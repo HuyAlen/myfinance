@@ -1,0 +1,93 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Sidebar from "./Sidebar";
+import Header from "./Header";
+import BottomNav from "./BottomNav";
+import { useAuth } from "@/src/components/auth/AuthProvider";
+
+type AppShellProps = {
+  children: React.ReactNode;
+};
+
+export default function AppShell({ children }: AppShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [user, loading, router]);
+
+  // Close sidebar on Escape key
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setSidebarOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Lock body scroll while mobile drawer is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [sidebarOpen]);
+
+  // Show loading spinner while resolving session
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="size-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+          <p className="text-sm text-slate-500">Đang tải...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/*
+        Overlay backdrop — always mounted so it can fade in/out smoothly.
+        On desktop (lg+) it is permanently invisible and non-interactive.
+      */}
+      <div
+        aria-hidden="true"
+        onClick={() => setSidebarOpen(false)}
+        className={[
+          "fixed inset-0 z-30 lg:hidden",
+          "bg-slate-950/40 backdrop-blur-sm",
+          "transition-opacity duration-300 ease-in-out",
+          sidebarOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none",
+        ].join(" ")}
+      />
+
+      <div className="min-h-screen lg:pl-72">
+        <Header
+          onMenuOpen={() => setSidebarOpen(true)}
+          sidebarOpen={sidebarOpen}
+        />
+
+        <main className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-6">
+          {children}
+        </main>
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}
