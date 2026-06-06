@@ -3,6 +3,7 @@ import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";
+import { OnboardingProvider } from "@/src/components/onboarding/OnboardingProvider";
 import ServiceWorkerRegistration from "@/src/components/pwa/ServiceWorkerRegistration";
 import InstallPrompt from "@/src/components/pwa/InstallPrompt";
 
@@ -39,7 +40,9 @@ export default function RootLayout({
     <html lang="vi">
       <body className={beVietnam.variable}>
         <AuthProvider>
-          <RealtimeProvider>{children}</RealtimeProvider>
+          <RealtimeProvider>
+            <OnboardingProvider>{children}</OnboardingProvider>
+          </RealtimeProvider>
           <ServiceWorkerRegistration />
           <InstallPrompt />
         </AuthProvider>

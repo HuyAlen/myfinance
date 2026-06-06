@@ -51,6 +51,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
+import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1612,21 +1613,19 @@ export default function InvestmentsPage() {
                   onChange={(v) => setForm((p) => ({ ...p, symbol: v }))}
                   placeholder="VD: FPT, BTC, VNM..."
                 />
-                <FormInput
+                <CurrencyInput
                   label="Vốn đầu tư *"
                   value={form.investedAmount}
                   onChange={(v) =>
                     setForm((p) => ({ ...p, investedAmount: v }))
                   }
-                  placeholder="VD: 10000000"
-                  type="number"
+                  placeholder="10000000"
                 />
-                <FormInput
+                <CurrencyInput
                   label="Giá trị hiện tại *"
                   value={form.currentValue}
                   onChange={(v) => setForm((p) => ({ ...p, currentValue: v }))}
-                  placeholder="VD: 12500000"
-                  type="number"
+                  placeholder="12500000"
                 />
 
                 {/* Asset type selector */}

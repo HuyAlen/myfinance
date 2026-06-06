@@ -62,6 +62,11 @@ import {
 import { detectSpendingAnomalies } from "@/src/services/finance/analytics/spendingAnalytics";
 import { computeMonthlyForecast } from "@/src/services/finance/analytics/forecastAnalytics";
 import { computeSmartBudget } from "@/src/services/finance/analytics/smartBudget";
+import {
+  CurrencyInput,
+  formatCurrencyInput,
+  parseCurrencyInput,
+} from "@/src/components/ui/CurrencyInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortKey = "date" | "amount" | "category" | "wallet";
@@ -853,24 +858,24 @@ export default function TransactionsPage() {
                   <p className="mb-1.5 text-xs font-black text-slate-600">
                     Số tiền tối thiểu
                   </p>
-                  <input
-                    type="number"
+                  <CurrencyInput
                     value={amountMin}
-                    onChange={(e) => setAmountMin(e.target.value)}
+                    onChange={setAmountMin}
                     placeholder="0"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-blue-400"
+                    showPrefix={false}
+                    className="[&_input]:bg-white [&_input]:py-2.5 [&_input]:px-4"
                   />
                 </div>
                 <div>
                   <p className="mb-1.5 text-xs font-black text-slate-600">
                     Số tiền tối đa
                   </p>
-                  <input
-                    type="number"
+                  <CurrencyInput
                     value={amountMax}
-                    onChange={(e) => setAmountMax(e.target.value)}
+                    onChange={setAmountMax}
                     placeholder="Không giới hạn"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-blue-400"
+                    showPrefix={false}
+                    className="[&_input]:bg-white [&_input]:py-2.5 [&_input]:px-4"
                   />
                 </div>
               </div>
@@ -1585,10 +1590,14 @@ export default function TransactionsPage() {
                     ₫
                   </span>
                   <input
-                    type="number"
-                    value={form.amount}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatCurrencyInput(form.amount)}
                     onChange={(e) =>
-                      setForm((p) => ({ ...p, amount: e.target.value }))
+                      setForm((p) => ({
+                        ...p,
+                        amount: parseCurrencyInput(e.target.value),
+                      }))
                     }
                     placeholder="0"
                     className="w-full rounded-2xl bg-transparent py-4 pl-10 pr-4 text-xl font-black text-slate-900 outline-none placeholder:text-slate-300"

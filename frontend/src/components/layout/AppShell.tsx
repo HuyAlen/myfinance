@@ -6,6 +6,11 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import WelcomeWizard from "@/src/components/onboarding/WelcomeWizard";
+import ProductTour from "@/src/components/onboarding/ProductTour";
+import OnboardingChecklist from "@/src/components/onboarding/OnboardingChecklist";
+import QuickActionFab from "@/src/components/onboarding/QuickActionFab";
+import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -88,6 +93,13 @@ export default function AppShell({ children }: AppShellProps) {
       </div>
 
       <BottomNav />
+
+      {/* ── Onboarding Layer ─────────────────────────────────────────────── */}
+      <WelcomeWizard />
+      <ProductTour />
+      <OnboardingChecklist />
+      <QuickActionFab />
+      <AchievementToast />
     </div>
   );
 }

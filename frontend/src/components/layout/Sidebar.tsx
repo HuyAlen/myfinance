@@ -7,6 +7,7 @@ import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
 import {
   BarChart3,
+  BookOpen,
   Bot,
   BriefcaseBusiness,
   ChartPie,
@@ -27,49 +28,65 @@ const NAV_GROUPS = [
   {
     label: "Quản lý tài chính",
     items: [
-      { label: "Tổng quan",    icon: Home,           href: "/" },
-      { label: "Giao Dịch",    icon: ReceiptText,    href: "/transactions" },
-      { label: "Ví Tiền",      icon: Wallet,         href: "/wallets" },
-      { label: "Ngân Sách",    icon: ChartPie,       href: "/budgets" },
-      { label: "Mục Tiêu",     icon: Target,         href: "/goals" },
-      { label: "Danh Mục",     icon: Folder,         href: "/categories" },
+      { label: "Tổng quan", icon: Home, href: "/" },
+      { label: "Giao Dịch", icon: ReceiptText, href: "/transactions" },
+      { label: "Ví Tiền", icon: Wallet, href: "/wallets" },
+      { label: "Ngân Sách", icon: ChartPie, href: "/budgets" },
+      { label: "Mục Tiêu", icon: Target, href: "/goals" },
+      { label: "Danh Mục", icon: Folder, href: "/categories" },
     ],
   },
   {
     label: "Phân tích & Đầu tư",
     items: [
-      { label: "Báo cáo",        icon: BarChart3,      href: "/reports" },
-      { label: "Đầu Tư",         icon: BriefcaseBusiness, href: "/investments" },
-      { label: "Nợ & Khoản Vay", icon: Landmark,      href: "/debts" },
-      { label: "AI Advisor",     icon: Bot,           href: "/ai-insights" },
+      { label: "Báo cáo", icon: BarChart3, href: "/reports" },
+      { label: "Đầu Tư", icon: BriefcaseBusiness, href: "/investments" },
+      { label: "Nợ & Khoản Vay", icon: Landmark, href: "/debts" },
+      { label: "AI Advisor", icon: Bot, href: "/ai-insights" },
     ],
   },
   {
     label: "Hệ thống",
     items: [
       { label: "Cài Đặt", icon: Settings, href: "/settings" },
+      { label: "Hướng Dẫn", icon: BookOpen, href: "/help" },
     ],
   },
 ];
 
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 const QUICK_ACTIONS = [
-  { label: "Thêm giao dịch", href: "/transactions", cls: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200" },
-  { label: "Thêm ví tiền",    href: "/wallets",      cls: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200" },
-  { label: "Thêm mục tiêu",  href: "/goals",        cls: "bg-cyan-600 text-white hover:bg-cyan-700 shadow-sm shadow-cyan-200" },
+  {
+    label: "Thêm giao dịch",
+    href: "/transactions",
+    cls: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200",
+  },
+  {
+    label: "Thêm ví tiền",
+    href: "/wallets",
+    cls: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200",
+  },
+  {
+    label: "Thêm mục tiêu",
+    href: "/goals",
+    cls: "bg-cyan-600 text-white hover:bg-cyan-700 shadow-sm shadow-cyan-200",
+  },
 ];
 
 type SidebarProps = { isOpen: boolean; onClose: () => void };
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const pathname    = usePathname();
+  const pathname = usePathname();
   const firstRender = useRef(true);
   const { status, lastSync } = useRealtime();
   const connected = status === "SUBSCRIBED";
 
   // Auto-close on route change
   useEffect(() => {
-    if (firstRender.current) { firstRender.current = false; return; }
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
@@ -96,13 +113,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </button>
 
       {/* ══ Brand Area ══════════════════════════════════════════════════════ */}
-      <Link href="/" onClick={onClose} className="mb-6 flex items-center gap-3 px-2">
+      <Link
+        href="/"
+        onClick={onClose}
+        className="mb-6 flex items-center gap-3 px-2"
+      >
         <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200/60">
           <PiggyBank size={24} />
         </div>
         <div>
-          <h1 className="text-[15px] font-black tracking-tight text-slate-900">MyFinance</h1>
-          <p className="text-[11px] font-semibold text-slate-400">Your Personal CFO</p>
+          <h1 className="text-[15px] font-black tracking-tight text-slate-900">
+            MyFinance
+          </h1>
+          <p className="text-[11px] font-semibold text-slate-400">
+            Your Personal CFO
+          </p>
         </div>
       </Link>
 
@@ -115,8 +140,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </p>
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const Icon   = item.icon;
-                const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                const active =
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
@@ -129,14 +157,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
                     ].join(" ")}
                   >
-                    <span className={[
-                      "flex size-7 shrink-0 items-center justify-center rounded-xl transition-colors",
-                      active ? "bg-white/20" : "bg-slate-100",
-                    ].join(" ")}>
+                    <span
+                      className={[
+                        "flex size-7 shrink-0 items-center justify-center rounded-xl transition-colors",
+                        active ? "bg-white/20" : "bg-slate-100",
+                      ].join(" ")}
+                    >
                       <Icon size={15} strokeWidth={active ? 2.5 : 2} />
                     </span>
                     <span className="flex-1">{item.label}</span>
-                    {active && <span className="size-1.5 rounded-full bg-white/60" />}
+                    {active && (
+                      <span className="size-1.5 rounded-full bg-white/60" />
+                    )}
                   </Link>
                 );
               })}
@@ -155,7 +187,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 key={a.href}
                 href={a.href}
                 onClick={onClose}
-                className={["flex items-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-bold transition-all active:scale-[.98] ", a.cls].join("")}
+                className={[
+                  "flex items-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-bold transition-all active:scale-[.98] ",
+                  a.cls,
+                ].join("")}
               >
                 <Plus size={13} />
                 {a.label}
@@ -169,17 +204,22 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       <div className="mt-3 rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-blue-50/40 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className={[
-              "size-2 rounded-full",
-              connected ? "bg-emerald-500" : "bg-amber-400 animate-pulse",
-            ].join(" ")} />
+            <span
+              className={[
+                "size-2 rounded-full",
+                connected ? "bg-emerald-500" : "bg-amber-400 animate-pulse",
+              ].join(" ")}
+            />
             <span className="text-xs font-bold text-slate-600">
               {connected ? "Đã kết nối" : "Đang kết nối..."}
             </span>
           </div>
           {lastSync && (
             <span className="text-[10px] font-medium text-slate-400">
-              {lastSync.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+              {lastSync.toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           )}
         </div>
