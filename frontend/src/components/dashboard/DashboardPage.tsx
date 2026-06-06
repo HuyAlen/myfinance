@@ -43,10 +43,11 @@ import {
   getInvestments,
   getTransactions,
   getWallets,
-  resetFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 
 import {
+  buildMonthlyCashFlowData,
+  buildMonthlyNetWorthData,
   formatVND,
   getDebtRatio,
   getGoalScore,
@@ -179,46 +180,33 @@ export default function DashboardPage() {
     };
   }, [wallets, investments, debts, transactions, goals]);
 
-  // ── Net-worth trend (real base + proportional seeds) ─────────────────────
-  const netWorthTrend = useMemo(() => {
-    const base = summary.netWorth;
-    return ["T7", "T8", "T9", "T10", "T11", "T12"].map((m, i) => ({
-      month: m,
-      value: Math.round(base * [0.74, 0.8, 0.85, 0.91, 0.96, 1.0][i]),
-    }));
-  }, [summary.netWorth]);
+  // ── Net-worth trend (real monthly reconstruction) ─────────────────────────
+  const netWorthTrend = useMemo(
+    () => buildMonthlyNetWorthData(transactions, summary.netWorth, 6),
+    [transactions, summary.netWorth],
+  );
 
-  // ── Cash-flow trend ───────────────────────────────────────────────────────
-  const cashFlowTrend = useMemo(() => {
-    const [ci, ce, cs] = [
-      Math.round(summary.income / 1e6),
-      Math.round(summary.expense / 1e6),
-      Math.round(summary.saving / 1e6),
-    ];
-    return ["T7", "T8", "T9", "T10", "T11", "T12"].map((m, i) => ({
-      month: m,
-      thu: Math.round(ci * [0.75, 0.82, 0.88, 0.93, 0.97, 1.0][i]),
-      chi: Math.round(ce * [0.75, 0.82, 0.88, 0.93, 0.97, 1.0][i]),
-      tietKiem: Math.round(cs * [0.75, 0.82, 0.88, 0.93, 0.97, 1.0][i]),
-    }));
-  }, [summary.income, summary.expense, summary.saving]);
+  // ── Cash-flow trend (real monthly transaction data) ───────────────────────
+  const cashFlowTrend = useMemo(
+    () => buildMonthlyCashFlowData(transactions, 6),
+    [transactions],
+  );
 
   // ── Asset pie ─────────────────────────────────────────────────────────────
   const assetPieData = useMemo(() => {
-    const total = summary.totalAssets || 1;
     const items = wallets.map((w, i) => ({
       name: w.name,
-      value: Math.round((w.balance / total) * 100),
+      value: w.balance,
       color: ASSET_COLORS[i % ASSET_COLORS.length],
     }));
     if (summary.investmentAssets > 0)
       items.push({
         name: "Đầu tư",
-        value: Math.round((summary.investmentAssets / total) * 100),
+        value: summary.investmentAssets,
         color: "#10b981",
       });
     return items;
-  }, [wallets, summary.totalAssets, summary.investmentAssets]);
+  }, [wallets, summary.investmentAssets]);
 
   // ── Spending ──────────────────────────────────────────────────────────────
   const spendingByCategory = useMemo(
@@ -229,7 +217,8 @@ export default function DashboardPage() {
     () =>
       spendingByCategory.map((item, i) => ({
         name: item.name,
-        value: item.percent,
+        value: item.value, // VND amount drives slice size
+        percent: item.percent,
         color: SPEND_COLORS[i % SPEND_COLORS.length],
       })),
     [spendingByCategory],
@@ -270,14 +259,16 @@ export default function DashboardPage() {
       }),
     [investments],
   );
-  const investPieData = useMemo(() => {
-    const total = summary.investmentAssets || 1;
-    return investments.map((inv, i) => ({
-      name: inv.name,
-      value: Math.round((inv.currentValue / total) * 100),
-      color: INV_TYPE_COLORS[inv.type] ?? ASSET_COLORS[i % ASSET_COLORS.length],
-    }));
-  }, [investments, summary.investmentAssets]);
+  const investPieData = useMemo(
+    () =>
+      investments.map((inv, i) => ({
+        name: inv.name,
+        value: inv.currentValue,
+        color:
+          INV_TYPE_COLORS[inv.type] ?? ASSET_COLORS[i % ASSET_COLORS.length],
+      })),
+    [investments],
+  );
 
   // ── Goal rows with estimate ───────────────────────────────────────────────
   const goalRows = useMemo(
@@ -486,24 +477,13 @@ export default function DashboardPage() {
       <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 xl:grid-cols-[1.4fr_0.8fr]">
           <div className="bg-gradient-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-blue-600">
-                  Personal CFO Dashboard
-                </p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-4xl">
-                  Tài sản ròng
-                </h1>
-              </div>
-              <button
-                onClick={async () => {
-                  await resetFinanceDemoData();
-                  await reloadData();
-                }}
-                className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-100"
-              >
-                Reset demo
-              </button>
+            <div>
+              <p className="text-sm font-bold text-blue-600">
+                Personal CFO Dashboard
+              </p>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 sm:text-4xl">
+                Tài sản ròng
+              </h1>
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-4">
               <p className="text-3xl font-black tracking-tight text-blue-600 sm:text-5xl">
@@ -551,13 +531,22 @@ export default function DashboardPage() {
                     stroke="#e2e8f0"
                   />
                   <XAxis
-                    dataKey="month"
+                    dataKey="label"
                     axisLine={false}
                     tickLine={false}
                     fontSize={11}
                   />
                   <YAxis hide />
                   <Tooltip
+                    contentStyle={{
+                      borderRadius: "0.75rem",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{ fontWeight: 700, color: "#475569" }}
+                    itemStyle={{ color: "#1e293b", fontWeight: 600 }}
                     formatter={(v) => [
                       formatVND(Number(v ?? 0)),
                       "Tài sản ròng",
@@ -695,7 +684,7 @@ export default function DashboardPage() {
                   stroke="#e2e8f0"
                 />
                 <XAxis
-                  dataKey="month"
+                  dataKey="label"
                   axisLine={false}
                   tickLine={false}
                   fontSize={11}
@@ -704,9 +693,18 @@ export default function DashboardPage() {
                   axisLine={false}
                   tickLine={false}
                   fontSize={11}
-                  tickFormatter={(v) => `${Math.round(v / 1_000_000)}M`}
+                  tickFormatter={(v) => `${Math.round(Number(v) / 1_000_000)}M`}
                 />
                 <Tooltip
+                  contentStyle={{
+                    borderRadius: "0.75rem",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{ fontWeight: 700, color: "#475569" }}
+                  itemStyle={{ color: "#1e293b", fontWeight: 600 }}
                   formatter={(v) => [formatVND(Number(v ?? 0)), "Tài sản ròng"]}
                 />
                 <Area
@@ -733,7 +731,21 @@ export default function DashboardPage() {
                     <Cell key={e.name} fill={e.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "0.75rem",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{ fontWeight: 700, color: "#475569" }}
+                  itemStyle={{ color: "#1e293b", fontWeight: 600 }}
+                  formatter={(v, name) => [
+                    formatVND(Number(v ?? 0)),
+                    String(name),
+                  ]}
+                />
               </PieChart>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-xl font-black text-blue-600">
@@ -753,7 +765,10 @@ export default function DashboardPage() {
                     {item.name}
                   </span>
                   <span className="text-sm font-bold text-slate-900">
-                    {item.value}%
+                    {summary.totalAssets > 0
+                      ? Math.round((item.value / summary.totalAssets) * 100)
+                      : 0}
+                    %
                   </span>
                 </div>
               ))}
@@ -798,13 +813,32 @@ export default function DashboardPage() {
                   stroke="#e2e8f0"
                 />
                 <XAxis
-                  dataKey="month"
+                  dataKey="label"
                   axisLine={false}
                   tickLine={false}
                   fontSize={11}
                 />
-                <YAxis axisLine={false} tickLine={false} fontSize={11} />
-                <Tooltip />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  fontSize={11}
+                  tickFormatter={(v) => `${Math.round(Number(v) / 1_000_000)}M`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "0.75rem",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                  }}
+                  labelStyle={{ fontWeight: 700, color: "#475569" }}
+                  itemStyle={{ color: "#1e293b", fontWeight: 600 }}
+                  formatter={(v, name) => [
+                    formatVND(Number(v ?? 0)),
+                    String(name),
+                  ]}
+                />
                 <Bar
                   dataKey="thu"
                   name="Thu nhập"
@@ -933,7 +967,6 @@ export default function DashboardPage() {
                       <Cell key={e.name} fill={e.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
                 </PieChart>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-sm font-black text-rose-500">
@@ -988,7 +1021,21 @@ export default function DashboardPage() {
                         <Cell key={e.name} fill={e.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "0.75rem",
+                        border: "1px solid #e2e8f0",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                      }}
+                      labelStyle={{ fontWeight: 700, color: "#475569" }}
+                      itemStyle={{ color: "#1e293b", fontWeight: 600 }}
+                      formatter={(v, name) => [
+                        formatVND(Number(v ?? 0)),
+                        String(name),
+                      ]}
+                    />
                   </PieChart>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                     <span
