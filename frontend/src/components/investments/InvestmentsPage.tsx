@@ -52,6 +52,10 @@ import {
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -141,6 +145,10 @@ export default function InvestmentsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<InvestmentType | "all">("all");
@@ -457,15 +465,15 @@ export default function InvestmentsPage() {
     const investedAmount = Number(form.investedAmount);
     const currentValue = Number(form.currentValue);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên tài sản đầu tư");
+      setSaveError("Vui lòng nhập tên tài sản đầu tư");
       return;
     }
     if (!investedAmount || investedAmount <= 0) {
-      alert("Vui lòng nhập số vốn đầu tư hợp lệ");
+      setSaveError("Vui lòng nhập số vốn đầu tư hợp lệ");
       return;
     }
     if (Number.isNaN(currentValue) || currentValue < 0) {
-      alert("Vui lòng nhập giá trị hiện tại hợp lệ");
+      setSaveError("Vui lòng nhập giá trị hiện tại hợp lệ");
       return;
     }
 
@@ -492,14 +500,25 @@ export default function InvestmentsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa tài sản đầu tư này?")) return;
-    const { error } = await deleteInvestment(id);
-    if (error) {
-      alert("Lỗi xóa tài sản: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa tài sản đầu tư?",
+      description:
+        "Hành động này không thể hoàn tác. Tài sản sẽ bị xóa khỏi danh mục đầu tư của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteInvestment(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa tài sản: " + error });
+          return;
+        }
+        toast({
+          variant: "success",
+          message: "Đã xóa tài sản đầu tư thành công.",
+        });
+        await reloadData();
+      },
+    });
   }
 
   const isProfit = summary.profitLoss >= 0;
@@ -1742,6 +1761,11 @@ export default function InvestmentsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

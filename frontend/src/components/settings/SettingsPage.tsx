@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 import {
   AlertTriangle,
@@ -98,6 +101,10 @@ export default function SettingsPage() {
 
   // Save feedback
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   // Active nav section
   const [activeSection, setActiveSection] = useState("profile");
@@ -132,27 +139,47 @@ export default function SettingsPage() {
 
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
-    const ok = confirm("Bạn có chắc muốn reset về dữ liệu demo?");
-    if (!ok) return;
-    const { error } = await resetFinanceDemoData();
-    if (error) {
-      alert("Lỗi reset dữ liệu demo: " + error);
-      return;
-    }
-    await reloadStats();
-    alert("Đã reset dữ liệu demo.");
+    setPendingAction({
+      title: "Reset dữ liệu demo?",
+      description:
+        "Toàn bộ dữ liệu hiện tại sẽ bị xóa và thay bằng dữ liệu demo.",
+      confirmText: "Reset",
+      variant: "warning",
+      onConfirm: async () => {
+        const { error } = await resetFinanceDemoData();
+        if (error) {
+          toast({
+            variant: "error",
+            message: "Lỗi reset dữ liệu demo: " + error,
+          });
+          return;
+        }
+        await reloadStats();
+        toast({
+          variant: "success",
+          message: "Đã reset dữ liệu demo thành công.",
+        });
+      },
+    });
   }
 
   async function handleClearAll() {
-    const ok = confirm("Bạn có chắc muốn xóa toàn bộ dữ liệu của app?");
-    if (!ok) return;
-    const { error } = await clearAllUserData();
-    if (error) {
-      alert("Lỗi xóa dữ liệu: " + error);
-      return;
-    }
-    await reloadStats();
-    alert("Đã xóa toàn bộ dữ liệu.");
+    setPendingAction({
+      title: "Xóa toàn bộ dữ liệu?",
+      description:
+        "Hành động này không thể hoàn tác. Tất cả giao dịch, ví và dữ liệu tài chính sẽ bị xóa vĩnh viễn.",
+      confirmText: "Xóa tất cả",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await clearAllUserData();
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa dữ liệu: " + error });
+          return;
+        }
+        await reloadStats();
+        toast({ variant: "success", message: "Đã xóa toàn bộ dữ liệu." });
+      },
+    });
   }
 
   async function handleExportJson() {
@@ -224,12 +251,15 @@ export default function SettingsPage() {
         });
         await reloadStats();
         if (importErr) {
-          alert("Lỗi import dữ liệu: " + importErr);
+          toast({
+            variant: "error",
+            message: "Lỗi import dữ liệu: " + importErr,
+          });
         } else {
-          alert("Import dữ liệu thành công.");
+          toast({ variant: "success", message: "Import dữ liệu thành công." });
         }
       } catch {
-        alert("File JSON không hợp lệ.");
+        toast({ variant: "error", message: "File JSON không hợp lệ." });
       }
     };
     reader.readAsText(file);
@@ -1182,6 +1212,11 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

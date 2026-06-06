@@ -38,6 +38,10 @@ import {
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -121,6 +125,10 @@ export default function DebtsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
@@ -348,19 +356,19 @@ export default function DebtsPage() {
     const totalAmount = Number(form.totalAmount);
     const remainingAmount = Number(form.remainingAmount);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên khoản nợ");
+      setSaveError("Vui lòng nhập tên khoản nợ");
       return;
     }
     if (!totalAmount || totalAmount <= 0) {
-      alert("Vui lòng nhập tổng số tiền vay hợp lệ");
+      setSaveError("Vui lòng nhập tổng số tiền vay hợp lệ");
       return;
     }
     if (Number.isNaN(remainingAmount) || remainingAmount < 0) {
-      alert("Vui lòng nhập số tiền còn lại hợp lệ");
+      setSaveError("Vui lòng nhập số tiền còn lại hợp lệ");
       return;
     }
     if (remainingAmount > totalAmount) {
-      alert("Số tiền còn lại không được lớn hơn tổng số tiền vay");
+      setSaveError("Số tiền còn lại không được lớn hơn tổng số tiền vay");
       return;
     }
     const debt: Debt = {
@@ -380,14 +388,22 @@ export default function DebtsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa khoản nợ này?")) return;
-    const { error } = await deleteDebt(id);
-    if (error) {
-      alert("Lỗi xóa khoản nợ: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa khoản nợ?",
+      description:
+        "Hành động này không thể hoàn tác. Khoản nợ sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteDebt(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa khoản nợ: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa khoản nợ thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // Sort: unpaid (by remaining %) first, paid last
@@ -1203,6 +1219,11 @@ export default function DebtsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

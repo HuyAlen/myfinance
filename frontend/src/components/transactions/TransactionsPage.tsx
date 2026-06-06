@@ -67,6 +67,10 @@ import {
   parseCurrencyInput,
 } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortKey = "date" | "amount" | "category" | "wallet";
@@ -126,6 +130,10 @@ export default function TransactionsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   async function reloadData() {
     const [txns, cats, wlts, bdgs] = await Promise.all([
@@ -293,18 +301,28 @@ export default function TransactionsPage() {
     else setSelectedIds(new Set(sorted.map((t) => t.id)));
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!confirm("Xóa " + selectedIds.size + " giao dịch đã chọn?")) return;
-    for (const id of selectedIds) {
-      const { error } = await deleteTransaction(id);
-      if (error) {
-        alert("Lỗi xóa giao dịch: " + error);
-        break;
-      }
-    }
-    setSelectedIds(new Set());
-    await reloadData();
+    const count = selectedIds.size;
+    const idsToDelete = new Set(selectedIds);
+    setPendingAction({
+      title: `Xóa ${count} giao dịch?`,
+      description: `Hành động này không thể hoàn tác. ${count} giao dịch đã chọn sẽ bị xóa vĩnh viễn.`,
+      variant: "danger",
+      confirmText: "Xóa tất cả",
+      onConfirm: async () => {
+        for (const id of idsToDelete) {
+          const { error } = await deleteTransaction(id);
+          if (error) {
+            toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
+            return;
+          }
+        }
+        setSelectedIds(new Set());
+        toast({ variant: "success", message: `Đã xóa ${count} giao dịch.` });
+        await reloadData();
+      },
+    });
   }
 
   function exportCSV() {
@@ -388,29 +406,29 @@ export default function TransactionsPage() {
     event.preventDefault();
     const amount = Number(form.amount);
     if (!amount || amount <= 0) {
-      alert("Vui lòng nhập số tiền hợp lệ");
+      setSaveError("Vui lòng nhập số tiền hợp lệ");
       return;
     }
     if (form.type === "transfer") {
       if (!form.walletId) {
-        alert("Vui lòng chọn ví nguồn");
+        setSaveError("Vui lòng chọn ví nguồn");
         return;
       }
       if (!form.transferToWalletId) {
-        alert("Vui lòng chọn ví đích");
+        setSaveError("Vui lòng chọn ví đích");
         return;
       }
       if (form.walletId === form.transferToWalletId) {
-        alert("Ví nguồn và ví đích phải khác nhau");
+        setSaveError("Ví nguồn và ví đích phải khác nhau");
         return;
       }
     } else {
       if (!form.categoryId) {
-        alert("Vui lòng chọn danh mục");
+        setSaveError("Vui lòng chọn danh mục");
         return;
       }
       if (!form.walletId) {
-        alert("Vui lòng chọn ví tiền");
+        setSaveError("Vui lòng chọn ví tiền");
         return;
       }
     }
@@ -442,14 +460,22 @@ export default function TransactionsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa giao dịch này?")) return;
-    const { error } = await deleteTransaction(id);
-    if (error) {
-      alert("Lỗi xóa giao dịch: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa giao dịch?",
+      description:
+        "Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteTransaction(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa giao dịch thành công." });
+        await reloadData();
+      },
+    });
   }
 
   function clearFilters() {
@@ -1767,6 +1793,11 @@ export default function TransactionsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

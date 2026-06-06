@@ -45,6 +45,10 @@ import {
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FormState = {
@@ -93,6 +97,10 @@ export default function WalletsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   async function reloadData() {
     const [w, t] = await Promise.all([getWallets(), getTransactions()]);
@@ -280,11 +288,11 @@ export default function WalletsPage() {
     event.preventDefault();
     const balance = Number(form.balance);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên ví");
+      setSaveError("Vui lòng nhập tên ví");
       return;
     }
     if (Number.isNaN(balance) || balance < 0) {
-      alert("Vui lòng nhập số dư hợp lệ");
+      setSaveError("Vui lòng nhập số dư hợp lệ");
       return;
     }
     const wallet: WalletType = {
@@ -306,27 +314,31 @@ export default function WalletsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
+  function handleDelete(id: string) {
     const wallet = wallets.find((w) => w.id === id);
     const linked = transactions.filter((t) => t.walletId === id);
     if (linked.length > 0) {
-      alert(
-        'Không thể xóa ví "' +
-          (wallet?.name ?? "này") +
-          '" vì đang có ' +
-          linked.length +
-          " giao dịch liên kết.\nHãy xóa hoặc chuyển các giao dịch sang ví khác trước khi xóa ví.",
-      );
+      toast({
+        variant: "warning",
+        message: `Không thể xóa ví "${wallet?.name ?? "này"}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+      });
       return;
     }
-    if (!confirm('Bạn có chắc muốn xóa ví "' + (wallet?.name ?? "này") + '"?'))
-      return;
-    const { error } = await deleteWallet(id);
-    if (error) {
-      alert("Lỗi xóa ví: " + error);
-      return;
-    }
-    await reloadData();
+    setPendingAction({
+      title: `Xóa ví "${wallet?.name ?? "này"}"?`,
+      description:
+        "Hành động này không thể hoàn tác. Ví sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteWallet(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa ví: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa ví thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
@@ -952,6 +964,11 @@ export default function WalletsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

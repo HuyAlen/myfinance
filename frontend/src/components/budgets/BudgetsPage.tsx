@@ -35,6 +35,10 @@ import {
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 import { computeSmartBudget } from "@/src/services/finance/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -72,6 +76,10 @@ export default function BudgetsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return (
@@ -208,15 +216,15 @@ export default function BudgetsPage() {
     event.preventDefault();
     const limitAmount = Number(form.limitAmount);
     if (!form.categoryId) {
-      alert("Vui lòng chọn danh mục");
+      setSaveError("Vui lòng chọn danh mục");
       return;
     }
     if (!form.month) {
-      alert("Vui lòng chọn tháng");
+      setSaveError("Vui lòng chọn tháng");
       return;
     }
     if (!limitAmount || limitAmount <= 0) {
-      alert("Vui lòng nhập ngân sách hợp lệ");
+      setSaveError("Vui lòng nhập ngân sách hợp lệ");
       return;
     }
     const budget: Budget = {
@@ -238,14 +246,22 @@ export default function BudgetsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa ngân sách này?")) return;
-    const { error } = await deleteBudget(id);
-    if (error) {
-      alert("Lỗi xóa ngân sách: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa ngân sách?",
+      description:
+        "Hành động này không thể hoàn tác. Ngân sách sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteBudget(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa ngân sách: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa ngân sách thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── Status helpers ───────────────────────────────────────────────────────
@@ -1081,6 +1097,11 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

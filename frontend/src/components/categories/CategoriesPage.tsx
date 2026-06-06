@@ -31,6 +31,10 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -52,6 +56,10 @@ export default function CategoriesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   // NEW: filter state
   const [search, setSearch] = useState("");
@@ -241,7 +249,7 @@ export default function CategoriesPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên danh mục");
+      setSaveError("Vui lòng nhập tên danh mục");
       return;
     }
     const category: Category = {
@@ -263,26 +271,30 @@ export default function CategoriesPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(category: Category) {
+  function handleDelete(category: Category) {
     const usage = getCategoryUsage(category.id);
     if (usage.count > 0) {
-      alert(
-        'Không thể xóa danh mục "' +
-          category.name +
-          '" vì đang có ' +
-          usage.count +
-          " giao dịch liên kết.\nHãy xóa hoặc phân loại lại các giao dịch đó trước khi xóa danh mục.",
-      );
+      toast({
+        variant: "warning",
+        message: `Không thể xóa danh mục “${category.name}” vì đang có ${usage.count} giao dịch liên kết. Hãy phân loại lại các giao dịch trước.`,
+      });
       return;
     }
-    if (!confirm('Bạn có chắc muốn xóa danh mục "' + category.name + '"?'))
-      return;
-    const { error } = await deleteCategory(category.id);
-    if (error) {
-      alert("Lỗi xóa danh mục: " + error);
-      return;
-    }
-    await reloadData();
+    setPendingAction({
+      title: `Xóa danh mục “${category.name}”?`,
+      description:
+        "Hành động này không thể hoàn tác. Danh mục sẽ bị xóa khỏi tài khoản.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteCategory(category.id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa danh mục: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa danh mục thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
@@ -989,6 +1001,11 @@ export default function CategoriesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

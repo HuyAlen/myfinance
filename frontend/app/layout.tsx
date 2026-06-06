@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";
 import { OnboardingProvider } from "@/src/components/onboarding/OnboardingProvider";
+import { ToastProvider } from "@/src/components/ui/ToastProvider";
 import ServiceWorkerRegistration from "@/src/components/pwa/ServiceWorkerRegistration";
 import InstallPrompt from "@/src/components/pwa/InstallPrompt";
 
@@ -41,7 +42,9 @@ export default function RootLayout({
       <body className={beVietnam.variable}>
         <AuthProvider>
           <RealtimeProvider>
-            <OnboardingProvider>{children}</OnboardingProvider>
+            <ToastProvider>
+              <OnboardingProvider>{children}</OnboardingProvider>
+            </ToastProvider>
           </RealtimeProvider>
           <ServiceWorkerRegistration />
           <InstallPrompt />

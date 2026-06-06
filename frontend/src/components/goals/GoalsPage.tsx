@@ -32,6 +32,10 @@ import {
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -109,6 +113,10 @@ export default function GoalsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
@@ -269,15 +277,15 @@ export default function GoalsPage() {
     const targetAmount = Number(form.targetAmount);
     const currentAmount = Number(form.currentAmount);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên mục tiêu");
+      setSaveError("Vui lòng nhập tên mục tiêu");
       return;
     }
     if (!targetAmount || targetAmount <= 0) {
-      alert("Vui lòng nhập số tiền mục tiêu hợp lệ");
+      setSaveError("Vui lòng nhập số tiền mục tiêu hợp lệ");
       return;
     }
     if (Number.isNaN(currentAmount) || currentAmount < 0) {
-      alert("Vui lòng nhập số tiền đã tiết kiệm hợp lệ");
+      setSaveError("Vui lòng nhập số tiền đã tiết kiệm hợp lệ");
       return;
     }
     const goal: Goal = {
@@ -297,14 +305,22 @@ export default function GoalsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa mục tiêu này?")) return;
-    const { error } = await deleteGoal(id);
-    if (error) {
-      alert("Lỗi xóa mục tiêu: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa mục tiêu?",
+      description:
+        "Hành động này không thể hoàn tác. Mục tiêu sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteGoal(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa mục tiêu: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa mục tiêu thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
@@ -1030,6 +1046,11 @@ export default function GoalsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }
