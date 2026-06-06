@@ -9,18 +9,21 @@ export type Database = {
       wallets: {
         Row: {
           id: string;
+          user_id: string;
           name: string;
           type: "cash" | "bank" | "ewallet" | "investment";
           balance: number;
         };
         Insert: {
           id: string;
+          user_id: string;
           name: string;
           type: "cash" | "bank" | "ewallet" | "investment";
           balance?: number;
         };
         Update: {
           id?: string;
+          user_id?: string;
           name?: string;
           type?: "cash" | "bank" | "ewallet" | "investment";
           balance?: number;
@@ -31,16 +34,19 @@ export type Database = {
       categories: {
         Row: {
           id: string;
+          user_id: string;
           name: string;
           type: "income" | "expense";
         };
         Insert: {
           id: string;
+          user_id: string;
           name: string;
           type: "income" | "expense";
         };
         Update: {
           id?: string;
+          user_id?: string;
           name?: string;
           type?: "income" | "expense";
         };
@@ -50,6 +56,7 @@ export type Database = {
       transactions: {
         Row: {
           id: string;
+          user_id: string;
           type: "income" | "expense" | "transfer";
           amount: number;
           categoryId: string;
@@ -63,6 +70,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          user_id: string;
           type: "income" | "expense" | "transfer";
           amount: number;
           categoryId: string;
@@ -76,6 +84,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          user_id?: string;
           type?: "income" | "expense" | "transfer";
           amount?: number;
           categoryId?: string;
@@ -93,6 +102,7 @@ export type Database = {
       debts: {
         Row: {
           id: string;
+          user_id: string;
           name: string;
           totalAmount: number;
           remainingAmount: number;
@@ -103,6 +113,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          user_id: string;
           name: string;
           totalAmount: number;
           remainingAmount: number;
@@ -113,6 +124,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          user_id?: string;
           name?: string;
           totalAmount?: number;
           remainingAmount?: number;
@@ -127,18 +139,21 @@ export type Database = {
       goals: {
         Row: {
           id: string;
+          user_id: string;
           name: string;
           targetAmount: number;
           currentAmount: number;
         };
         Insert: {
           id: string;
+          user_id: string;
           name: string;
           targetAmount: number;
           currentAmount?: number;
         };
         Update: {
           id?: string;
+          user_id?: string;
           name?: string;
           targetAmount?: number;
           currentAmount?: number;
@@ -149,6 +164,7 @@ export type Database = {
       budgets: {
         Row: {
           id: string;
+          user_id: string;
           categoryId: string;
           month: string;
           limitAmount: number;
@@ -158,6 +174,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          user_id: string;
           categoryId: string;
           month: string;
           limitAmount: number;
@@ -167,6 +184,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          user_id?: string;
           categoryId?: string;
           month?: string;
           limitAmount?: number;
@@ -180,6 +198,7 @@ export type Database = {
       investments: {
         Row: {
           id: string;
+          user_id: string;
           name: string;
           type: "stock" | "crypto" | "fund" | "gold" | "other";
           symbol: string | null;
@@ -193,6 +212,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          user_id: string;
           name: string;
           type: "stock" | "crypto" | "fund" | "gold" | "other";
           symbol?: string | null;
@@ -206,6 +226,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          user_id?: string;
           name?: string;
           type?: "stock" | "crypto" | "fund" | "gold" | "other";
           symbol?: string | null;

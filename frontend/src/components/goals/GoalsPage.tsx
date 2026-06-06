@@ -32,6 +32,7 @@ import {
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -108,6 +109,7 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
@@ -285,8 +287,12 @@ export default function GoalsPage() {
       targetAmount,
       currentAmount,
     };
-    if (form.id) await updateGoal(goal);
-    else await addGoal(goal);
+    setSaveError(null);
+    const { error } = form.id ? await updateGoal(goal) : await addGoal(goal);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -294,7 +300,11 @@ export default function GoalsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bạn có chắc muốn xóa mục tiêu này?")) return;
-    await deleteGoal(id);
+    const { error } = await deleteGoal(id);
+    if (error) {
+      alert("Lỗi xóa mục tiêu: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -998,6 +1008,10 @@ export default function GoalsPage() {
                 />
               </div>
 
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-6 flex gap-3">
                 <button
                   type="button"

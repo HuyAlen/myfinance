@@ -67,6 +67,7 @@ import {
   formatCurrencyInput,
   parseCurrencyInput,
 } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortKey = "date" | "amount" | "category" | "wallet";
@@ -125,6 +126,7 @@ export default function TransactionsPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function reloadData() {
     const [txns, cats, wlts, bdgs] = await Promise.all([
@@ -295,7 +297,13 @@ export default function TransactionsPage() {
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
     if (!confirm("Xóa " + selectedIds.size + " giao dịch đã chọn?")) return;
-    for (const id of selectedIds) await deleteTransaction(id);
+    for (const id of selectedIds) {
+      const { error } = await deleteTransaction(id);
+      if (error) {
+        alert("Lỗi xóa giao dịch: " + error);
+        break;
+      }
+    }
     setSelectedIds(new Set());
     await reloadData();
   }
@@ -422,8 +430,14 @@ export default function TransactionsPage() {
       isRecurring: form.isRecurring || undefined,
       recurrence: form.isRecurring ? form.recurrence : undefined,
     };
-    if (form.id) await updateTransaction(transaction);
-    else await addTransaction(transaction);
+    setSaveError(null);
+    const { error } = form.id
+      ? await updateTransaction(transaction)
+      : await addTransaction(transaction);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -431,7 +445,11 @@ export default function TransactionsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bạn có chắc muốn xóa giao dịch này?")) return;
-    await deleteTransaction(id);
+    const { error } = await deleteTransaction(id);
+    if (error) {
+      alert("Lỗi xóa giao dịch: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -1716,6 +1734,10 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-5 flex gap-3">
                 <button
                   type="button"

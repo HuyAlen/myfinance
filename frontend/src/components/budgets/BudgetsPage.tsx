@@ -35,6 +35,7 @@ import {
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 import { computeSmartBudget } from "@/src/services/finance/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export default function BudgetsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return (
@@ -224,8 +226,14 @@ export default function BudgetsPage() {
       month: form.month,
       limitAmount,
     };
-    if (form.id) await updateBudget(budget);
-    else await addBudget(budget);
+    setSaveError(null);
+    const { error } = form.id
+      ? await updateBudget(budget)
+      : await addBudget(budget);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -233,7 +241,11 @@ export default function BudgetsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bạn có chắc muốn xóa ngân sách này?")) return;
-    await deleteBudget(id);
+    const { error } = await deleteBudget(id);
+    if (error) {
+      alert("Lỗi xóa ngân sách: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -1047,6 +1059,10 @@ export default function BudgetsPage() {
               </div>
 
               {/* Actions */}
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-6 flex gap-3">
                 <button
                   type="button"

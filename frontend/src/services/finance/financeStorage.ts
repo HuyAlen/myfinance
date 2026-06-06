@@ -20,109 +20,221 @@ import type {
   Wallet,
 } from "@/src/types/finance";
 
+// ─── Auth helper ──────────────────────────────────────────────────────────────
+
+async function getAuthUserId(): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? null;
+}
+
+const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
+
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
 export async function getWallets(): Promise<Wallet[]> {
-  const { data } = await supabase.from("wallets").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("wallets")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getWallets:", error.message);
   return (data ?? []) as Wallet[];
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const { data } = await supabase.from("categories").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getCategories:", error.message);
   return (data ?? []) as Category[];
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
-  const { data } = await supabase
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
     .from("transactions")
     .select("*")
+    .eq("user_id", userId)
     .order("date", { ascending: false });
+  if (error) console.error("[financeStorage] getTransactions:", error.message);
   return (data ?? []) as Transaction[];
 }
 
 export async function getDebts(): Promise<Debt[]> {
-  const { data } = await supabase.from("debts").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("debts")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getDebts:", error.message);
   return (data ?? []) as Debt[];
 }
 
 export async function getGoals(): Promise<Goal[]> {
-  const { data } = await supabase.from("goals").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getGoals:", error.message);
   return (data ?? []) as Goal[];
 }
 
 export async function getBudgets(): Promise<Budget[]> {
-  const { data } = await supabase.from("budgets").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("budgets")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getBudgets:", error.message);
   return (data ?? []) as Budget[];
 }
 
 export async function getInvestments(): Promise<Investment[]> {
-  const { data } = await supabase.from("investments").select("*");
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("investments")
+    .select("*")
+    .eq("user_id", userId);
+  if (error) console.error("[financeStorage] getInvestments:", error.message);
   return (data ?? []) as Investment[];
 }
 
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
 export async function initFinanceDemoData() {
-  const { data } = await supabase.from("wallets").select("id").limit(1);
+  const userId = await getAuthUserId();
+  if (!userId) return;
+
+  // Check whether this user already has data
+  const { data } = await supabase
+    .from("wallets")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
   if (data && data.length > 0) return;
 
   await Promise.all([
+    supabase.from("wallets").upsert(
+      demoWallets.map((w) => ({ ...w, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("categories").upsert(
+      demoCategories.map((c) => ({ ...c, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("transactions").upsert(
+      demoTransactions.map((t) => ({ ...t, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("debts").upsert(
+      demoDebts.map((d) => ({ ...d, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("goals").upsert(
+      demoGoals.map((g) => ({ ...g, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("budgets").upsert(
+      demoBudgets.map((b) => ({ ...b, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+    supabase.from("investments").upsert(
+      demoInvestments.map((i) => ({ ...i, user_id: userId })),
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
+  ]);
+}
+
+export async function resetFinanceDemoData(): Promise<{
+  error: string | null;
+}> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const deleteErrors = await Promise.all([
+    supabase.from("transactions").delete().eq("user_id", userId),
+    supabase.from("budgets").delete().eq("user_id", userId),
+    supabase.from("goals").delete().eq("user_id", userId),
+    supabase.from("debts").delete().eq("user_id", userId),
+    supabase.from("investments").delete().eq("user_id", userId),
+    supabase.from("categories").delete().eq("user_id", userId),
+    supabase.from("wallets").delete().eq("user_id", userId),
+  ]);
+  const firstDeleteErr = deleteErrors.find((r) => r.error)?.error;
+  if (firstDeleteErr) {
+    console.error(
+      "[financeStorage] resetFinanceDemoData delete:",
+      firstDeleteErr.message,
+    );
+    return { error: firstDeleteErr.message };
+  }
+
+  const insertErrors = await Promise.all([
     supabase
       .from("wallets")
-      .upsert(demoWallets, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoWallets.map((w) => ({ ...w, user_id: userId }))),
     supabase
       .from("categories")
-      .upsert(demoCategories, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoCategories.map((c) => ({ ...c, user_id: userId }))),
     supabase
       .from("transactions")
-      .upsert(demoTransactions, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoTransactions.map((t) => ({ ...t, user_id: userId }))),
     supabase
       .from("debts")
-      .upsert(demoDebts, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoDebts.map((d) => ({ ...d, user_id: userId }))),
     supabase
       .from("goals")
-      .upsert(demoGoals, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoGoals.map((g) => ({ ...g, user_id: userId }))),
     supabase
       .from("budgets")
-      .upsert(demoBudgets, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoBudgets.map((b) => ({ ...b, user_id: userId }))),
     supabase
       .from("investments")
-      .upsert(demoInvestments, { onConflict: "id", ignoreDuplicates: true }),
+      .insert(demoInvestments.map((i) => ({ ...i, user_id: userId }))),
   ]);
+  const firstInsertErr = insertErrors.find((r) => r.error)?.error;
+  if (firstInsertErr) {
+    console.error(
+      "[financeStorage] resetFinanceDemoData insert:",
+      firstInsertErr.message,
+    );
+    return { error: firstInsertErr.message };
+  }
+
+  return { error: null };
 }
 
-export async function resetFinanceDemoData() {
-  await Promise.all([
-    supabase.from("transactions").delete().neq("id", ""),
-    supabase.from("budgets").delete().neq("id", ""),
-    supabase.from("goals").delete().neq("id", ""),
-    supabase.from("debts").delete().neq("id", ""),
-    supabase.from("investments").delete().neq("id", ""),
-    supabase.from("categories").delete().neq("id", ""),
-    supabase.from("wallets").delete().neq("id", ""),
-  ]);
+export async function clearAllData(): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
 
-  await Promise.all([
-    supabase.from("wallets").insert(demoWallets),
-    supabase.from("categories").insert(demoCategories),
-    supabase.from("transactions").insert(demoTransactions),
-    supabase.from("debts").insert(demoDebts),
-    supabase.from("goals").insert(demoGoals),
-    supabase.from("budgets").insert(demoBudgets),
-    supabase.from("investments").insert(demoInvestments),
+  const results = await Promise.all([
+    supabase.from("transactions").delete().eq("user_id", userId),
+    supabase.from("budgets").delete().eq("user_id", userId),
+    supabase.from("goals").delete().eq("user_id", userId),
+    supabase.from("debts").delete().eq("user_id", userId),
+    supabase.from("investments").delete().eq("user_id", userId),
+    supabase.from("categories").delete().eq("user_id", userId),
+    supabase.from("wallets").delete().eq("user_id", userId),
   ]);
-}
-
-export async function clearAllData() {
-  await Promise.all([
-    supabase.from("transactions").delete().neq("id", ""),
-    supabase.from("budgets").delete().neq("id", ""),
-    supabase.from("goals").delete().neq("id", ""),
-    supabase.from("debts").delete().neq("id", ""),
-    supabase.from("investments").delete().neq("id", ""),
-    supabase.from("categories").delete().neq("id", ""),
-    supabase.from("wallets").delete().neq("id", ""),
-  ]);
+  const firstErr = results.find((r) => r.error)?.error;
+  if (firstErr) {
+    console.error("[financeStorage] clearAllData:", firstErr.message);
+    return { error: firstErr.message };
+  }
+  return { error: null };
 }
 
 export async function importAllData(data: {
@@ -133,27 +245,82 @@ export async function importAllData(data: {
   goals?: Goal[];
   budgets?: Budget[];
   investments?: Investment[];
-}) {
-  await clearAllData();
+}): Promise<{ error: string | null }> {
+  const clearResult = await clearAllData();
+  if (clearResult.error) return clearResult;
 
-  const inserts: PromiseLike<unknown>[] = [];
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const run = async (
+    table: string,
+    rows: object[],
+  ): Promise<{ error: string | null }> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from(table) as any).insert(rows);
+    return { error: (error as { message: string } | null)?.message ?? null };
+  };
+
+  const inserts: Promise<{ error: string | null }>[] = [];
 
   if (data.wallets?.length)
-    inserts.push(supabase.from("wallets").insert(data.wallets));
+    inserts.push(
+      run(
+        "wallets",
+        data.wallets.map((w) => ({ ...w, user_id: userId })),
+      ),
+    );
   if (data.categories?.length)
-    inserts.push(supabase.from("categories").insert(data.categories));
+    inserts.push(
+      run(
+        "categories",
+        data.categories.map((c) => ({ ...c, user_id: userId })),
+      ),
+    );
   if (data.transactions?.length)
-    inserts.push(supabase.from("transactions").insert(data.transactions));
+    inserts.push(
+      run(
+        "transactions",
+        data.transactions.map((t) => ({ ...t, user_id: userId })),
+      ),
+    );
   if (data.debts?.length)
-    inserts.push(supabase.from("debts").insert(data.debts));
+    inserts.push(
+      run(
+        "debts",
+        data.debts.map((d) => ({ ...d, user_id: userId })),
+      ),
+    );
   if (data.goals?.length)
-    inserts.push(supabase.from("goals").insert(data.goals));
+    inserts.push(
+      run(
+        "goals",
+        data.goals.map((g) => ({ ...g, user_id: userId })),
+      ),
+    );
   if (data.budgets?.length)
-    inserts.push(supabase.from("budgets").insert(data.budgets));
+    inserts.push(
+      run(
+        "budgets",
+        data.budgets.map((b) => ({ ...b, user_id: userId })),
+      ),
+    );
   if (data.investments?.length)
-    inserts.push(supabase.from("investments").insert(data.investments));
+    inserts.push(
+      run(
+        "investments",
+        data.investments.map((i) => ({ ...i, user_id: userId })),
+      ),
+    );
 
-  await Promise.all(inserts);
+  const results = await Promise.all(inserts);
+  const firstErr = results.find((r) => r.error !== null)?.error ?? null;
+  if (firstErr) {
+    console.error("[financeStorage] importAllData:", firstErr);
+    return { error: firstErr };
+  }
+  return { error: null };
 }
 
 // ─── Transaction CRUD + Wallet Balance Sync ───────────────────────────────────
@@ -168,62 +335,134 @@ function walletDelta(tx: Transaction): number {
   return -tx.amount; // transfer: source loses amount
 }
 
-export async function addTransaction(transaction: Transaction) {
+export async function addTransaction(
+  transaction: Transaction,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
   if (transaction.type === "transfer") {
-    // Fetch both wallets in one round-trip
     const walletsToUpdate = [
       transaction.walletId,
       transaction.transferToWalletId,
     ].filter(Boolean) as string[];
-    const { data: walletData } = await supabase
+
+    const { data: walletData, error: fetchErr } = await supabase
       .from("wallets")
       .select("*")
+      .eq("user_id", userId)
       .in("id", walletsToUpdate);
 
+    if (fetchErr) {
+      console.error(
+        "[financeStorage] addTransaction – fetch wallets:",
+        fetchErr.message,
+      );
+      return { error: fetchErr.message };
+    }
+
     const wallets = (walletData ?? []) as Wallet[];
-    const updates = wallets.map((w) => {
-      const delta =
-        w.id === transaction.walletId
-          ? -transaction.amount
-          : transaction.amount;
-      return supabase
-        .from("wallets")
-        .update({ balance: w.balance + delta })
-        .eq("id", w.id);
-    });
-    await Promise.all(updates);
-    await supabase.from("transactions").insert(transaction);
-    return;
+    const updateResults = await Promise.all(
+      wallets.map((w) => {
+        const delta =
+          w.id === transaction.walletId
+            ? -transaction.amount
+            : transaction.amount;
+        return supabase
+          .from("wallets")
+          .update({ balance: w.balance + delta })
+          .eq("id", w.id)
+          .eq("user_id", userId);
+      }),
+    );
+    const walletErr = updateResults.find((r) => r.error)?.error;
+    if (walletErr) {
+      console.error(
+        "[financeStorage] addTransaction – update wallet:",
+        walletErr.message,
+      );
+      return { error: walletErr.message };
+    }
+
+    const { error: txErr } = await supabase
+      .from("transactions")
+      .insert({ ...transaction, user_id: userId });
+    if (txErr) {
+      console.error(
+        "[financeStorage] addTransaction (transfer):",
+        txErr.message,
+      );
+      return { error: txErr.message };
+    }
+    return { error: null };
   }
 
   // Income / Expense
-  const { data: walletData } = await supabase
+  const { data: walletData, error: fetchErr } = await supabase
     .from("wallets")
     .select("*")
     .eq("id", transaction.walletId)
+    .eq("user_id", userId)
     .limit(1);
+
+  if (fetchErr) {
+    console.error(
+      "[financeStorage] addTransaction – fetch wallet:",
+      fetchErr.message,
+    );
+    return { error: fetchErr.message };
+  }
 
   const wallet = walletData?.[0] as Wallet | undefined;
   if (wallet) {
-    await supabase
+    const { error: balErr } = await supabase
       .from("wallets")
       .update({ balance: wallet.balance + walletDelta(transaction) })
-      .eq("id", wallet.id);
+      .eq("id", wallet.id)
+      .eq("user_id", userId);
+    if (balErr) {
+      console.error(
+        "[financeStorage] addTransaction – balance update:",
+        balErr.message,
+      );
+      return { error: balErr.message };
+    }
   }
-  await supabase.from("transactions").insert(transaction);
+
+  const { error: txErr } = await supabase
+    .from("transactions")
+    .insert({ ...transaction, user_id: userId });
+  if (txErr) {
+    console.error("[financeStorage] addTransaction:", txErr.message);
+    return { error: txErr.message };
+  }
+  return { error: null };
 }
 
-export async function updateTransaction(updatedTransaction: Transaction) {
-  const { data: oldData } = await supabase
+export async function updateTransaction(
+  updatedTransaction: Transaction,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { data: oldData, error: fetchErr } = await supabase
     .from("transactions")
     .select("*")
     .eq("id", updatedTransaction.id)
+    .eq("user_id", userId)
     .limit(1);
+
+  if (fetchErr) {
+    console.error(
+      "[financeStorage] updateTransaction – fetch:",
+      fetchErr.message,
+    );
+    return { error: fetchErr.message };
+  }
 
   const oldTransaction = oldData?.[0] as Transaction | undefined;
 
   if (oldTransaction) {
-    // Collect every unique wallet ID touched by old + new transaction
     const allIds = [
       oldTransaction.walletId,
       oldTransaction.transferToWalletId,
@@ -232,17 +471,24 @@ export async function updateTransaction(updatedTransaction: Transaction) {
     ].filter((id): id is string => !!id);
     const uniqueIds = [...new Set(allIds)];
 
-    const { data: walletData } = await supabase
+    const { data: walletData, error: walletFetchErr } = await supabase
       .from("wallets")
       .select("*")
+      .eq("user_id", userId)
       .in("id", uniqueIds);
 
-    // Build a balance map and compute net changes in memory
+    if (walletFetchErr) {
+      console.error(
+        "[financeStorage] updateTransaction – fetch wallets:",
+        walletFetchErr.message,
+      );
+      return { error: walletFetchErr.message };
+    }
+
     const balanceMap = new Map<string, number>(
       ((walletData ?? []) as Wallet[]).map((w) => [w.id, w.balance]),
     );
 
-    // Reverse old transaction effects
     const reverseEffect = (tx: Transaction, sign: -1 | 1) => {
       const srcBal = balanceMap.get(tx.walletId);
       if (srcBal !== undefined) {
@@ -251,176 +497,457 @@ export async function updateTransaction(updatedTransaction: Transaction) {
       if (tx.type === "transfer" && tx.transferToWalletId) {
         const dstBal = balanceMap.get(tx.transferToWalletId);
         if (dstBal !== undefined) {
-          // transfer destination received +amount; to reverse, subtract
           balanceMap.set(tx.transferToWalletId, dstBal - tx.amount * sign);
         }
       }
     };
 
-    reverseEffect(oldTransaction, -1); // undo old
-    reverseEffect(updatedTransaction, 1); // apply new
+    reverseEffect(oldTransaction, -1);
+    reverseEffect(updatedTransaction, 1);
 
-    // Persist updated balances
-    await Promise.all(
+    const updateResults = await Promise.all(
       [...balanceMap.entries()].map(([id, balance]) =>
-        supabase.from("wallets").update({ balance }).eq("id", id),
+        supabase
+          .from("wallets")
+          .update({ balance })
+          .eq("id", id)
+          .eq("user_id", userId),
       ),
     );
+    const balErr = updateResults.find((r) => r.error)?.error;
+    if (balErr) {
+      console.error(
+        "[financeStorage] updateTransaction – wallet balance:",
+        balErr.message,
+      );
+      return { error: balErr.message };
+    }
   }
 
-  await supabase
+  const { error: txErr } = await supabase
     .from("transactions")
-    .update(updatedTransaction)
-    .eq("id", updatedTransaction.id);
+    .update({ ...updatedTransaction, user_id: userId })
+    .eq("id", updatedTransaction.id)
+    .eq("user_id", userId);
+
+  if (txErr) {
+    console.error("[financeStorage] updateTransaction:", txErr.message);
+    return { error: txErr.message };
+  }
+  return { error: null };
 }
 
-export async function deleteTransaction(transactionId: string) {
-  const { data: transactionData } = await supabase
+export async function deleteTransaction(
+  transactionId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { data: transactionData, error: fetchErr } = await supabase
     .from("transactions")
     .select("*")
     .eq("id", transactionId)
+    .eq("user_id", userId)
     .limit(1);
+
+  if (fetchErr) {
+    console.error(
+      "[financeStorage] deleteTransaction – fetch:",
+      fetchErr.message,
+    );
+    return { error: fetchErr.message };
+  }
 
   const transaction = transactionData?.[0] as Transaction | undefined;
 
   if (transaction) {
     if (transaction.type === "transfer") {
-      // Reverse both legs of the transfer
       const walletsToUpdate = [
         transaction.walletId,
         transaction.transferToWalletId,
       ].filter(Boolean) as string[];
-      const { data: walletData } = await supabase
+
+      const { data: walletData, error: walletFetchErr } = await supabase
         .from("wallets")
         .select("*")
+        .eq("user_id", userId)
         .in("id", walletsToUpdate);
 
+      if (walletFetchErr) {
+        console.error(
+          "[financeStorage] deleteTransaction – fetch wallets:",
+          walletFetchErr.message,
+        );
+        return { error: walletFetchErr.message };
+      }
+
       const wallets = (walletData ?? []) as Wallet[];
-      const updates = wallets.map((w) => {
-        // Source lost amount; restore it. Destination gained amount; remove it.
-        const delta =
-          w.id === transaction.walletId
-            ? transaction.amount
-            : -transaction.amount;
-        return supabase
-          .from("wallets")
-          .update({ balance: w.balance + delta })
-          .eq("id", w.id);
-      });
-      await Promise.all(updates);
+      const updateResults = await Promise.all(
+        wallets.map((w) => {
+          const delta =
+            w.id === transaction.walletId
+              ? transaction.amount
+              : -transaction.amount;
+          return supabase
+            .from("wallets")
+            .update({ balance: w.balance + delta })
+            .eq("id", w.id)
+            .eq("user_id", userId);
+        }),
+      );
+      const balErr = updateResults.find((r) => r.error)?.error;
+      if (balErr) {
+        console.error(
+          "[financeStorage] deleteTransaction – wallet balance:",
+          balErr.message,
+        );
+        return { error: balErr.message };
+      }
     } else {
-      const { data: walletData } = await supabase
+      const { data: walletData, error: walletFetchErr } = await supabase
         .from("wallets")
         .select("*")
         .eq("id", transaction.walletId)
+        .eq("user_id", userId)
         .limit(1);
+
+      if (walletFetchErr) {
+        console.error(
+          "[financeStorage] deleteTransaction – fetch wallet:",
+          walletFetchErr.message,
+        );
+        return { error: walletFetchErr.message };
+      }
 
       const wallet = walletData?.[0] as Wallet | undefined;
       if (wallet) {
-        // Reverse the effect: undo walletDelta
-        await supabase
+        const { error: balErr } = await supabase
           .from("wallets")
           .update({ balance: wallet.balance - walletDelta(transaction) })
-          .eq("id", wallet.id);
+          .eq("id", wallet.id)
+          .eq("user_id", userId);
+        if (balErr) {
+          console.error(
+            "[financeStorage] deleteTransaction – balance:",
+            balErr.message,
+          );
+          return { error: balErr.message };
+        }
       }
     }
   }
 
-  await supabase.from("transactions").delete().eq("id", transactionId);
+  const { error: delErr } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", transactionId)
+    .eq("user_id", userId);
+
+  if (delErr) {
+    console.error("[financeStorage] deleteTransaction:", delErr.message);
+    return { error: delErr.message };
+  }
+  return { error: null };
 }
 
 // ─── Wallet CRUD ──────────────────────────────────────────────────────────────
 
-export async function addWallet(wallet: Wallet) {
-  await supabase.from("wallets").insert(wallet);
+export async function addWallet(
+  wallet: Wallet,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("wallets")
+    .insert({ ...wallet, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addWallet:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateWallet(updatedWallet: Wallet) {
-  await supabase
+export async function updateWallet(
+  updatedWallet: Wallet,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
     .from("wallets")
     .update(updatedWallet)
-    .eq("id", updatedWallet.id);
+    .eq("id", updatedWallet.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateWallet:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteWallet(walletId: string) {
-  await supabase.from("wallets").delete().eq("id", walletId);
+export async function deleteWallet(
+  walletId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("wallets")
+    .delete()
+    .eq("id", walletId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteWallet:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ─── Category CRUD ────────────────────────────────────────────────────────────
 
-export async function addCategory(category: Category) {
-  await supabase.from("categories").insert(category);
+export async function addCategory(
+  category: Category,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("categories")
+    .insert({ ...category, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addCategory:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateCategory(updatedCategory: Category) {
-  await supabase
+export async function updateCategory(
+  updatedCategory: Category,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
     .from("categories")
     .update(updatedCategory)
-    .eq("id", updatedCategory.id);
+    .eq("id", updatedCategory.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateCategory:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteCategory(categoryId: string) {
-  await supabase.from("categories").delete().eq("id", categoryId);
+export async function deleteCategory(
+  categoryId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", categoryId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteCategory:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ─── Budget CRUD ──────────────────────────────────────────────────────────────
 
-export async function addBudget(budget: Budget) {
-  await supabase.from("budgets").insert(budget);
+export async function addBudget(
+  budget: Budget,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("budgets")
+    .insert({ ...budget, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addBudget:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateBudget(updatedBudget: Budget) {
-  await supabase
+export async function updateBudget(
+  updatedBudget: Budget,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
     .from("budgets")
     .update(updatedBudget)
-    .eq("id", updatedBudget.id);
+    .eq("id", updatedBudget.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateBudget:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteBudget(budgetId: string) {
-  await supabase.from("budgets").delete().eq("id", budgetId);
+export async function deleteBudget(
+  budgetId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("budgets")
+    .delete()
+    .eq("id", budgetId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteBudget:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ─── Goal CRUD ────────────────────────────────────────────────────────────────
 
-export async function addGoal(goal: Goal) {
-  await supabase.from("goals").insert(goal);
+export async function addGoal(goal: Goal): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("goals")
+    .insert({ ...goal, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addGoal:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateGoal(updatedGoal: Goal) {
-  await supabase.from("goals").update(updatedGoal).eq("id", updatedGoal.id);
+export async function updateGoal(
+  updatedGoal: Goal,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("goals")
+    .update(updatedGoal)
+    .eq("id", updatedGoal.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateGoal:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteGoal(goalId: string) {
-  await supabase.from("goals").delete().eq("id", goalId);
+export async function deleteGoal(
+  goalId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("goals")
+    .delete()
+    .eq("id", goalId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteGoal:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ─── Debt CRUD ────────────────────────────────────────────────────────────────
 
-export async function addDebt(debt: Debt) {
-  await supabase.from("debts").insert(debt);
+export async function addDebt(debt: Debt): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("debts")
+    .insert({ ...debt, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addDebt:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateDebt(updatedDebt: Debt) {
-  await supabase.from("debts").update(updatedDebt).eq("id", updatedDebt.id);
+export async function updateDebt(
+  updatedDebt: Debt,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("debts")
+    .update(updatedDebt)
+    .eq("id", updatedDebt.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateDebt:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteDebt(debtId: string) {
-  await supabase.from("debts").delete().eq("id", debtId);
+export async function deleteDebt(
+  debtId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("debts")
+    .delete()
+    .eq("id", debtId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteDebt:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ─── Investment CRUD ──────────────────────────────────────────────────────────
 
-export async function addInvestment(investment: Investment) {
-  await supabase.from("investments").insert(investment);
+export async function addInvestment(
+  investment: Investment,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("investments")
+    .insert({ ...investment, user_id: userId });
+  if (error) {
+    console.error("[financeStorage] addInvestment:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function updateInvestment(updatedInvestment: Investment) {
-  await supabase
+export async function updateInvestment(
+  updatedInvestment: Investment,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
     .from("investments")
     .update(updatedInvestment)
-    .eq("id", updatedInvestment.id);
+    .eq("id", updatedInvestment.id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] updateInvestment:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function deleteInvestment(investmentId: string) {
-  await supabase.from("investments").delete().eq("id", investmentId);
+export async function deleteInvestment(
+  investmentId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+  const { error } = await supabase
+    .from("investments")
+    .delete()
+    .eq("id", investmentId)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[financeStorage] deleteInvestment:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }

@@ -52,6 +52,7 @@ import {
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<InvestmentType | "all">("all");
@@ -478,8 +480,14 @@ export default function InvestmentsPage() {
       purchaseDate: form.purchaseDate || undefined,
       notes: form.notes.trim() || undefined,
     };
-    if (form.id) await updateInvestment(investment);
-    else await addInvestment(investment);
+    setSaveError(null);
+    const { error } = form.id
+      ? await updateInvestment(investment)
+      : await addInvestment(investment);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -487,7 +495,11 @@ export default function InvestmentsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bạn có chắc muốn xóa tài sản đầu tư này?")) return;
-    await deleteInvestment(id);
+    const { error } = await deleteInvestment(id);
+    if (error) {
+      alert("Lỗi xóa tài sản: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -1708,6 +1720,10 @@ export default function InvestmentsPage() {
               </div>
 
               {/* Actions */}
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-6 flex gap-3">
                 <button
                   type="button"

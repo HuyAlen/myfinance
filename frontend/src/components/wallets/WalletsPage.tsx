@@ -45,6 +45,7 @@ import {
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FormState = {
@@ -92,6 +93,7 @@ export default function WalletsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function reloadData() {
     const [w, t] = await Promise.all([getWallets(), getTransactions()]);
@@ -292,8 +294,14 @@ export default function WalletsPage() {
       type: form.type,
       balance,
     };
-    if (form.id) await updateWallet(wallet);
-    else await addWallet(wallet);
+    setSaveError(null);
+    const { error } = form.id
+      ? await updateWallet(wallet)
+      : await addWallet(wallet);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -314,7 +322,11 @@ export default function WalletsPage() {
     }
     if (!confirm('Bạn có chắc muốn xóa ví "' + (wallet?.name ?? "này") + '"?'))
       return;
-    await deleteWallet(id);
+    const { error } = await deleteWallet(id);
+    if (error) {
+      alert("Lỗi xóa ví: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -918,6 +930,10 @@ export default function WalletsPage() {
               </div>
 
               {/* Actions */}
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-5 flex gap-3">
                 <button
                   type="button"

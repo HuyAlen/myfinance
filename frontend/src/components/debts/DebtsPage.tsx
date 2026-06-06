@@ -38,6 +38,7 @@ import {
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
+import { SaveError } from "@/src/components/ui/SaveError";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -120,6 +121,7 @@ export default function DebtsPage() {
   const [annualIncome, setAnnualIncome] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
@@ -368,8 +370,12 @@ export default function DebtsPage() {
       totalAmount,
       remainingAmount,
     };
-    if (form.id) await updateDebt(debt);
-    else await addDebt(debt);
+    setSaveError(null);
+    const { error } = form.id ? await updateDebt(debt) : await addDebt(debt);
+    if (error) {
+      setSaveError(error);
+      return;
+    }
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
@@ -377,7 +383,11 @@ export default function DebtsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Bạn có chắc muốn xóa khoản nợ này?")) return;
-    await deleteDebt(id);
+    const { error } = await deleteDebt(id);
+    if (error) {
+      alert("Lỗi xóa khoản nợ: " + error);
+      return;
+    }
     await reloadData();
   }
 
@@ -1171,6 +1181,10 @@ export default function DebtsPage() {
                   placeholder="25000000"
                 />
               </div>
+              <SaveError
+                message={saveError}
+                onDismiss={() => setSaveError(null)}
+              />
               <div className="mt-6 flex gap-3">
                 <button
                   type="button"
