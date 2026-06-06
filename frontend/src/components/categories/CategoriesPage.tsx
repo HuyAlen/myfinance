@@ -27,7 +27,6 @@ import {
   deleteCategory,
   getCategories,
   getTransactions,
-  initFinanceDemoData,
   updateCategory,
 } from "@/src/services/finance/financeStorage";
 
@@ -67,7 +66,7 @@ export default function CategoriesPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["categories", "transactions"], reloadData);
 

@@ -29,7 +29,6 @@ import {
   getBudgets,
   getCategories,
   getTransactions,
-  initFinanceDemoData,
   updateBudget,
 } from "@/src/services/finance/financeStorage";
 
@@ -93,7 +92,7 @@ export default function BudgetsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["budgets", "transactions"], reloadData);
 

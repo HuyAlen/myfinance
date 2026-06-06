@@ -37,7 +37,6 @@ import {
   getTransactions,
   getWallets,
   importAllData,
-  initFinanceDemoData,
   resetFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 
@@ -128,7 +127,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadStats);
+    reloadStats();
   }, []);
 
   // ── Preserved handlers ─────────────────────────────────────────────────────

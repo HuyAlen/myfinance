@@ -43,7 +43,6 @@ import {
   getInvestments,
   getTransactions,
   getWallets,
-  initFinanceDemoData,
   resetFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 
@@ -123,7 +122,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
 
   useRealtimeTable(
@@ -303,14 +302,12 @@ export default function DashboardPage() {
   // ── Recent transactions ───────────────────────────────────────────────────
   const recentTxns = useMemo(
     () =>
-      transactions
-        .slice(0, 5)
-        .map((t) => ({
-          ...t,
-          categoryName:
-            categories.find((c) => c.id === t.categoryId)?.name ?? "Khác",
-          walletName: wallets.find((w) => w.id === t.walletId)?.name ?? "Ví",
-        })),
+      transactions.slice(0, 5).map((t) => ({
+        ...t,
+        categoryName:
+          categories.find((c) => c.id === t.categoryId)?.name ?? "Khác",
+        walletName: wallets.find((w) => w.id === t.walletId)?.name ?? "Ví",
+      })),
     [transactions, categories, wallets],
   );
 

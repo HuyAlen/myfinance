@@ -26,7 +26,6 @@ import {
   addGoal,
   deleteGoal,
   getGoals,
-  initFinanceDemoData,
   updateGoal,
 } from "@/src/services/finance/financeStorage";
 
@@ -117,7 +116,7 @@ export default function GoalsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["goals"], reloadData);
 

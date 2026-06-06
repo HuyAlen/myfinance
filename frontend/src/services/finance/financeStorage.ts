@@ -111,11 +111,46 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+// ─── Demo seed guard ──────────────────────────────────────────────────────────
+// Key stored in localStorage per user. When set, initFinanceDemoData() is a
+// no-op — ensures demo data never re-seeds after "Clear All Data".
+
+function seedGuardKey(userId: string): string {
+  return `mf-skip-auto-seed-${userId}`;
+}
+
+function isSeedBlocked(userId: string): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(seedGuardKey(userId)) === "1";
+}
+
+function blockSeed(userId: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(seedGuardKey(userId), "1");
+  }
+}
+
+function unblockSeed(userId: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(seedGuardKey(userId));
+  }
+}
+
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
+/**
+ * Seeds demo data on first login ONLY.
+ * Skipped when:
+ *  (a) the user already has wallets in Supabase, OR
+ *  (b) the seed-guard flag is set (e.g. after "Clear All Data").
+ * Safe to call on every page mount — it is a no-op in both cases above.
+ */
 export async function initFinanceDemoData() {
   const userId = await getAuthUserId();
   if (!userId) return;
+
+  // Respect explicit "do not auto-seed" flag set by clearAllUserData
+  if (isSeedBlocked(userId)) return;
 
   // Check whether this user already has data
   const { data } = await supabase
@@ -162,6 +197,9 @@ export async function resetFinanceDemoData(): Promise<{
 }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
+
+  // Allow auto-seed to work again after an explicit reset
+  unblockSeed(userId);
 
   const deleteErrors = await Promise.all([
     supabase.from("transactions").delete().eq("user_id", userId),
@@ -247,6 +285,9 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
       };
     }
   }
+
+  // Prevent auto-seed from re-populating demo data on next page load
+  blockSeed(userId);
 
   return { error: null };
 }

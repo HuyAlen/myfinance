@@ -46,7 +46,6 @@ import {
   addInvestment,
   deleteInvestment,
   getInvestments,
-  initFinanceDemoData,
   updateInvestment,
 } from "@/src/services/finance/financeStorage";
 
@@ -157,7 +156,7 @@ export default function InvestmentsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["investments"], reloadData);
 

@@ -36,7 +36,6 @@ import {
   getInvestments,
   getTransactions,
   getWallets,
-  initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 
 import { formatVND } from "@/src/services/finance/financeCalculations";
@@ -78,7 +77,6 @@ export default function AIInsightsPage() {
 
   useEffect(() => {
     async function load() {
-      await initFinanceDemoData();
       const [
         wallets,
         categories,

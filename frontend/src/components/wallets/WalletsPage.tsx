@@ -34,7 +34,6 @@ import {
   deleteWallet,
   getTransactions,
   getWallets,
-  initFinanceDemoData,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
 
@@ -102,7 +101,7 @@ export default function WalletsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["wallets", "transactions"], reloadData);
 

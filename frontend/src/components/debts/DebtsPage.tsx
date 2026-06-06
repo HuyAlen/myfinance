@@ -28,7 +28,6 @@ import {
   getDebts,
   getWallets,
   getTransactions,
-  initFinanceDemoData,
   updateDebt,
 } from "@/src/services/finance/financeStorage";
 
@@ -142,7 +141,7 @@ export default function DebtsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    reloadData();
   }, []);
   useRealtimeTable(["debts"], reloadData);
 
