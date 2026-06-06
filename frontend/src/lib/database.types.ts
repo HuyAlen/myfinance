@@ -50,30 +50,42 @@ export type Database = {
       transactions: {
         Row: {
           id: string;
-          type: "income" | "expense";
+          type: "income" | "expense" | "transfer";
           amount: number;
           categoryId: string;
           walletId: string;
           note: string;
           date: string;
+          transferToWalletId: string | null;
+          isRecurring: boolean | null;
+          recurrence: "daily" | "weekly" | "monthly" | "yearly" | null;
+          nextRunDate: string | null;
         };
         Insert: {
           id: string;
-          type: "income" | "expense";
+          type: "income" | "expense" | "transfer";
           amount: number;
           categoryId: string;
           walletId: string;
           note?: string;
           date: string;
+          transferToWalletId?: string | null;
+          isRecurring?: boolean | null;
+          recurrence?: "daily" | "weekly" | "monthly" | "yearly" | null;
+          nextRunDate?: string | null;
         };
         Update: {
           id?: string;
-          type?: "income" | "expense";
+          type?: "income" | "expense" | "transfer";
           amount?: number;
           categoryId?: string;
           walletId?: string;
           note?: string;
           date?: string;
+          transferToWalletId?: string | null;
+          isRecurring?: boolean | null;
+          recurrence?: "daily" | "weekly" | "monthly" | "yearly" | null;
+          nextRunDate?: string | null;
         };
         Relationships: [];
       };
@@ -84,18 +96,30 @@ export type Database = {
           name: string;
           totalAmount: number;
           remainingAmount: number;
+          interestRate: number | null;
+          minimumPayment: number | null;
+          dueDate: string | null;
+          loanTermMonths: number | null;
         };
         Insert: {
           id: string;
           name: string;
           totalAmount: number;
           remainingAmount: number;
+          interestRate?: number | null;
+          minimumPayment?: number | null;
+          dueDate?: string | null;
+          loanTermMonths?: number | null;
         };
         Update: {
           id?: string;
           name?: string;
           totalAmount?: number;
           remainingAmount?: number;
+          interestRate?: number | null;
+          minimumPayment?: number | null;
+          dueDate?: string | null;
+          loanTermMonths?: number | null;
         };
         Relationships: [];
       };
@@ -128,18 +152,27 @@ export type Database = {
           categoryId: string;
           month: string;
           limitAmount: number;
+          rolloverAmount: number | null;
+          warningThreshold: number | null;
+          criticalThreshold: number | null;
         };
         Insert: {
           id: string;
           categoryId: string;
           month: string;
           limitAmount: number;
+          rolloverAmount?: number | null;
+          warningThreshold?: number | null;
+          criticalThreshold?: number | null;
         };
         Update: {
           id?: string;
           categoryId?: string;
           month?: string;
           limitAmount?: number;
+          rolloverAmount?: number | null;
+          warningThreshold?: number | null;
+          criticalThreshold?: number | null;
         };
         Relationships: [];
       };
@@ -154,6 +187,9 @@ export type Database = {
           currentValue: number;
           purchaseDate: string | null;
           notes: string | null;
+          quantity: number | null;
+          averageCost: number | null;
+          currentPrice: number | null;
         };
         Insert: {
           id: string;
@@ -164,6 +200,9 @@ export type Database = {
           currentValue?: number;
           purchaseDate?: string | null;
           notes?: string | null;
+          quantity?: number | null;
+          averageCost?: number | null;
+          currentPrice?: number | null;
         };
         Update: {
           id?: string;
@@ -174,6 +213,9 @@ export type Database = {
           currentValue?: number;
           purchaseDate?: string | null;
           notes?: string | null;
+          quantity?: number | null;
+          averageCost?: number | null;
+          currentPrice?: number | null;
         };
         Relationships: [];
       };

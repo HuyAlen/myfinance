@@ -1,4 +1,6 @@
-export type TransactionType = "income" | "expense";
+export type TransactionType = "income" | "expense" | "transfer";
+
+export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
 
 export type WalletType = "cash" | "bank" | "ewallet" | "investment";
 
@@ -25,6 +27,12 @@ export type Transaction = {
   walletId: string;
   note: string;
   date: string;
+  // Phase 1 — wallet transfers
+  transferToWalletId?: string;
+  // Phase 2 — recurring transactions
+  isRecurring?: boolean;
+  recurrence?: RecurrenceFrequency;
+  nextRunDate?: string;
 };
 
 export type Debt = {
@@ -32,6 +40,11 @@ export type Debt = {
   name: string;
   totalAmount: number;
   remainingAmount: number;
+  // Phase 3 — advanced debt model
+  interestRate?: number;
+  minimumPayment?: number;
+  dueDate?: string;
+  loanTermMonths?: number;
 };
 
 export type Goal = {
@@ -46,6 +59,10 @@ export type Budget = {
   categoryId: string;
   month: string;
   limitAmount: number;
+  // Phase 4 — advanced budgets
+  rolloverAmount?: number;
+  warningThreshold?: number;
+  criticalThreshold?: number;
 };
 
 export type InvestmentType = "stock" | "crypto" | "fund" | "gold" | "other";
@@ -59,4 +76,8 @@ export type Investment = {
   currentValue: number;
   purchaseDate?: string;
   notes?: string;
+  // Phase 5 — advanced investment data
+  quantity?: number;
+  averageCost?: number;
+  currentPrice?: number;
 };

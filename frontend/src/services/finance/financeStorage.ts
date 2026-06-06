@@ -158,7 +158,45 @@ export async function importAllData(data: {
 
 // ─── Transaction CRUD + Wallet Balance Sync ───────────────────────────────────
 
+/**
+ * Compute the signed delta a transaction applies to its source wallet.
+ * Transfers are handled separately (negative on source, positive on destination).
+ */
+function walletDelta(tx: Transaction): number {
+  if (tx.type === "income") return tx.amount;
+  if (tx.type === "expense") return -tx.amount;
+  return -tx.amount; // transfer: source loses amount
+}
+
 export async function addTransaction(transaction: Transaction) {
+  if (transaction.type === "transfer") {
+    // Fetch both wallets in one round-trip
+    const walletsToUpdate = [
+      transaction.walletId,
+      transaction.transferToWalletId,
+    ].filter(Boolean) as string[];
+    const { data: walletData } = await supabase
+      .from("wallets")
+      .select("*")
+      .in("id", walletsToUpdate);
+
+    const wallets = (walletData ?? []) as Wallet[];
+    const updates = wallets.map((w) => {
+      const delta =
+        w.id === transaction.walletId
+          ? -transaction.amount
+          : transaction.amount;
+      return supabase
+        .from("wallets")
+        .update({ balance: w.balance + delta })
+        .eq("id", w.id);
+    });
+    await Promise.all(updates);
+    await supabase.from("transactions").insert(transaction);
+    return;
+  }
+
+  // Income / Expense
   const { data: walletData } = await supabase
     .from("wallets")
     .select("*")
@@ -166,15 +204,12 @@ export async function addTransaction(transaction: Transaction) {
     .limit(1);
 
   const wallet = walletData?.[0] as Wallet | undefined;
-
   if (wallet) {
-    const sign = transaction.type === "income" ? 1 : -1;
     await supabase
       .from("wallets")
-      .update({ balance: wallet.balance + transaction.amount * sign })
+      .update({ balance: wallet.balance + walletDelta(transaction) })
       .eq("id", wallet.id);
   }
-
   await supabase.from("transactions").insert(transaction);
 }
 
@@ -188,67 +223,49 @@ export async function updateTransaction(updatedTransaction: Transaction) {
   const oldTransaction = oldData?.[0] as Transaction | undefined;
 
   if (oldTransaction) {
-    if (oldTransaction.walletId === updatedTransaction.walletId) {
-      const { data: walletData } = await supabase
-        .from("wallets")
-        .select("*")
-        .eq("id", oldTransaction.walletId)
-        .limit(1);
+    // Collect every unique wallet ID touched by old + new transaction
+    const allIds = [
+      oldTransaction.walletId,
+      oldTransaction.transferToWalletId,
+      updatedTransaction.walletId,
+      updatedTransaction.transferToWalletId,
+    ].filter((id): id is string => !!id);
+    const uniqueIds = [...new Set(allIds)];
 
-      const wallet = walletData?.[0] as Wallet | undefined;
+    const { data: walletData } = await supabase
+      .from("wallets")
+      .select("*")
+      .in("id", uniqueIds);
 
-      if (wallet) {
-        const oldSign = oldTransaction.type === "income" ? 1 : -1;
-        const newSign = updatedTransaction.type === "income" ? 1 : -1;
-        const newBalance =
-          wallet.balance -
-          oldTransaction.amount * oldSign +
-          updatedTransaction.amount * newSign;
-        await supabase
-          .from("wallets")
-          .update({ balance: newBalance })
-          .eq("id", wallet.id);
+    // Build a balance map and compute net changes in memory
+    const balanceMap = new Map<string, number>(
+      ((walletData ?? []) as Wallet[]).map((w) => [w.id, w.balance]),
+    );
+
+    // Reverse old transaction effects
+    const reverseEffect = (tx: Transaction, sign: -1 | 1) => {
+      const srcBal = balanceMap.get(tx.walletId);
+      if (srcBal !== undefined) {
+        balanceMap.set(tx.walletId, srcBal + walletDelta(tx) * sign);
       }
-    } else {
-      const { data: walletData } = await supabase
-        .from("wallets")
-        .select("*")
-        .in("id", [oldTransaction.walletId, updatedTransaction.walletId]);
-
-      const wallets = (walletData ?? []) as Wallet[];
-      const oldWallet = wallets.find((w) => w.id === oldTransaction.walletId);
-      const newWallet = wallets.find(
-        (w) => w.id === updatedTransaction.walletId,
-      );
-
-      const updates: PromiseLike<unknown>[] = [];
-
-      if (oldWallet) {
-        const oldSign = oldTransaction.type === "income" ? 1 : -1;
-        updates.push(
-          supabase
-            .from("wallets")
-            .update({
-              balance: oldWallet.balance - oldTransaction.amount * oldSign,
-            })
-            .eq("id", oldWallet.id),
-        );
+      if (tx.type === "transfer" && tx.transferToWalletId) {
+        const dstBal = balanceMap.get(tx.transferToWalletId);
+        if (dstBal !== undefined) {
+          // transfer destination received +amount; to reverse, subtract
+          balanceMap.set(tx.transferToWalletId, dstBal - tx.amount * sign);
+        }
       }
+    };
 
-      if (newWallet) {
-        const newSign = updatedTransaction.type === "income" ? 1 : -1;
-        updates.push(
-          supabase
-            .from("wallets")
-            .update({
-              balance: newWallet.balance + updatedTransaction.amount * newSign,
-            })
-            .eq("id", newWallet.id),
-        );
-      }
+    reverseEffect(oldTransaction, -1); // undo old
+    reverseEffect(updatedTransaction, 1); // apply new
 
-      await Promise.all(updates);
-    }
+    // Persist updated balances
+    await Promise.all(
+      [...balanceMap.entries()].map(([id, balance]) =>
+        supabase.from("wallets").update({ balance }).eq("id", id),
+      ),
+    );
   }
 
   await supabase
@@ -267,20 +284,45 @@ export async function deleteTransaction(transactionId: string) {
   const transaction = transactionData?.[0] as Transaction | undefined;
 
   if (transaction) {
-    const { data: walletData } = await supabase
-      .from("wallets")
-      .select("*")
-      .eq("id", transaction.walletId)
-      .limit(1);
-
-    const wallet = walletData?.[0] as Wallet | undefined;
-
-    if (wallet) {
-      const sign = transaction.type === "income" ? 1 : -1;
-      await supabase
+    if (transaction.type === "transfer") {
+      // Reverse both legs of the transfer
+      const walletsToUpdate = [
+        transaction.walletId,
+        transaction.transferToWalletId,
+      ].filter(Boolean) as string[];
+      const { data: walletData } = await supabase
         .from("wallets")
-        .update({ balance: wallet.balance - transaction.amount * sign })
-        .eq("id", wallet.id);
+        .select("*")
+        .in("id", walletsToUpdate);
+
+      const wallets = (walletData ?? []) as Wallet[];
+      const updates = wallets.map((w) => {
+        // Source lost amount; restore it. Destination gained amount; remove it.
+        const delta =
+          w.id === transaction.walletId
+            ? transaction.amount
+            : -transaction.amount;
+        return supabase
+          .from("wallets")
+          .update({ balance: w.balance + delta })
+          .eq("id", w.id);
+      });
+      await Promise.all(updates);
+    } else {
+      const { data: walletData } = await supabase
+        .from("wallets")
+        .select("*")
+        .eq("id", transaction.walletId)
+        .limit(1);
+
+      const wallet = walletData?.[0] as Wallet | undefined;
+      if (wallet) {
+        // Reverse the effect: undo walletDelta
+        await supabase
+          .from("wallets")
+          .update({ balance: wallet.balance - walletDelta(transaction) })
+          .eq("id", wallet.id);
+      }
     }
   }
 

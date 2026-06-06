@@ -5,6 +5,7 @@ import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowLeftRight,
   ArrowUpRight,
   Bot,
   ChevronDown,
@@ -38,6 +39,7 @@ import {
 import type {
   Budget,
   Category,
+  RecurrenceFrequency,
   Transaction,
   TransactionType,
   Wallet,
@@ -72,8 +74,11 @@ type FormState = {
   amount: string;
   categoryId: string;
   walletId: string;
+  transferToWalletId: string;
   note: string;
   date: string;
+  isRecurring: boolean;
+  recurrence: RecurrenceFrequency;
 };
 
 const emptyForm: FormState = {
@@ -81,8 +86,11 @@ const emptyForm: FormState = {
   amount: "",
   categoryId: "",
   walletId: "",
+  transferToWalletId: "",
   note: "",
   date: new Date().toISOString().slice(0, 10),
+  isRecurring: false,
+  recurrence: "monthly",
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -299,7 +307,11 @@ export default function TransactionsPage() {
         const wal = wallets.find((w) => w.id === t.walletId)?.name ?? "";
         return [
           t.date,
-          t.type === "income" ? "Thu" : "Chi",
+          t.type === "income"
+            ? "Thu"
+            : t.type === "transfer"
+              ? "Chuyển"
+              : "Chi",
           t.note,
           cat,
           wal,
@@ -340,8 +352,11 @@ export default function TransactionsPage() {
       amount: String(t.amount),
       categoryId: t.categoryId,
       walletId: t.walletId,
+      transferToWalletId: t.transferToWalletId ?? "",
       note: t.note,
       date: t.date,
+      isRecurring: t.isRecurring ?? false,
+      recurrence: t.recurrence ?? "monthly",
     });
     setIsFormOpen(true);
   }
@@ -350,7 +365,10 @@ export default function TransactionsPage() {
     setForm((prev) => ({
       ...prev,
       type,
-      categoryId: categories.find((c) => c.type === type)?.id ?? "",
+      categoryId:
+        type === "transfer"
+          ? ""
+          : (categories.find((c) => c.type === type)?.id ?? ""),
     }));
   }
 
@@ -361,22 +379,43 @@ export default function TransactionsPage() {
       alert("Vui lòng nhập số tiền hợp lệ");
       return;
     }
-    if (!form.categoryId) {
-      alert("Vui lòng chọn danh mục");
-      return;
-    }
-    if (!form.walletId) {
-      alert("Vui lòng chọn ví tiền");
-      return;
+    if (form.type === "transfer") {
+      if (!form.walletId) {
+        alert("Vui lòng chọn ví nguồn");
+        return;
+      }
+      if (!form.transferToWalletId) {
+        alert("Vui lòng chọn ví đích");
+        return;
+      }
+      if (form.walletId === form.transferToWalletId) {
+        alert("Ví nguồn và ví đích phải khác nhau");
+        return;
+      }
+    } else {
+      if (!form.categoryId) {
+        alert("Vui lòng chọn danh mục");
+        return;
+      }
+      if (!form.walletId) {
+        alert("Vui lòng chọn ví tiền");
+        return;
+      }
     }
     const transaction: Transaction = {
       id: form.id ?? crypto.randomUUID(),
       type: form.type,
       amount,
-      categoryId: form.categoryId,
+      categoryId: form.type === "transfer" ? "" : form.categoryId,
       walletId: form.walletId,
-      note: form.note || "Giao dịch mới",
+      transferToWalletId:
+        form.type === "transfer" ? form.transferToWalletId : undefined,
+      note:
+        form.note ||
+        (form.type === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
       date: form.date,
+      isRecurring: form.isRecurring || undefined,
+      recurrence: form.isRecurring ? form.recurrence : undefined,
     };
     if (form.id) await updateTransaction(transaction);
     else await addTransaction(transaction);
@@ -592,7 +631,7 @@ export default function TransactionsPage() {
 
             {/* Type filter pills — color-coded */}
             <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
-              {(["all", "income", "expense"] as const).map((t) => (
+              {(["all", "income", "expense", "transfer"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
@@ -607,7 +646,13 @@ export default function TransactionsPage() {
                       : "text-slate-500 hover:text-slate-800")
                   }
                 >
-                  {t === "all" ? "Tất cả" : t === "income" ? "Thu" : "Chi"}
+                  {t === "all"
+                    ? "Tất cả"
+                    : t === "income"
+                      ? "Thu"
+                      : t === "transfer"
+                        ? "Chuyển"
+                        : "Chi"}
                 </button>
               ))}
             </div>
@@ -677,9 +722,21 @@ export default function TransactionsPage() {
             <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 px-5 py-2.5">
               {typeFilter !== "all" && (
                 <FilterChip
-                  label={typeFilter === "income" ? "Thu nhập" : "Chi tiêu"}
+                  label={
+                    typeFilter === "income"
+                      ? "Thu nhập"
+                      : typeFilter === "transfer"
+                        ? "Chuyển tiền"
+                        : "Chi tiêu"
+                  }
                   onRemove={() => setTypeFilter("all")}
-                  color={typeFilter === "income" ? "emerald" : "rose"}
+                  color={
+                    typeFilter === "income"
+                      ? "emerald"
+                      : typeFilter === "transfer"
+                        ? "slate"
+                        : "rose"
+                  }
                 />
               )}
               {dateFrom && (
@@ -1105,9 +1162,13 @@ export default function TransactionsPage() {
               {sorted.map((t) => {
                 const cat = categories.find((c) => c.id === t.categoryId);
                 const wal = wallets.find((w) => w.id === t.walletId);
+                const dstWal = t.transferToWalletId
+                  ? wallets.find((w) => w.id === t.transferToWalletId)
+                  : undefined;
                 const isSelected = selectedIds.has(t.id);
                 const isSwiped = swipedId === t.id;
                 const isIncome = t.type === "income";
+                const isTransfer = t.type === "transfer";
 
                 return (
                   <div key={t.id} className="relative overflow-hidden">
@@ -1173,11 +1234,15 @@ export default function TransactionsPage() {
                             "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
                             (isIncome
                               ? "bg-emerald-100 text-emerald-600"
-                              : "bg-rose-100 text-rose-600")
+                              : isTransfer
+                                ? "bg-blue-100 text-blue-600"
+                                : "bg-rose-100 text-rose-600")
                           }
                         >
                           {isIncome ? (
                             <ArrowUpRight size={18} strokeWidth={2.5} />
+                          ) : isTransfer ? (
+                            <ArrowLeftRight size={18} strokeWidth={2.5} />
                           ) : (
                             <ArrowDownRight size={18} strokeWidth={2.5} />
                           )}
@@ -1187,23 +1252,42 @@ export default function TransactionsPage() {
                             {t.note}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-400 lg:hidden">
-                            {cat?.name ?? "—"} · {wal?.name ?? "—"} · {t.date}
+                            {isTransfer
+                              ? (wal?.name ?? "—") +
+                                " → " +
+                                (dstWal?.name ?? "—")
+                              : (cat?.name ?? "—") +
+                                " · " +
+                                (wal?.name ?? "—")}{" "}
+                            · {t.date}
                           </p>
                         </div>
                       </div>
 
                       {/* Category pill (desktop) */}
                       <div className="hidden lg:block">
-                        <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                          {cat?.name ?? "—"}
-                        </span>
+                        {isTransfer ? (
+                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                            Chuyển khoản
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                            {cat?.name ?? "—"}
+                          </span>
+                        )}
                       </div>
 
                       {/* Wallet badge (desktop) */}
                       <div className="hidden lg:block">
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                          {wal?.name ?? "—"}
-                        </span>
+                        {isTransfer ? (
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {wal?.name ?? "—"} → {dstWal?.name ?? "—"}
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {wal?.name ?? "—"}
+                          </span>
+                        )}
                       </div>
 
                       {/* Date badge (desktop) */}
@@ -1217,10 +1301,14 @@ export default function TransactionsPage() {
                       <div
                         className={
                           "hidden text-base font-black lg:block " +
-                          (isIncome ? "text-emerald-600" : "text-rose-500")
+                          (isIncome
+                            ? "text-emerald-600"
+                            : isTransfer
+                              ? "text-blue-600"
+                              : "text-rose-500")
                         }
                       >
-                        {isIncome ? "+" : "−"}
+                        {isIncome ? "+" : isTransfer ? "⇄" : "−"}
                         {formatVND(t.amount)}
                       </div>
 
@@ -1245,10 +1333,14 @@ export default function TransactionsPage() {
                         <span
                           className={
                             "text-base font-black " +
-                            (isIncome ? "text-emerald-600" : "text-rose-500")
+                            (isIncome
+                              ? "text-emerald-600"
+                              : isTransfer
+                                ? "text-blue-600"
+                                : "text-rose-500")
                           }
                         >
-                          {isIncome ? "+" : "−"}
+                          {isIncome ? "+" : isTransfer ? "⇄" : "−"}
                           {formatVND(t.amount)}
                         </span>
                         <div className="flex gap-1.5">
@@ -1329,7 +1421,11 @@ export default function TransactionsPage() {
                   {txns.map((t) => {
                     const cat = categories.find((c) => c.id === t.categoryId);
                     const wal = wallets.find((w) => w.id === t.walletId);
+                    const tDstWal = t.transferToWalletId
+                      ? wallets.find((w) => w.id === t.transferToWalletId)
+                      : undefined;
                     const isIncome = t.type === "income";
+                    const isTransferRow = t.type === "transfer";
                     return (
                       <div
                         key={t.id}
@@ -1340,11 +1436,15 @@ export default function TransactionsPage() {
                             "flex size-10 shrink-0 items-center justify-center rounded-2xl " +
                             (isIncome
                               ? "bg-emerald-100 text-emerald-600"
-                              : "bg-rose-100 text-rose-600")
+                              : isTransferRow
+                                ? "bg-blue-100 text-blue-600"
+                                : "bg-rose-100 text-rose-600")
                           }
                         >
                           {isIncome ? (
                             <ArrowUpRight size={16} strokeWidth={2.5} />
+                          ) : isTransferRow ? (
+                            <ArrowLeftRight size={16} strokeWidth={2.5} />
                           ) : (
                             <ArrowDownRight size={16} strokeWidth={2.5} />
                           )}
@@ -1354,16 +1454,24 @@ export default function TransactionsPage() {
                             {t.note}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-400">
-                            {cat?.name ?? "—"} · {wal?.name ?? "—"}
+                            {isTransferRow
+                              ? (wal?.name ?? "—") +
+                                " → " +
+                                (tDstWal?.name ?? "—")
+                              : (cat?.name ?? "—") + " · " + (wal?.name ?? "—")}
                           </p>
                         </div>
                         <span
                           className={
                             "shrink-0 text-base font-black " +
-                            (isIncome ? "text-emerald-600" : "text-rose-500")
+                            (isIncome
+                              ? "text-emerald-600"
+                              : isTransferRow
+                                ? "text-blue-600"
+                                : "text-rose-500")
                           }
                         >
-                          {isIncome ? "+" : "−"}
+                          {isIncome ? "+" : isTransferRow ? "⇄" : "−"}
                           {formatVND(t.amount)}
                         </span>
                         <div className="flex shrink-0 gap-1">
@@ -1418,30 +1526,42 @@ export default function TransactionsPage() {
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
-                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+                <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
                   <button
                     type="button"
                     onClick={() => handleTypeChange("income")}
                     className={
-                      "rounded-xl py-3 text-sm font-bold transition-all " +
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
                       (form.type === "income"
                         ? "bg-emerald-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
                   >
-                    ↑ Thu nhập
+                    ↑ Thu
                   </button>
                   <button
                     type="button"
                     onClick={() => handleTypeChange("expense")}
                     className={
-                      "rounded-xl py-3 text-sm font-bold transition-all " +
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
                       (form.type === "expense"
                         ? "bg-rose-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
                   >
-                    ↓ Chi tiêu
+                    ↓ Chi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange("transfer")}
+                    className={
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
+                      (form.type === "transfer"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    ⇄ Chuyển
                   </button>
                 </div>
               </div>
@@ -1456,7 +1576,9 @@ export default function TransactionsPage() {
                     "relative rounded-2xl border-2 transition-colors " +
                     (form.type === "income"
                       ? "border-emerald-200 focus-within:border-emerald-400"
-                      : "border-rose-200 focus-within:border-rose-400")
+                      : form.type === "transfer"
+                        ? "border-blue-200 focus-within:border-blue-400"
+                        : "border-rose-200 focus-within:border-rose-400")
                   }
                 >
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">
@@ -1481,27 +1603,108 @@ export default function TransactionsPage() {
                   value={form.date}
                   onChange={(v) => setForm((p) => ({ ...p, date: v }))}
                 />
-                <FormSelect
-                  label="Danh mục"
-                  value={form.categoryId}
-                  onChange={(v) => setForm((p) => ({ ...p, categoryId: v }))}
-                  options={filteredCategories.map((c) => ({
-                    label: c.name,
-                    value: c.id,
-                  }))}
-                />
-                <FormSelect
-                  label="Ví tiền"
-                  value={form.walletId}
-                  onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
-                  options={wallets.map((w) => ({ label: w.name, value: w.id }))}
-                />
-                <FormInput
-                  label="Ghi chú"
-                  value={form.note}
-                  onChange={(v) => setForm((p) => ({ ...p, note: v }))}
-                  placeholder="Ăn trưa, lương tháng..."
-                />
+                {form.type === "transfer" ? (
+                  <>
+                    <FormSelect
+                      label="Ví nguồn"
+                      value={form.walletId}
+                      onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                      options={wallets.map((w) => ({
+                        label: w.name,
+                        value: w.id,
+                      }))}
+                    />
+                    <FormSelect
+                      label="Ví đích"
+                      value={form.transferToWalletId}
+                      onChange={(v) =>
+                        setForm((p) => ({ ...p, transferToWalletId: v }))
+                      }
+                      options={wallets
+                        .filter((w) => w.id !== form.walletId)
+                        .map((w) => ({ label: w.name, value: w.id }))}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <FormSelect
+                      label="Danh mục"
+                      value={form.categoryId}
+                      onChange={(v) =>
+                        setForm((p) => ({ ...p, categoryId: v }))
+                      }
+                      options={filteredCategories.map((c) => ({
+                        label: c.name,
+                        value: c.id,
+                      }))}
+                    />
+                    <FormSelect
+                      label="Ví tiền"
+                      value={form.walletId}
+                      onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                      options={wallets.map((w) => ({
+                        label: w.name,
+                        value: w.id,
+                      }))}
+                    />
+                  </>
+                )}
+                <div className="sm:col-span-2">
+                  <FormInput
+                    label="Ghi chú"
+                    value={form.note}
+                    onChange={(v) => setForm((p) => ({ ...p, note: v }))}
+                    placeholder={
+                      form.type === "transfer"
+                        ? "Chuyển tiền..."
+                        : "Ăn trưa, lương tháng..."
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Recurring toggle */}
+              <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Định kỳ</p>
+                  <p className="text-xs text-slate-400">Lặp lại tự động</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {form.isRecurring && (
+                    <select
+                      value={form.recurrence}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          recurrence: e.target.value as RecurrenceFrequency,
+                        }))
+                      }
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
+                    >
+                      <option value="daily">Hàng ngày</option>
+                      <option value="weekly">Hàng tuần</option>
+                      <option value="monthly">Hàng tháng</option>
+                      <option value="yearly">Hàng năm</option>
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((p) => ({ ...p, isRecurring: !p.isRecurring }))
+                    }
+                    className={
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
+                      (form.isRecurring ? "bg-blue-600" : "bg-slate-300")
+                    }
+                  >
+                    <span
+                      className={
+                        "inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform " +
+                        (form.isRecurring ? "translate-x-6" : "translate-x-1")
+                      }
+                    />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 flex gap-3">
@@ -1518,10 +1721,16 @@ export default function TransactionsPage() {
                     "flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] " +
                     (form.type === "income"
                       ? "bg-emerald-500 shadow-emerald-200 hover:bg-emerald-600"
-                      : "bg-rose-500 shadow-rose-200 hover:bg-rose-600")
+                      : form.type === "transfer"
+                        ? "bg-blue-600 shadow-blue-200 hover:bg-blue-700"
+                        : "bg-rose-500 shadow-rose-200 hover:bg-rose-600")
                   }
                 >
-                  {form.id ? "Lưu thay đổi" : "Thêm giao dịch"}
+                  {form.id
+                    ? "Lưu thay đổi"
+                    : form.type === "transfer"
+                      ? "Chuyển tiền"
+                      : "Thêm giao dịch"}
                 </button>
               </div>
             </form>
