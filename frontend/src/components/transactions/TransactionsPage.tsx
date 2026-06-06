@@ -557,7 +557,7 @@ export default function TransactionsPage() {
             </p>
             <p
               className={
-                "mt-2 text-5xl font-black tracking-tight sm:text-6xl " +
+                "mt-2 text-3xl font-black tracking-tight sm:text-5xl " +
                 (netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500")
               }
             >

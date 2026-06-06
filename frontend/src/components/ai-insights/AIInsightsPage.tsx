@@ -170,7 +170,7 @@ export default function AIInsightsPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <MetricCard
           title="Thu nhập"
           value={formatVND(analysis.income)}
@@ -488,16 +488,16 @@ export default function AIInsightsPage() {
             </div>
 
             {/* 3 metric tiles */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs text-slate-500">Hiện có</p>
-                <p className="mt-1 text-sm font-black text-slate-900">
+                <p className="mt-1 truncate text-sm font-black text-slate-900">
                   {formatVND(emergencyFund.liquidCash)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs text-slate-500">Mục tiêu (6 tháng)</p>
-                <p className="mt-1 text-sm font-black text-slate-900">
+                <p className="mt-1 truncate text-sm font-black text-slate-900">
                   {formatVND(emergencyFund.targetAmount)}
                 </p>
               </div>
@@ -512,7 +512,7 @@ export default function AIInsightsPage() {
                   {emergencyFund.shortfall > 0 ? "Còn thiếu" : "Vượt mục tiêu"}
                 </p>
                 <p
-                  className={`mt-1 text-sm font-black ${emergencyFund.shortfall > 0 ? "text-rose-700" : "text-emerald-700"}`}
+                  className={`mt-1 truncate text-sm font-black ${emergencyFund.shortfall > 0 ? "text-rose-700" : "text-emerald-700"}`}
                 >
                   {formatVND(emergencyFund.shortfall)}
                 </p>
