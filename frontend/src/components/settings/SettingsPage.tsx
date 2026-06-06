@@ -28,7 +28,7 @@ import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
 import {
-  clearAllData,
+  clearAllUserData,
   getCategories,
   getDebts,
   getGoals,
@@ -147,7 +147,7 @@ export default function SettingsPage() {
   async function handleClearAll() {
     const ok = confirm("Bạn có chắc muốn xóa toàn bộ dữ liệu của app?");
     if (!ok) return;
-    const { error } = await clearAllData();
+    const { error } = await clearAllUserData();
     if (error) {
       alert("Lỗi xóa dữ liệu: " + error);
       return;

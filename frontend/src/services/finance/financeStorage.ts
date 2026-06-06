@@ -216,26 +216,43 @@ export async function resetFinanceDemoData(): Promise<{
   return { error: null };
 }
 
-export async function clearAllData(): Promise<{ error: string | null }> {
+export async function clearAllUserData(): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const results = await Promise.all([
-    supabase.from("transactions").delete().eq("user_id", userId),
-    supabase.from("budgets").delete().eq("user_id", userId),
-    supabase.from("goals").delete().eq("user_id", userId),
-    supabase.from("debts").delete().eq("user_id", userId),
-    supabase.from("investments").delete().eq("user_id", userId),
-    supabase.from("categories").delete().eq("user_id", userId),
-    supabase.from("wallets").delete().eq("user_id", userId),
-  ]);
-  const firstErr = results.find((r) => r.error)?.error;
-  if (firstErr) {
-    console.error("[financeStorage] clearAllData:", firstErr.message);
-    return { error: firstErr.message };
+  // Sequential deletes to respect FK dependency order:
+  // child rows first, parent rows (wallets) last.
+  const steps: [string, string][] = [
+    ["transactions", "Giao dịch"],
+    ["budgets", "Ngân sách"],
+    ["goals", "Mục tiêu"],
+    ["debts", "Khoản nợ"],
+    ["investments", "Đầu tư"],
+    ["categories", "Danh mục"],
+    ["wallets", "Ví tiền"],
+  ];
+
+  for (const [table, label] of steps) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from(table) as any)
+      .delete()
+      .eq("user_id", userId);
+    if (error) {
+      console.error(
+        `[financeStorage] clearAllUserData – ${label} (${table}):`,
+        error.message,
+      );
+      return {
+        error: `Không thể xóa ${label}: ${(error as { message: string }).message}`,
+      };
+    }
   }
+
   return { error: null };
 }
+
+/** @deprecated Use clearAllUserData() — kept for internal use by importAllData */
+export const clearAllData = clearAllUserData;
 
 export async function importAllData(data: {
   wallets?: Wallet[];
@@ -246,7 +263,7 @@ export async function importAllData(data: {
   budgets?: Budget[];
   investments?: Investment[];
 }): Promise<{ error: string | null }> {
-  const clearResult = await clearAllData();
+  const clearResult = await clearAllUserData();
   if (clearResult.error) return clearResult;
 
   const userId = await getAuthUserId();
