@@ -55,6 +55,8 @@ import {
   getWallets,
 } from "@/src/services/finance/financeStorage";
 import {
+  buildPlanningGroupSpendingData,
+  calculateFinancialStructureSummary,
   formatVND,
   getDebtRatio,
   getGoalScore,
@@ -64,6 +66,7 @@ import {
   getTotalDebt,
   getTotalExpense,
   getTotalIncome,
+  getCategoryPlanningGroup,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
 import { computeRiskScore } from "@/src/services/finance/analytics/riskAnalytics";
@@ -157,6 +160,24 @@ function periodLabel(
   }
 }
 
+function filterOperatingExpenseTransactions(
+  txns: Transaction[],
+  categories: Category[],
+) {
+  const categoryById = new Map(
+    categories.map((category) => [category.id, category]),
+  );
+
+  return txns.filter((transaction) => {
+    if (transaction.type !== "expense") return false;
+
+    const group = getCategoryPlanningGroup(
+      categoryById.get(transaction.categoryId),
+    );
+    return group === "fixed" || group === "variable";
+  });
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -218,12 +239,23 @@ export default function ReportsPage() {
     [transactions, periodMode, year, month, quarter, customStart, customEnd],
   );
 
-  // ── Core summary (preserved) ──────────────────────────────────────────────
+  // ── Core summary with planningGroup sync (V12.2) ────────────────────────
   const summary = useMemo(() => {
     const income = getTotalIncome(filtered);
-    const expense = getTotalExpense(filtered);
-    const saving = income - expense;
-    const savingRate = getSavingRate(income, expense);
+    const totalOutflow = getTotalExpense(filtered);
+    const financialStructure = calculateFinancialStructureSummary({
+      transactions: filtered,
+      categories,
+    });
+    const operatingExpense =
+      financialStructure.fixedCost + financialStructure.variableCost;
+    const savingAllocation = financialStructure.savingAmount;
+    const investmentAllocation = financialStructure.investmentAmount;
+    const netCashFlow = income - totalOutflow;
+    const planningSurplus = income - operatingExpense;
+    const spendingRate =
+      income > 0 ? Math.round((operatingExpense / income) * 100) : 0;
+    const savingRate = getSavingRate(income, totalOutflow);
     const investmentAssets = investments.reduce(
       (s, i) => s + i.currentValue,
       0,
@@ -234,11 +266,20 @@ export default function ReportsPage() {
     const netWorth = totalAssets - totalDebt;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
     const goalScore = getGoalScore(goals);
+
     return {
       income,
-      expense,
-      saving,
+      expense: operatingExpense,
+      totalOutflow,
+      operatingExpense,
+      savingAllocation,
+      investmentAllocation,
+      saving: netCashFlow,
+      netCashFlow,
+      planningSurplus,
       savingRate,
+      spendingRate,
+      financialStructure,
       totalAssets,
       totalDebt,
       netWorth,
@@ -246,7 +287,7 @@ export default function ReportsPage() {
       debtRatio,
       goalScore,
     };
-  }, [filtered, wallets, investments, debts, goals]);
+  }, [filtered, categories, wallets, investments, debts, goals]);
 
   // ── Monthly breakdown (preserved) ────────────────────────────────────────
   const yearTxns = useMemo(
@@ -260,34 +301,49 @@ export default function ReportsPage() {
         const m = String(i + 1).padStart(2, "0");
         const mx = yearTxns.filter((t) => t.date.startsWith(year + "-" + m));
         const inc = getTotalIncome(mx);
-        const exp = getTotalExpense(mx);
+        const structure = calculateFinancialStructureSummary({
+          transactions: mx,
+          categories,
+        });
+        const operatingExp = structure.fixedCost + structure.variableCost;
+        const totalOutflow = getTotalExpense(mx);
+
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
-          chi: exp / 1e6,
-          tietKiem: (inc - exp) / 1e6,
+          chi: operatingExp / 1e6,
+          tongRa: totalOutflow / 1e6,
+          tietKiem: (inc - totalOutflow) / 1e6,
           income: inc,
-          expense: exp,
+          expense: operatingExp,
+          totalOutflow,
+          savingAllocation: structure.savingAmount,
+          investmentAllocation: structure.investmentAmount,
         };
       }),
-    [yearTxns, year],
+    [yearTxns, year, categories],
   );
 
   // ── Running net-worth (preserved) ────────────────────────────────────────
   const cashFlowRows = useMemo(() => {
     let running =
       summary.netWorth -
-      monthly.reduce((s, m) => s + m.income - m.expense * 1e6, 0);
+      monthly.reduce((s, m) => s + m.income - m.totalOutflow, 0);
     return monthly.map((m) => {
-      running += (m.thu - m.chi) * 1e6;
+      running += m.income - m.totalOutflow;
       return { ...m, balance: running };
     });
   }, [monthly, summary.netWorth]);
 
-  // ── Spending breakdown (preserved) ────────────────────────────────────────
-  const spendingByCategory = useMemo(
-    () => getSpendingByCategory(filtered, categories),
+  // ── Spending breakdown with planningGroup sync (V12.2) ────────────────
+  const operatingExpenseTransactions = useMemo(
+    () => filterOperatingExpenseTransactions(filtered, categories),
     [filtered, categories],
+  );
+
+  const spendingByCategory = useMemo(
+    () => getSpendingByCategory(operatingExpenseTransactions, categories),
+    [operatingExpenseTransactions, categories],
   );
   const spendingPieData = useMemo(
     () =>
@@ -296,6 +352,19 @@ export default function ReportsPage() {
         color: COLORS[i % COLORS.length],
       })),
     [spendingByCategory],
+  );
+
+  const planningGroupBreakdown = useMemo(
+    () =>
+      buildPlanningGroupSpendingData({
+        transactions: filtered,
+        categories,
+        income: summary.income,
+      }).map((item, i) => ({
+        ...item,
+        color: COLORS[i % COLORS.length],
+      })),
+    [filtered, categories, summary.income],
   );
 
   // ── Comparisons: MoM / QoQ / YoY (preserved) ─────────────────────────────
@@ -432,12 +501,21 @@ export default function ReportsPage() {
   // ── Export helpers (preserved) ────────────────────────────────────────────
   function exportCSV() {
     const rows = [
-      ["Tháng", "Thu nhập (đ)", "Chi tiêu (đ)", "Tiết kiệm (đ)"],
+      [
+        "Tháng",
+        "Thu nhập (đ)",
+        "Chi tiêu thực (đ)",
+        "Tiết kiệm/Đầu tư (đ)",
+        "Tổng tiền ra (đ)",
+        "Dòng tiền ròng (đ)",
+      ],
       ...monthly.map((m) => [
         m.month,
-        String(Math.round(m.thu * 1e6)),
-        String(Math.round(m.chi * 1e6)),
-        String(Math.round(m.tietKiem * 1e6)),
+        String(Math.round(m.income)),
+        String(Math.round(m.expense)),
+        String(Math.round(m.savingAllocation + m.investmentAllocation)),
+        String(Math.round(m.totalOutflow)),
+        String(Math.round(m.income - m.totalOutflow)),
       ]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -713,21 +791,21 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi tiêu"
+              label="Chi tiêu thực"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
-              label="Tiết kiệm"
+              label="Dòng tiền ròng"
               value={formatVND(summary.saving)}
               color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Tỷ lệ tiết kiệm"
+              label="Tỷ lệ dòng tiền"
               value={summary.savingRate + "%"}
               color={
                 summary.savingRate >= 20
@@ -738,6 +816,41 @@ export default function ReportsPage() {
               }
               bg="bg-slate-50"
               border="border-slate-200"
+            />
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatMini
+              label="Tiết kiệm phân bổ"
+              value={formatVND(summary.savingAllocation)}
+              color="text-blue-600"
+              bg="bg-blue-50"
+              border="border-blue-100"
+            />
+            <StatMini
+              label="Đầu tư phân bổ"
+              value={formatVND(summary.investmentAllocation)}
+              color="text-violet-600"
+              bg="bg-violet-50"
+              border="border-violet-100"
+            />
+            <StatMini
+              label="Tổng tiền ra"
+              value={formatVND(summary.totalOutflow)}
+              color="text-slate-700"
+              bg="bg-slate-50"
+              border="border-slate-200"
+            />
+            <StatMini
+              label="Dư sau chi thực"
+              value={formatVND(summary.planningSurplus)}
+              color={
+                summary.planningSurplus >= 0
+                  ? "text-emerald-600"
+                  : "text-rose-500"
+              }
+              bg="bg-emerald-50"
+              border="border-emerald-100"
             />
           </section>
 
@@ -757,7 +870,7 @@ export default function ReportsPage() {
                 positive
               />
               <TrendCard
-                title="Chi tiêu"
+                title="Chi tiêu thực"
                 color="#f43f5e"
                 data={monthly.map((m) => ({ v: m.chi }))}
                 unit="M"
@@ -836,14 +949,14 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Tổng chi tiêu"
+              label="Chi tiêu thực"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
-              label="Lợi nhuận ròng"
+              label="Dòng tiền ròng"
               value={formatVND(summary.saving)}
               color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
               bg="bg-blue-50"
@@ -960,7 +1073,7 @@ export default function ReportsPage() {
                   </tr>
                   <tr className="bg-rose-50/40">
                     <td className="py-3 font-black text-slate-900">
-                      Tổng chi tiêu
+                      Chi tiêu thực
                     </td>
                     <td className="py-3 text-right font-black text-rose-500">
                       {formatVND(summary.expense)}
@@ -973,7 +1086,7 @@ export default function ReportsPage() {
                     </td>
                   </tr>
                   <tr className="font-black">
-                    <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
+                    <td className="py-3 text-slate-900">Dòng tiền ròng</td>
                     <td
                       className={
                         "py-3 text-right " +
@@ -1033,8 +1146,8 @@ export default function ReportsPage() {
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<PieChartIcon size={20} />}
-              title="Chi tiêu theo danh mục"
-              subtitle="Tỷ trọng từng nhóm"
+              title="Chi tiêu thực theo danh mục"
+              subtitle="Không bao gồm khoản tiết kiệm và đầu tư"
             />
             <div className="relative mx-auto mt-5 h-56 w-56">
               <PieChart width={224} height={224}>
@@ -1050,14 +1163,17 @@ export default function ReportsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v) => [formatVND(Number(v ?? 0)), "Chi tiêu"]}
+                  formatter={(v) => [
+                    formatVND(Number(v ?? 0)),
+                    "Chi tiêu thực",
+                  ]}
                 />
               </PieChart>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-black text-rose-500">
                   {Math.round(summary.expense / 1e6)}M
                 </span>
-                <span className="text-xs text-slate-500">Tổng chi</span>
+                <span className="text-xs text-slate-500">Chi thực</span>
               </div>
             </div>
             <div className="mt-5 space-y-3">
@@ -1092,6 +1208,41 @@ export default function ReportsPage() {
                   Không có dữ liệu chi tiêu cho kỳ này.
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <SectionHeader
+              icon={<BriefcaseBusiness size={20} />}
+              title="Cấu trúc dòng tiền"
+              subtitle="Tách chi tiêu thực, tiết kiệm và đầu tư"
+            />
+            <div className="mt-5 space-y-3">
+              {planningGroupBreakdown.map((item) => (
+                <div key={item.group}>
+                  <div className="mb-1.5 flex justify-between text-sm">
+                    <span className="flex items-center gap-2 font-bold text-slate-700">
+                      <span
+                        className="size-2.5 shrink-0 rounded-full"
+                        style={{ background: item.color }}
+                      />
+                      {item.label}
+                    </span>
+                    <span className="text-slate-500">
+                      {formatVND(item.value)} · {item.percentOfIncome}% thu nhập
+                    </span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100">
+                    <div
+                      className="h-2.5 rounded-full transition-all"
+                      style={{
+                        width: Math.min(item.percentOfIncome, 100) + "%",
+                        backgroundColor: item.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1329,7 +1480,7 @@ export default function ReportsPage() {
                     </tr>
                     <tr className="bg-rose-50/40">
                       <td className="py-3 font-black text-slate-900">
-                        Tổng chi tiêu
+                        Chi tiêu thực
                       </td>
                       <td className="py-3 text-right font-black text-rose-500">
                         {formatVND(summary.expense)}
@@ -1342,7 +1493,7 @@ export default function ReportsPage() {
                       </td>
                     </tr>
                     <tr className="font-black">
-                      <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
+                      <td className="py-3 text-slate-900">Dòng tiền ròng</td>
                       <td
                         className={
                           "py-3 text-right " +

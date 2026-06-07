@@ -512,17 +512,17 @@ export default function Header({
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3.5 backdrop-blur-xl sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur-xl sm:px-6 sm:py-3.5 lg:px-8">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         {/* ══ LEFT ══ */}
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Hamburger mobile */}
           <button
             onClick={onMenuOpen}
             aria-label="Mở menu"
             aria-expanded={sidebarOpen}
             aria-controls="sidebar"
-            className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden"
+            className="min-h-11 min-w-11 rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden"
           >
             <span className="flex h-[22px] w-[22px] flex-col items-center justify-center gap-[5px]">
               <span
@@ -548,7 +548,7 @@ export default function Header({
 
           {/* Page title */}
           <div className="min-w-0">
-            <h2 className="truncate text-base font-black tracking-tight text-slate-900 sm:text-lg">
+            <h2 className="truncate text-[15px] font-black tracking-tight text-slate-900 sm:text-lg">
               {pageMeta.title}
             </h2>
             <p className="hidden truncate text-xs text-slate-500 sm:block">
@@ -648,7 +648,7 @@ export default function Header({
         </div>
 
         {/* ══ RIGHT ══ */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {/* Month picker */}
           <div className="relative hidden md:block">
             <button
@@ -714,7 +714,7 @@ export default function Header({
                 setDropdownOpen(false);
                 setMonthOpen(false);
               }}
-              className="relative rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition hover:bg-blue-50 hover:text-blue-600"
+              className="relative min-h-11 min-w-11 rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition hover:bg-blue-50 hover:text-blue-600"
               aria-label="Thông báo"
             >
               <Bell size={17} />
@@ -731,10 +731,10 @@ export default function Header({
                   className="fixed inset-0 z-40"
                   onClick={() => setNotifOpen(false)}
                 />
-                <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+                <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
                   {/* Header */}
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                       <p className="text-sm font-black text-slate-900">
                         Thông báo
                       </p>
@@ -818,7 +818,9 @@ export default function Header({
           </div>
 
           {/* Realtime status */}
-          <RealtimeStatusChip />
+          <div className="hidden sm:block">
+            <RealtimeStatusChip />
+          </div>
 
           {/* User dropdown */}
           <div className="relative">
@@ -828,7 +830,7 @@ export default function Header({
                 setNotifOpen(false);
                 setMonthOpen(false);
               }}
-              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 shadow-sm transition hover:bg-slate-50 active:scale-[.98]"
+              className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-2 shadow-sm transition hover:bg-slate-50 active:scale-[.98] sm:pr-3"
             >
               <div className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 text-sm font-black text-white">
                 {avatarLetter}
@@ -851,7 +853,7 @@ export default function Header({
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+                <div className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64">
                   {/* User info */}
                   <div className="border-b border-slate-100 bg-gradient-to-br from-blue-50 to-cyan-50 px-4 py-4">
                     <div className="flex items-center gap-3">

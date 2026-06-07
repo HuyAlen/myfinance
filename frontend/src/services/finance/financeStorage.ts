@@ -5,6 +5,7 @@ import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
 import type {
   Budget,
   Category,
+  CategoryPlanningGroup,
   Debt,
   Goal,
   Investment,
@@ -22,6 +23,100 @@ async function getAuthUserId(): Promise<string | null> {
 }
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
+
+// ─── Category planning group mapping ─────────────────────────────────────────
+
+type CategoryDbRow = Category & {
+  planning_group?: CategoryPlanningGroup | null;
+  user_id?: string;
+};
+
+function inferDefaultPlanningGroup(
+  category: Pick<Category, "type" | "name">,
+): CategoryPlanningGroup {
+  const name = category.name.toLowerCase();
+
+  if (category.type === "income") return "income";
+
+  if (
+    name.includes("nhà") ||
+    name.includes("điện") ||
+    name.includes("nước") ||
+    name.includes("gửi xe") ||
+    name.includes("phí quản lý") ||
+    name.includes("internet") ||
+    name.includes("bảo hiểm") ||
+    name.includes("học phí")
+  ) {
+    return "fixed";
+  }
+
+  if (
+    name.includes("trading") ||
+    name.includes("đầu tư") ||
+    name.includes("crypto") ||
+    name.includes("cổ phiếu") ||
+    name.includes("etf") ||
+    name.includes("vàng")
+  ) {
+    return "investment";
+  }
+
+  if (
+    name.includes("tiết kiệm") ||
+    name.includes("quỹ") ||
+    name.includes("dự phòng")
+  ) {
+    return "saving";
+  }
+
+  return "variable";
+}
+
+function fromCategoryRow(row: CategoryDbRow): Category {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    planningGroup:
+      row.planning_group ?? row.planningGroup ?? inferDefaultPlanningGroup(row),
+  };
+}
+
+function toCategoryRow(category: Category): Omit<CategoryDbRow, "user_id"> {
+  return {
+    id: category.id,
+    name: category.name,
+    type: category.type,
+    planning_group:
+      category.planningGroup ?? inferDefaultPlanningGroup(category),
+  };
+}
+
+type GoalDbRow = Goal & {
+  saving_category_ids?: string[] | null;
+  user_id?: string;
+};
+
+function fromGoalRow(row: GoalDbRow): Goal {
+  return {
+    id: row.id,
+    name: row.name,
+    targetAmount: row.targetAmount,
+    currentAmount: row.currentAmount,
+    savingCategoryIds: row.saving_category_ids ?? row.savingCategoryIds ?? [],
+  };
+}
+
+function toGoalRow(goal: Goal): Omit<GoalDbRow, "user_id"> {
+  return {
+    id: goal.id,
+    name: goal.name,
+    targetAmount: goal.targetAmount,
+    currentAmount: goal.currentAmount,
+    saving_category_ids: goal.savingCategoryIds ?? [],
+  };
+}
 
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +139,7 @@ export async function getCategories(): Promise<Category[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getCategories:", error.message);
-  return (data ?? []) as Category[];
+  return ((data ?? []) as CategoryDbRow[]).map(fromCategoryRow);
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
@@ -78,7 +173,7 @@ export async function getGoals(): Promise<Goal[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getGoals:", error.message);
-  return (data ?? []) as Goal[];
+  return ((data ?? []) as GoalDbRow[]).map(fromGoalRow);
 }
 
 export async function getBudgets(): Promise<Budget[]> {
@@ -160,7 +255,10 @@ export async function initFinanceDemoData() {
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("categories").upsert(
-      demoData.categories.map((c) => ({ ...c, user_id: userId })),
+      demoData.categories.map((c) => ({
+        ...toCategoryRow(c),
+        user_id: userId,
+      })) as never,
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("transactions").upsert(
@@ -171,10 +269,15 @@ export async function initFinanceDemoData() {
       demoData.debts.map((d) => ({ ...d, user_id: userId })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
-    supabase.from("goals").upsert(
-      demoData.goals.map((g) => ({ ...g, user_id: userId })),
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
+    supabase
+      .from("goals")
+      .upsert(
+        demoData.goals.map((g) => ({
+          ...toGoalRow(g),
+          user_id: userId,
+        })) as never,
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
     supabase.from("budgets").upsert(
       demoData.budgets.map((b) => ({ ...b, user_id: userId })),
       { onConflict: "id", ignoreDuplicates: true },
@@ -219,9 +322,12 @@ export async function resetFinanceDemoData(): Promise<{
     supabase
       .from("wallets")
       .insert(demoData.wallets.map((w) => ({ ...w, user_id: userId }))),
-    supabase
-      .from("categories")
-      .insert(demoData.categories.map((c) => ({ ...c, user_id: userId }))),
+    supabase.from("categories").insert(
+      demoData.categories.map((c) => ({
+        ...toCategoryRow(c),
+        user_id: userId,
+      })) as never,
+    ),
     supabase
       .from("transactions")
       .insert(demoData.transactions.map((t) => ({ ...t, user_id: userId }))),
@@ -230,7 +336,12 @@ export async function resetFinanceDemoData(): Promise<{
       .insert(demoData.debts.map((d) => ({ ...d, user_id: userId }))),
     supabase
       .from("goals")
-      .insert(demoData.goals.map((g) => ({ ...g, user_id: userId }))),
+      .insert(
+        demoData.goals.map((g) => ({
+          ...toGoalRow(g),
+          user_id: userId,
+        })) as never,
+      ),
     supabase
       .from("budgets")
       .insert(demoData.budgets.map((b) => ({ ...b, user_id: userId }))),
@@ -306,7 +417,6 @@ export async function importAllData(data: {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const run = async (
     table: string,
     rows: object[],
@@ -329,7 +439,7 @@ export async function importAllData(data: {
     inserts.push(
       run(
         "categories",
-        data.categories.map((c) => ({ ...c, user_id: userId })),
+        data.categories.map((c) => ({ ...toCategoryRow(c), user_id: userId })),
       ),
     );
   if (data.transactions?.length)
@@ -350,7 +460,7 @@ export async function importAllData(data: {
     inserts.push(
       run(
         "goals",
-        data.goals.map((g) => ({ ...g, user_id: userId })),
+        data.goals.map((g) => ({ ...toGoalRow(g), user_id: userId })),
       ),
     );
   if (data.budgets?.length)
@@ -767,7 +877,7 @@ export async function addCategory(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("categories")
-    .insert({ ...category, user_id: userId });
+    .insert({ ...toCategoryRow(category), user_id: userId } as never);
   if (error) {
     console.error("[financeStorage] addCategory:", error.message);
     return { error: error.message };
@@ -782,7 +892,7 @@ export async function updateCategory(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("categories")
-    .update(updatedCategory)
+    .update(toCategoryRow(updatedCategory) as never)
     .eq("id", updatedCategory.id)
     .eq("user_id", userId);
   if (error) {
@@ -867,7 +977,7 @@ export async function addGoal(goal: Goal): Promise<{ error: string | null }> {
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("goals")
-    .insert({ ...goal, user_id: userId });
+    .insert({ ...toGoalRow(goal), user_id: userId } as never);
   if (error) {
     console.error("[financeStorage] addGoal:", error.message);
     return { error: error.message };
@@ -882,7 +992,7 @@ export async function updateGoal(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("goals")
-    .update(updatedGoal)
+    .update(toGoalRow(updatedGoal) as never)
     .eq("id", updatedGoal.id)
     .eq("user_id", userId);
   if (error) {

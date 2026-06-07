@@ -1,6 +1,7 @@
 import type {
   Budget,
   Category,
+  CategoryPlanningGroup,
   Debt,
   Goal,
   Investment,
@@ -88,6 +89,164 @@ export function getFinancialGrade(score: number) {
     ring: "ring-rose-100",
     gradient: "from-rose-500 to-red-600",
   };
+}
+
+export function normalizePlanningGroup(
+  value: CategoryPlanningGroup | string | null | undefined,
+): CategoryPlanningGroup | undefined {
+  if (
+    value === "income" ||
+    value === "fixed" ||
+    value === "variable" ||
+    value === "saving" ||
+    value === "investment"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+export function inferCategoryPlanningGroup(
+  category: Pick<Category, "name" | "type">,
+): CategoryPlanningGroup {
+  if (category.type === "income") return "income";
+
+  const name = normalizeText(category.name);
+
+  if (
+    name.includes("nha") ||
+    name.includes("thue nha") ||
+    name.includes("dien") ||
+    name.includes("nuoc") ||
+    name.includes("internet") ||
+    name.includes("wifi") ||
+    name.includes("gui xe") ||
+    name.includes("phi quan ly") ||
+    name.includes("bao hiem") ||
+    name.includes("hoc phi") ||
+    name.includes("tra gop") ||
+    name.includes("subscription") ||
+    name.includes("dang ky")
+  ) {
+    return "fixed";
+  }
+
+  if (
+    name.includes("tiet kiem") ||
+    name.includes("quy") ||
+    name.includes("khan cap") ||
+    name.includes("du phong")
+  ) {
+    return "saving";
+  }
+
+  if (
+    name.includes("dau tu") ||
+    name.includes("trading") ||
+    name.includes("capital") ||
+    name.includes("crypto") ||
+    name.includes("coin") ||
+    name.includes("co phieu") ||
+    name.includes("chung khoan") ||
+    name.includes("etf") ||
+    name.includes("vang")
+  ) {
+    return "investment";
+  }
+
+  return "variable";
+}
+
+export function getCategoryPlanningGroup(
+  category: Pick<Category, "name" | "type" | "planningGroup"> | undefined,
+): CategoryPlanningGroup {
+  if (!category) return "variable";
+
+  return (
+    normalizePlanningGroup(category.planningGroup) ??
+    inferCategoryPlanningGroup(category)
+  );
+}
+
+export function getPlanningGroupLabel(group: CategoryPlanningGroup) {
+  switch (group) {
+    case "income":
+      return "Thu nhập";
+    case "fixed":
+      return "Chi phí cố định";
+    case "variable":
+      return "Chi phí biến đổi";
+    case "saving":
+      return "Tiết kiệm";
+    case "investment":
+      return "Đầu tư";
+    default:
+      return "Chi phí biến đổi";
+  }
+}
+
+export function isControllableExpenseCategory(
+  category: Pick<Category, "name" | "type" | "planningGroup"> | undefined,
+) {
+  const group = getCategoryPlanningGroup(category);
+  return group === "variable";
+}
+
+export function isFixedExpenseCategory(
+  category: Pick<Category, "name" | "type" | "planningGroup"> | undefined,
+) {
+  return getCategoryPlanningGroup(category) === "fixed";
+}
+
+export function getGoalLinkedSavingAmount(input: {
+  goal: Pick<Goal, "savingCategoryIds">;
+  transactions: Transaction[];
+}) {
+  const linkedCategoryIds = new Set(input.goal.savingCategoryIds ?? []);
+  if (linkedCategoryIds.size === 0) return 0;
+
+  return input.transactions.reduce((sum, transaction) => {
+    if (
+      transaction.type === "expense" &&
+      linkedCategoryIds.has(transaction.categoryId)
+    ) {
+      return sum + transaction.amount;
+    }
+
+    return sum;
+  }, 0);
+}
+
+export function getGoalEffectiveCurrentAmount(input: {
+  goal: Goal;
+  transactions: Transaction[];
+}) {
+  return (
+    input.goal.currentAmount +
+    getGoalLinkedSavingAmount({
+      goal: input.goal,
+      transactions: input.transactions,
+    })
+  );
+}
+
+export function getGoalEffectiveProgress(input: {
+  goal: Goal;
+  transactions: Transaction[];
+}) {
+  if (input.goal.targetAmount <= 0) return 0;
+
+  const effectiveCurrentAmount = getGoalEffectiveCurrentAmount(input);
+  return Math.round((effectiveCurrentAmount / input.goal.targetAmount) * 100);
 }
 
 export function getTotalAssets(wallets: Wallet[]) {
@@ -318,6 +477,7 @@ export interface CategorySpending {
   name: string;
   value: number;
   percent: number;
+  planningGroup: CategoryPlanningGroup;
 }
 
 export function buildCategorySpendingData(
@@ -334,13 +494,22 @@ export function buildCategorySpendingData(
   const categoryById = new Map(
     categories.map((category) => [category.id, category]),
   );
-  const totals = new Map<string, { id: string; name: string; value: number }>();
+  const totals = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      value: number;
+      planningGroup: CategoryPlanningGroup;
+    }
+  >();
 
   for (const transaction of expenseTransactions) {
     const category = categoryById.get(transaction.categoryId);
     const id = category?.id ?? "__uncategorized__";
     const name = category?.name ?? "Khac";
-    const current = totals.get(id) ?? { id, name, value: 0 };
+    const planningGroup = getCategoryPlanningGroup(category);
+    const current = totals.get(id) ?? { id, name, value: 0, planningGroup };
     current.value += transaction.amount;
     totals.set(id, current);
   }
@@ -353,6 +522,668 @@ export function buildCategorySpendingData(
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
+}
+
+export interface PlanningGroupSpending {
+  group: CategoryPlanningGroup;
+  label: string;
+  value: number;
+  percentOfIncome: number;
+  percentOfExpense: number;
+}
+
+export function buildPlanningGroupSpendingData(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  income?: number;
+}): PlanningGroupSpending[] {
+  const income = input.income ?? getTotalIncome(input.transactions);
+  const expenseTransactions = input.transactions.filter(
+    (transaction) => transaction.type === "expense",
+  );
+  const totalExpense = getTotalExpense(input.transactions);
+  const categoryById = new Map(
+    input.categories.map((category) => [category.id, category]),
+  );
+  const totals = new Map<CategoryPlanningGroup, number>([
+    ["fixed", 0],
+    ["variable", 0],
+    ["saving", 0],
+    ["investment", 0],
+  ]);
+
+  for (const transaction of expenseTransactions) {
+    const category = categoryById.get(transaction.categoryId);
+    const group = getCategoryPlanningGroup(category);
+
+    if (group === "income") continue;
+
+    totals.set(group, (totals.get(group) ?? 0) + transaction.amount);
+  }
+
+  return (
+    ["fixed", "variable", "saving", "investment"] as CategoryPlanningGroup[]
+  ).map((group) => {
+    const value = totals.get(group) ?? 0;
+
+    return {
+      group,
+      label: getPlanningGroupLabel(group),
+      value,
+      percentOfIncome: income > 0 ? Math.round((value / income) * 100) : 0,
+      percentOfExpense:
+        totalExpense > 0 ? Math.round((value / totalExpense) * 100) : 0,
+    };
+  });
+}
+
+export function getPlanningGroupAmount(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  group: CategoryPlanningGroup;
+}) {
+  if (input.group === "income") {
+    return getTotalIncome(input.transactions);
+  }
+
+  const categoryById = new Map(
+    input.categories.map((category) => [category.id, category]),
+  );
+
+  return input.transactions
+    .filter((transaction) => transaction.type === "expense")
+    .reduce((sum, transaction) => {
+      const category = categoryById.get(transaction.categoryId);
+      const group = getCategoryPlanningGroup(category);
+
+      return group === input.group ? sum + transaction.amount : sum;
+    }, 0);
+}
+
+export function getFixedCostAmount(input: {
+  transactions: Transaction[];
+  categories: Category[];
+}) {
+  return getPlanningGroupAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+    group: "fixed",
+  });
+}
+
+export function getVariableCostAmount(input: {
+  transactions: Transaction[];
+  categories: Category[];
+}) {
+  return getPlanningGroupAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+    group: "variable",
+  });
+}
+
+export function getPlanningSavingAmount(input: {
+  transactions: Transaction[];
+  categories: Category[];
+}) {
+  return getPlanningGroupAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+    group: "saving",
+  });
+}
+
+export function getPlanningInvestmentAmount(input: {
+  transactions: Transaction[];
+  categories: Category[];
+}) {
+  return getPlanningGroupAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+    group: "investment",
+  });
+}
+
+export function getFixedCostRatio(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  income?: number;
+}) {
+  const income = input.income ?? getTotalIncome(input.transactions);
+  if (income <= 0) return 0;
+
+  const fixedCost = getFixedCostAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+  });
+
+  return Math.round((fixedCost / income) * 1000) / 10;
+}
+
+export function getVariableCostRatio(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  income?: number;
+}) {
+  const income = input.income ?? getTotalIncome(input.transactions);
+  if (income <= 0) return 0;
+
+  const variableCost = getVariableCostAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+  });
+
+  return Math.round((variableCost / income) * 1000) / 10;
+}
+
+export function getPlanningSavingRate(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  income?: number;
+}) {
+  const income = input.income ?? getTotalIncome(input.transactions);
+  if (income <= 0) return 0;
+
+  const savingAmount = getPlanningSavingAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+  });
+
+  return Math.round((savingAmount / income) * 1000) / 10;
+}
+
+export function getInvestmentRate(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  income?: number;
+}) {
+  const income = input.income ?? getTotalIncome(input.transactions);
+  if (income <= 0) return 0;
+
+  const investmentAmount = getPlanningInvestmentAmount({
+    transactions: input.transactions,
+    categories: input.categories,
+  });
+
+  return Math.round((investmentAmount / income) * 1000) / 10;
+}
+
+export interface FinancialStructureSummary {
+  income: number;
+  expense: number;
+  cashFlow: number;
+  fixedCost: number;
+  variableCost: number;
+  savingAmount: number;
+  investmentAmount: number;
+  fixedCostRatio: number;
+  variableCostRatio: number;
+  planningSavingRate: number;
+  investmentRate: number;
+}
+
+export function calculateFinancialStructureSummary(input: {
+  transactions: Transaction[];
+  categories: Category[];
+}): FinancialStructureSummary {
+  const income = getTotalIncome(input.transactions);
+  const expense = getTotalExpense(input.transactions);
+  const fixedCost = getFixedCostAmount(input);
+  const variableCost = getVariableCostAmount(input);
+  const savingAmount = getPlanningSavingAmount(input);
+  const investmentAmount = getPlanningInvestmentAmount(input);
+
+  return {
+    income,
+    expense,
+    cashFlow: income - expense,
+    fixedCost,
+    variableCost,
+    savingAmount,
+    investmentAmount,
+    fixedCostRatio: getFixedCostRatio({ ...input, income }),
+    variableCostRatio: getVariableCostRatio({ ...input, income }),
+    planningSavingRate: getPlanningSavingRate({ ...input, income }),
+    investmentRate: getInvestmentRate({ ...input, income }),
+  };
+}
+
+export interface FinancialStabilityBreakdownItem {
+  key: "fixedCost" | "saving" | "investment" | "cashFlow" | "emergency";
+  label: string;
+  score: number;
+  weight: number;
+  weightedScore: number;
+  status: "good" | "warning" | "danger";
+  detail: string;
+}
+
+export interface FinancialStabilitySummary {
+  score: number;
+  label: string;
+  tone: "good" | "warning" | "danger";
+  breakdown: FinancialStabilityBreakdownItem[];
+  strengths: string[];
+  improvements: string[];
+}
+
+function scoreFixedCostRatio(ratio: number) {
+  if (ratio <= 35) return 100;
+  if (ratio <= 45) return 85;
+  if (ratio <= 60) return 60;
+  if (ratio <= 75) return 35;
+  return 15;
+}
+
+function scorePlanningSavingRate(rate: number) {
+  if (rate >= 25) return 100;
+  if (rate >= 20) return 90;
+  if (rate >= 10) return 70;
+  if (rate > 0) return 40;
+  return 10;
+}
+
+function scoreInvestmentRate(rate: number) {
+  if (rate >= 20) return 100;
+  if (rate >= 15) return 90;
+  if (rate >= 5) return 65;
+  if (rate > 0) return 35;
+  return 10;
+}
+
+function scoreCashFlowRatio(cashFlow: number, income: number) {
+  if (income <= 0) return 0;
+  const ratio = (cashFlow / income) * 100;
+  if (ratio >= 25) return 100;
+  if (ratio >= 15) return 85;
+  if (ratio >= 0) return 65;
+  if (ratio >= -10) return 35;
+  return 10;
+}
+
+function getStabilityStatus(score: number): "good" | "warning" | "danger" {
+  if (score >= 75) return "good";
+  if (score >= 50) return "warning";
+  return "danger";
+}
+
+export function calculateFinancialStabilitySummary(input: {
+  financialStructure: FinancialStructureSummary;
+  emergencyMonths: number;
+}): FinancialStabilitySummary {
+  const { financialStructure, emergencyMonths } = input;
+
+  const rows: Omit<
+    FinancialStabilityBreakdownItem,
+    "weightedScore" | "status"
+  >[] = [
+    {
+      key: "fixedCost",
+      label: "Chi phí cố định",
+      score: scoreFixedCostRatio(financialStructure.fixedCostRatio),
+      weight: 25,
+      detail: `${financialStructure.fixedCostRatio}% thu nhập`,
+    },
+    {
+      key: "saving",
+      label: "Tỷ lệ tiết kiệm",
+      score: scorePlanningSavingRate(financialStructure.planningSavingRate),
+      weight: 20,
+      detail: `${financialStructure.planningSavingRate}% thu nhập`,
+    },
+    {
+      key: "investment",
+      label: "Tỷ lệ đầu tư",
+      score: scoreInvestmentRate(financialStructure.investmentRate),
+      weight: 15,
+      detail: `${financialStructure.investmentRate}% thu nhập`,
+    },
+    {
+      key: "cashFlow",
+      label: "Dòng tiền ròng",
+      score: scoreCashFlowRatio(
+        financialStructure.cashFlow,
+        financialStructure.income,
+      ),
+      weight: 20,
+      detail: `${financialStructure.cashFlow >= 0 ? "+" : ""}${formatVND(financialStructure.cashFlow)}`,
+    },
+    {
+      key: "emergency",
+      label: "Quỹ khẩn cấp",
+      score: getEmergencyScore(emergencyMonths),
+      weight: 20,
+      detail: `${Math.round(emergencyMonths * 10) / 10} tháng chi tiêu`,
+    },
+  ];
+
+  const breakdown = rows.map((item) => ({
+    ...item,
+    weightedScore: Math.round((item.score * item.weight) / 100),
+    status: getStabilityStatus(item.score),
+  }));
+
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(breakdown.reduce((sum, item) => sum + item.weightedScore, 0)),
+    ),
+  );
+
+  const label =
+    score >= 85
+      ? "Rất ổn định"
+      : score >= 70
+        ? "Ổn định"
+        : score >= 50
+          ? "Cần theo dõi"
+          : "Rủi ro";
+
+  const tone = getStabilityStatus(score);
+
+  const strengths: string[] = [];
+  const improvements: string[] = [];
+
+  if (financialStructure.fixedCostRatio <= 40) {
+    strengths.push("Chi phí cố định đang ở vùng an toàn.");
+  } else {
+    improvements.push("Giảm tỷ trọng chi phí cố định xuống dưới 40% thu nhập.");
+  }
+
+  if (financialStructure.planningSavingRate >= 20) {
+    strengths.push("Tỷ lệ tiết kiệm vượt mức khuyến nghị 20%.");
+  } else {
+    improvements.push("Tăng tỷ lệ tiết kiệm lên tối thiểu 20% thu nhập.");
+  }
+
+  if (financialStructure.investmentRate >= 15) {
+    strengths.push("Tỷ lệ đầu tư đang tích cực xây tài sản dài hạn.");
+  } else {
+    improvements.push("Dành thêm một phần dòng tiền cho đầu tư dài hạn.");
+  }
+
+  if (financialStructure.cashFlow >= 0) {
+    strengths.push("Dòng tiền ròng đang dương.");
+  } else {
+    improvements.push(
+      "Dòng tiền ròng âm, cần giảm chi tiêu hoặc tăng thu nhập.",
+    );
+  }
+
+  if (emergencyMonths >= 3) {
+    strengths.push("Quỹ khẩn cấp đạt mức tối thiểu 3 tháng.");
+  } else {
+    improvements.push("Bổ sung quỹ khẩn cấp lên tối thiểu 3 tháng chi tiêu.");
+  }
+
+  return {
+    score,
+    label,
+    tone,
+    breakdown,
+    strengths: strengths.slice(0, 3),
+    improvements: improvements.slice(0, 3),
+  };
+}
+
+// ─── V11.3 Financial Independence Tracker ───────────────────────────────────
+export interface FinancialIndependenceSummary {
+  investmentAssets: number;
+  monthlyExpense: number;
+  monthlyInvestment: number;
+  annualExpense: number;
+  targetAssets: number;
+  progressPercent: number;
+  remainingAmount: number;
+  yearsToFI: number | null;
+  label: string;
+  tone: "good" | "warning" | "danger";
+  insight: string;
+}
+
+export function calculateFinancialIndependenceSummary(input: {
+  investments: Investment[];
+  monthlyExpense: number;
+  monthlyInvestment?: number;
+}): FinancialIndependenceSummary {
+  const investmentAssets = getTotalInvestmentValue(input.investments);
+  const monthlyExpense = Math.max(0, input.monthlyExpense);
+  const monthlyInvestment = Math.max(0, input.monthlyInvestment ?? 0);
+  const annualExpense = monthlyExpense * 12;
+  const targetAssets = annualExpense * 25;
+  const remainingAmount = Math.max(targetAssets - investmentAssets, 0);
+  const progressPercent =
+    targetAssets > 0
+      ? Math.min(100, Math.round((investmentAssets / targetAssets) * 1000) / 10)
+      : 0;
+  const yearsToFI =
+    remainingAmount > 0 && monthlyInvestment > 0
+      ? Math.round((remainingAmount / monthlyInvestment / 12) * 10) / 10
+      : remainingAmount <= 0
+        ? 0
+        : null;
+
+  const label =
+    progressPercent >= 100
+      ? "Đã đạt FI"
+      : progressPercent >= 50
+        ? "Gần mục tiêu"
+        : progressPercent >= 20
+          ? "Đang tăng tốc"
+          : "Đang xây nền";
+
+  const tone: "good" | "warning" | "danger" =
+    progressPercent >= 50
+      ? "good"
+      : progressPercent >= 10
+        ? "warning"
+        : "danger";
+
+  const insight =
+    targetAssets <= 0
+      ? "Cần dữ liệu chi tiêu tháng để ước tính mục tiêu tự do tài chính."
+      : remainingAmount <= 0
+        ? "Tài sản đầu tư đã đạt ngưỡng mục tiêu theo quy tắc 4%."
+        : yearsToFI !== null
+          ? `Nếu duy trì đầu tư ${formatVND(monthlyInvestment)}/tháng, bạn có thể đạt FI sau khoảng ${yearsToFI} năm.`
+          : "Hãy thiết lập dòng tiền đầu tư hằng tháng để ước tính thời gian đạt FI.";
+
+  return {
+    investmentAssets,
+    monthlyExpense,
+    monthlyInvestment,
+    annualExpense,
+    targetAssets,
+    progressPercent,
+    remainingAmount,
+    yearsToFI,
+    label,
+    tone,
+    insight,
+  };
+}
+
+export interface AiCfoPriorityAction {
+  title: string;
+  body: string;
+  tone: "good" | "warning" | "danger";
+  ctaLabel?: string;
+  ctaRoute?: string;
+}
+
+export interface AiCfoInsightSummary {
+  score: number;
+  label: string;
+  tone: "good" | "warning" | "danger";
+  headline: string;
+  summary: string;
+  priorityActions: AiCfoPriorityAction[];
+  accelerationInsight: string;
+  warning: string | null;
+}
+
+function getCfoTone(score: number): "good" | "warning" | "danger" {
+  if (score >= 75) return "good";
+  if (score >= 50) return "warning";
+  return "danger";
+}
+
+function getCfoLabel(score: number) {
+  if (score >= 85) return "Rất tốt";
+  if (score >= 70) return "Ổn định";
+  if (score >= 50) return "Cần tối ưu";
+  return "Cần hành động";
+}
+
+export function calculateAiCfoInsightSummary(input: {
+  financialStructure: FinancialStructureSummary;
+  financialStability: FinancialStabilitySummary;
+  financialIndependence: FinancialIndependenceSummary;
+  emergencyMonths: number;
+}): AiCfoInsightSummary {
+  const {
+    financialStructure,
+    financialStability,
+    financialIndependence,
+    emergencyMonths,
+  } = input;
+
+  const actions: AiCfoPriorityAction[] = [];
+
+  if (financialStructure.fixedCostRatio > 45) {
+    const targetFixedCost = financialStructure.income * 0.4;
+    const reduceAmount = Math.max(
+      financialStructure.fixedCost - targetFixedCost,
+      0,
+    );
+    actions.push({
+      title: "Giảm chi phí cố định",
+      body: `Chi phí cố định đang chiếm ${financialStructure.fixedCostRatio}% thu nhập. Mục tiêu an toàn là dưới 40%, tương đương cần tối ưu khoảng ${formatVND(reduceAmount)}/tháng.`,
+      tone: financialStructure.fixedCostRatio > 60 ? "danger" : "warning",
+      ctaLabel: "Xem ngân sách",
+      ctaRoute: "/budgets",
+    });
+  }
+
+  if (financialStructure.planningSavingRate < 20) {
+    const targetSaving = financialStructure.income * 0.2;
+    const addAmount = Math.max(
+      targetSaving - financialStructure.savingAmount,
+      0,
+    );
+    actions.push({
+      title: "Tăng tỷ lệ tiết kiệm",
+      body: `Tỷ lệ tiết kiệm hiện là ${financialStructure.planningSavingRate}%. Nên hướng tới 20%, cần tăng thêm khoảng ${formatVND(addAmount)}/tháng.`,
+      tone: financialStructure.planningSavingRate < 10 ? "danger" : "warning",
+      ctaLabel: "Xem giao dịch",
+      ctaRoute: "/transactions",
+    });
+  }
+
+  if (financialStructure.investmentRate < 15) {
+    const targetInvestment = financialStructure.income * 0.15;
+    const addInvestment = Math.max(
+      targetInvestment - financialStructure.investmentAmount,
+      0,
+    );
+    actions.push({
+      title: "Tăng tốc đầu tư",
+      body: `Tỷ lệ đầu tư hiện là ${financialStructure.investmentRate}%. Nếu nâng lên 15%, bạn cần bổ sung khoảng ${formatVND(addInvestment)}/tháng cho nhóm đầu tư.`,
+      tone: financialStructure.investmentRate < 5 ? "danger" : "warning",
+      ctaLabel: "Xem đầu tư",
+      ctaRoute: "/investments",
+    });
+  }
+
+  if (emergencyMonths < 3) {
+    actions.push({
+      title: "Củng cố quỹ khẩn cấp",
+      body: `Quỹ khẩn cấp mới đạt ${Math.round(emergencyMonths * 10) / 10} tháng chi tiêu. Mốc tối thiểu nên là 3 tháng trước khi tăng rủi ro đầu tư.`,
+      tone: emergencyMonths < 1 ? "danger" : "warning",
+      ctaLabel: "Tạo mục tiêu",
+      ctaRoute: "/goals",
+    });
+  }
+
+  if (financialIndependence.progressPercent < 20) {
+    actions.push({
+      title: "Xây nền tự do tài chính",
+      body: `FI Progress hiện là ${financialIndependence.progressPercent}%. Hãy ưu tiên tăng tài sản đầu tư đều đặn để rút ngắn khoảng cách ${formatVND(financialIndependence.remainingAmount)}.`,
+      tone: "warning",
+      ctaLabel: "Xem mục tiêu",
+      ctaRoute: "/goals",
+    });
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      title: "Duy trì chiến lược hiện tại",
+      body: "Cấu trúc tài chính đang cân bằng. Tiếp tục duy trì tiết kiệm, đầu tư định kỳ và kiểm soát chi phí biến đổi.",
+      tone: "good",
+      ctaLabel: "Xem báo cáo",
+      ctaRoute: "/reports",
+    });
+  }
+
+  const cfoScore = Math.round(
+    financialStability.score * 0.45 +
+      Math.min(financialIndependence.progressPercent * 2, 100) * 0.25 +
+      Math.min(financialStructure.planningSavingRate * 4, 100) * 0.15 +
+      Math.min(financialStructure.investmentRate * 5, 100) * 0.15,
+  );
+
+  const tone = getCfoTone(cfoScore);
+  const label = getCfoLabel(cfoScore);
+
+  const headline =
+    tone === "good"
+      ? "Tài chính đang đi đúng hướng"
+      : tone === "warning"
+        ? "Tài chính ổn nhưng cần tối ưu"
+        : "Cần ưu tiên kiểm soát rủi ro";
+
+  const summary =
+    tone === "good"
+      ? `Stability ${financialStability.score}/100, tiết kiệm ${financialStructure.planningSavingRate}% và đầu tư ${financialStructure.investmentRate}% cho thấy nền tài chính đang lành mạnh.`
+      : tone === "warning"
+        ? `Stability ${financialStability.score}/100. Điểm cần tối ưu chính là chi phí cố định, tỷ lệ tiết kiệm hoặc tốc độ đầu tư.`
+        : `Stability ${financialStability.score}/100 đang thấp. Cần ưu tiên dòng tiền dương, quỹ khẩn cấp và giảm chi phí cố định.`;
+
+  const boostedMonthlyInvestment =
+    financialStructure.investmentAmount + financialStructure.income * 0.05;
+  const remaining = financialIndependence.remainingAmount;
+  const currentYears = financialIndependence.yearsToFI;
+  const boostedYears =
+    remaining > 0 && boostedMonthlyInvestment > 0
+      ? Math.round((remaining / boostedMonthlyInvestment / 12) * 10) / 10
+      : null;
+  const accelerationInsight =
+    currentYears !== null &&
+    boostedYears !== null &&
+    currentYears > boostedYears
+      ? `Nếu tăng đầu tư thêm 5% thu nhập/tháng, thời gian đạt FI có thể rút ngắn khoảng ${Math.round((currentYears - boostedYears) * 10) / 10} năm.`
+      : "Khi có dòng tiền đầu tư đều đặn hơn, hệ thống sẽ ước tính khả năng rút ngắn thời gian đạt FI.";
+
+  const warning =
+    financialStructure.fixedCostRatio > 60
+      ? `Chi phí cố định ${financialStructure.fixedCostRatio}% vượt xa ngưỡng an toàn 40%.`
+      : financialStructure.cashFlow < 0
+        ? "Dòng tiền ròng đang âm, cần xử lý trước khi tăng đầu tư."
+        : emergencyMonths < 1
+          ? "Quỹ khẩn cấp dưới 1 tháng, rủi ro thanh khoản cao."
+          : null;
+
+  return {
+    score: cfoScore,
+    label,
+    tone,
+    headline,
+    summary,
+    priorityActions: actions.slice(0, 3),
+    accelerationInsight,
+    warning,
+  };
 }
 
 // ─── Monthly analytics helpers ────────────────────────────────────────────────
@@ -621,24 +1452,37 @@ export function generateDashboardActions(input: {
     currentMonthSpending.map((item) => [item.id, item.value]),
   );
   const overBudget = currentBudgets
-    .map((budget) => ({
-      budget,
-      spent: spendingByCategoryId.get(budget.categoryId) ?? 0,
-      categoryName:
-        input.categories.find((category) => category.id === budget.categoryId)
-          ?.name ?? "Khac",
-    }))
-    .filter((item) => item.spent > item.budget.limitAmount)
-    .sort(
-      (a, b) =>
-        b.spent - b.budget.limitAmount - (a.spent - a.budget.limitAmount),
-    )[0];
+    .map((budget) => {
+      const category = input.categories.find(
+        (item) => item.id === budget.categoryId,
+      );
+      const spent = spendingByCategoryId.get(budget.categoryId) ?? 0;
+      const overAmount = spent - budget.limitAmount;
+      const planningGroup = getCategoryPlanningGroup(category);
+
+      return {
+        budget,
+        spent,
+        overAmount,
+        planningGroup,
+        isControllable: planningGroup === "variable",
+        categoryName: category?.name ?? "Khac",
+      };
+    })
+    .filter((item) => item.overAmount > 0)
+    .sort((a, b) => {
+      if (a.isControllable !== b.isControllable) {
+        return a.isControllable ? -1 : 1;
+      }
+
+      return b.overAmount - a.overAmount;
+    })[0];
 
   if (overBudget) {
     actions.push({
       icon: "budget",
       title: `Vuot ngan sach: ${overBudget.categoryName}`,
-      body: `Da chi ${formatVND(overBudget.spent)} tren han muc ${formatVND(overBudget.budget.limitAmount)} trong thang nay.`,
+      body: `Da chi ${formatVND(overBudget.spent)} tren han muc ${formatVND(overBudget.budget.limitAmount)} trong thang nay. Nhom: ${getPlanningGroupLabel(overBudget.planningGroup)}.`,
       tone: "danger",
       ctaLabel: "Xem ngân sách",
       ctaRoute: "/budgets",

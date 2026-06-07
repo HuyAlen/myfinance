@@ -93,12 +93,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <aside
+      id="sidebar"
       role="dialog"
       aria-modal="true"
       aria-label="Menu chính"
       aria-hidden={!isOpen}
       className={[
-        "fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-100 bg-white px-3 py-5 shadow-xl shadow-slate-200/40",
+        "fixed inset-y-0 left-0 z-40 flex w-[min(18rem,85vw)] flex-col border-r border-slate-100 bg-white px-3 py-5 shadow-xl shadow-slate-200/40 lg:w-72",
         "transition-transform duration-300 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}

@@ -76,10 +76,17 @@ import { useToast } from "@/src/components/ui/ToastProvider";
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
+type TransactionFormMode =
+  | "income"
+  | "expense"
+  | "saving"
+  | "investment"
+  | "transfer";
 
 type FormState = {
   id?: string;
   type: TransactionType;
+  formMode: TransactionFormMode;
   amount: string;
   categoryId: string;
   walletId: string;
@@ -92,6 +99,7 @@ type FormState = {
 
 const emptyForm: FormState = {
   type: "expense",
+  formMode: "expense",
   amount: "",
   categoryId: "",
   walletId: "",
@@ -101,6 +109,38 @@ const emptyForm: FormState = {
   isRecurring: false,
   recurrence: "monthly",
 };
+
+function getCategoryPlanningGroup(category?: Category) {
+  return (
+    category?.planningGroup ??
+    (category?.type === "income" ? "income" : "variable")
+  );
+}
+
+function getTransactionFormMode(
+  transaction: Transaction,
+  categories: Category[],
+): TransactionFormMode {
+  if (transaction.type === "income" || transaction.type === "transfer") {
+    return transaction.type;
+  }
+
+  const category = categories.find(
+    (item) => item.id === transaction.categoryId,
+  );
+  const group = getCategoryPlanningGroup(category);
+
+  if (group === "saving") return "saving";
+  if (group === "investment") return "investment";
+  return "expense";
+}
+
+function getTransactionTypeFromFormMode(
+  mode: TransactionFormMode,
+): TransactionType {
+  if (mode === "income" || mode === "transfer") return mode;
+  return "expense";
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
@@ -149,7 +189,13 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
-    reloadData();
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
   useRealtimeTable(["transactions", "wallets", "categories"], reloadData);
 
@@ -402,17 +448,53 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url);
   }
 
-  const filteredCategories = useMemo(
-    () => categories.filter((c) => c.type === form.type),
-    [categories, form.type],
-  );
+  const filteredCategories = useMemo(() => {
+    if (form.formMode === "income") {
+      return categories.filter((category) => category.type === "income");
+    }
+
+    if (form.formMode === "saving") {
+      return categories.filter(
+        (category) =>
+          category.type === "expense" &&
+          getCategoryPlanningGroup(category) === "saving",
+      );
+    }
+
+    if (form.formMode === "investment") {
+      return categories.filter(
+        (category) =>
+          category.type === "expense" &&
+          getCategoryPlanningGroup(category) === "investment",
+      );
+    }
+
+    if (form.formMode === "expense") {
+      return categories.filter((category) => {
+        if (category.type !== "expense") return false;
+        const group = getCategoryPlanningGroup(category);
+        return group !== "saving" && group !== "investment";
+      });
+    }
+
+    return [];
+  }, [categories, form.formMode]);
 
   function openCreateForm() {
+    const defaultMode: TransactionFormMode = "expense";
     setForm({
       ...emptyForm,
-      categoryId: categories.find((c) => c.type === "expense")?.id ?? "",
+      formMode: defaultMode,
+      type: getTransactionTypeFromFormMode(defaultMode),
+      categoryId:
+        categories.find((category) => {
+          if (category.type !== "expense") return false;
+          const group = getCategoryPlanningGroup(category);
+          return group !== "saving" && group !== "investment";
+        })?.id ?? "",
       walletId: wallets[0]?.id ?? "",
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
@@ -420,6 +502,7 @@ export default function TransactionsPage() {
     setForm({
       id: t.id,
       type: t.type,
+      formMode: getTransactionFormMode(t, categories),
       amount: String(t.amount),
       categoryId: t.categoryId,
       walletId: t.walletId,
@@ -429,18 +512,34 @@ export default function TransactionsPage() {
       isRecurring: t.isRecurring ?? false,
       recurrence: t.recurrence ?? "monthly",
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
-  function handleTypeChange(type: TransactionType) {
+  function handleTypeChange(mode: TransactionFormMode) {
+    const nextType = getTransactionTypeFromFormMode(mode);
+
+    const nextCategoryId =
+      mode === "transfer"
+        ? ""
+        : (categories.find((category) => {
+            if (mode === "income") return category.type === "income";
+            if (category.type !== "expense") return false;
+
+            const group = getCategoryPlanningGroup(category);
+            if (mode === "saving") return group === "saving";
+            if (mode === "investment") return group === "investment";
+            return group !== "saving" && group !== "investment";
+          })?.id ?? "");
+
     setForm((prev) => ({
       ...prev,
-      type,
-      categoryId:
-        type === "transfer"
-          ? ""
-          : (categories.find((c) => c.type === type)?.id ?? ""),
+      formMode: mode,
+      type: nextType,
+      categoryId: nextCategoryId,
+      transferToWalletId: mode === "transfer" ? prev.transferToWalletId : "",
     }));
+    setSaveError(null);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -473,17 +572,19 @@ export default function TransactionsPage() {
         return;
       }
     }
+    const transactionType = getTransactionTypeFromFormMode(form.formMode);
+
     const transaction: Transaction = {
       id: form.id ?? crypto.randomUUID(),
-      type: form.type,
+      type: transactionType,
       amount,
-      categoryId: form.type === "transfer" ? "" : form.categoryId,
+      categoryId: transactionType === "transfer" ? "" : form.categoryId,
       walletId: form.walletId,
       transferToWalletId:
-        form.type === "transfer" ? form.transferToWalletId : undefined,
+        transactionType === "transfer" ? form.transferToWalletId : undefined,
       note:
         form.note ||
-        (form.type === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
+        (transactionType === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
       date: form.date,
       isRecurring: form.isRecurring || undefined,
       recurrence: form.isRecurring ? form.recurrence : undefined,
@@ -560,7 +661,7 @@ export default function TransactionsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-5 md:pb-0">
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ════════════════════════════════════════════════════════════════════ */}
@@ -644,7 +745,7 @@ export default function TransactionsPage() {
           </div>
 
           {/* KPI chips strip — horizontal scroll */}
-          <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="relative mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-600">
                 Thu nhập
@@ -981,7 +1082,7 @@ export default function TransactionsPage() {
             {monthlyTrendLabel}
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <TrendPanel
             title="Thu nhập"
             color="#10b981"
@@ -1290,7 +1391,7 @@ export default function TransactionsPage() {
 
                     <div
                       className={
-                        "grid gap-3 px-6 py-4 transition-all duration-200 hover:bg-blue-50/30 lg:grid-cols-[36px_1fr_130px_120px_100px_150px_88px] lg:items-center " +
+                        "grid gap-3 px-4 py-4 transition-all duration-200 hover:bg-blue-50/30 sm:px-6 lg:grid-cols-[36px_1fr_130px_120px_100px_150px_88px] lg:items-center " +
                         (isSelected ? "bg-blue-50" : "") +
                         " " +
                         (isSwiped ? "-translate-x-24 lg:translate-x-0" : "")
@@ -1589,10 +1690,10 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
@@ -1615,13 +1716,13 @@ export default function TransactionsPage() {
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
-                <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+                <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 sm:grid-cols-3 lg:grid-cols-5">
                   <button
                     type="button"
                     onClick={() => handleTypeChange("income")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "income"
+                      (form.formMode === "income"
                         ? "bg-emerald-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1633,7 +1734,7 @@ export default function TransactionsPage() {
                     onClick={() => handleTypeChange("expense")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "expense"
+                      (form.formMode === "expense"
                         ? "bg-rose-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1642,10 +1743,34 @@ export default function TransactionsPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleTypeChange("saving")}
+                    className={
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
+                      (form.formMode === "saving"
+                        ? "bg-cyan-500 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    ◇ Tiết kiệm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange("investment")}
+                    className={
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
+                      (form.formMode === "investment"
+                        ? "bg-violet-500 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    ▣ Đầu tư
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleTypeChange("transfer")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "transfer"
+                      (form.formMode === "transfer"
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1663,11 +1788,15 @@ export default function TransactionsPage() {
                 <div
                   className={
                     "relative rounded-2xl border-2 transition-colors " +
-                    (form.type === "income"
+                    (form.formMode === "income"
                       ? "border-emerald-200 focus-within:border-emerald-400"
-                      : form.type === "transfer"
+                      : form.formMode === "transfer"
                         ? "border-blue-200 focus-within:border-blue-400"
-                        : "border-rose-200 focus-within:border-rose-400")
+                        : form.formMode === "saving"
+                          ? "border-cyan-200 focus-within:border-cyan-400"
+                          : form.formMode === "investment"
+                            ? "border-violet-200 focus-within:border-violet-400"
+                            : "border-rose-200 focus-within:border-rose-400")
                   }
                 >
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">

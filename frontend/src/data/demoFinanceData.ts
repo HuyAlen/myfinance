@@ -15,14 +15,46 @@ export const demoWallets: Wallet[] = [
 ];
 
 export const demoCategories: Category[] = [
-  { id: "salary", name: "Lương", type: "income" },
-  { id: "freelance", name: "Freelance", type: "income" },
-  { id: "food", name: "Ăn uống", type: "expense" },
-  { id: "housing", name: "Nhà ở", type: "expense" },
-  { id: "transport", name: "Di chuyển", type: "expense" },
-  { id: "shopping", name: "Mua sắm", type: "expense" },
-  { id: "entertainment", name: "Giải trí", type: "expense" },
-  { id: "other", name: "Khác", type: "expense" },
+  { id: "salary", name: "Lương", type: "income", planningGroup: "income" },
+  {
+    id: "freelance",
+    name: "Freelance",
+    type: "income",
+    planningGroup: "income",
+  },
+  { id: "food", name: "Ăn uống", type: "expense", planningGroup: "variable" },
+  { id: "housing", name: "Nhà ở", type: "expense", planningGroup: "fixed" },
+  {
+    id: "transport",
+    name: "Di chuyển",
+    type: "expense",
+    planningGroup: "variable",
+  },
+  {
+    id: "shopping",
+    name: "Mua sắm",
+    type: "expense",
+    planningGroup: "variable",
+  },
+  {
+    id: "entertainment",
+    name: "Giải trí",
+    type: "expense",
+    planningGroup: "variable",
+  },
+  {
+    id: "saving",
+    name: "Quỹ tiết kiệm",
+    type: "expense",
+    planningGroup: "saving",
+  },
+  {
+    id: "capital-trading",
+    name: "Capital Trading",
+    type: "expense",
+    planningGroup: "investment",
+  },
+  { id: "other", name: "Khác", type: "expense", planningGroup: "variable" },
 ];
 
 export const demoTransactions: Transaction[] = [
@@ -141,6 +173,13 @@ export const demoBudgets: Budget[] = [
   { id: "b2", categoryId: "housing", month: "2026-06", limitAmount: 5000000 },
   { id: "b3", categoryId: "transport", month: "2026-06", limitAmount: 4000000 },
   { id: "b4", categoryId: "shopping", month: "2026-06", limitAmount: 3500000 },
+  { id: "b5", categoryId: "saving", month: "2026-06", limitAmount: 5000000 },
+  {
+    id: "b6",
+    categoryId: "capital-trading",
+    month: "2026-06",
+    limitAmount: 3000000,
+  },
 ];
 
 export const demoInvestments: Investment[] = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 
@@ -51,6 +51,10 @@ import {
   buildMonthlyCashFlowData,
   buildMonthlyNetWorthData,
   calculateDashboardSummary,
+  calculateFinancialStructureSummary,
+  calculateFinancialStabilitySummary,
+  calculateFinancialIndependenceSummary,
+  calculateAiCfoInsightSummary,
   formatVND,
   generateDashboardActions,
   getFinancialGrade,
@@ -201,7 +205,7 @@ export default function DashboardPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isHealthDrawerOpen, setIsHealthDrawerOpen] = useState(false);
 
-  async function reloadData() {
+  const reloadData = useCallback(async () => {
     const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
       getWallets(),
       getInvestments(),
@@ -218,11 +222,17 @@ export default function DashboardPage() {
     setDebts(dbt);
     setGoals(gls);
     setBudgets(bdg);
-  }
+  }, []);
 
   useEffect(() => {
-    reloadData();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [reloadData]);
 
   useRealtimeTable(
     ["wallets", "transactions", "investments", "debts", "goals", "budgets"],
@@ -369,6 +379,129 @@ export default function DashboardPage() {
     if (summary.monthlyExpense <= 0) return 0;
     return summary.liquidBalance / summary.monthlyExpense;
   }, [summary.liquidBalance, summary.monthlyExpense]);
+
+  // ── V11.1 Financial Structure ───────────────────────────────────────────
+  const financialStructure = useMemo(
+    () =>
+      calculateFinancialStructureSummary({
+        transactions,
+        categories,
+      }),
+    [transactions, categories],
+  );
+
+  const financialStructureCards = useMemo(
+    () => [
+      {
+        title: "Chi phí cố định",
+        value: `${financialStructure.fixedCostRatio}%`,
+        amount: `${formatVND(financialStructure.fixedCost)} / ${formatVND(financialStructure.income)}`,
+        note:
+          financialStructure.fixedCostRatio < 40
+            ? "Tốt · dưới 40% thu nhập"
+            : financialStructure.fixedCostRatio <= 60
+              ? "Cần theo dõi · 40–60% thu nhập"
+              : "Rủi ro · trên 60% thu nhập",
+        tone:
+          financialStructure.fixedCostRatio < 40
+            ? "good"
+            : financialStructure.fixedCostRatio <= 60
+              ? "warning"
+              : "danger",
+        bar: Math.min(financialStructure.fixedCostRatio, 100),
+      },
+      {
+        title: "Chi phí biến đổi",
+        value: `${financialStructure.variableCostRatio}%`,
+        amount: `${formatVND(financialStructure.variableCost)} / ${formatVND(financialStructure.income)}`,
+        note:
+          financialStructure.variableCostRatio <= 30
+            ? "Gọn nhẹ · dễ kiểm soát"
+            : financialStructure.variableCostRatio <= 50
+              ? "Trung bình · nên theo dõi"
+              : "Cao · cần tối ưu",
+        tone:
+          financialStructure.variableCostRatio <= 30
+            ? "good"
+            : financialStructure.variableCostRatio <= 50
+              ? "warning"
+              : "danger",
+        bar: Math.min(financialStructure.variableCostRatio, 100),
+      },
+      {
+        title: "Tỷ lệ tiết kiệm",
+        value: `${financialStructure.planningSavingRate}%`,
+        amount: `${formatVND(financialStructure.savingAmount)} / ${formatVND(financialStructure.income)}`,
+        note:
+          financialStructure.planningSavingRate >= 20
+            ? "Xuất sắc · trên 20% thu nhập"
+            : financialStructure.planningSavingRate >= 10
+              ? "Tốt · 10–20% thu nhập"
+              : "Thấp · nên tăng dần",
+        tone:
+          financialStructure.planningSavingRate >= 20
+            ? "good"
+            : financialStructure.planningSavingRate >= 10
+              ? "warning"
+              : "danger",
+        bar: Math.min(financialStructure.planningSavingRate, 100),
+      },
+      {
+        title: "Tỷ lệ đầu tư",
+        value: `${financialStructure.investmentRate}%`,
+        amount: `${formatVND(financialStructure.investmentAmount)} / ${formatVND(financialStructure.income)}`,
+        note:
+          financialStructure.investmentRate >= 15
+            ? "Tích cực xây tài sản"
+            : financialStructure.investmentRate >= 5
+              ? "Đang bắt đầu"
+              : "Cần tăng đầu tư",
+        tone:
+          financialStructure.investmentRate >= 15
+            ? "good"
+            : financialStructure.investmentRate >= 5
+              ? "warning"
+              : "danger",
+        bar: Math.min(financialStructure.investmentRate, 100),
+      },
+    ],
+    [financialStructure],
+  );
+
+  const financialStability = useMemo(
+    () =>
+      calculateFinancialStabilitySummary({
+        financialStructure,
+        emergencyMonths: emergencyMonthsExact,
+      }),
+    [financialStructure, emergencyMonthsExact],
+  );
+
+  const financialIndependence = useMemo(
+    () =>
+      calculateFinancialIndependenceSummary({
+        investments,
+        monthlyExpense: summary.monthlyExpense,
+        monthlyInvestment: financialStructure.investmentAmount,
+      }),
+    [investments, summary.monthlyExpense, financialStructure.investmentAmount],
+  );
+
+  const aiCfoInsight = useMemo(
+    () =>
+      calculateAiCfoInsightSummary({
+        financialStructure,
+        financialStability,
+        financialIndependence,
+        emergencyMonths: emergencyMonthsExact,
+      }),
+    [
+      financialStructure,
+      financialStability,
+      financialIndependence,
+      emergencyMonthsExact,
+    ],
+  );
 
   // ── Investment rows ───────────────────────────────────────────────────────
   const investmentRows = useMemo(
@@ -595,80 +728,6 @@ export default function DashboardPage() {
             : "Cần cải thiện";
 
   // ── AI actions ────────────────────────────────────────────────────────────
-  const legacyAiActions = useMemo(() => {
-    const actions: {
-      icon: React.ReactNode;
-      title: string;
-      body: string;
-      tone: "danger" | "warning" | "good";
-      ctaLabel?: string;
-      ctaRoute?: string;
-    }[] = [];
-    if (summary.savingRate < 20) {
-      actions.push({
-        icon: <AlertTriangle size={18} />,
-        title: "Tỷ lệ tiết kiệm thấp",
-        body: `Bạn đang tiết kiệm ${summary.savingRate}% thu nhập. Mục tiêu tối thiểu là 20%. Xem xét cắt giảm chi tiêu không thiết yếu.`,
-        tone: "danger",
-      });
-    } else if (summary.savingRate < 40) {
-      actions.push({
-        icon: <PiggyBank size={18} />,
-        title: "Tăng thêm tiết kiệm",
-        body: `Tỷ lệ tiết kiệm ${summary.savingRate}% — tốt nhưng còn dư địa. Thêm ${formatVND(summary.income * 0.4 - summary.saving)} nữa để đạt mục tiêu 40%.`,
-        tone: "warning",
-      });
-    } else {
-      actions.push({
-        icon: <ShieldCheck size={18} />,
-        title: "Tiết kiệm xuất sắc",
-        body: `Bạn đang tiết kiệm ${summary.savingRate}% — vượt mục tiêu 40%. Hãy phân bổ phần thặng dư vào đầu tư.`,
-        tone: "good",
-      });
-    }
-    if (summary.debtRatio > 50) {
-      actions.push({
-        icon: <CreditCard size={18} />,
-        title: "Tỷ lệ nợ cần chú ý",
-        body: `Nợ chiếm ${summary.debtRatio}% tổng tài sản (an toàn < 40%). Ưu tiên trả nhanh ${formatVND(summary.totalDebt)} còn lại.`,
-        tone: "danger",
-      });
-    } else if (summary.debtRatio > 30) {
-      actions.push({
-        icon: <Landmark size={18} />,
-        title: "Kiểm soát nợ tốt",
-        body: `Tỷ lệ nợ ${summary.debtRatio}% — trong vùng an toàn. Tiếp tục trả đúng hạn để giải phóng dòng tiền.`,
-        tone: "warning",
-      });
-    }
-    if (emergencyMonthsExact < 3) {
-      actions.push({
-        icon: <Zap size={18} />,
-        title: "Quỹ khẩn cấp thiếu",
-        body: `Quỹ khẩn cấp đủ dùng khoảng ${formatOneDecimal(emergencyMonthsExact)} tháng. Mục tiêu tối thiểu: 3 tháng (${formatVND((summary.monthlyExpense || summary.expense) * 3)}).`,
-        tone: "danger",
-      });
-    }
-    if (summary.investmentReturn < 0 && investments.length > 0) {
-      actions.push({
-        icon: <TrendingDown size={18} />,
-        title: "Danh mục đầu tư âm",
-        body: `Danh mục đang lỗ ${Math.abs(summary.investmentReturn)}% (${formatVND(Math.abs(summary.investmentPL))}). Đánh giá lại phân bổ tài sản.`,
-        tone: "warning",
-      });
-    }
-    if (actions.length < 3 && goalRows.length > 0) {
-      const slow = [...goalRows].sort((a, b) => a.percent - b.percent)[0];
-      if (slow && slow.percent < 50)
-        actions.push({
-          icon: <Target size={18} />,
-          title: `Đẩy nhanh: ${slow.name}`,
-          body: `Mới đạt ${slow.percent}%. ${slow.monthsLeft ? `Còn ~${slow.monthsLeft} tháng nếu giữ tốc độ hiện tại.` : "Tăng khoản góp hàng tháng."}`,
-          tone: "warning",
-        });
-    }
-    return actions.slice(0, 3);
-  }, [summary, investments, goalRows]);
   const aiActions = useMemo(
     () =>
       generateDashboardActions({
@@ -826,7 +885,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       {/* ── 1. Executive Strip ─────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 xl:grid-cols-[1.4fr_0.8fr]">
@@ -847,7 +906,7 @@ export default function DashboardPage() {
                 Tài sản − Nợ
               </span>
             </div>
-            <div className="mt-6 grid grid-cols-3 gap-3">
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <HeroMini
                 icon={<Wallet size={16} />}
                 label="Thanh khoản"
@@ -1004,13 +1063,422 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ── 3. Wealth Growth + Cash Flow ───────────────────────────────── */}
+      {/* ── 3. Financial Structure V11.1 ───────────────────────────────── */}
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.2em] text-blue-600">
+              Financial Structure
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-slate-900">
+              Cấu trúc tài chính
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Phân tách dòng tiền theo chi phí cố định, biến đổi, tiết kiệm và
+              đầu tư.
+            </p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
+            <p className="text-xs font-bold text-slate-500">Dòng tiền ròng</p>
+            <p
+              className={`text-xl font-black ${
+                financialStructure.cashFlow >= 0
+                  ? "text-emerald-600"
+                  : "text-rose-500"
+              }`}
+            >
+              {financialStructure.cashFlow >= 0 ? "+" : ""}
+              {formatVND(financialStructure.cashFlow)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {financialStructureCards.map((item) => (
+            <div
+              key={item.title}
+              className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-500">
+                    {item.title}
+                  </p>
+                  <p
+                    className={`mt-2 text-3xl font-black ${
+                      item.tone === "good"
+                        ? "text-emerald-600"
+                        : item.tone === "warning"
+                          ? "text-amber-500"
+                          : "text-rose-500"
+                    }`}
+                  >
+                    {item.value}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                    item.tone === "good"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : item.tone === "warning"
+                        ? "bg-amber-50 text-amber-600"
+                        : "bg-rose-50 text-rose-600"
+                  }`}
+                >
+                  {item.tone === "good"
+                    ? "Tốt"
+                    : item.tone === "warning"
+                      ? "Theo dõi"
+                      : "Rủi ro"}
+                </span>
+              </div>
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                {item.amount}
+              </p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
+                <div
+                  className={`h-full rounded-full ${
+                    item.tone === "good"
+                      ? "bg-emerald-500"
+                      : item.tone === "warning"
+                        ? "bg-amber-400"
+                        : "bg-rose-500"
+                  }`}
+                  style={{ width: `${Math.max(4, Math.min(item.bar, 100))}%` }}
+                />
+              </div>
+              <p className="mt-3 text-xs font-semibold text-slate-600">
+                {item.note}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div
+            className={`rounded-3xl border p-5 ${
+              financialStability.tone === "good"
+                ? "border-emerald-100 bg-emerald-50/70"
+                : financialStability.tone === "warning"
+                  ? "border-amber-100 bg-amber-50/70"
+                  : "border-rose-100 bg-rose-50/70"
+            }`}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              Financial Stability
+            </p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <p
+                  className={`text-5xl font-black ${
+                    financialStability.tone === "good"
+                      ? "text-emerald-600"
+                      : financialStability.tone === "warning"
+                        ? "text-amber-600"
+                        : "text-rose-600"
+                  }`}
+                >
+                  {financialStability.score}
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-500">/ 100</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-black text-slate-900">
+                  {financialStability.label}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Dựa trên chi phí cố định, tiết kiệm, đầu tư, dòng tiền và quỹ
+                  khẩn cấp.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
+              <div
+                className={`h-full rounded-full ${
+                  financialStability.tone === "good"
+                    ? "bg-emerald-500"
+                    : financialStability.tone === "warning"
+                      ? "bg-amber-400"
+                      : "bg-rose-500"
+                }`}
+                style={{ width: `${Math.max(6, financialStability.score)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {financialStability.breakdown.map((item) => (
+                <div key={item.key} className="rounded-2xl bg-slate-50 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        {item.detail}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-black ${
+                        item.status === "good"
+                          ? "bg-emerald-50 text-emerald-600"
+                          : item.status === "warning"
+                            ? "bg-amber-50 text-amber-600"
+                            : "bg-rose-50 text-rose-600"
+                      }`}
+                    >
+                      +{item.weightedScore}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                    <div
+                      className={`h-full rounded-full ${
+                        item.status === "good"
+                          ? "bg-emerald-500"
+                          : item.status === "warning"
+                            ? "bg-amber-400"
+                            : "bg-rose-500"
+                      }`}
+                      style={{ width: `${Math.max(4, item.score)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className={`mt-5 rounded-3xl border p-5 ${
+            financialIndependence.tone === "good"
+              ? "border-emerald-100 bg-emerald-50/70"
+              : financialIndependence.tone === "warning"
+                ? "border-amber-100 bg-amber-50/70"
+                : "border-rose-100 bg-rose-50/70"
+          }`}
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                Financial Independence Tracker
+              </p>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">
+                Tự do tài chính
+              </h3>
+              <p className="mt-2 text-sm font-semibold text-slate-600">
+                Dựa trên quy tắc 4%: mục tiêu tài sản đầu tư ≈ 25 lần chi tiêu
+                năm.
+              </p>
+              <p className="mt-3 text-sm font-bold text-slate-700">
+                {financialIndependence.insight}
+              </p>
+            </div>
+
+            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-[260px]">
+              <p
+                className={`text-5xl font-black ${
+                  financialIndependence.tone === "good"
+                    ? "text-emerald-600"
+                    : financialIndependence.tone === "warning"
+                      ? "text-amber-600"
+                      : "text-rose-600"
+                }`}
+              >
+                {financialIndependence.progressPercent}%
+              </p>
+              <p className="mt-1 text-sm font-black text-slate-900">
+                {financialIndependence.label}
+              </p>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full ${
+                    financialIndependence.tone === "good"
+                      ? "bg-emerald-500"
+                      : financialIndependence.tone === "warning"
+                        ? "bg-amber-400"
+                        : "bg-rose-500"
+                  }`}
+                  style={{
+                    width: `${Math.max(4, financialIndependence.progressPercent)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <MiniStat
+              label="Tài sản đầu tư"
+              value={formatVND(financialIndependence.investmentAssets)}
+              color="text-blue-600"
+            />
+            <MiniStat
+              label="Mục tiêu FI"
+              value={formatVND(financialIndependence.targetAssets)}
+              color="text-slate-900"
+            />
+            <MiniStat
+              label="Còn thiếu"
+              value={formatVND(financialIndependence.remainingAmount)}
+              color="text-amber-600"
+            />
+            <MiniStat
+              label="Thời gian ước tính"
+              value={
+                financialIndependence.yearsToFI === null
+                  ? "Chưa đủ dữ liệu"
+                  : financialIndependence.yearsToFI === 0
+                    ? "Đã đạt"
+                    : `${financialIndependence.yearsToFI} năm`
+              }
+              color="text-emerald-600"
+            />
+          </div>
+        </div>
+
+        <div
+          className={`mt-5 rounded-3xl border p-5 ${
+            aiCfoInsight.tone === "good"
+              ? "border-emerald-100 bg-emerald-50/70"
+              : aiCfoInsight.tone === "warning"
+                ? "border-amber-100 bg-amber-50/70"
+                : "border-rose-100 bg-rose-50/70"
+          }`}
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                AI CFO Insight
+              </p>
+              <h3 className="mt-2 text-2xl font-black text-slate-900">
+                {aiCfoInsight.headline}
+              </h3>
+              <p className="mt-2 text-sm font-semibold text-slate-600">
+                {aiCfoInsight.summary}
+              </p>
+              {aiCfoInsight.warning && (
+                <div className="mt-4 rounded-2xl border border-rose-100 bg-white/70 p-3 text-sm font-bold text-rose-600">
+                  ⚠ {aiCfoInsight.warning}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-[220px]">
+              <p
+                className={`text-5xl font-black ${
+                  aiCfoInsight.tone === "good"
+                    ? "text-emerald-600"
+                    : aiCfoInsight.tone === "warning"
+                      ? "text-amber-600"
+                      : "text-rose-600"
+                }`}
+              >
+                {aiCfoInsight.score}
+              </p>
+              <p className="mt-1 text-sm font-black text-slate-900">
+                {aiCfoInsight.label}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                CFO Score
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-black text-slate-900">
+                Ưu tiên hành động
+              </p>
+              <div className="mt-3 space-y-3">
+                {aiCfoInsight.priorityActions.map((action, index) => (
+                  <div
+                    key={`${action.title}-${index}`}
+                    className="rounded-2xl bg-slate-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                          Ưu tiên #{index + 1}
+                        </p>
+                        <p className="mt-1 font-black text-slate-900">
+                          {action.title}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-black ${
+                          action.tone === "good"
+                            ? "bg-emerald-50 text-emerald-600"
+                            : action.tone === "warning"
+                              ? "bg-amber-50 text-amber-600"
+                              : "bg-rose-50 text-rose-600"
+                        }`}
+                      >
+                        {action.tone === "good"
+                          ? "Tốt"
+                          : action.tone === "warning"
+                            ? "Theo dõi"
+                            : "Cần xử lý"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-600">
+                      {action.body}
+                    </p>
+                    {action.ctaLabel && action.ctaRoute && (
+                      <button
+                        type="button"
+                        onClick={() => router.push(action.ctaRoute!)}
+                        className="mt-3 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-700"
+                      >
+                        {action.ctaLabel}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                  <Zap size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    FI Acceleration
+                  </p>
+                  <p className="text-xs font-semibold text-slate-500">
+                    Mô phỏng tăng tốc tự do tài chính
+                  </p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm font-bold leading-6 text-slate-700">
+                {aiCfoInsight.accelerationInsight}
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <MiniStat
+                  label="Stability"
+                  value={`${financialStability.score}/100`}
+                  color="text-emerald-600"
+                />
+                <MiniStat
+                  label="FI Progress"
+                  value={`${financialIndependence.progressPercent}%`}
+                  color="text-blue-600"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 4. Wealth Growth + Cash Flow ───────────────────────────────── */}
       <section className="grid gap-6 xl:grid-cols-2">
         <Panel
           title="Tăng trưởng tài sản"
           subtitle="Xu hướng tài sản ròng và phân bổ 6 tháng"
         >
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <MiniStat
               label="Tổng tài sản"
               value={formatVND(summary.totalAssets)}
@@ -1099,7 +1567,7 @@ export default function DashboardPage() {
                 {formatVND(summary.saving)}/tháng
               </span>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {netWorthForecast.map((item) => (
                 <div
                   key={item.label}
@@ -1177,7 +1645,7 @@ export default function DashboardPage() {
         </Panel>
 
         <Panel title="Dòng tiền & Chi tiêu" subtitle={cashFlowSubtitle}>
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             <MiniStat
               label="Thu nhập"
               value={formatVND(summary.income)}

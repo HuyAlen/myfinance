@@ -20,16 +20,23 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 
-import type { Goal } from "@/src/types/finance";
+import type { Category, Goal, Transaction } from "@/src/types/finance";
 
 import {
   addGoal,
   deleteGoal,
+  getCategories,
   getGoals,
+  getTransactions,
   updateGoal,
 } from "@/src/services/finance/financeStorage";
 
-import { formatVND } from "@/src/services/finance/financeCalculations";
+import {
+  formatVND,
+  getCategoryPlanningGroup,
+  getGoalEffectiveCurrentAmount,
+  getGoalLinkedSavingAmount,
+} from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
 import ConfirmDialog, {
@@ -43,12 +50,14 @@ type FormState = {
   name: string;
   targetAmount: string;
   currentAmount: string;
+  savingCategoryIds: string[];
 };
 
 const emptyForm: FormState = {
   name: "",
   targetAmount: "",
   currentAmount: "",
+  savingCategoryIds: [],
 };
 
 type GoalTier = "completed" | "near" | "progress" | "started";
@@ -110,6 +119,8 @@ const PIE_COLORS: Record<GoalTier, string> = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -120,18 +131,41 @@ export default function GoalsPage() {
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
-    setGoals(await getGoals());
+    const [nextGoals, nextCategories, nextTransactions] = await Promise.all([
+      getGoals(),
+      getCategories(),
+      getTransactions(),
+    ]);
+
+    setGoals(nextGoals);
+    setCategories(nextCategories);
+    setTransactions(nextTransactions);
   }
 
   useEffect(() => {
-    reloadData();
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
-  useRealtimeTable(["goals"], reloadData);
+  useRealtimeTable(["goals", "transactions", "categories"], reloadData);
+
+  const savingCategories = useMemo(
+    () =>
+      categories.filter(
+        (category) => getCategoryPlanningGroup(category) === "saving",
+      ),
+    [categories],
+  );
 
   // ── PRESERVED: summary ───────────────────────────────────────────────────
   const summary = useMemo(() => {
     const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
-    const totalCurrent = goals.reduce((s, g) => s + g.currentAmount, 0);
+    const totalCurrent = goals.reduce(
+      (s, g) => s + getGoalEffectiveCurrentAmount({ goal: g, transactions }),
+      0,
+    );
     const percent =
       totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0;
     return {
@@ -140,25 +174,42 @@ export default function GoalsPage() {
       remaining: totalTarget - totalCurrent,
       percent,
     };
-  }, [goals]);
+  }, [goals, transactions]);
 
   // ── NEW: per-goal analytics ───────────────────────────────────────────────
   const goalMeta = useMemo(
     () =>
       goals.map((g) => {
+        const linkedSavingAmount = getGoalLinkedSavingAmount({
+          goal: g,
+          transactions,
+        });
+        const effectiveCurrentAmount = getGoalEffectiveCurrentAmount({
+          goal: g,
+          transactions,
+        });
         const pct =
           g.targetAmount > 0
-            ? Math.round((g.currentAmount / g.targetAmount) * 100)
+            ? Math.round((effectiveCurrentAmount / g.targetAmount) * 100)
             : 0;
         const tier = getTier(pct);
-        const remaining = Math.max(g.targetAmount - g.currentAmount, 0);
+        const remaining = Math.max(g.targetAmount - effectiveCurrentAmount, 0);
         const suggestedMonthly =
           remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
         const monthsLeft =
           suggestedMonthly > 0 ? Math.ceil(remaining / suggestedMonthly) : 0;
-        return { ...g, pct, tier, remaining, suggestedMonthly, monthsLeft };
+        return {
+          ...g,
+          pct,
+          tier,
+          remaining,
+          linkedSavingAmount,
+          effectiveCurrentAmount,
+          suggestedMonthly,
+          monthsLeft,
+        };
       }),
-    [goals],
+    [goals, transactions],
   );
 
   // ── NEW: tier counts ──────────────────────────────────────────────────────
@@ -272,6 +323,7 @@ export default function GoalsPage() {
       name: goal.name,
       targetAmount: String(goal.targetAmount),
       currentAmount: String(goal.currentAmount),
+      savingCategoryIds: goal.savingCategoryIds ?? [],
     });
     setIsFormOpen(true);
   }
@@ -297,6 +349,7 @@ export default function GoalsPage() {
       name: form.name.trim(),
       targetAmount,
       currentAmount,
+      savingCategoryIds: form.savingCategoryIds,
     };
     setSaveError(null);
     const { error } = form.id ? await updateGoal(goal) : await addGoal(goal);
@@ -329,7 +382,7 @@ export default function GoalsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
@@ -357,7 +410,7 @@ export default function GoalsPage() {
           </div>
 
           {/* 5 KPI cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng mục tiêu"
               value={String(goals.length)}
@@ -727,7 +780,7 @@ export default function GoalsPage() {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="text-slate-500">
-                          {formatVND(g.currentAmount)}
+                          {formatVND(g.effectiveCurrentAmount)}
                         </span>
                         <span className="text-slate-300">/</span>
                         <span className="font-bold text-slate-700">
@@ -848,7 +901,7 @@ export default function GoalsPage() {
                 </div>
 
                 {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3">
+                <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
                   <div className="text-center">
                     <p className="text-[9px] font-bold uppercase text-slate-400">
                       Mục tiêu
@@ -864,9 +917,9 @@ export default function GoalsPage() {
                       Đã có
                     </p>
                     <p className="mt-0.5 text-xs font-black text-emerald-600">
-                      {g.currentAmount >= 1_000_000
-                        ? Math.round(g.currentAmount / 1_000_000) + "M"
-                        : Math.round(g.currentAmount / 1_000) + "K"}
+                      {g.effectiveCurrentAmount >= 1_000_000
+                        ? Math.round(g.effectiveCurrentAmount / 1_000_000) + "M"
+                        : Math.round(g.effectiveCurrentAmount / 1_000) + "K"}
                     </p>
                   </div>
                   <div className="text-center">
@@ -894,11 +947,17 @@ export default function GoalsPage() {
                         : "text-blue-700")
                     }
                   >
-                    {formatVND(g.currentAmount)}
+                    {formatVND(g.effectiveCurrentAmount)}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-400">
                     / {formatVND(g.targetAmount)}
                   </p>
+                  {g.linkedSavingAmount > 0 && (
+                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">
+                      Đã tự động cộng {formatVND(g.linkedSavingAmount)} từ danh
+                      mục tiết kiệm
+                    </p>
+                  )}
                 </div>
 
                 {/* Progress bar */}
@@ -1016,10 +1075,10 @@ export default function GoalsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Chỉnh sửa mục tiêu" : "Thêm mục tiêu mới"}
@@ -1053,10 +1112,21 @@ export default function GoalsPage() {
                 />
                 {/* Current amount with ₫ */}
                 <AmountInput
-                  label="Số tiền đã tiết kiệm"
+                  label="Số tiền đã tiết kiệm thủ công"
                   value={form.currentAmount}
                   onChange={(v) => setForm((p) => ({ ...p, currentAmount: v }))}
                   placeholder="12000000"
+                />
+
+                <SavingCategorySelector
+                  categories={savingCategories}
+                  value={form.savingCategoryIds}
+                  onChange={(next) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      savingCategoryIds: next,
+                    }))
+                  }
                 />
               </div>
 
@@ -1126,6 +1196,81 @@ function KpiCard({
       </div>
       <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
       <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+    </div>
+  );
+}
+
+function SavingCategorySelector({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: Category[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function toggle(categoryId: string) {
+    if (value.includes(categoryId)) {
+      onChange(value.filter((id) => id !== categoryId));
+      return;
+    }
+
+    onChange([...value, categoryId]);
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-slate-800">
+            Liên kết danh mục tiết kiệm
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Các giao dịch thuộc danh mục này sẽ tự cộng vào tiến độ mục tiêu.
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-emerald-600 shadow-sm">
+          {value.length} chọn
+        </span>
+      </div>
+
+      {categories.length === 0 ? (
+        <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
+          Chưa có danh mục planning_group = saving. Hãy tạo danh mục như Quỹ
+          khẩn cấp hoặc Tiết kiệm hằng tháng.
+        </p>
+      ) : (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {categories.map((category) => {
+            const checked = value.includes(category.id);
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => toggle(category.id)}
+                className={
+                  "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-bold transition " +
+                  (checked
+                    ? "border-emerald-300 bg-white text-emerald-700 shadow-sm"
+                    : "border-white bg-white/70 text-slate-600 hover:border-emerald-200")
+                }
+              >
+                <span className="truncate">{category.name}</span>
+                <span
+                  className={
+                    "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] " +
+                    (checked
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-slate-200 text-transparent")
+                  }
+                >
+                  ✓
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
