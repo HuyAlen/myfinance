@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
+import { useAuth } from "@/src/components/auth/AuthProvider";
 import { supabase } from "@/src/lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ const RealtimeContext = createContext<RealtimeContextType>({
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [status, setStatus] = useState<REALTIME_SUBSCRIBE_STATES | "INITIAL">(
     "INITIAL",
   );
@@ -74,6 +76,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (!user?.id) {
+      setStatus("INITIAL");
+      setLastSync(null);
+      return;
+    }
+
     const tables: RealtimeTable[] = [
       "wallets",
       "categories",
@@ -89,7 +97,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     for (const table of tables) {
       channel.on(
         "postgres_changes",
-        { event: "*", schema: "public", table },
+        {
+          event: "*",
+          schema: "public",
+          table,
+          filter: `user_id=eq.${user.id}`,
+        },
         () => {
           setLastSync(new Date());
           // Fire all callbacks registered for this table
@@ -107,7 +120,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.id]);
 
   return (
     <RealtimeContext.Provider value={{ status, lastSync, _register: register }}>

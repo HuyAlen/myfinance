@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 
 import {
@@ -46,17 +47,18 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
+  buildCategorySpendingData,
   buildMonthlyCashFlowData,
   buildMonthlyNetWorthData,
+  calculateDashboardSummary,
   formatVND,
-  getDebtRatio,
-  getGoalScore,
-  getSavingRate,
-  getSpendingByCategory,
-  getTotalAssets,
-  getTotalDebt,
-  getTotalExpense,
-  getTotalIncome,
+  generateDashboardActions,
+  getFinancialGrade,
+} from "@/src/services/finance/financeCalculations";
+
+import type {
+  CategorySpending,
+  DashboardActionIcon,
 } from "@/src/services/finance/financeCalculations";
 
 import type {
@@ -94,7 +96,102 @@ const INV_TYPE_LABELS: Record<string, string> = {
 };
 const SPARK = [30, 44, 38, 58, 52, 70, 63];
 
+const NEED_KEYWORDS = [
+  "food",
+  "meal",
+  "grocery",
+  "market",
+  "housing",
+  "rent",
+  "home",
+  "transport",
+  "fuel",
+  "gas",
+  "electric",
+  "water",
+  "internet",
+  "phone",
+  "medical",
+  "health",
+  "insurance",
+  "education",
+  "school",
+  "tuition",
+  "ăn",
+  "uống",
+  "chợ",
+  "siêu thị",
+  "nhà",
+  "thuê",
+  "điện",
+  "nước",
+  "mạng",
+  "đi lại",
+  "xăng",
+  "xe",
+  "y tế",
+  "sức khỏe",
+  "bảo hiểm",
+  "học",
+];
+
+const WANT_KEYWORDS = [
+  "shopping",
+  "entertainment",
+  "coffee",
+  "travel",
+  "game",
+  "movie",
+  "restaurant",
+  "fashion",
+  "gift",
+  "mua sắm",
+  "giải trí",
+  "cafe",
+  "cà phê",
+  "du lịch",
+  "ăn ngoài",
+  "thời trang",
+  "quà",
+];
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function categoryText(category?: Category) {
+  if (!category) return "";
+  return normalizeText(`${category.id} ${category.name}`);
+}
+
+function isNeedCategory(category?: Category) {
+  const text = categoryText(category);
+  if (!text) return false;
+  return NEED_KEYWORDS.some((keyword) => text.includes(normalizeText(keyword)));
+}
+
+function isWantCategory(category?: Category) {
+  const text = categoryText(category);
+  if (!text) return false;
+  return WANT_KEYWORDS.some((keyword) => text.includes(normalizeText(keyword)));
+}
+
+function formatOneDecimal(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 1,
+  }).format(Math.round(value * 10) / 10);
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(Math.round(value), 100));
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,6 +199,7 @@ export default function DashboardPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [isHealthDrawerOpen, setIsHealthDrawerOpen] = useState(false);
 
   async function reloadData() {
     const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
@@ -132,58 +230,29 @@ export default function DashboardPage() {
   );
 
   // ── Core summary ──────────────────────────────────────────────────────────
-  const summary = useMemo(() => {
-    const walletAssets = getTotalAssets(wallets);
-    const investmentAssets = investments.reduce(
-      (s, i) => s + i.currentValue,
-      0,
-    );
-    const totalAssets = walletAssets + investmentAssets;
-    const totalDebt = getTotalDebt(debts);
-    const netWorth = totalAssets - totalDebt;
-    const income = getTotalIncome(transactions);
-    const expense = getTotalExpense(transactions);
-    const saving = income - expense;
-    const savingRate = getSavingRate(income, expense);
-    const debtRatio = getDebtRatio(totalDebt, totalAssets);
-    const goalScore = getGoalScore(goals);
-    const investedAmount = investments.reduce(
-      (s, i) => s + i.investedAmount,
-      0,
-    );
-    const investmentPL = investmentAssets - investedAmount;
-    const investmentReturn =
-      investedAmount > 0
-        ? Math.round((investmentPL / investedAmount) * 1000) / 10
-        : 0;
-    const liquidBalance = wallets
-      .filter((w) => w.type !== "investment")
-      .reduce((s, w) => s + w.balance, 0);
-    const emergencyMonths = Math.floor(liquidBalance / (expense || 1));
-    return {
-      walletAssets,
-      investmentAssets,
-      investedAmount,
-      investmentPL,
-      investmentReturn,
-      totalAssets,
-      totalDebt,
-      netWorth,
-      liquidBalance,
-      income,
-      expense,
-      saving,
-      savingRate,
-      debtRatio,
-      goalScore,
-      emergencyMonths,
-    };
-  }, [wallets, investments, debts, transactions, goals]);
+  const summary = useMemo(
+    () =>
+      calculateDashboardSummary({
+        wallets,
+        investments,
+        debts,
+        transactions,
+        goals,
+      }),
+    [wallets, investments, debts, transactions, goals],
+  );
 
   // ── Net-worth trend (real monthly reconstruction) ─────────────────────────
   const netWorthTrend = useMemo(
-    () => buildMonthlyNetWorthData(transactions, summary.netWorth, 6),
-    [transactions, summary.netWorth],
+    () =>
+      buildMonthlyNetWorthData({
+        wallets,
+        investments,
+        debts,
+        transactions,
+        months: 6,
+      }),
+    [wallets, investments, debts, transactions],
   );
 
   // ── Cash-flow trend (real monthly transaction data) ───────────────────────
@@ -210,12 +279,13 @@ export default function DashboardPage() {
 
   // ── Spending ──────────────────────────────────────────────────────────────
   const spendingByCategory = useMemo(
-    () => getSpendingByCategory(transactions, categories),
+    () => buildCategorySpendingData(transactions, categories),
     [transactions, categories],
   );
   const spendingPieData = useMemo(
     () =>
       spendingByCategory.map((item, i) => ({
+        id: item.id,
         name: item.name,
         value: item.value, // VND amount drives slice size
         percent: item.percent,
@@ -226,22 +296,79 @@ export default function DashboardPage() {
 
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
-    const needIds = ["food", "housing", "transport"];
-    const income = summary.income || 1;
-    const needs = transactions
-      .filter((t) => t.type === "expense")
-      .filter((t) => {
-        const cat = categories.find((c) => c.id === t.categoryId);
-        return cat && needIds.some((n) => cat.id.includes(n));
-      })
-      .reduce((s, t) => s + t.amount, 0);
+    const income = Math.max(summary.income, 0);
+    const expenseTxns = transactions.filter((t) => t.type === "expense");
+
+    const needs = expenseTxns
+      .filter((t) =>
+        isNeedCategory(categories.find((c) => c.id === t.categoryId)),
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const explicitWants = expenseTxns
+      .filter((t) =>
+        isWantCategory(categories.find((c) => c.id === t.categoryId)),
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const unclassifiedExpense = Math.max(
+      summary.expense - needs - explicitWants,
+      0,
+    );
+    const wants = explicitWants + unclassifiedExpense;
     const savings = Math.max(summary.saving, 0);
+
+    const pct = (value: number) =>
+      income > 0 ? Math.round((value / income) * 100) : 0;
+
     return {
-      needs: Math.round((needs / income) * 100),
-      wants: Math.round((Math.max(summary.expense - needs, 0) / income) * 100),
-      savings: Math.round((savings / income) * 100),
+      needs: pct(needs),
+      wants: pct(wants),
+      savings: pct(savings),
+      needsAmount: needs,
+      wantsAmount: wants,
+      savingsAmount: savings,
+      unclassifiedAmount: unclassifiedExpense,
     };
   }, [transactions, categories, summary]);
+
+  const cashFlowData = useMemo(
+    () =>
+      cashFlowTrend.map((item) => ({
+        ...item,
+        dongTienRong: item.thu - item.chi,
+      })),
+    [cashFlowTrend],
+  );
+
+  const cashFlowMonthsWithData = useMemo(
+    () => cashFlowTrend.filter((item) => item.thu > 0 || item.chi > 0).length,
+    [cashFlowTrend],
+  );
+
+  const cashFlowSubtitle =
+    cashFlowMonthsWithData <= 1
+      ? "Dữ liệu tháng hiện tại; chưa đủ lịch sử 6 tháng"
+      : "Xu hướng 6 tháng và phân bổ thu nhập";
+
+  const netCashFlow = summary.income - summary.expense;
+
+  const netWorthForecast = useMemo(() => {
+    const monthlyGrowth = Number.isFinite(summary.saving) ? summary.saving : 0;
+    const project = (months: number) =>
+      summary.netWorth + monthlyGrowth * months;
+
+    return [
+      { label: "3 tháng", value: project(3) },
+      { label: "6 tháng", value: project(6) },
+      { label: "12 tháng", value: project(12) },
+    ];
+  }, [summary.netWorth, summary.saving]);
+
+  const emergencyMonthsExact = useMemo(() => {
+    if (summary.monthlyExpense <= 0) return 0;
+    return summary.liquidBalance / summary.monthlyExpense;
+  }, [summary.liquidBalance, summary.monthlyExpense]);
 
   // ── Investment rows ───────────────────────────────────────────────────────
   const investmentRows = useMemo(
@@ -275,16 +402,20 @@ export default function DashboardPage() {
     () =>
       goals.map((g) => {
         const percent = Math.min(
-          Math.round((g.currentAmount / g.targetAmount) * 100),
+          g.targetAmount > 0
+            ? Math.round((g.currentAmount / g.targetAmount) * 100)
+            : 0,
           100,
         );
-        const remaining = g.targetAmount - g.currentAmount;
+        const remaining = Math.max(g.targetAmount - g.currentAmount, 0);
         return {
           ...g,
           percent,
           remaining,
           monthsLeft:
-            summary.saving > 0 ? Math.ceil(remaining / summary.saving) : null,
+            remaining > 0 && summary.saving > 0
+              ? Math.max(0, Math.ceil(remaining / summary.saving))
+              : null,
         };
       }),
     [goals, summary.saving],
@@ -302,16 +433,132 @@ export default function DashboardPage() {
     [transactions, categories, wallets],
   );
 
-  // ── Risk score ────────────────────────────────────────────────────────────
-  const riskScore = useMemo(
-    () =>
-      Math.round(
-        Math.min(summary.debtRatio, 100) * 0.4 +
-          Math.max(0, 40 - summary.savingRate) * 2.5 * 0.35 +
-          Math.max(0, 80 - summary.goalScore) * 0.25,
-      ),
-    [summary],
+  // ── Financial health score v2 ─────────────────────────────────────────────
+  const healthMetrics = useMemo(() => {
+    const savingScore = Math.max(
+      0,
+      Math.min(Math.round(summary.savingRate * 2.5), 100),
+    );
+    const debtSafetyScore = Math.max(
+      0,
+      Math.min(100 - Math.round(summary.debtRatio), 100),
+    );
+    const goalScore = Math.max(0, Math.min(Math.round(summary.goalScore), 100));
+    const emergencyScore = Math.max(
+      0,
+      Math.min(Math.round((emergencyMonthsExact / 6) * 100), 100),
+    );
+
+    const totalScore = Math.round(
+      savingScore * 0.3 +
+        debtSafetyScore * 0.3 +
+        emergencyScore * 0.25 +
+        goalScore * 0.15,
+    );
+
+    return {
+      savingScore,
+      debtSafetyScore,
+      goalScore,
+      emergencyScore,
+      totalScore,
+    };
+  }, [
+    summary.savingRate,
+    summary.debtRatio,
+    summary.goalScore,
+    emergencyMonthsExact,
+  ]);
+
+  const healthScore = healthMetrics.totalScore;
+  const financialGrade = getFinancialGrade(healthScore);
+  const healthBreakdown = useMemo(
+    () => [
+      {
+        label: "Tiết kiệm",
+        score: healthMetrics.savingScore,
+        weight: 30,
+        points: Math.round(healthMetrics.savingScore * 0.3),
+        note: `Tỷ lệ tiết kiệm hiện tại ${summary.savingRate}%`,
+      },
+      {
+        label: "An toàn nợ",
+        score: healthMetrics.debtSafetyScore,
+        weight: 30,
+        points: Math.round(healthMetrics.debtSafetyScore * 0.3),
+        note:
+          summary.debtRatio <= 0
+            ? "Không có nợ, rủi ro thấp"
+            : `Tỷ lệ nợ ${summary.debtRatio}%`,
+      },
+      {
+        label: "Quỹ khẩn cấp",
+        score: healthMetrics.emergencyScore,
+        weight: 25,
+        points: Math.round(healthMetrics.emergencyScore * 0.25),
+        note: `${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu`,
+      },
+      {
+        label: "Mục tiêu",
+        score: healthMetrics.goalScore,
+        weight: 15,
+        points: Math.round(healthMetrics.goalScore * 0.15),
+        note: `${goals.length} mục tiêu · tiến độ trung bình ${summary.goalScore}%`,
+      },
+    ],
+    [
+      healthMetrics,
+      summary.savingRate,
+      summary.debtRatio,
+      summary.goalScore,
+      emergencyMonthsExact,
+      goals.length,
+    ],
   );
+
+  const healthStrengths = useMemo(() => {
+    const items: string[] = [];
+    if (healthMetrics.debtSafetyScore >= 90)
+      items.push("Không có nợ hoặc tỷ lệ nợ rất an toàn.");
+    if (healthMetrics.savingScore >= 70)
+      items.push(`Tỷ lệ tiết kiệm tốt (${summary.savingRate}%).`);
+    if (healthMetrics.emergencyScore >= 50)
+      items.push(
+        `Quỹ khẩn cấp đạt ${formatOneDecimal(emergencyMonthsExact)} tháng.`,
+      );
+    if (healthMetrics.goalScore >= 50)
+      items.push("Mục tiêu tài chính có tiến độ tốt.");
+    return items.length > 0
+      ? items
+      : ["Bạn đã có dữ liệu tài chính để bắt đầu tối ưu."];
+  }, [healthMetrics, summary.savingRate, emergencyMonthsExact]);
+
+  const healthImprovements = useMemo(() => {
+    const items: string[] = [];
+    if (emergencyMonthsExact < 3)
+      items.push(`Tăng quỹ khẩn cấp lên tối thiểu 3 tháng chi tiêu.`);
+    if (healthMetrics.goalScore < 30 && goals.length > 0)
+      items.push(
+        `Đẩy nhanh tiến độ mục tiêu tài chính, hiện mới đạt ${summary.goalScore}%.`,
+      );
+    if (summary.savingRate < 20)
+      items.push("Nâng tỷ lệ tiết kiệm lên ít nhất 20% thu nhập.");
+    if (summary.debtRatio > 40)
+      items.push("Giảm tỷ lệ nợ xuống dưới 40% tổng tài sản.");
+    return items.length > 0
+      ? items
+      : ["Duy trì nhịp hiện tại và cân nhắc tăng đầu tư dài hạn."];
+  }, [
+    healthMetrics.goalScore,
+    emergencyMonthsExact,
+    goals.length,
+    summary.goalScore,
+    summary.savingRate,
+    summary.debtRatio,
+  ]);
+
+  const riskScore = Math.max(0, 100 - healthScore);
+
   const riskLevel =
     riskScore <= 25
       ? "Thấp"
@@ -336,23 +583,26 @@ export default function DashboardPage() {
         : riskScore <= 75
           ? "from-orange-500 to-rose-400"
           : "from-rose-500 to-rose-700";
-  const healthScore = 100 - riskScore;
   const healthLabel =
-    healthScore >= 80
+    healthScore >= 90
       ? "Xuất sắc"
-      : healthScore >= 60
+      : healthScore >= 75
         ? "Tốt"
-        : healthScore >= 40
-          ? "Trung bình"
-          : "Cần cải thiện";
+        : healthScore >= 60
+          ? "Khá"
+          : healthScore >= 40
+            ? "Trung bình"
+            : "Cần cải thiện";
 
   // ── AI actions ────────────────────────────────────────────────────────────
-  const aiActions = useMemo(() => {
+  const legacyAiActions = useMemo(() => {
     const actions: {
       icon: React.ReactNode;
       title: string;
       body: string;
       tone: "danger" | "warning" | "good";
+      ctaLabel?: string;
+      ctaRoute?: string;
     }[] = [];
     if (summary.savingRate < 20) {
       actions.push({
@@ -391,11 +641,11 @@ export default function DashboardPage() {
         tone: "warning",
       });
     }
-    if (summary.emergencyMonths < 3) {
+    if (emergencyMonthsExact < 3) {
       actions.push({
         icon: <Zap size={18} />,
         title: "Quỹ khẩn cấp thiếu",
-        body: `Quỹ khẩn cấp đủ dùng ${summary.emergencyMonths} tháng. Mục tiêu tối thiểu: 3 tháng (${formatVND(summary.expense * 3)}).`,
+        body: `Quỹ khẩn cấp đủ dùng khoảng ${formatOneDecimal(emergencyMonthsExact)} tháng. Mục tiêu tối thiểu: 3 tháng (${formatVND((summary.monthlyExpense || summary.expense) * 3)}).`,
         tone: "danger",
       });
     }
@@ -419,6 +669,110 @@ export default function DashboardPage() {
     }
     return actions.slice(0, 3);
   }, [summary, investments, goalRows]);
+  const aiActions = useMemo(
+    () =>
+      generateDashboardActions({
+        transactions,
+        wallets,
+        budgets,
+        goals,
+        debts,
+        investments,
+        categories,
+        summary,
+      }),
+    [
+      transactions,
+      wallets,
+      budgets,
+      goals,
+      debts,
+      investments,
+      categories,
+      summary,
+    ],
+  );
+  const actionIcons: Record<DashboardActionIcon, React.ReactNode> = {
+    alert: <AlertTriangle size={18} />,
+    savings: <PiggyBank size={18} />,
+    shield: <ShieldCheck size={18} />,
+    debt: <CreditCard size={18} />,
+    bank: <Landmark size={18} />,
+    emergency: <Zap size={18} />,
+    investment: <TrendingDown size={18} />,
+    goal: <Target size={18} />,
+    budget: <AlertTriangle size={18} />,
+  };
+
+  const v3AdvisorActions = useMemo(() => {
+    const actions: {
+      icon: React.ReactNode;
+      title: string;
+      body: string;
+      tone: "danger" | "warning" | "good";
+      ctaLabel?: string;
+      ctaRoute?: string;
+    }[] = [];
+
+    const emergencyTarget = (summary.monthlyExpense || summary.expense) * 3;
+    const emergencyGap = Math.max(emergencyTarget - summary.liquidBalance, 0);
+
+    if (emergencyMonthsExact < 3) {
+      actions.push({
+        icon: <Zap size={18} />,
+        title: "Ưu tiên tạo quỹ khẩn cấp",
+        body: `Hiện tại bạn có khoảng ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu. Mục tiêu tối thiểu là 3 tháng, cần bổ sung khoảng ${formatVND(emergencyGap)}.`,
+        tone: emergencyMonthsExact < 1 ? "danger" : "warning",
+        ctaLabel: "Tạo mục tiêu",
+        ctaRoute: "/goals",
+      });
+    }
+
+    if (goals.length > 0 && healthMetrics.goalScore < 30) {
+      actions.push({
+        icon: <Target size={18} />,
+        title: "Mục tiêu tài chính đang chậm",
+        body: `${goals.length} mục tiêu hiện đạt trung bình ${summary.goalScore}%. Hãy chọn 1 mục tiêu ưu tiên và đặt khoản góp cố định hàng tháng.`,
+        tone: "warning",
+        ctaLabel: "Xem mục tiêu",
+        ctaRoute: "/goals",
+      });
+    }
+
+    if (summary.savingRate >= 30) {
+      actions.push({
+        icon: <PiggyBank size={18} />,
+        title: "Tỷ lệ tiết kiệm rất tốt",
+        body: `Bạn đang tiết kiệm ${summary.savingRate}% thu nhập, cao hơn mốc 20%. Có thể phân bổ phần dư vào quỹ khẩn cấp hoặc đầu tư dài hạn.`,
+        tone: "good",
+        ctaLabel: "Phân bổ mục tiêu",
+        ctaRoute: "/goals",
+      });
+    }
+
+    if (summary.debtRatio <= 0) {
+      actions.push({
+        icon: <ShieldCheck size={18} />,
+        title: "Không có nợ",
+        body: "Đây là điểm mạnh lớn của hồ sơ tài chính. Hãy tận dụng dòng tiền dương để tăng tài sản thanh khoản và mục tiêu dài hạn.",
+        tone: "good",
+        ctaLabel: "Xem báo cáo",
+        ctaRoute: "/reports",
+      });
+    }
+
+    return actions.slice(0, 4);
+  }, [
+    emergencyMonthsExact,
+    goals.length,
+    healthMetrics.goalScore,
+    summary.monthlyExpense,
+    summary.expense,
+    summary.liquidBalance,
+    summary.goalScore,
+    summary.savingRate,
+    summary.debtRatio,
+  ]);
 
   // ── KPI bar ───────────────────────────────────────────────────────────────
   const kpiCards = [
@@ -570,48 +924,59 @@ export default function DashboardPage() {
                 Sức khoẻ tài chính
               </p>
               <div className="mt-5 flex items-center gap-5">
-                <div
-                  className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${riskBg} p-2 shadow-lg`}
+                <button
+                  type="button"
+                  onClick={() => setIsHealthDrawerOpen(true)}
+                  className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${financialGrade.gradient} p-2 shadow-lg transition hover:scale-[1.03] focus:outline-none focus:ring-4 ${financialGrade.ring}`}
+                  title="Xem giải thích điểm sức khỏe tài chính"
                 >
                   <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
-                    <span className={`text-3xl font-black ${riskColor}`}>
+                    <span
+                      className={`text-3xl font-black ${financialGrade.color}`}
+                    >
                       {healthScore}
                     </span>
                     <span className="text-xs text-slate-500">/100</span>
                   </div>
-                </div>
+                </button>
                 <div>
-                  <p className={`text-xl font-black ${riskColor}`}>
-                    {healthLabel}
+                  <div
+                    className={`mb-2 inline-flex items-center rounded-full border px-3 py-1 text-xs font-black ${financialGrade.bg} ${financialGrade.border} ${financialGrade.color}`}
+                  >
+                    Grade {financialGrade.grade}
+                  </div>
+                  <p className={`text-xl font-black ${financialGrade.color}`}>
+                    {financialGrade.label}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Rủi ro: {riskLevel}
+                    {healthLabel} · Rủi ro: {riskLevel}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsHealthDrawerOpen(true)}
+                    className="mt-3 text-xs font-black text-blue-600 hover:text-blue-700"
+                  >
+                    Xem giải thích điểm →
+                  </button>
                 </div>
               </div>
             </div>
             <div className="mt-6 space-y-4">
-              <ScoreLine
-                label="Tiết kiệm"
-                value={Math.min(Math.round(summary.savingRate * 2.5), 100)}
-              />
+              <ScoreLine label="Tiết kiệm" value={healthMetrics.savingScore} />
               <ScoreLine
                 label="An toàn nợ"
-                value={Math.max(100 - Math.round(summary.debtRatio), 0)}
+                value={healthMetrics.debtSafetyScore}
               />
-              <ScoreLine label="Mục tiêu" value={summary.goalScore} />
+              <ScoreLine label="Mục tiêu" value={healthMetrics.goalScore} />
               <ScoreLine
                 label="Quỹ khẩn cấp"
-                value={Math.min(
-                  Math.round((summary.emergencyMonths / 6) * 100),
-                  100,
-                )}
+                value={healthMetrics.emergencyScore}
               />
             </div>
             <div className="mt-6 rounded-2xl bg-white/70 p-4 text-sm text-slate-600 backdrop-blur">
               <span className="font-bold text-slate-900">Quỹ khẩn cấp: </span>
-              {summary.emergencyMonths} tháng chi tiêu
-              {summary.emergencyMonths < 3 ? (
+              {formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu
+              {emergencyMonthsExact < 3 ? (
                 <span className="ml-2 font-bold text-rose-500">⚠ Thiếu</span>
               ) : (
                 <span className="ml-2 font-bold text-emerald-600">
@@ -717,6 +1082,41 @@ export default function DashboardPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <div className="mt-5 rounded-3xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-black text-blue-700">
+                  Dự báo tài sản ròng
+                </p>
+                <p className="text-xs text-blue-600/80">
+                  Ước tính nếu giữ dòng tiền hiện tại
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black ${summary.saving >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+              >
+                {summary.saving >= 0 ? "+" : ""}
+                {formatVND(summary.saving)}/tháng
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {netWorthForecast.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl bg-white p-3 ring-1 ring-blue-100"
+                >
+                  <p className="text-[11px] font-bold text-slate-500">
+                    {item.label}
+                  </p>
+                  <p
+                    className={`mt-1 text-sm font-black ${item.value >= summary.netWorth ? "text-emerald-600" : "text-rose-500"}`}
+                  >
+                    {formatVND(item.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-[140px_1fr] sm:items-center">
             <div className="relative mx-auto h-36 w-36">
               <PieChart width={144} height={144}>
@@ -776,11 +1176,8 @@ export default function DashboardPage() {
           </div>
         </Panel>
 
-        <Panel
-          title="Dòng tiền & Chi tiêu"
-          subtitle="Xu hướng 6 tháng và phân bổ thu nhập"
-        >
-          <div className="mt-4 grid grid-cols-3 gap-3">
+        <Panel title="Dòng tiền & Chi tiêu" subtitle={cashFlowSubtitle}>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             <MiniStat
               label="Thu nhập"
               value={formatVND(summary.income)}
@@ -792,7 +1189,12 @@ export default function DashboardPage() {
               color="text-rose-500"
             />
             <MiniStat
-              label="Tiết kiệm"
+              label="Dòng tiền ròng"
+              value={`${netCashFlow >= 0 ? "+" : ""}${formatVND(netCashFlow)}`}
+              color={netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500"}
+            />
+            <MiniStat
+              label="Tỷ lệ tiết kiệm"
               value={`${summary.savingRate}%`}
               color={
                 summary.savingRate >= 20 ? "text-emerald-600" : "text-rose-500"
@@ -802,7 +1204,7 @@ export default function DashboardPage() {
           <div className="mt-5 h-[220px]">
             <ResponsiveContainer width="100%" height={220} minWidth={0}>
               <BarChart
-                data={cashFlowTrend}
+                data={cashFlowData}
                 barGap={2}
                 barCategoryGap={10}
                 margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
@@ -852,8 +1254,8 @@ export default function DashboardPage() {
                   radius={[6, 6, 0, 0]}
                 />
                 <Bar
-                  dataKey="tietKiem"
-                  name="Tiết kiệm"
+                  dataKey="dongTienRong"
+                  name="Dòng tiền ròng"
                   fill="#2563eb"
                   radius={[6, 6, 0, 0]}
                 />
@@ -871,7 +1273,7 @@ export default function DashboardPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-blue-600" />
-              Tiết kiệm
+              Dòng tiền ròng
             </span>
           </div>
           <div className="mt-6 rounded-2xl bg-slate-50 p-4">
@@ -879,23 +1281,32 @@ export default function DashboardPage() {
               Quy tắc 50/30/20
             </p>
             <AllocationRow
-              label="Thiết yếu (50%)"
+              label="Thiết yếu"
               actual={allocation5030.needs}
               target={50}
+              amount={allocation5030.needsAmount}
               color="bg-blue-500"
             />
             <AllocationRow
-              label="Muốn (30%)"
+              label="Muốn"
               actual={allocation5030.wants}
               target={30}
+              amount={allocation5030.wantsAmount}
               color="bg-violet-500"
             />
             <AllocationRow
-              label="Tiết kiệm (20%)"
+              label="Tiết kiệm"
               actual={allocation5030.savings}
               target={20}
+              amount={allocation5030.savingsAmount}
               color="bg-emerald-500"
             />
+            {allocation5030.unclassifiedAmount > 0 && (
+              <p className="mt-2 text-[11px] text-slate-500">
+                Có {formatVND(allocation5030.unclassifiedAmount)} chi tiêu chưa
+                map rõ danh mục, tạm tính vào nhóm “Muốn”.
+              </p>
+            )}
           </div>
         </Panel>
       </section>
@@ -950,49 +1361,69 @@ export default function DashboardPage() {
           </div>
           {/* Spending breakdown */}
           <div className="mt-6 border-t border-slate-100 pt-5">
-            <p className="mb-3 text-sm font-black text-slate-700">
+            <p className="mb-4 text-sm font-black text-slate-700">
               Chi tiêu theo danh mục
             </p>
-            <div className="grid gap-4 sm:grid-cols-[120px_1fr] sm:items-center">
-              <div className="relative mx-auto h-32 w-32">
-                <PieChart width={128} height={128}>
-                  <Pie
-                    data={spendingPieData}
-                    dataKey="value"
-                    innerRadius={36}
-                    outerRadius={56}
-                    paddingAngle={3}
-                  >
-                    {spendingPieData.map((e) => (
-                      <Cell key={e.name} fill={e.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-sm font-black text-rose-500">
-                    {Math.round(summary.expense / 1_000_000)}M
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {spendingByCategory.slice(0, 4).map((item, i) => (
-                  <div key={item.name} className="flex items-center gap-2">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{
-                        background: SPEND_COLORS[i % SPEND_COLORS.length],
-                      }}
-                    />
-                    <span className="flex-1 truncate text-xs text-slate-600">
-                      {item.name}
+            {spendingByCategory.length === 0 ? (
+              <p className="py-4 text-center text-xs text-slate-400">
+                Chưa có chi tiêu nào.
+              </p>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
+                {/* Donut */}
+                <div className="relative mx-auto h-[180px] w-[180px] shrink-0 md:mx-0">
+                  <PieChart width={180} height={180}>
+                    <Pie
+                      data={spendingPieData}
+                      dataKey="value"
+                      innerRadius={52}
+                      outerRadius={80}
+                      paddingAngle={3}
+                      startAngle={90}
+                      endAngle={-270}
+                    >
+                      {spendingPieData.map((e) => (
+                        <Cell key={e.id} fill={e.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CategorySpendingTooltip />} />
+                  </PieChart>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
+                    <span className="max-w-[90px] truncate text-xl font-black text-rose-500">
+                      {formatCompactVND(summary.expense)}
                     </span>
-                    <span className="text-xs font-bold text-slate-800">
-                      {item.percent}%
+                    <span className="mt-0.5 text-[10px] font-medium text-slate-400">
+                      Tổng chi
                     </span>
                   </div>
-                ))}
+                </div>
+
+                {/* Legend */}
+                <div className="min-w-0 space-y-2">
+                  {spendingPieData.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid min-w-0 items-center gap-2 rounded-xl bg-slate-50 px-3 py-2"
+                      style={{ gridTemplateColumns: "10px minmax(0,1fr) 44px" }}
+                    >
+                      <span
+                        className="size-2.5 rounded-full shrink-0"
+                        style={{ background: item.color }}
+                      />
+                      <span
+                        className="min-w-0 truncate text-xs font-medium text-slate-600"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                      <span className="text-right text-xs font-bold text-slate-800 tabular-nums">
+                        {item.percent}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </Panel>
 
@@ -1002,9 +1433,39 @@ export default function DashboardPage() {
           subtitle={`${investments.length} tài sản · ${summary.investmentReturn >= 0 ? "+" : ""}${summary.investmentReturn}% tổng lợi nhuận`}
         >
           {investments.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-400">
-              Chưa có tài sản đầu tư.
-            </p>
+            <div className="mt-5 rounded-3xl border border-dashed border-emerald-200 bg-emerald-50/60 p-5 text-center">
+              <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
+                <Briefcase size={22} />
+              </div>
+              <p className="mt-3 text-base font-black text-slate-800">
+                Bắt đầu danh mục đầu tư
+              </p>
+              <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-500">
+                Thêm cổ phiếu, vàng, crypto hoặc quỹ ETF để theo dõi lợi nhuận,
+                tỷ trọng và rủi ro đầu tư.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs font-bold text-emerald-700">
+                <span className="rounded-full bg-white px-3 py-1 ring-1 ring-emerald-100">
+                  Cổ phiếu
+                </span>
+                <span className="rounded-full bg-white px-3 py-1 ring-1 ring-emerald-100">
+                  Vàng
+                </span>
+                <span className="rounded-full bg-white px-3 py-1 ring-1 ring-emerald-100">
+                  Crypto
+                </span>
+                <span className="rounded-full bg-white px-3 py-1 ring-1 ring-emerald-100">
+                  Quỹ ETF
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push("/investments")}
+                className="mt-5 inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                Thêm tài sản đầu tư
+              </button>
+            </div>
           ) : (
             <>
               <div className="mt-5 flex items-center gap-5">
@@ -1099,7 +1560,7 @@ export default function DashboardPage() {
         {/* Risk Analysis */}
         <Panel
           title="Phân tích rủi ro"
-          subtitle="Đánh giá 3 chiều: Nợ · Tiết kiệm · Mục tiêu"
+          subtitle="Đánh giá 4 chiều: Nợ · Tiết kiệm · Quỹ khẩn cấp · Mục tiêu"
         >
           <div className="mt-5 flex items-center gap-5">
             <div
@@ -1128,17 +1589,22 @@ export default function DashboardPage() {
           <div className="mt-6 space-y-4">
             <RiskDimension
               label="Rủi ro nợ"
-              score={Math.min(summary.debtRatio, 100)}
+              score={100 - healthMetrics.debtSafetyScore}
               description={`Tỷ lệ nợ: ${summary.debtRatio}%`}
             />
             <RiskDimension
               label="Rủi ro tiết kiệm"
-              score={Math.max(0, 40 - summary.savingRate) * 2.5}
+              score={100 - healthMetrics.savingScore}
               description={`Tiết kiệm: ${summary.savingRate}%`}
             />
             <RiskDimension
+              label="Rủi ro quỹ khẩn cấp"
+              score={100 - healthMetrics.emergencyScore}
+              description={`Dự phòng: ${summary.emergencyMonths} tháng`}
+            />
+            <RiskDimension
               label="Rủi ro mục tiêu"
-              score={Math.max(0, 80 - summary.goalScore)}
+              score={100 - healthMetrics.goalScore}
               description={`Tiến độ: ${summary.goalScore}%`}
             />
           </div>
@@ -1200,10 +1666,35 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-5 space-y-4">
-            {aiActions.map((action, i) => (
-              <ActionCard key={i} rank={i + 1} {...action} />
+            {v3AdvisorActions.map((action, i) => (
+              <ActionCard
+                key={`v3-${action.title}-${i}`}
+                rank={i + 1}
+                icon={action.icon}
+                title={action.title}
+                body={action.body}
+                tone={action.tone}
+                ctaLabel={action.ctaLabel}
+                ctaRoute={action.ctaRoute}
+                onNavigate={router.push}
+              />
             ))}
-            {aiActions.length === 0 && (
+            {aiActions
+              .slice(0, Math.max(0, 3 - v3AdvisorActions.length))
+              .map((action, i) => (
+                <ActionCard
+                  key={`${action.title}-${i}`}
+                  rank={v3AdvisorActions.length + i + 1}
+                  icon={actionIcons[action.icon]}
+                  title={action.title}
+                  body={action.body}
+                  tone={action.tone}
+                  ctaLabel={action.ctaLabel}
+                  ctaRoute={action.ctaRoute}
+                  onNavigate={router.push}
+                />
+              ))}
+            {v3AdvisorActions.length === 0 && aiActions.length === 0 && (
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center">
                 <p className="text-2xl">🎉</p>
                 <p className="mt-2 font-black text-emerald-700">
@@ -1254,11 +1745,211 @@ export default function DashboardPage() {
           </div>
         </Panel>
       </section>
+
+      <FinancialHealthDrawer
+        open={isHealthDrawerOpen}
+        onClose={() => setIsHealthDrawerOpen(false)}
+        score={healthScore}
+        grade={financialGrade.grade}
+        healthLabel={healthLabel}
+        riskLevel={riskLevel}
+        breakdown={healthBreakdown}
+        strengths={healthStrengths}
+        improvements={healthImprovements}
+      />
     </div>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
+
+function FinancialHealthDrawer({
+  open,
+  onClose,
+  score,
+  grade,
+  healthLabel,
+  riskLevel,
+  breakdown,
+  strengths,
+  improvements,
+}: {
+  open: boolean;
+  onClose: () => void;
+  score: number;
+  grade: string;
+  healthLabel: string;
+  riskLevel: string;
+  breakdown: {
+    label: string;
+    score: number;
+    weight: number;
+    points: number;
+    note: string;
+  }[];
+  strengths: string[];
+  improvements: string[];
+}) {
+  if (!open) return null;
+
+  const totalPoints = breakdown.reduce((sum, item) => sum + item.points, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="Đóng"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+      />
+      <aside className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-2xl sm:p-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-blue-500">
+              AI Explain Score
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-slate-900">
+              Giải thích sức khỏe tài chính
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Cách hệ thống chấm điểm hồ sơ tài chính hiện tại của bạn.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 hover:bg-slate-200"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mt-6 rounded-[2rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-500">Tổng điểm</p>
+              <p className="mt-1 text-5xl font-black text-blue-600">
+                {score}
+                <span className="text-base text-slate-400">/100</span>
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white bg-white/80 px-5 py-4 text-center shadow-sm">
+              <p className="text-xs font-bold text-slate-400">Grade</p>
+              <p className="text-3xl font-black text-slate-900">{grade}</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">
+                {healthLabel} · Rủi ro {riskLevel}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-4">
+          {breakdown.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-slate-900">{item.label}</p>
+                  <p className="mt-1 text-xs text-slate-500">{item.note}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-blue-600">
+                    +{item.points} điểm
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Trọng số {item.weight}%
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 h-2.5 rounded-full bg-white">
+                <div
+                  className="h-2.5 rounded-full bg-gradient-to-r from-emerald-400 to-blue-500"
+                  style={{ width: `${clampScore(item.score)}%` }}
+                />
+              </div>
+              <div className="mt-1 flex justify-between text-[11px] text-slate-400">
+                <span>Score {clampScore(item.score)}/100</span>
+                <span>Đóng góp tối đa {item.weight} điểm</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="font-black text-emerald-700">Điểm mạnh</p>
+            <ul className="mt-3 space-y-2 text-sm text-emerald-700">
+              {strengths.map((item) => (
+                <li key={item}>✓ {item}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+            <p className="font-black text-amber-700">Cần cải thiện</p>
+            <ul className="mt-3 space-y-2 text-sm text-amber-700">
+              {improvements.map((item) => (
+                <li key={item}>⚠ {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+          Tổng điểm hiện tại được tính từ các phần trên:{" "}
+          <span className="font-black">{totalPoints}/100</span>. Khi quỹ khẩn
+          cấp và mục tiêu tăng lên, điểm sức khỏe tài chính sẽ tự cải thiện.
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function formatCompactVND(value: number) {
+  const rounded = Math.round(Number.isFinite(value) ? value : 0);
+  if (Math.abs(rounded) >= 1_000_000) {
+    return `${Math.round(rounded / 1_000_000)}M`;
+  }
+  if (Math.abs(rounded) >= 1_000) {
+    return `${Math.round(rounded / 1_000)}K`;
+  }
+  return `${rounded}`;
+}
+
+function CategorySpendingTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    payload?: CategorySpending & { color?: string };
+    value?: number;
+  }>;
+}) {
+  const item = payload?.[0]?.payload;
+  if (!active || !item) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+      <div className="flex items-center gap-2">
+        <span
+          className="size-2.5 rounded-full"
+          style={{ background: item.color }}
+        />
+        <span className="max-w-[180px] truncate font-bold text-slate-700">
+          {item.name}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-4">
+        <span className="font-black text-slate-900">
+          {formatVND(Number(item.value ?? 0))}
+        </span>
+        <span className="font-bold text-rose-500">{item.percent}%</span>
+      </div>
+    </div>
+  );
+}
 
 function HeroMini({
   icon,
@@ -1389,25 +2080,35 @@ function AllocationRow({
   label,
   actual,
   target,
+  amount,
   color,
 }: {
   label: string;
   actual: number;
   target: number;
+  amount: number;
   color: string;
 }) {
   const over = actual > target;
+  const diff = actual - target;
   return (
     <div className="mb-3">
-      <div className="mb-1 flex justify-between text-xs">
-        <span className="font-medium text-slate-600">{label}</span>
+      <div className="mb-1 flex justify-between gap-3 text-xs">
+        <span className="font-medium text-slate-600">
+          {label}: {actual}% / {target}%
+          <span className="ml-1 text-slate-400">({formatVND(amount)})</span>
+        </span>
         <span
-          className={`font-bold ${over ? "text-rose-500" : "text-emerald-600"}`}
+          className={`shrink-0 font-bold ${over ? "text-rose-500" : "text-emerald-600"}`}
         >
-          {actual}%{over ? ` (+${actual - target}%)` : ""}
+          {over ? `Vượt ${diff}%` : `Còn ${Math.max(target - actual, 0)}%`}
         </span>
       </div>
-      <div className="flex h-2.5 rounded-full bg-white overflow-hidden">
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-white">
+        <div
+          className="absolute left-0 top-0 h-full border-l border-slate-400/60"
+          style={{ left: `${Math.min(target, 100)}%` }}
+        />
         <div
           className={`h-full rounded-full ${color} transition-all`}
           style={{
@@ -1458,12 +2159,18 @@ function ActionCard({
   title,
   body,
   tone,
+  ctaLabel,
+  ctaRoute,
+  onNavigate,
 }: {
   rank: number;
   icon: React.ReactNode;
   title: string;
   body: string;
   tone: "danger" | "warning" | "good";
+  ctaLabel?: string;
+  ctaRoute?: string;
+  onNavigate?: (href: string) => void;
 }) {
   const styles = {
     danger: "border-rose-100 bg-rose-50 text-rose-700",
@@ -1487,6 +2194,15 @@ function ActionCard({
         <div className="min-w-0">
           <p className="font-black">{title}</p>
           <p className="mt-1 text-sm leading-6 opacity-80">{body}</p>
+          {ctaLabel && ctaRoute && onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate(ctaRoute)}
+              className="mt-3 inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-700"
+            >
+              {ctaLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

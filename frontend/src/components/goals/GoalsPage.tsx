@@ -152,7 +152,11 @@ export default function GoalsPage() {
             : 0;
         const tier = getTier(pct);
         const remaining = Math.max(g.targetAmount - g.currentAmount, 0);
-        return { ...g, pct, tier, remaining };
+        const suggestedMonthly =
+          remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
+        const monthsLeft =
+          suggestedMonthly > 0 ? Math.ceil(remaining / suggestedMonthly) : 0;
+        return { ...g, pct, tier, remaining, suggestedMonthly, monthsLeft };
       }),
     [goals],
   );
@@ -928,6 +932,39 @@ export default function GoalsPage() {
                       }}
                     />
                   </div>
+                </div>
+
+                {/* V3 forecast */}
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">
+                        Dự kiến hoàn thành
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {g.remaining <= 0
+                          ? "Đã hoàn thành"
+                          : `~${g.monthsLeft} tháng`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-slate-400">
+                        Góp đề xuất
+                      </p>
+                      <p className="mt-1 text-sm font-black text-blue-700">
+                        {g.remaining <= 0
+                          ? "0 đ"
+                          : formatVND(g.suggestedMonthly) + "/tháng"}
+                      </p>
+                    </div>
+                  </div>
+                  {g.remaining > 0 && (
+                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                      Nếu duy trì khoản góp này, mục tiêu có thể hoàn thành
+                      trong khoảng 12 tháng. Bạn có thể chỉnh số tiền đã tiết
+                      kiệm sau mỗi lần góp.
+                    </p>
+                  )}
                 </div>
 
                 {/* Mobile edit row */}

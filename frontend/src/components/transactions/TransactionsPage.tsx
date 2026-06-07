@@ -157,7 +157,21 @@ export default function TransactionsPage() {
     return transactions.filter((t) => {
       const cat = categories.find((c) => c.id === t.categoryId);
       const wal = wallets.find((w) => w.id === t.walletId);
-      const searchText = [t.note, cat?.name, wal?.name, String(t.amount)]
+      const typeLabel =
+        t.type === "income"
+          ? "thu nhập income thu"
+          : t.type === "expense"
+            ? "chi tiêu expense chi"
+            : "chuyển khoản transfer";
+      const searchText = [
+        t.note,
+        cat?.name,
+        wal?.name,
+        t.date,
+        typeLabel,
+        String(t.amount),
+        formatVND(t.amount),
+      ]
         .join(" ")
         .toLowerCase();
       if (typeFilter !== "all" && t.type !== typeFilter) return false;
@@ -229,6 +243,33 @@ export default function TransactionsPage() {
       }),
     [yearTxns, currentYear],
   );
+
+  const monthlyTrendDisplay = useMemo(() => {
+    let lastActiveIndex = -1;
+
+    for (let i = monthlyTrend.length - 1; i >= 0; i -= 1) {
+      const m = monthlyTrend[i];
+      if (m.thu !== 0 || m.chi !== 0 || m.net !== 0) {
+        lastActiveIndex = i;
+        break;
+      }
+    }
+
+    if (lastActiveIndex < 0) return monthlyTrend.slice(0, 6);
+
+    return monthlyTrend.slice(0, lastActiveIndex + 1);
+  }, [monthlyTrend]);
+
+  const monthlyTrendLabel = useMemo(() => {
+    const lastPoint = monthlyTrendDisplay.at(-1);
+    const hasData = monthlyTrendDisplay.some(
+      (m) => m.thu !== 0 || m.chi !== 0 || m.net !== 0,
+    );
+
+    if (!hasData || !lastPoint) return "Chưa có dữ liệu trong " + currentYear;
+
+    return "Dữ liệu đến " + lastPoint.month + " " + currentYear;
+  }, [monthlyTrendDisplay, currentYear]);
 
   const anomalies = useMemo(
     () => detectSpendingAnomalies(transactions, categories, 6),
@@ -937,7 +978,7 @@ export default function TransactionsPage() {
             Phân tích dòng tiền
           </p>
           <span className="ml-auto text-xs text-slate-400">
-            12 tháng {currentYear}
+            {monthlyTrendLabel}
           </span>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -945,21 +986,21 @@ export default function TransactionsPage() {
             title="Thu nhập"
             color="#10b981"
             dataKey="thu"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="area"
           />
           <TrendPanel
             title="Chi tiêu"
             color="#f43f5e"
             dataKey="chi"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="line"
           />
           <TrendPanel
             title="Dòng tiền"
             color="#2563eb"
             dataKey="net"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="bar"
           />
         </div>
@@ -1851,12 +1892,16 @@ function TrendPanel({
   data: TrendDataPoint[];
   chartType: "area" | "line" | "bar";
 }) {
-  const last = data.at(-1)?.[dataKey] ?? 0;
-  const prev = data.at(-2)?.[dataKey] ?? 0;
+  const activeData =
+    data.length > 0 ? data : [{ month: "T1", thu: 0, chi: 0, net: 0 }];
+
+  const last = activeData.at(-1)?.[dataKey] ?? 0;
+  const prev = activeData.at(-2)?.[dataKey] ?? 0;
   const delta =
     prev !== 0 ? Math.round(((last - prev) / Math.abs(prev)) * 100) : 0;
   const isUp = delta > 0;
   const isGood = dataKey !== "chi" ? isUp : !isUp;
+  const displayValue = Math.abs(last) >= 10 ? last.toFixed(1) : last.toFixed(2);
 
   const cardBg =
     dataKey === "thu"
@@ -1889,13 +1934,13 @@ function TrendPanel({
         )}
       </div>
       <p className="mt-2.5 text-2xl font-black" style={{ color }}>
-        {last.toFixed(1)}M
+        {displayValue}M
       </p>
       <div className="mt-3.5 h-24">
         <ResponsiveContainer width="100%" height={96} minWidth={0}>
           {chartType === "area" ? (
             <AreaChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
             >
               <defs>
@@ -1921,7 +1966,7 @@ function TrendPanel({
             </AreaChart>
           ) : chartType === "line" ? (
             <LineChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
             >
               <Line
@@ -1934,7 +1979,7 @@ function TrendPanel({
             </LineChart>
           ) : (
             <BarChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
               barCategoryGap={5}
             >
