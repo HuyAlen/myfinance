@@ -65,76 +65,6 @@ const emptyForm: FormState = {
   limitAmount: "",
 };
 
-type CategoryPlanningGroup =
-  | "fixed"
-  | "variable"
-  | "saving"
-  | "investment"
-  | "income"
-  | "other";
-
-type PendingConfirm = {
-  title: string;
-  description?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  variant?: "danger" | "default";
-  onConfirm: () => void | Promise<void>;
-};
-
-function getCategoryPlanningGroup(category?: Category): CategoryPlanningGroup {
-  const rawCategory = category as
-    | (Category & {
-        planningGroup?: string;
-        group?: string;
-        kind?: string;
-      })
-    | undefined;
-
-  const rawGroup = String(
-    rawCategory?.planningGroup ?? rawCategory?.group ?? rawCategory?.kind ?? "",
-  ).toLowerCase();
-
-  if (
-    ["fixed", "variable", "saving", "investment", "income"].includes(rawGroup)
-  ) {
-    return rawGroup as CategoryPlanningGroup;
-  }
-
-  const name = (category?.name ?? "").toLowerCase();
-
-  if (category?.type === "income") return "income";
-  if (/(tiết kiệm|tiet kiem|saving|quỹ|quy|dự phòng|du phong)/i.test(name))
-    return "saving";
-  if (
-    /(đầu tư|dau tu|investment|cổ phiếu|co phieu|chứng khoán|chung khoan|crypto|vàng|vang)/i.test(
-      name,
-    )
-  )
-    return "investment";
-  if (
-    /(nhà|nha|thuê|thue|điện|dien|nước|nuoc|internet|bảo hiểm|bao hiem|học phí|hoc phi|trả góp|tra gop|nợ|no)/i.test(
-      name,
-    )
-  )
-    return "fixed";
-
-  return category?.type === "expense" ? "variable" : "other";
-}
-
-function getPlanningGroupLabel(group: CategoryPlanningGroup) {
-  const labels: Record<CategoryPlanningGroup, string> = {
-    fixed: "Chi phí cố định",
-    variable: "Chi phí linh hoạt",
-    saving: "Tiết kiệm",
-    investment: "Đầu tư",
-    income: "Thu nhập",
-    other: "Khác",
-  };
-
-  return labels[group] ?? "Khác";
-}
-
 const PIE_COLORS = [
   "#2563eb",
   "#10b981",
@@ -331,6 +261,11 @@ export default function BudgetsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const { toast } = useToast();
+  const router = useRouter();
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return (
@@ -458,8 +393,247 @@ export default function BudgetsPage() {
       remaining: totalLimit - totalSpent,
       percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredBudgets, transactions]);
+  }, [filteredBudgets, isRealExpenseGroup, transactions]);
+
+  const budgetForecast = useMemo(
+    () =>
+      getBudgetForecast(
+        filteredSummary.totalLimit,
+        filteredSummary.totalSpent,
+        activeMonth,
+      ),
+    [activeMonth, filteredSummary],
+  );
+
+  const monthlyIncome = useMemo(
+    () =>
+      transactions
+        .filter(
+          (transaction) =>
+            transaction.type === "income" &&
+            transaction.date.startsWith(activeMonth),
+        )
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    [activeMonth, transactions],
+  );
+
+  const financialPlanning = useMemo(() => {
+    type PlanningBudgetItem = {
+      categoryId: string;
+      categoryName: string;
+      group: CategoryPlanningGroup;
+      spent: number;
+      limit: number;
+      projectedSpend: number;
+    };
+
+    const fixedItems: PlanningBudgetItem[] = [];
+    const variableItems: PlanningBudgetItem[] = [];
+    const savingItems: PlanningBudgetItem[] = [];
+    const investmentItems: PlanningBudgetItem[] = [];
+    const uncategorizedItems: PlanningBudgetItem[] = [];
+
+    filteredBudgets.forEach((budget) => {
+      const category = categoryById.get(budget.categoryId);
+      const categoryName = category?.name ?? "Danh mục";
+      const group = getCategoryPlanningGroup(category);
+      const spent = getSpent(budget.categoryId, budget.month);
+      const forecast = getBudgetForecast(
+        budget.limitAmount,
+        spent,
+        budget.month,
+      );
+      const item: PlanningBudgetItem = {
+        categoryId: budget.categoryId,
+        categoryName,
+        group,
+        spent,
+        limit: budget.limitAmount,
+        projectedSpend: forecast.projectedSpend,
+      };
+
+      if (group === "fixed") {
+        fixedItems.push(item);
+      } else if (group === "variable") {
+        variableItems.push(item);
+      } else if (group === "saving") {
+        savingItems.push(item);
+      } else if (group === "investment") {
+        investmentItems.push(item);
+      } else {
+        uncategorizedItems.push(item);
+      }
+    });
+
+    const sumBy = (
+      items: PlanningBudgetItem[],
+      key: "spent" | "limit" | "projectedSpend",
+    ) => items.reduce((sum, item) => sum + item[key], 0);
+
+    const fixedSpent = sumBy(fixedItems, "spent");
+    const variableSpent = sumBy(variableItems, "spent");
+    const savingSpent = sumBy(savingItems, "spent");
+    const investmentSpent = sumBy(investmentItems, "spent");
+    const uncategorizedSpent = sumBy(uncategorizedItems, "spent");
+    const fixedLimit = sumBy(fixedItems, "limit");
+    const variableLimit = sumBy(variableItems, "limit");
+    const savingLimit = sumBy(savingItems, "limit");
+    const investmentLimit = sumBy(investmentItems, "limit");
+    const fixedProjected = sumBy(fixedItems, "projectedSpend");
+    const variableProjected = sumBy(variableItems, "projectedSpend");
+    const savingProjected = sumBy(savingItems, "projectedSpend");
+    const investmentProjected = sumBy(investmentItems, "projectedSpend");
+    const realExpenseSpent = fixedSpent + variableSpent;
+    const futureAllocationSpent = savingSpent + investmentSpent;
+    const realExpenseProjected = fixedProjected + variableProjected;
+    const effectiveIncome =
+      monthlyIncome > 0
+        ? monthlyIncome
+        : Math.max(
+            filteredSummary.totalLimit,
+            realExpenseSpent + futureAllocationSpent,
+          );
+    const fixedRatio =
+      effectiveIncome > 0
+        ? Math.round((fixedSpent / effectiveIncome) * 100)
+        : 0;
+    const variableRatio =
+      effectiveIncome > 0
+        ? Math.round((variableSpent / effectiveIncome) * 100)
+        : 0;
+    const savingRatio =
+      effectiveIncome > 0
+        ? Math.round((futureAllocationSpent / effectiveIncome) * 100)
+        : 0;
+    const stabilityScore = getStabilityScore(
+      fixedRatio,
+      variableRatio,
+      savingRatio,
+    );
+    const fixedStatus = getFixedCostStatus(fixedRatio);
+
+    return {
+      fixedItems,
+      variableItems,
+      savingItems,
+      investmentItems,
+      uncategorizedItems,
+      fixedSpent,
+      variableSpent,
+      savingSpent,
+      investmentSpent,
+      uncategorizedSpent,
+      fixedLimit,
+      variableLimit,
+      savingLimit,
+      investmentLimit,
+      fixedProjected,
+      variableProjected,
+      savingProjected,
+      investmentProjected,
+      realExpenseSpent,
+      futureAllocationSpent,
+      realExpenseProjected,
+      fixedRatio,
+      variableRatio,
+      savingRatio,
+      stabilityScore,
+      fixedStatus,
+      effectiveIncome,
+    };
+  }, [
+    categoryById,
+    filteredBudgets,
+    filteredSummary.totalLimit,
+    monthlyIncome,
+    transactions,
+  ]);
+
+  const budgetHealthScore = useMemo(() => {
+    if (filteredSummary.totalLimit <= 0) return 0;
+
+    const currentUsagePenalty =
+      filteredSummary.percent <= 70
+        ? 0
+        : filteredSummary.percent <= 100
+          ? (filteredSummary.percent - 70) * 0.45
+          : 18 + (filteredSummary.percent - 100) * 0.8;
+
+    const forecastPenalty =
+      budgetForecast.projectedPercent <= 100
+        ? 0
+        : Math.min(28, (budgetForecast.projectedPercent - 100) * 0.7) *
+          budgetForecast.confidenceWeight;
+
+    const violationPenalty = Math.min(18, realExpenseViolations.length * 5);
+    const trendPenalty = Math.min(10, realExpenseTrends.length * 3);
+    const fixedCostPenalty =
+      financialPlanning.fixedRatio <= 40
+        ? 0
+        : financialPlanning.fixedRatio <= 60
+          ? (financialPlanning.fixedRatio - 40) * 0.4
+          : 8 + (financialPlanning.fixedRatio - 60) * 0.65;
+
+    return Math.round(
+      clampNumber(
+        100 -
+          currentUsagePenalty -
+          forecastPenalty -
+          violationPenalty -
+          trendPenalty -
+          fixedCostPenalty,
+        0,
+        100,
+      ),
+    );
+  }, [
+    budgetForecast,
+    filteredSummary,
+    financialPlanning.fixedRatio,
+    realExpenseTrends.length,
+    realExpenseViolations.length,
+  ]);
+
+  const budgetForecastInsights = useMemo(() => {
+    const insights: string[] = [];
+
+    if (budgetForecast.confidenceLevel === "low") {
+      insights.push(
+        `${budgetForecast.confidenceLabel}: ${budgetForecast.confidenceNote}`,
+      );
+    }
+
+    if (budgetForecast.projectedOverage > 0) {
+      insights.push(
+        `Nếu giữ tốc độ chi hiện tại, ngân sách có thể vượt ${formatVND(budgetForecast.projectedOverage)} vào cuối tháng.`,
+      );
+    } else if (filteredSummary.totalLimit > 0) {
+      insights.push(
+        `Nếu giữ tốc độ chi hiện tại, bạn còn dư khoảng ${formatVND(Math.max(0, budgetForecast.projectedRemaining))} cuối tháng.`,
+      );
+    }
+
+    const fastestTrend = realExpenseTrends[0];
+    if (fastestTrend) {
+      insights.push(
+        `${fastestTrend.categoryName} có biến động đáng chú ý. Xem chi tiết delta trong Smart Budget AI bên dưới.`,
+      );
+    }
+
+    const topViolation = realExpenseViolations[0];
+    if (topViolation) {
+      insights.push(
+        `${topViolation.categoryName} đã vượt ${formatVND(topViolation.overage)}, nên ưu tiên chỉnh hạn mức hoặc giảm chi.`,
+      );
+    }
+
+    return insights.slice(0, 3);
+  }, [
+    budgetForecast,
+    filteredSummary.totalLimit,
+    realExpenseTrends,
+    realExpenseViolations,
+  ]);
 
   // ── NEW: Category analysis lookup map ─────────────────────────────────────
   const categoryAnalysisMap = useMemo(
@@ -1992,6 +2166,11 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }
