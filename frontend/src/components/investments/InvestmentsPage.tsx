@@ -46,7 +46,6 @@ import {
   addInvestment,
   deleteInvestment,
   getInvestments,
-  initFinanceDemoData,
   updateInvestment,
 } from "@/src/services/finance/financeStorage";
 
@@ -135,6 +134,13 @@ const TYPE_CONFIG: Record<
 type PerfFilter = "all" | "profit" | "loss";
 type HoldingTab = "largest" | "best" | "worst";
 
+type PendingConfirm = {
+  title: string;
+  description: string;
+  variant?: "danger" | "default";
+  onConfirm: () => void | Promise<void>;
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function InvestmentsPage() {
@@ -142,6 +148,9 @@ export default function InvestmentsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<InvestmentType | "all">("all");
@@ -157,7 +166,11 @@ export default function InvestmentsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
   useRealtimeTable(["investments"], reloadData);
 
@@ -458,15 +471,15 @@ export default function InvestmentsPage() {
     const investedAmount = Number(form.investedAmount);
     const currentValue = Number(form.currentValue);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên tài sản đầu tư");
+      setSaveError("Vui lòng nhập tên tài sản đầu tư");
       return;
     }
     if (!investedAmount || investedAmount <= 0) {
-      alert("Vui lòng nhập số vốn đầu tư hợp lệ");
+      setSaveError("Vui lòng nhập số vốn đầu tư hợp lệ");
       return;
     }
     if (Number.isNaN(currentValue) || currentValue < 0) {
-      alert("Vui lòng nhập giá trị hiện tại hợp lệ");
+      setSaveError("Vui lòng nhập giá trị hiện tại hợp lệ");
       return;
     }
 
@@ -493,14 +506,22 @@ export default function InvestmentsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa tài sản đầu tư này?")) return;
-    const { error } = await deleteInvestment(id);
-    if (error) {
-      alert("Lỗi xóa tài sản: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa tài sản đầu tư?",
+      description:
+        "Hành động này không thể hoàn tác. Tài sản sẽ bị xóa khỏi danh mục đầu tư của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteInvestment(id);
+        if (error) {
+          setSaveError("Lỗi xóa tài sản: " + error);
+          return;
+        }
+        setPendingAction(null);
+        await reloadData();
+      },
+    });
   }
 
   const isProfit = summary.profitLoss >= 0;
@@ -511,8 +532,8 @@ export default function InvestmentsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
@@ -598,7 +619,7 @@ export default function InvestmentsPage() {
             {/* 5 · Portfolio Health */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
                 (healthScores.overall >= 80
                   ? "from-indigo-500 to-indigo-600"
                   : healthScores.overall >= 60
@@ -635,9 +656,9 @@ export default function InvestmentsPage() {
       {investments.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
           {/* Allocation donut + legend */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                 <Target size={17} />
               </div>
               <div>
@@ -721,14 +742,14 @@ export default function InvestmentsPage() {
           </div>
 
           {/* Portfolio Overview stats */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div
                 className={
                   "flex size-10 items-center justify-center rounded-2xl text-white shadow-sm " +
                   (isProfit
-                    ? "bg-gradient-to-br from-emerald-500 to-teal-500"
-                    : "bg-gradient-to-br from-rose-500 to-orange-400")
+                    ? "bg-linear-to-br from-emerald-500 to-teal-500"
+                    : "bg-linear-to-br from-rose-500 to-orange-400")
                 }
               >
                 {isProfit ? (
@@ -795,8 +816,8 @@ export default function InvestmentsPage() {
                   className={
                     "h-3 rounded-full transition-all " +
                     (isProfit
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-400"
-                      : "bg-gradient-to-r from-rose-500 to-orange-400")
+                      ? "bg-linear-to-r from-emerald-500 to-teal-400"
+                      : "bg-linear-to-r from-rose-500 to-orange-400")
                   }
                   style={{
                     width:
@@ -848,7 +869,7 @@ export default function InvestmentsPage() {
                 <div className="flex items-center gap-2.5">
                   <div
                     className={
-                      "flex size-9 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm " +
+                      "flex size-9 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm " +
                       g.gradientFrom +
                       " " +
                       g.gradientTo
@@ -894,9 +915,9 @@ export default function InvestmentsPage() {
 
           {/* Performance BarChart */}
           {investments.length > 0 && (
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-5 flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                   <TrendingUp size={17} />
                 </div>
                 <div>
@@ -998,12 +1019,12 @@ export default function InvestmentsPage() {
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm"
+                className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div
                     className={
-                      "flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm " +
+                      "flex size-10 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
                       s.grad
                     }
                   >
@@ -1025,7 +1046,7 @@ export default function InvestmentsPage() {
                 <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
                   <div
                     className={
-                      "h-2.5 rounded-full bg-gradient-to-r transition-all " +
+                      "h-2.5 rounded-full bg-linear-to-r transition-all " +
                       s.grad
                     }
                     style={{ width: s.score + "%" }}
@@ -1186,12 +1207,12 @@ export default function InvestmentsPage() {
               return (
                 <div
                   key={inv.id}
-                  className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm"
+                  className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm"
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={
-                        "flex size-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white text-xs font-black shadow-sm " +
+                        "flex size-9 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white text-xs font-black shadow-sm " +
                         medal.bg
                       }
                     >
@@ -1242,7 +1263,7 @@ export default function InvestmentsPage() {
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className={
-                        "h-2 rounded-full bg-gradient-to-r transition-all " +
+                        "h-2 rounded-full bg-linear-to-r transition-all " +
                         medal.bg
                       }
                       style={{ width: barPct + "%" }}
@@ -1253,7 +1274,7 @@ export default function InvestmentsPage() {
             })}
             {/* Fallback for "worst" tab with no losers */}
             {holdingTab === "worst" && topHoldings.worst.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-8 text-center">
+              <div className="col-span-full flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-8 text-center">
                 <Sparkles size={28} className="text-emerald-400" />
                 <p className="mt-3 font-black text-emerald-700">
                   Tất cả tài sản đều sinh lời!
@@ -1386,7 +1407,7 @@ export default function InvestmentsPage() {
             return (
               <div
                 key={inv.id}
-                className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+                className="group rounded-4xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
@@ -1560,7 +1581,7 @@ export default function InvestmentsPage() {
 
           {/* Empty state */}
           {filteredInvestments.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <BriefcaseBusiness size={24} className="text-blue-400" />
               </div>
@@ -1593,7 +1614,7 @@ export default function InvestmentsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-4xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
@@ -1743,6 +1764,44 @@ export default function InvestmentsPage() {
           </div>
         </div>
       )}
+
+      {pendingAction ? (
+        <div className="fixed inset-0 z-90 flex items-end justify-center bg-slate-950/50 p-3 sm:items-center">
+          <div className="w-full max-w-md rounded-t-4xl bg-white p-6 shadow-2xl sm:rounded-4xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {pendingAction.title}
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  {pendingAction.description}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void pendingAction.onConfirm();
+                }}
+                className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-200 hover:bg-red-700 active:scale-[.98]"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1765,7 +1824,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
@@ -1869,7 +1928,7 @@ function InvestmentIcon({ type }: { type: InvestmentType }) {
   return (
     <div
       className={
-        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm " +
+        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
         cfg.gradientFrom +
         " " +
         cfg.gradientTo

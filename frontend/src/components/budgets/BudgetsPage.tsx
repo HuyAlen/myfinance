@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   AlertTriangle,
@@ -29,7 +30,6 @@ import {
   getBudgets,
   getCategories,
   getTransactions,
-  initFinanceDemoData,
   updateBudget,
 } from "@/src/services/finance/financeStorage";
 
@@ -52,6 +52,76 @@ const emptyForm: FormState = {
   limitAmount: "",
 };
 
+type CategoryPlanningGroup =
+  | "fixed"
+  | "variable"
+  | "saving"
+  | "investment"
+  | "income"
+  | "other";
+
+type PendingConfirm = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: "danger" | "default";
+  onConfirm: () => void | Promise<void>;
+};
+
+function getCategoryPlanningGroup(category?: Category): CategoryPlanningGroup {
+  const rawCategory = category as
+    | (Category & {
+        planningGroup?: string;
+        group?: string;
+        kind?: string;
+      })
+    | undefined;
+
+  const rawGroup = String(
+    rawCategory?.planningGroup ?? rawCategory?.group ?? rawCategory?.kind ?? "",
+  ).toLowerCase();
+
+  if (
+    ["fixed", "variable", "saving", "investment", "income"].includes(rawGroup)
+  ) {
+    return rawGroup as CategoryPlanningGroup;
+  }
+
+  const name = (category?.name ?? "").toLowerCase();
+
+  if (category?.type === "income") return "income";
+  if (/(tiết kiệm|tiet kiem|saving|quỹ|quy|dự phòng|du phong)/i.test(name))
+    return "saving";
+  if (
+    /(đầu tư|dau tu|investment|cổ phiếu|co phieu|chứng khoán|chung khoan|crypto|vàng|vang)/i.test(
+      name,
+    )
+  )
+    return "investment";
+  if (
+    /(nhà|nha|thuê|thue|điện|dien|nước|nuoc|internet|bảo hiểm|bao hiem|học phí|hoc phi|trả góp|tra gop|nợ|no)/i.test(
+      name,
+    )
+  )
+    return "fixed";
+
+  return category?.type === "expense" ? "variable" : "other";
+}
+
+function getPlanningGroupLabel(group: CategoryPlanningGroup) {
+  const labels: Record<CategoryPlanningGroup, string> = {
+    fixed: "Chi phí cố định",
+    variable: "Chi phí linh hoạt",
+    saving: "Tiết kiệm",
+    investment: "Đầu tư",
+    income: "Thu nhập",
+    other: "Khác",
+  };
+
+  return labels[group] ?? "Khác";
+}
+
 const PIE_COLORS = [
   "#2563eb",
   "#10b981",
@@ -65,6 +135,181 @@ const PIE_COLORS = [
   "#64748b",
 ];
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getMonthMeta(month: string) {
+  const [yearRaw, monthRaw] = month.split("-").map(Number);
+  const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
+  const monthIndex = Number.isFinite(monthRaw)
+    ? monthRaw - 1
+    : new Date().getMonth();
+  const now = new Date();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const isCurrentMonth =
+    now.getFullYear() === year && now.getMonth() === monthIndex;
+
+  const elapsedDays = isCurrentMonth
+    ? clampNumber(now.getDate(), 1, daysInMonth)
+    : daysInMonth;
+
+  return {
+    year,
+    monthIndex,
+    daysInMonth,
+    elapsedDays,
+    remainingDays: Math.max(daysInMonth - elapsedDays, 0),
+    isCurrentMonth,
+  };
+}
+
+function getBudgetForecast(limitAmount: number, spent: number, month: string) {
+  const meta = getMonthMeta(month);
+  const dailyPace = meta.elapsedDays > 0 ? spent / meta.elapsedDays : 0;
+  const projectedSpend = meta.isCurrentMonth
+    ? Math.round(dailyPace * meta.daysInMonth)
+    : spent;
+  const projectedRemaining = limitAmount - projectedSpend;
+  const projectedPercent =
+    limitAmount > 0 ? Math.round((projectedSpend / limitAmount) * 100) : 0;
+  const projectedOverage = Math.max(0, projectedSpend - limitAmount);
+  const safeDailyBudget =
+    meta.remainingDays > 0
+      ? Math.max(0, (limitAmount - spent) / meta.remainingDays)
+      : 0;
+
+  const confidenceLevel = !meta.isCurrentMonth
+    ? "high"
+    : meta.elapsedDays < 10
+      ? "low"
+      : meta.elapsedDays < 18
+        ? "medium"
+        : "high";
+
+  const confidenceLabel =
+    confidenceLevel === "low"
+      ? "Độ tin cậy thấp"
+      : confidenceLevel === "medium"
+        ? "Độ tin cậy trung bình"
+        : "Độ tin cậy cao";
+
+  const confidenceNote =
+    confidenceLevel === "low"
+      ? `Dữ liệu mới ${meta.elapsedDays} ngày, dự báo có thể dao động mạnh.`
+      : confidenceLevel === "medium"
+        ? `Dựa trên ${meta.elapsedDays} ngày dữ liệu trong tháng.`
+        : meta.isCurrentMonth
+          ? `Dựa trên ${meta.elapsedDays} ngày dữ liệu trong tháng.`
+          : "Tháng đã kết thúc, số liệu là thực tế.";
+
+  const confidenceWeight =
+    confidenceLevel === "low" ? 0.35 : confidenceLevel === "medium" ? 0.65 : 1;
+
+  return {
+    ...meta,
+    dailyPace,
+    projectedSpend,
+    projectedRemaining,
+    projectedPercent,
+    projectedOverage,
+    safeDailyBudget,
+    confidenceLevel,
+    confidenceLabel,
+    confidenceNote,
+    confidenceWeight,
+    isProjectedOver: projectedRemaining < 0,
+  };
+}
+
+function getPreviousMonthKey(month: string) {
+  const [yearRaw, monthRaw] = month.split("-").map(Number);
+  const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
+  const monthIndex = Number.isFinite(monthRaw)
+    ? monthRaw - 1
+    : new Date().getMonth();
+  const previous = new Date(year, monthIndex - 1, 1);
+  return (
+    previous.getFullYear() +
+    "-" +
+    String(previous.getMonth() + 1).padStart(2, "0")
+  );
+}
+
+function formatDeltaPercent(current: number, previous: number) {
+  if (previous <= 0 && current > 0) return "+100%";
+  if (previous <= 0) return "0%";
+  const delta = Math.round(((current - previous) / previous) * 100);
+  return (delta >= 0 ? "+" : "") + delta + "%";
+}
+
+function getTrendDeltaText(current: number, previous: number) {
+  const delta = current - previous;
+  if (delta === 0) {
+    return `Giữ nguyên ở ${formatVND(current)} so với tháng trước.`;
+  }
+
+  const direction = delta > 0 ? "tăng" : "giảm";
+  return `${formatVND(previous)} → ${formatVND(current)} · ${direction} ${formatVND(Math.abs(delta))} (${formatDeltaPercent(current, previous)}).`;
+}
+
+function getFixedCostStatus(ratio: number) {
+  if (ratio <= 40) {
+    return {
+      label: "Ổn định",
+      tone: "good" as const,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+      border: "border-emerald-100",
+    };
+  }
+
+  if (ratio <= 60) {
+    return {
+      label: "Cần theo dõi",
+      tone: "warning" as const,
+      color: "text-amber-600",
+      bg: "bg-amber-50",
+      border: "border-amber-100",
+    };
+  }
+
+  return {
+    label: "Rủi ro cao",
+    tone: "danger" as const,
+    color: "text-rose-600",
+    bg: "bg-rose-50",
+    border: "border-rose-100",
+  };
+}
+
+function getStabilityScore(
+  fixedRatio: number,
+  variableRatio: number,
+  savingRatio: number,
+) {
+  const fixedPenalty =
+    fixedRatio <= 40
+      ? 0
+      : fixedRatio <= 60
+        ? (fixedRatio - 40) * 1.1
+        : 22 + (fixedRatio - 60) * 1.4;
+  const variablePenalty =
+    variableRatio <= 45
+      ? 0
+      : variableRatio <= 65
+        ? (variableRatio - 45) * 0.8
+        : 16 + (variableRatio - 65) * 1.1;
+  const savingBonus =
+    savingRatio >= 20
+      ? Math.min(12, (savingRatio - 20) * 0.5)
+      : -(20 - savingRatio) * 1.2;
+
+  return Math.round(
+    clampNumber(82 - fixedPenalty - variablePenalty + savingBonus, 0, 100),
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -73,6 +318,26 @@ export default function BudgetsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const toast = useCallback(
+    ({
+      message,
+      variant,
+    }: {
+      message: string;
+      variant?: "success" | "error";
+    }) => {
+      if (variant === "error") {
+        setSaveError(message);
+        return;
+      }
+      console.info(message);
+    },
+    [],
+  );
+  const router = useRouter();
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return (
@@ -81,7 +346,7 @@ export default function BudgetsPage() {
   });
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
-  async function reloadData() {
+  const reloadData = useCallback(async () => {
     const [b, c, t] = await Promise.all([
       getBudgets(),
       getCategories(),
@@ -90,17 +355,42 @@ export default function BudgetsPage() {
     setBudgets(b);
     setCategories(c);
     setTransactions(t);
-  }
+  }, []);
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
-  }, []);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [reloadData]);
+
   useRealtimeTable(["budgets", "transactions"], reloadData);
 
   // ── PRESERVED: expense categories ─────────────────────────────────────────
   const expenseCategories = useMemo(
     () => categories.filter((item) => item.type === "expense"),
     [categories],
+  );
+
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
+
+  const getCategoryGroup = useCallback(
+    (categoryId: string): CategoryPlanningGroup => {
+      return getCategoryPlanningGroup(categoryById.get(categoryId));
+    },
+    [categoryById],
+  );
+
+  const isRealExpenseGroup = useCallback(
+    (categoryId: string) => {
+      const group = getCategoryGroup(categoryId);
+      return group === "fixed" || group === "variable";
+    },
+    [getCategoryGroup],
   );
 
   // ── PRESERVED: getSpent ───────────────────────────────────────────────────
@@ -115,26 +405,34 @@ export default function BudgetsPage() {
       .reduce((sum, item) => sum + item.amount, 0);
   }
 
-  // ── PRESERVED: budgetSummary (all budgets) ────────────────────────────────
-  const budgetSummary = useMemo(() => {
-    const totalLimit = budgets.reduce((sum, item) => sum + item.limitAmount, 0);
-    const totalSpent = budgets.reduce(
-      (sum, item) => sum + getSpent(item.categoryId, item.month),
-      0,
-    );
-    return {
-      totalLimit,
-      totalSpent,
-      remaining: totalLimit - totalSpent,
-      percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budgets, transactions]);
-
   // ── NEW: Smart Budget analytics ───────────────────────────────────────────
   const smartBudget = useMemo(
     () => computeSmartBudget(transactions, categories, budgets),
     [transactions, categories, budgets],
+  );
+
+  const realExpenseViolations = useMemo(
+    () =>
+      smartBudget.violations.filter((item) =>
+        isRealExpenseGroup(item.categoryId),
+      ),
+    [isRealExpenseGroup, smartBudget.violations],
+  );
+
+  const realExpenseTrends = useMemo(
+    () =>
+      smartBudget.overspendingTrend.filter((item) =>
+        isRealExpenseGroup(item.categoryId),
+      ),
+    [isRealExpenseGroup, smartBudget.overspendingTrend],
+  );
+
+  const realExpenseRecommendations = useMemo(
+    () =>
+      smartBudget.recommendedBudgets.filter((item) =>
+        isRealExpenseGroup(item.categoryId),
+      ),
+    [isRealExpenseGroup, smartBudget.recommendedBudgets],
   );
 
   // ── NEW: Month filter ─────────────────────────────────────────────────────
@@ -150,8 +448,14 @@ export default function BudgetsPage() {
 
   // ── NEW: Filtered summary for active month KPIs ───────────────────────────
   const filteredSummary = useMemo(() => {
-    const totalLimit = filteredBudgets.reduce((s, b) => s + b.limitAmount, 0);
-    const totalSpent = filteredBudgets.reduce(
+    const realExpenseBudgets = filteredBudgets.filter((budget) =>
+      isRealExpenseGroup(budget.categoryId),
+    );
+    const totalLimit = realExpenseBudgets.reduce(
+      (s, b) => s + b.limitAmount,
+      0,
+    );
+    const totalSpent = realExpenseBudgets.reduce(
       (s, b) => s + getSpent(b.categoryId, b.month),
       0,
     );
@@ -161,14 +465,456 @@ export default function BudgetsPage() {
       remaining: totalLimit - totalSpent,
       percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredBudgets, transactions]);
+  }, [filteredBudgets, getSpent, isRealExpenseGroup]);
+
+  const budgetForecast = useMemo(
+    () =>
+      getBudgetForecast(
+        filteredSummary.totalLimit,
+        filteredSummary.totalSpent,
+        activeMonth,
+      ),
+    [activeMonth, filteredSummary],
+  );
+
+  const monthlyIncome = useMemo(
+    () =>
+      transactions
+        .filter(
+          (transaction) =>
+            transaction.type === "income" &&
+            transaction.date.startsWith(activeMonth),
+        )
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    [activeMonth, transactions],
+  );
+
+  const financialPlanning = useMemo(() => {
+    type PlanningBudgetItem = {
+      categoryId: string;
+      categoryName: string;
+      group: CategoryPlanningGroup;
+      spent: number;
+      limit: number;
+      projectedSpend: number;
+    };
+
+    const fixedItems: PlanningBudgetItem[] = [];
+    const variableItems: PlanningBudgetItem[] = [];
+    const savingItems: PlanningBudgetItem[] = [];
+    const investmentItems: PlanningBudgetItem[] = [];
+    const uncategorizedItems: PlanningBudgetItem[] = [];
+
+    filteredBudgets.forEach((budget) => {
+      const category = categoryById.get(budget.categoryId);
+      const categoryName = category?.name ?? "Danh mục";
+      const group = getCategoryPlanningGroup(category);
+      const spent = getSpent(budget.categoryId, budget.month);
+      const forecast = getBudgetForecast(
+        budget.limitAmount,
+        spent,
+        budget.month,
+      );
+      const item: PlanningBudgetItem = {
+        categoryId: budget.categoryId,
+        categoryName,
+        group,
+        spent,
+        limit: budget.limitAmount,
+        projectedSpend: forecast.projectedSpend,
+      };
+
+      if (group === "fixed") {
+        fixedItems.push(item);
+      } else if (group === "variable") {
+        variableItems.push(item);
+      } else if (group === "saving") {
+        savingItems.push(item);
+      } else if (group === "investment") {
+        investmentItems.push(item);
+      } else {
+        uncategorizedItems.push(item);
+      }
+    });
+
+    const sumBy = (
+      items: PlanningBudgetItem[],
+      key: "spent" | "limit" | "projectedSpend",
+    ) => items.reduce((sum, item) => sum + item[key], 0);
+
+    const fixedSpent = sumBy(fixedItems, "spent");
+    const variableSpent = sumBy(variableItems, "spent");
+    const savingSpent = sumBy(savingItems, "spent");
+    const investmentSpent = sumBy(investmentItems, "spent");
+    const uncategorizedSpent = sumBy(uncategorizedItems, "spent");
+    const fixedLimit = sumBy(fixedItems, "limit");
+    const variableLimit = sumBy(variableItems, "limit");
+    const savingLimit = sumBy(savingItems, "limit");
+    const investmentLimit = sumBy(investmentItems, "limit");
+    const fixedProjected = sumBy(fixedItems, "projectedSpend");
+    const variableProjected = sumBy(variableItems, "projectedSpend");
+    const savingProjected = sumBy(savingItems, "projectedSpend");
+    const investmentProjected = sumBy(investmentItems, "projectedSpend");
+    const realExpenseSpent = fixedSpent + variableSpent;
+    const futureAllocationSpent = savingSpent + investmentSpent;
+    const realExpenseProjected = fixedProjected + variableProjected;
+    const effectiveIncome =
+      monthlyIncome > 0
+        ? monthlyIncome
+        : Math.max(
+            filteredSummary.totalLimit,
+            realExpenseSpent + futureAllocationSpent,
+          );
+    const fixedRatio =
+      effectiveIncome > 0
+        ? Math.round((fixedSpent / effectiveIncome) * 100)
+        : 0;
+    const variableRatio =
+      effectiveIncome > 0
+        ? Math.round((variableSpent / effectiveIncome) * 100)
+        : 0;
+    const savingRatio =
+      effectiveIncome > 0
+        ? Math.round((futureAllocationSpent / effectiveIncome) * 100)
+        : 0;
+    const stabilityScore = getStabilityScore(
+      fixedRatio,
+      variableRatio,
+      savingRatio,
+    );
+    const fixedStatus = getFixedCostStatus(fixedRatio);
+
+    return {
+      fixedItems,
+      variableItems,
+      savingItems,
+      investmentItems,
+      uncategorizedItems,
+      fixedSpent,
+      variableSpent,
+      savingSpent,
+      investmentSpent,
+      uncategorizedSpent,
+      fixedLimit,
+      variableLimit,
+      savingLimit,
+      investmentLimit,
+      fixedProjected,
+      variableProjected,
+      savingProjected,
+      investmentProjected,
+      realExpenseSpent,
+      futureAllocationSpent,
+      realExpenseProjected,
+      fixedRatio,
+      variableRatio,
+      savingRatio,
+      stabilityScore,
+      fixedStatus,
+      effectiveIncome,
+    };
+  }, [
+    categoryById,
+    filteredBudgets,
+    filteredSummary.totalLimit,
+    getSpent,
+    monthlyIncome,
+    transactions,
+  ]);
+
+  const budgetHealthScore = useMemo(() => {
+    if (filteredSummary.totalLimit <= 0) return 0;
+
+    const currentUsagePenalty =
+      filteredSummary.percent <= 70
+        ? 0
+        : filteredSummary.percent <= 100
+          ? (filteredSummary.percent - 70) * 0.45
+          : 18 + (filteredSummary.percent - 100) * 0.8;
+
+    const forecastPenalty =
+      budgetForecast.projectedPercent <= 100
+        ? 0
+        : Math.min(28, (budgetForecast.projectedPercent - 100) * 0.7) *
+          budgetForecast.confidenceWeight;
+
+    const violationPenalty = Math.min(18, realExpenseViolations.length * 5);
+    const trendPenalty = Math.min(10, realExpenseTrends.length * 3);
+    const fixedCostPenalty =
+      financialPlanning.fixedRatio <= 40
+        ? 0
+        : financialPlanning.fixedRatio <= 60
+          ? (financialPlanning.fixedRatio - 40) * 0.4
+          : 8 + (financialPlanning.fixedRatio - 60) * 0.65;
+
+    return Math.round(
+      clampNumber(
+        100 -
+          currentUsagePenalty -
+          forecastPenalty -
+          violationPenalty -
+          trendPenalty -
+          fixedCostPenalty,
+        0,
+        100,
+      ),
+    );
+  }, [
+    budgetForecast,
+    filteredSummary,
+    financialPlanning.fixedRatio,
+    realExpenseTrends.length,
+    realExpenseViolations.length,
+  ]);
+
+  const budgetForecastInsights = useMemo(() => {
+    const insights: string[] = [];
+
+    if (budgetForecast.confidenceLevel === "low") {
+      insights.push(
+        `${budgetForecast.confidenceLabel}: ${budgetForecast.confidenceNote}`,
+      );
+    }
+
+    if (budgetForecast.projectedOverage > 0) {
+      insights.push(
+        `Nếu giữ tốc độ chi hiện tại, ngân sách có thể vượt ${formatVND(budgetForecast.projectedOverage)} vào cuối tháng.`,
+      );
+    } else if (filteredSummary.totalLimit > 0) {
+      insights.push(
+        `Nếu giữ tốc độ chi hiện tại, bạn còn dư khoảng ${formatVND(Math.max(0, budgetForecast.projectedRemaining))} cuối tháng.`,
+      );
+    }
+
+    const fastestTrend = realExpenseTrends[0];
+    if (fastestTrend) {
+      insights.push(
+        `${fastestTrend.categoryName} có biến động đáng chú ý. Xem chi tiết delta trong Smart Budget AI bên dưới.`,
+      );
+    }
+
+    const topViolation = realExpenseViolations[0];
+    if (topViolation) {
+      insights.push(
+        `${topViolation.categoryName} đã vượt ${formatVND(topViolation.overage)}, nên ưu tiên chỉnh hạn mức hoặc giảm chi.`,
+      );
+    }
+
+    return insights.slice(0, 3);
+  }, [
+    budgetForecast,
+    filteredSummary.totalLimit,
+    realExpenseTrends,
+    realExpenseViolations,
+  ]);
 
   // ── NEW: Category analysis lookup map ─────────────────────────────────────
   const categoryAnalysisMap = useMemo(
     () => new Map(smartBudget.categoryAnalysis.map((a) => [a.categoryId, a])),
     [smartBudget],
   );
+
+  const previousMonth = useMemo(
+    () => getPreviousMonthKey(activeMonth),
+    [activeMonth],
+  );
+
+  const spendingByCategory = useMemo(() => {
+    const current = new Map<string, number>();
+    const previous = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      if (transaction.type !== "expense") return;
+      if (!isRealExpenseGroup(transaction.categoryId)) return;
+      const map = transaction.date.startsWith(activeMonth)
+        ? current
+        : transaction.date.startsWith(previousMonth)
+          ? previous
+          : null;
+      if (!map) return;
+      map.set(
+        transaction.categoryId,
+        (map.get(transaction.categoryId) ?? 0) + transaction.amount,
+      );
+    });
+
+    return { current, previous };
+  }, [activeMonth, isRealExpenseGroup, previousMonth, transactions]);
+
+  const v7Allocation = useMemo(() => {
+    const income = financialPlanning.effectiveIncome;
+    const makeBucket = (
+      label: string,
+      actualAmount: number,
+      targetPercent: number,
+      color: string,
+      textColor: string,
+    ) => {
+      const targetAmount = income > 0 ? (income * targetPercent) / 100 : 0;
+      const percentOfTarget =
+        targetAmount > 0 ? Math.round((actualAmount / targetAmount) * 100) : 0;
+      const status =
+        percentOfTarget > 100
+          ? "over"
+          : percentOfTarget >= 85
+            ? "near"
+            : "safe";
+      const difference = actualAmount - targetAmount;
+
+      return {
+        label,
+        actualAmount,
+        targetAmount,
+        targetPercent,
+        percentOfTarget,
+        status,
+        difference,
+        color,
+        textColor,
+      };
+    };
+
+    return [
+      makeBucket(
+        "Nhu cầu thiết yếu",
+        financialPlanning.fixedSpent,
+        50,
+        "#2563eb",
+        "text-blue-700",
+      ),
+      makeBucket(
+        "Muốn & Giải trí",
+        financialPlanning.variableSpent,
+        30,
+        "#f59e0b",
+        "text-amber-700",
+      ),
+      makeBucket(
+        "Tiết kiệm & Đầu tư",
+        financialPlanning.futureAllocationSpent,
+        20,
+        "#10b981",
+        "text-emerald-700",
+      ),
+    ];
+  }, [financialPlanning]);
+
+  const topRiskCategories = useMemo(() => {
+    const byCategory = new Map<
+      string,
+      {
+        categoryId: string;
+        categoryName: string;
+        spent: number;
+        limit: number;
+        projectedSpend: number;
+        riskScore: number;
+        reason: string;
+        tone: "danger" | "warning" | "good";
+      }
+    >();
+
+    filteredBudgets.forEach((budget) => {
+      const category = categoryById.get(budget.categoryId);
+      const categoryName = category?.name ?? "Danh mục";
+      const group = getCategoryPlanningGroup(category);
+      if (group === "saving" || group === "investment" || group === "income") {
+        return;
+      }
+      const isFixedCost = group === "fixed";
+      const spent = getSpent(budget.categoryId, budget.month);
+      const forecast = getBudgetForecast(
+        budget.limitAmount,
+        spent,
+        budget.month,
+      );
+      const usage =
+        budget.limitAmount > 0 ? (spent / budget.limitAmount) * 100 : 0;
+      const forecastUsage =
+        budget.limitAmount > 0
+          ? (forecast.projectedSpend / budget.limitAmount) * 100
+          : 0;
+      const riskScore = Math.round(Math.max(usage, forecastUsage));
+      const projectedOverage = Math.max(
+        0,
+        forecast.projectedSpend - budget.limitAmount,
+      );
+      const overage = Math.max(0, spent - budget.limitAmount);
+      const tone =
+        overage > 0 || projectedOverage > 0
+          ? "danger"
+          : riskScore >= 85
+            ? "warning"
+            : "good";
+      const reason =
+        overage > 0
+          ? `Đã vượt ${formatVND(overage)}.`
+          : projectedOverage > 0
+            ? `Dự kiến vượt ${formatVND(projectedOverage)} cuối tháng.`
+            : riskScore >= 85
+              ? `Đã dùng ${Math.round(usage)}% hạn mức.`
+              : `Đang trong hạn mức.`;
+
+      if (isFixedCost && overage <= 0) {
+        return;
+      }
+
+      byCategory.set(budget.categoryId, {
+        categoryId: budget.categoryId,
+        categoryName,
+        spent,
+        limit: budget.limitAmount,
+        projectedSpend: forecast.projectedSpend,
+        riskScore: isFixedCost ? Math.max(0, riskScore - 35) : riskScore,
+        reason: isFixedCost
+          ? `${reason} Đây là ${getPlanningGroupLabel(group).toLowerCase()}, chỉ cảnh báo khi đã vượt hạn mức.`
+          : `${reason} Đây là ${getPlanningGroupLabel(group).toLowerCase()}, có thể tối ưu trong tháng.`,
+        tone,
+      });
+    });
+
+    return [...byCategory.values()]
+      .sort((a, b) => b.riskScore - a.riskScore)
+      .slice(0, 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryById, filteredBudgets, transactions]);
+
+  const budgetIntelligenceScore = useMemo(() => {
+    if (filteredSummary.totalLimit <= 0) return 0;
+    const riskPenalty = topRiskCategories.reduce((sum, item) => {
+      if (item.tone === "danger") return sum + 8;
+      if (item.tone === "warning") return sum + 4;
+      return sum;
+    }, 0);
+    const allocationPenalty = v7Allocation.reduce((sum, item) => {
+      if (item.percentOfTarget > 120) return sum + 8;
+      if (item.percentOfTarget > 100) return sum + 4;
+      return sum;
+    }, 0);
+    const stabilityAdjustment =
+      financialPlanning.stabilityScore >= 80
+        ? 8
+        : financialPlanning.stabilityScore >= 65
+          ? 2
+          : -(65 - financialPlanning.stabilityScore) * 0.35;
+
+    return Math.round(
+      clampNumber(
+        budgetHealthScore -
+          riskPenalty -
+          allocationPenalty +
+          stabilityAdjustment,
+        0,
+        100,
+      ),
+    );
+  }, [
+    budgetHealthScore,
+    filteredSummary.totalLimit,
+    financialPlanning.stabilityScore,
+    topRiskCategories,
+    v7Allocation,
+  ]);
 
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
   const pieData = useMemo(
@@ -183,11 +929,13 @@ export default function BudgetsPage() {
 
   // ── NEW: Health score ─────────────────────────────────────────────────────
   const healthGrade =
-    smartBudget.adherenceScore >= 80
+    budgetHealthScore >= 85
       ? { gradient: "from-emerald-500 to-green-500", label: "Xuất sắc" }
-      : smartBudget.adherenceScore >= 60
-        ? { gradient: "from-amber-400 to-orange-500", label: "Tốt" }
-        : { gradient: "from-rose-500 to-red-500", label: "Cần cải thiện" };
+      : budgetHealthScore >= 70
+        ? { gradient: "from-blue-500 to-cyan-500", label: "Tốt" }
+        : budgetHealthScore >= 55
+          ? { gradient: "from-amber-400 to-orange-500", label: "Cần chú ý" }
+          : { gradient: "from-rose-500 to-red-500", label: "Cần cải thiện" };
 
   // ── PRESERVED: CRUD ───────────────────────────────────────────────────────
   function openCreateForm() {
@@ -209,15 +957,15 @@ export default function BudgetsPage() {
     event.preventDefault();
     const limitAmount = Number(form.limitAmount);
     if (!form.categoryId) {
-      alert("Vui lòng chọn danh mục");
+      setSaveError("Vui lòng chọn danh mục");
       return;
     }
     if (!form.month) {
-      alert("Vui lòng chọn tháng");
+      setSaveError("Vui lòng chọn tháng");
       return;
     }
     if (!limitAmount || limitAmount <= 0) {
-      alert("Vui lòng nhập ngân sách hợp lệ");
+      setSaveError("Vui lòng nhập ngân sách hợp lệ");
       return;
     }
     const budget: Budget = {
@@ -239,14 +987,22 @@ export default function BudgetsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa ngân sách này?")) return;
-    const { error } = await deleteBudget(id);
-    if (error) {
-      alert("Lỗi xóa ngân sách: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa ngân sách?",
+      description:
+        "Hành động này không thể hoàn tác. Ngân sách sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteBudget(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa ngân sách: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa ngân sách thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── Status helpers ───────────────────────────────────────────────────────
@@ -295,8 +1051,8 @@ export default function BudgetsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -320,7 +1076,7 @@ export default function BudgetsPage() {
           </div>
 
           {/* 5 KPI cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
@@ -380,7 +1136,7 @@ export default function BudgetsPage() {
             {/* Health Score card */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
                 healthGrade.gradient
               }
             >
@@ -388,14 +1144,14 @@ export default function BudgetsPage() {
                 Budget Health
               </p>
               <p className="mt-1 text-3xl font-black text-white">
-                {smartBudget.adherenceScore}
+                {budgetHealthScore}
                 <span className="text-lg opacity-70">%</span>
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
                 <div
                   className="h-1.5 rounded-full bg-white"
                   style={{
-                    width: Math.min(smartBudget.adherenceScore, 100) + "%",
+                    width: Math.min(budgetHealthScore, 100) + "%",
                   }}
                 />
               </div>
@@ -407,15 +1163,239 @@ export default function BudgetsPage() {
         </div>
       </section>
 
+      {filteredSummary.totalLimit > 0 && (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ForecastCard
+              label="Dự kiến chi tiêu cuối tháng"
+              value={formatVND(budgetForecast.projectedSpend)}
+              sub={budgetForecast.confidenceLabel}
+              tone={
+                budgetForecast.confidenceLevel === "low"
+                  ? "warning"
+                  : budgetForecast.isProjectedOver
+                    ? "danger"
+                    : "good"
+              }
+            />
+            <ForecastCard
+              label="Còn lại dự kiến"
+              value={formatVND(Math.abs(budgetForecast.projectedRemaining))}
+              sub={
+                budgetForecast.projectedRemaining < 0
+                  ? "Vượt dự kiến"
+                  : "Còn dư cuối tháng"
+              }
+              tone={budgetForecast.projectedRemaining < 0 ? "danger" : "good"}
+            />
+            <ForecastCard
+              label="Vượt dự kiến"
+              value={
+                budgetForecast.projectedOverage > 0
+                  ? "+" + formatVND(budgetForecast.projectedOverage)
+                  : "0 đ"
+              }
+              sub={budgetForecast.confidenceNote}
+              tone={
+                budgetForecast.projectedOverage > 0
+                  ? "danger"
+                  : budgetForecast.projectedPercent >= 85
+                    ? "warning"
+                    : "good"
+              }
+            />
+            <ForecastCard
+              label="Mức chi/ngày còn lại"
+              value={formatVND(Math.round(budgetForecast.safeDailyBudget))}
+              sub={
+                budgetForecast.remainingDays > 0
+                  ? budgetForecast.remainingDays + " ngày còn lại"
+                  : "Đã hết kỳ ngân sách"
+              }
+              tone="neutral"
+            />
+          </section>
+
+          {budgetForecastInsights.length > 0 && (
+            <section className="rounded-[1.75rem] border border-amber-100 bg-linear-to-br from-amber-50 to-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex size-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                  <Lightbulb size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900">
+                    AI Forecast Insight
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Giải thích dự báo ngân sách cuối tháng
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {budgetForecastInsights.map((item, index) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-white bg-white/80 p-3 text-xs leading-5 text-slate-600 shadow-sm"
+                  >
+                    <span className="mr-2 inline-flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-black text-amber-700">
+                      {index + 1}
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {filteredSummary.totalLimit > 0 && (
+        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div
+            className={
+              "rounded-4xl border p-5 shadow-sm " +
+              financialPlanning.fixedStatus.bg +
+              " " +
+              financialPlanning.fixedStatus.border
+            }
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm">
+                  <ShieldCheck size={17} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-slate-900">
+                    Chi phí cố định
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Nhà ở · điện nước · phí định kỳ
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p
+                  className={
+                    "text-2xl font-black " + financialPlanning.fixedStatus.color
+                  }
+                >
+                  {financialPlanning.fixedRatio}%
+                </p>
+                <p className="text-[10px] font-bold text-slate-500">
+                  {financialPlanning.fixedStatus.label}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-white/80 p-3">
+                <p className="text-[10px] font-black uppercase text-slate-400">
+                  Đã chi cố định
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {formatVND(financialPlanning.fixedSpent)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  / {formatVND(financialPlanning.effectiveIncome)} thu nhập
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/80 p-3">
+                <p className="text-[10px] font-black uppercase text-slate-400">
+                  Chi biến đổi
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {financialPlanning.variableRatio}%
+                </p>
+                <p className="text-xs text-slate-500">
+                  {formatVND(financialPlanning.variableSpent)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/80 p-3">
+                <p className="text-[10px] font-black uppercase text-slate-400">
+                  Ổn định tài chính
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {financialPlanning.stabilityScore}/100
+                </p>
+                <p className="text-xs text-slate-500">Planning score</p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {financialPlanning.fixedItems.slice(0, 3).map((item) => (
+                <div
+                  key={item.categoryId}
+                  className="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2 text-xs"
+                >
+                  <span className="font-bold text-slate-700">
+                    {item.categoryName}
+                  </span>
+                  <span className="font-black text-slate-900">
+                    {formatVND(item.spent)}
+                  </span>
+                </div>
+              ))}
+              {financialPlanning.fixedItems.length === 0 && (
+                <p className="rounded-2xl bg-white/70 px-3 py-3 text-xs text-slate-500">
+                  Chưa phát hiện danh mục chi phí cố định. Bạn có thể thêm Nhà
+                  ở, Điện, Internet, Bảo hiểm...
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-4xl border border-blue-100 bg-linear-to-br from-blue-50 to-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
+                <Bot size={17} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  Financial Planning AI
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Phân tách chi phí cố định và chi phí có thể kiểm soát
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-white bg-white/80 p-4">
+                <p className="text-xs font-black text-slate-900">Nhận định</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Chi phí cố định đang chiếm{" "}
+                  <b>{financialPlanning.fixedRatio}%</b> thu nhập.
+                  {financialPlanning.fixedRatio <= 40
+                    ? " Đây là mức ổn định, còn dư địa cho tiết kiệm và chi biến đổi."
+                    : financialPlanning.fixedRatio <= 60
+                      ? " Mức này cần theo dõi để tránh làm giảm khả năng tiết kiệm."
+                      : " Mức này khá cao, nên rà soát các khoản định kỳ lớn."}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white bg-white/80 p-4">
+                <p className="text-xs font-black text-slate-900">
+                  Ưu tiên kiểm soát
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  AI sẽ ưu tiên cảnh báo các khoản biến đổi như ăn uống, mua
+                  sắm, giải trí trước. Chi phí cố định chỉ cảnh báo mạnh khi đã
+                  vượt hạn mức.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 · Budget Overview + Analytics
           ══════════════════════════════════════════════════════════════════ */}
       {budgets.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
           {/* LEFT: Category allocation */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                 <ChartPie size={17} />
               </div>
               <div>
@@ -458,7 +1438,10 @@ export default function BudgetsPage() {
                           )
                         : 0;
                     return (
-                      <div key={d.name}>
+                      <div
+                        key={d.name}
+                        title={`${d.name}: ${formatVND(d.value)} (${pct}%)`}
+                      >
                         <div className="mb-1 flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1.5">
                             <span
@@ -497,9 +1480,9 @@ export default function BudgetsPage() {
           </div>
 
           {/* RIGHT: 50/30/20 framework */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
                 <ShieldCheck size={17} />
               </div>
               <div>
@@ -512,29 +1495,17 @@ export default function BudgetsPage() {
               </div>
             </div>
 
-            {[
-              {
-                bucket: smartBudget.allocation.needs,
-                color: "#2563eb",
-                target: "50%",
-                textColor: "text-blue-700",
-              },
-              {
-                bucket: smartBudget.allocation.wants,
-                color: "#f59e0b",
-                target: "30%",
-                textColor: "text-amber-700",
-              },
-              {
-                bucket: smartBudget.allocation.savings,
-                color: "#10b981",
-                target: "20%",
-                textColor: "text-emerald-700",
-              },
-            ].map(({ bucket, color, target, textColor }) => {
-              const overColor = "text-rose-600";
+            {v7Allocation.map((bucket) => {
               const actualColor =
-                bucket.status === "over" ? overColor : textColor;
+                bucket.status === "over"
+                  ? "text-rose-600"
+                  : bucket.status === "near"
+                    ? "text-amber-600"
+                    : bucket.textColor;
+              const diffText =
+                bucket.difference > 0
+                  ? `Vượt ${formatVND(bucket.difference)}`
+                  : `Còn ${formatVND(Math.abs(bucket.difference))}`;
               return (
                 <div key={bucket.label} className="mb-5 last:mb-0">
                   <div className="mb-1.5 flex items-center justify-between">
@@ -543,27 +1514,112 @@ export default function BudgetsPage() {
                         {bucket.label}
                       </span>
                       <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
-                        Mục tiêu {target}
+                        Mục tiêu {bucket.targetPercent}%
                       </span>
                     </div>
                     <span className={"text-sm font-black " + actualColor}>
-                      {Math.round(bucket.actualPercent)}%
+                      {bucket.percentOfTarget}%
                     </span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className="h-2.5 rounded-full transition-all duration-500"
                       style={{
-                        width: Math.min(bucket.actualPercent, 100) + "%",
-                        background: color,
+                        width: Math.min(bucket.percentOfTarget, 100) + "%",
+                        background: bucket.color,
                       }}
                     />
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-400">
-                    {formatVND(bucket.actualAmount)} /{" "}
-                    {formatVND(bucket.targetAmount)}
-                  </p>
+                  <div className="mt-1 flex items-center justify-between text-[10px]">
+                    <span className="text-slate-400">
+                      {formatVND(bucket.actualAmount)} /{" "}
+                      {formatVND(bucket.targetAmount)}
+                    </span>
+                    <span
+                      className={
+                        bucket.difference > 0
+                          ? "font-bold text-rose-500"
+                          : "font-bold text-emerald-600"
+                      }
+                    >
+                      {diffText}
+                    </span>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {topRiskCategories.length > 0 && (
+        <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-rose-500 to-orange-500 text-white shadow-sm">
+                <AlertTriangle size={17} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  Top 3 danh mục rủi ro
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Ưu tiên khoản có thể kiểm soát; chi phí cố định chỉ cảnh báo
+                  khi vượt hạn mức
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
+              <p className="text-[10px] font-bold uppercase text-slate-400">
+                Budget Intelligence
+              </p>
+              <p className="text-lg font-black text-slate-900">
+                {budgetIntelligenceScore}/100
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {topRiskCategories.map((item, index) => {
+              const toneClass =
+                item.tone === "danger"
+                  ? "border-rose-100 bg-rose-50 text-rose-700"
+                  : item.tone === "warning"
+                    ? "border-amber-100 bg-amber-50 text-amber-700"
+                    : "border-emerald-100 bg-emerald-50 text-emerald-700";
+              return (
+                <button
+                  key={item.categoryId}
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/transactions?category=${encodeURIComponent(item.categoryId)}`,
+                    )
+                  }
+                  className={
+                    "rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md " +
+                    toneClass
+                  }
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="inline-flex size-7 items-center justify-center rounded-xl bg-white/70 text-xs font-black">
+                      {index + 1}
+                    </span>
+                    <span className="text-xs font-black">
+                      {item.riskScore}%
+                    </span>
+                  </div>
+                  <p className="font-black text-slate-900">
+                    {item.categoryName}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 opacity-80">
+                    {item.reason}
+                  </p>
+                  <p className="mt-2 text-[10px] font-bold opacity-70">
+                    Đã chi {formatVND(item.spent)} · Dự kiến{" "}
+                    {formatVND(item.projectedSpend)}
+                  </p>
+                </button>
               );
             })}
           </div>
@@ -573,23 +1629,23 @@ export default function BudgetsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 3 · Smart Budget AI Insights
           ══════════════════════════════════════════════════════════════════ */}
-      {(smartBudget.violations.length > 0 ||
-        smartBudget.overspendingTrend.length > 0 ||
-        smartBudget.recommendedBudgets.length > 0) && (
+      {(realExpenseViolations.length > 0 ||
+        realExpenseTrends.length > 0 ||
+        realExpenseRecommendations.length > 0) && (
         <section>
           <div className="mb-3 flex items-center gap-2 px-1">
             <Bot size={14} className="text-blue-600" />
             <p className="text-sm font-black text-slate-700">Smart Budget AI</p>
             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
-              {smartBudget.violations.length +
-                Math.min(smartBudget.overspendingTrend.length, 2) +
-                Math.min(smartBudget.recommendedBudgets.length, 2)}
+              {realExpenseViolations.length +
+                Math.min(realExpenseTrends.length, 2) +
+                Math.min(realExpenseRecommendations.length, 2)}
             </span>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {/* Violations → rose */}
-            {smartBudget.violations.slice(0, 3).map((v) => (
+            {realExpenseViolations.slice(0, 3).map((v) => (
               <div
                 key={v.categoryId}
                 className="rounded-2xl border border-rose-200 bg-rose-50 p-4"
@@ -609,11 +1665,23 @@ export default function BudgetsPage() {
                   (+{Math.round(v.overagePercent)}%) so với hạn mức{" "}
                   {formatVND(v.budgetLimit)}.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetBudget = filteredBudgets.find(
+                      (b) => b.categoryId === v.categoryId,
+                    );
+                    if (targetBudget) openEditForm(targetBudget);
+                  }}
+                  className="mt-3 rounded-xl bg-rose-600 px-3 py-2 text-[11px] font-black text-white transition hover:bg-rose-700"
+                >
+                  Chỉnh ngân sách
+                </button>
               </div>
             ))}
 
             {/* Overspending trend → amber */}
-            {smartBudget.overspendingTrend.slice(0, 2).map((a) => (
+            {realExpenseTrends.slice(0, 2).map((a) => (
               <div
                 key={a.categoryId}
                 className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
@@ -626,16 +1694,43 @@ export default function BudgetsPage() {
                     Xu hướng tăng · {a.categoryName}
                   </p>
                 </div>
-                <p className="text-xs leading-5 text-amber-700">
-                  Chi tiêu đang tăng ~{Math.round(Math.abs(a.trendRate))}
-                  %/tháng. Cân nhắc điều chỉnh ngân sách trước khi vượt giới
-                  hạn.
-                </p>
+                {(() => {
+                  const currentSpend =
+                    spendingByCategory.current.get(a.categoryId) ?? 0;
+                  const previousSpend =
+                    spendingByCategory.previous.get(a.categoryId) ?? 0;
+                  const trendDelta = currentSpend - previousSpend;
+                  const directionText =
+                    trendDelta >= 0 ? "Chi tiêu tăng" : "Chi tiêu giảm";
+                  return (
+                    <div className="text-xs leading-5 text-amber-700">
+                      <p>
+                        {directionText}:{" "}
+                        {getTrendDeltaText(currentSpend, previousSpend)}
+                      </p>
+                      <p className="mt-1 font-bold">
+                        Tháng này: {formatVND(currentSpend)} · Tháng trước:{" "}
+                        {formatVND(previousSpend)}
+                      </p>
+                    </div>
+                  );
+                })()}
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/transactions?category=${encodeURIComponent(a.categoryId)}`,
+                    )
+                  }
+                  className="mt-3 rounded-xl bg-amber-500 px-3 py-2 text-[11px] font-black text-white transition hover:bg-amber-600"
+                >
+                  Xem giao dịch
+                </button>
               </div>
             ))}
 
             {/* Recommendations → blue */}
-            {smartBudget.recommendedBudgets.slice(0, 2).map((r) => (
+            {realExpenseRecommendations.slice(0, 2).map((r) => (
               <div
                 key={r.categoryId}
                 className="rounded-2xl border border-blue-200 bg-blue-50 p-4"
@@ -654,6 +1749,28 @@ export default function BudgetsPage() {
                     Đề xuất: {formatVND(r.recommended)}
                   </p>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetBudget = filteredBudgets.find(
+                      (b) => b.categoryId === r.categoryId,
+                    );
+                    if (targetBudget) {
+                      openEditForm(targetBudget);
+                    } else {
+                      setForm({
+                        ...emptyForm,
+                        categoryId: r.categoryId,
+                        month: activeMonth,
+                        limitAmount: String(Math.round(r.recommended || 0)),
+                      });
+                      setIsFormOpen(true);
+                    }
+                  }}
+                  className="mt-3 rounded-xl bg-blue-600 px-3 py-2 text-[11px] font-black text-white transition hover:bg-blue-700"
+                >
+                  Áp dụng đề xuất
+                </button>
               </div>
             ))}
           </div>
@@ -719,14 +1836,14 @@ export default function BudgetsPage() {
               <div
                 key={budget.id}
                 className={
-                  "group rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
                   s.border
                 }
               >
                 {/* Card header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                       <ChartPie size={20} />
                     </div>
                     <div className="min-w-0">
@@ -772,7 +1889,7 @@ export default function BudgetsPage() {
                 </div>
 
                 {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3">
+                <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
                   <div className="text-center">
                     <p className="text-[9px] font-bold uppercase text-slate-400">
                       Hạn mức
@@ -857,6 +1974,46 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
+                {(() => {
+                  const itemForecast = getBudgetForecast(
+                    budget.limitAmount,
+                    spent,
+                    budget.month,
+                  );
+                  return (
+                    <div
+                      className={
+                        "mt-3 rounded-2xl border px-3 py-2 text-xs " +
+                        (itemForecast.isProjectedOver
+                          ? "border-rose-100 bg-rose-50 text-rose-700"
+                          : itemForecast.projectedPercent >= 85
+                            ? "border-amber-100 bg-amber-50 text-amber-700"
+                            : "border-emerald-100 bg-emerald-50 text-emerald-700")
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold">
+                          Dự kiến chi cuối tháng
+                        </span>
+                        <span className="font-black">
+                          {formatVND(itemForecast.projectedSpend)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] opacity-80">
+                        {itemForecast.isProjectedOver
+                          ? `Có thể vượt ${formatVND(Math.abs(itemForecast.projectedRemaining))} (${itemForecast.projectedPercent}% hạn mức).`
+                          : `Dự kiến còn ${formatVND(itemForecast.projectedRemaining)} (${itemForecast.projectedPercent}% hạn mức).`}
+                      </p>
+                      {itemForecast.confidenceLevel === "low" && (
+                        <p className="mt-1 text-[10px] font-bold opacity-80">
+                          {itemForecast.confidenceLabel}: mới{" "}
+                          {itemForecast.elapsedDays} ngày dữ liệu.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Mobile edit row */}
                 <div className="mt-4 flex gap-2 lg:hidden">
                   <button
@@ -880,7 +2037,7 @@ export default function BudgetsPage() {
 
           {/* Empty state */}
           {filteredBudgets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <ChartPie size={24} className="text-blue-400" />
               </div>
@@ -910,9 +2067,9 @@ export default function BudgetsPage() {
           SECTION 5 · Monthly Planning (Recommended Budgets)
           ══════════════════════════════════════════════════════════════════ */}
       {smartBudget.recommendedBudgets.length > 0 && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-100">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-100">
               <Zap size={17} />
             </div>
             <div>
@@ -926,7 +2083,7 @@ export default function BudgetsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
+            <table className="w-full min-w-120 text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="pb-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-400">
@@ -994,10 +2151,10 @@ export default function BudgetsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ngân sách" : "Tạo ngân sách"}
@@ -1082,11 +2239,98 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  action,
+  onCancel,
+}: {
+  action: PendingConfirm | null;
+  onCancel: () => void;
+}) {
+  if (!action) return null;
+
+  const currentAction = action;
+
+  async function handleConfirm() {
+    await currentAction.onConfirm();
+    onCancel();
+  }
+
+  return (
+    <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/40 p-3 backdrop-blur-sm sm:items-center">
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <h3 className="text-base font-bold text-slate-900">{action.title}</h3>
+        {action.description ? (
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {action.description}
+          </p>
+        ) : null}
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+          >
+            {action.cancelLabel ?? "Hủy"}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className={
+              "flex-1 rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition active:scale-[.98] " +
+              (action.variant === "danger"
+                ? "bg-rose-600 shadow-rose-200 hover:bg-rose-700"
+                : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
+            }
+          >
+            {action.confirmLabel ?? "Xác nhận"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function ForecastCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone: "good" | "warning" | "danger" | "neutral";
+}) {
+  const toneClass =
+    tone === "danger"
+      ? "border-rose-100 bg-rose-50 text-rose-700"
+      : tone === "warning"
+        ? "border-amber-100 bg-amber-50 text-amber-700"
+        : tone === "good"
+          ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+          : "border-slate-100 bg-white text-slate-700";
+
+  return (
+    <div className={"rounded-3xl border p-4 shadow-sm " + toneClass}>
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-70">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-xl font-black">{value}</p>
+      <p className="mt-1 text-xs opacity-75">{sub}</p>
+    </div>
+  );
+}
 
 function KpiCard({
   label,
@@ -1104,7 +2348,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}

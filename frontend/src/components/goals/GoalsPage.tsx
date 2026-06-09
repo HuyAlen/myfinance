@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   AlertTriangle,
-  ArrowDownRight,
   ArrowUpRight,
   Bot,
   CheckCircle2,
@@ -26,7 +25,6 @@ import {
   addGoal,
   deleteGoal,
   getGoals,
-  initFinanceDemoData,
   updateGoal,
 } from "@/src/services/finance/financeStorage";
 
@@ -46,6 +44,13 @@ const emptyForm: FormState = {
   name: "",
   targetAmount: "",
   currentAmount: "",
+};
+
+type PendingConfirm = {
+  title: string;
+  description?: string;
+  variant?: "danger" | "warning" | "info";
+  onConfirm: () => void | Promise<void>;
 };
 
 type GoalTier = "completed" | "near" | "progress" | "started";
@@ -110,14 +115,31 @@ export default function GoalsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  const toast = ({
+    message,
+  }: {
+    variant?: "success" | "error" | "warning" | "info";
+    message: string;
+  }) => {
+    window.alert(message);
+  };
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
-    setGoals(await getGoals());
+    const nextGoals = await getGoals();
+
+    setGoals(nextGoals);
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
   useRealtimeTable(["goals"], reloadData);
 
@@ -139,13 +161,28 @@ export default function GoalsPage() {
   const goalMeta = useMemo(
     () =>
       goals.map((g) => {
+        const linkedSavingAmount = 0;
+        const effectiveCurrentAmount = g.currentAmount;
         const pct =
           g.targetAmount > 0
-            ? Math.round((g.currentAmount / g.targetAmount) * 100)
+            ? Math.round((effectiveCurrentAmount / g.targetAmount) * 100)
             : 0;
         const tier = getTier(pct);
-        const remaining = Math.max(g.targetAmount - g.currentAmount, 0);
-        return { ...g, pct, tier, remaining };
+        const remaining = Math.max(g.targetAmount - effectiveCurrentAmount, 0);
+        const suggestedMonthly =
+          remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
+        const monthsLeft =
+          suggestedMonthly > 0 ? Math.ceil(remaining / suggestedMonthly) : 0;
+        return {
+          ...g,
+          pct,
+          tier,
+          remaining,
+          linkedSavingAmount,
+          effectiveCurrentAmount,
+          suggestedMonthly,
+          monthsLeft,
+        };
       }),
     [goals],
   );
@@ -270,15 +307,15 @@ export default function GoalsPage() {
     const targetAmount = Number(form.targetAmount);
     const currentAmount = Number(form.currentAmount);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên mục tiêu");
+      setSaveError("Vui lòng nhập tên mục tiêu");
       return;
     }
     if (!targetAmount || targetAmount <= 0) {
-      alert("Vui lòng nhập số tiền mục tiêu hợp lệ");
+      setSaveError("Vui lòng nhập số tiền mục tiêu hợp lệ");
       return;
     }
     if (Number.isNaN(currentAmount) || currentAmount < 0) {
-      alert("Vui lòng nhập số tiền đã tiết kiệm hợp lệ");
+      setSaveError("Vui lòng nhập số tiền đã tiết kiệm hợp lệ");
       return;
     }
     const goal: Goal = {
@@ -298,24 +335,32 @@ export default function GoalsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa mục tiêu này?")) return;
-    const { error } = await deleteGoal(id);
-    if (error) {
-      alert("Lỗi xóa mục tiêu: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa mục tiêu?",
+      description:
+        "Hành động này không thể hoàn tác. Mục tiêu sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteGoal(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa mục tiêu: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa mục tiêu thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xlborder border-blue-100 shadow-sm">
+        <div className="bg-linear-to-brfrom-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
@@ -338,7 +383,7 @@ export default function GoalsPage() {
           </div>
 
           {/* 5 KPI cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng mục tiêu"
               value={String(goals.length)}
@@ -389,7 +434,7 @@ export default function GoalsPage() {
             {/* Achievement score */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-brp-4 shadow-sm " +
                 achievementGrade.gradient
               }
             >
@@ -420,9 +465,9 @@ export default function GoalsPage() {
       {goals.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
           {/* LEFT: Overall progress + tier bars */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xlborder border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-brfrom-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                 <Target size={17} />
               </div>
               <div>
@@ -531,7 +576,7 @@ export default function GoalsPage() {
           {/* RIGHT: Pie + per-goal contribution */}
           <div className="flex flex-col gap-5">
             {/* Pie */}
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xlborder border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-base font-black text-slate-900">
                 Phân bổ trạng thái
               </h2>
@@ -594,7 +639,7 @@ export default function GoalsPage() {
               </p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                  className="h-2 rounded-full bg-linear-to-rfrom-emerald-500 to-blue-500"
                   style={{ width: Math.min(summary.percent, 100) + "%" }}
                 />
               </div>
@@ -670,9 +715,9 @@ export default function GoalsPage() {
           SECTION 4 · Goal Timeline (nearest to completion first)
           ══════════════════════════════════════════════════════════════════ */}
       {goalMeta.length > 0 && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xlborder border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-brfrom-indigo-500 to-violet-500 text-white shadow-sm">
               <Zap size={17} />
             </div>
             <div>
@@ -708,7 +753,7 @@ export default function GoalsPage() {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="text-slate-500">
-                          {formatVND(g.currentAmount)}
+                          {formatVND(g.effectiveCurrentAmount)}
                         </span>
                         <span className="text-slate-300">/</span>
                         <span className="font-bold text-slate-700">
@@ -778,7 +823,7 @@ export default function GoalsPage() {
               <div
                 key={g.id}
                 className={
-                  "group rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group rounded-4xlborder bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
                   s.border
                 }
               >
@@ -787,7 +832,7 @@ export default function GoalsPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={
-                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm " +
+                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-brtext-white shadow-sm " +
                         s.iconGrad
                       }
                     >
@@ -829,7 +874,7 @@ export default function GoalsPage() {
                 </div>
 
                 {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3">
+                <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
                   <div className="text-center">
                     <p className="text-[9px] font-bold uppercase text-slate-400">
                       Mục tiêu
@@ -845,9 +890,9 @@ export default function GoalsPage() {
                       Đã có
                     </p>
                     <p className="mt-0.5 text-xs font-black text-emerald-600">
-                      {g.currentAmount >= 1_000_000
-                        ? Math.round(g.currentAmount / 1_000_000) + "M"
-                        : Math.round(g.currentAmount / 1_000) + "K"}
+                      {g.effectiveCurrentAmount >= 1_000_000
+                        ? Math.round(g.effectiveCurrentAmount / 1_000_000) + "M"
+                        : Math.round(g.effectiveCurrentAmount / 1_000) + "K"}
                     </p>
                   </div>
                   <div className="text-center">
@@ -875,11 +920,17 @@ export default function GoalsPage() {
                         : "text-blue-700")
                     }
                   >
-                    {formatVND(g.currentAmount)}
+                    {formatVND(g.effectiveCurrentAmount)}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-400">
                     / {formatVND(g.targetAmount)}
                   </p>
+                  {g.linkedSavingAmount > 0 && (
+                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">
+                      Đã tự động cộng {formatVND(g.linkedSavingAmount)} từ danh
+                      mục tiết kiệm
+                    </p>
+                  )}
                 </div>
 
                 {/* Progress bar */}
@@ -915,6 +966,39 @@ export default function GoalsPage() {
                   </div>
                 </div>
 
+                {/* V3 forecast */}
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">
+                        Dự kiến hoàn thành
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {g.remaining <= 0
+                          ? "Đã hoàn thành"
+                          : `~${g.monthsLeft} tháng`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-slate-400">
+                        Góp đề xuất
+                      </p>
+                      <p className="mt-1 text-sm font-black text-blue-700">
+                        {g.remaining <= 0
+                          ? "0 đ"
+                          : formatVND(g.suggestedMonthly) + "/tháng"}
+                      </p>
+                    </div>
+                  </div>
+                  {g.remaining > 0 && (
+                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                      Nếu duy trì khoản góp này, mục tiêu có thể hoàn thành
+                      trong khoảng 12 tháng. Bạn có thể chỉnh số tiền đã tiết
+                      kiệm sau mỗi lần góp.
+                    </p>
+                  )}
+                </div>
+
                 {/* Mobile edit row */}
                 <div className="mt-4 flex gap-2 lg:hidden">
                   <button
@@ -938,7 +1022,7 @@ export default function GoalsPage() {
 
           {/* Empty state */}
           {goals.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xlborder-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Target size={24} className="text-blue-400" />
               </div>
@@ -964,10 +1048,10 @@ export default function GoalsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Chỉnh sửa mục tiêu" : "Thêm mục tiêu mới"}
@@ -984,7 +1068,10 @@ export default function GoalsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+            >
               <div className="space-y-4">
                 <FormInput
                   label="Tên mục tiêu"
@@ -1001,7 +1088,7 @@ export default function GoalsPage() {
                 />
                 {/* Current amount with ₫ */}
                 <AmountInput
-                  label="Số tiền đã tiết kiệm"
+                  label="Số tiền đã tiết kiệm thủ công"
                   value={form.currentAmount}
                   onChange={(v) => setForm((p) => ({ ...p, currentAmount: v }))}
                   placeholder="12000000"
@@ -1031,6 +1118,11 @@ export default function GoalsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }
@@ -1053,7 +1145,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-brp-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
@@ -1069,6 +1161,50 @@ function KpiCard({
       </div>
       <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
       <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  action,
+  onCancel,
+}: {
+  action: PendingConfirm | null;
+  onCancel: () => void;
+}) {
+  if (!action) return null;
+
+  const handleConfirm = async () => {
+    await action.onConfirm();
+    onCancel();
+  };
+
+  return (
+    <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/50 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 backdrop-blur-sm sm:items-center">
+      <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+        <h3 className="text-lg font-black text-slate-900">{action.title}</h3>
+        {action.description ? (
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            {action.description}
+          </p>
+        ) : null}
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="flex-1 rounded-2xl bg-rose-600 py-3 text-sm font-bold text-white shadow-lg shadow-rose-200 transition-all hover:bg-rose-700 active:scale-[.98]"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

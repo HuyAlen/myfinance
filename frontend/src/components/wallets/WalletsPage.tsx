@@ -13,7 +13,6 @@ import {
   Landmark,
   Lightbulb,
   Plus,
-  Shield,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -21,7 +20,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
 
 import type {
   Transaction,
@@ -34,7 +33,6 @@ import {
   deleteWallet,
   getTransactions,
   getWallets,
-  initFinanceDemoData,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
 
@@ -60,6 +58,10 @@ const emptyForm: FormState = {
   type: "cash",
   balance: "",
 };
+
+const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86400000)
+  .toISOString()
+  .slice(0, 10);
 
 const walletTypeOptions: {
   label: string;
@@ -87,6 +89,31 @@ const TYPE_COLORS: Record<FinanceWalletType, string> = {
   investment: "#10b981",
 };
 
+type PendingConfirm = {
+  title: string;
+  description?: string;
+  variant?: "danger" | "warning" | "info";
+  onConfirm: () => void | Promise<void>;
+};
+
+type ToastOptions = {
+  variant?: "success" | "error" | "warning" | "info";
+  message: string;
+};
+
+function notifyToast({ variant = "info", message }: ToastOptions) {
+  if (typeof window === "undefined") return;
+
+  const prefix: Record<NonNullable<ToastOptions["variant"]>, string> = {
+    success: "✅",
+    error: "❌",
+    warning: "⚠️",
+    info: "ℹ️",
+  };
+
+  window.alert(`${prefix[variant]} ${message}`);
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
@@ -94,6 +121,9 @@ export default function WalletsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
 
   async function reloadData() {
     const [w, t] = await Promise.all([getWallets(), getTransactions()]);
@@ -102,7 +132,9 @@ export default function WalletsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    queueMicrotask(() => {
+      reloadData();
+    });
   }, []);
   useRealtimeTable(["wallets", "transactions"], reloadData);
 
@@ -195,6 +227,8 @@ export default function WalletsPage() {
     [walletStats],
   );
 
+  const thirtyDaysAgo = THIRTY_DAYS_AGO;
+
   // Intelligence alerts
   const alerts = useMemo(() => {
     const out: {
@@ -202,10 +236,6 @@ export default function WalletsPage() {
       title: string;
       body: string;
     }[] = [];
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
-      .toISOString()
-      .slice(0, 10);
-
     // Low balance wallets
     for (const w of wallets) {
       if (w.balance < 100_000 && w.type !== "investment") {
@@ -259,7 +289,14 @@ export default function WalletsPage() {
     }
 
     return out.slice(0, 6);
-  }, [wallets, transactions, totalCash, liquidityScore, totalAssets]);
+  }, [
+    wallets,
+    transactions,
+    totalCash,
+    liquidityScore,
+    totalAssets,
+    thirtyDaysAgo,
+  ]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   function openCreateForm() {
@@ -281,11 +318,11 @@ export default function WalletsPage() {
     event.preventDefault();
     const balance = Number(form.balance);
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên ví");
+      setSaveError("Vui lòng nhập tên ví");
       return;
     }
     if (Number.isNaN(balance) || balance < 0) {
-      alert("Vui lòng nhập số dư hợp lệ");
+      setSaveError("Vui lòng nhập số dư hợp lệ");
       return;
     }
     const wallet: WalletType = {
@@ -307,27 +344,31 @@ export default function WalletsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
+  function handleDelete(id: string) {
     const wallet = wallets.find((w) => w.id === id);
     const linked = transactions.filter((t) => t.walletId === id);
     if (linked.length > 0) {
-      alert(
-        'Không thể xóa ví "' +
-          (wallet?.name ?? "này") +
-          '" vì đang có ' +
-          linked.length +
-          " giao dịch liên kết.\nHãy xóa hoặc chuyển các giao dịch sang ví khác trước khi xóa ví.",
-      );
+      notifyToast({
+        variant: "warning",
+        message: `Không thể xóa ví "${wallet?.name ?? "này"}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+      });
       return;
     }
-    if (!confirm('Bạn có chắc muốn xóa ví "' + (wallet?.name ?? "này") + '"?'))
-      return;
-    const { error } = await deleteWallet(id);
-    if (error) {
-      alert("Lỗi xóa ví: " + error);
-      return;
-    }
-    await reloadData();
+    setPendingAction({
+      title: `Xóa ví "${wallet?.name ?? "này"}"?`,
+      description:
+        "Hành động này không thể hoàn tác. Ví sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteWallet(id);
+        if (error) {
+          notifyToast({ variant: "error", message: "Lỗi xóa ví: " + error });
+          return;
+        }
+        notifyToast({ variant: "success", message: "Đã xóa ví thành công." });
+        await reloadData();
+      },
+    });
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
@@ -336,7 +377,7 @@ export default function WalletsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
         <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -442,7 +483,7 @@ export default function WalletsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         {/* Allocation breakdown */}
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
               <Landmark size={17} />
@@ -508,7 +549,7 @@ export default function WalletsPage() {
         {/* Right panel: Pie + highlights */}
         <div className="flex flex-col gap-5">
           {/* Pie chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-black text-slate-900">
               Biểu đồ phân bổ
             </h2>
@@ -681,7 +722,7 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
+                className="group rounded-4xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
@@ -823,7 +864,7 @@ export default function WalletsPage() {
 
           {/* Empty state */}
           {wallets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Wallet size={24} className="text-blue-400" />
               </div>
@@ -849,10 +890,10 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-900/40 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem-env(safe-area-inset-bottom))] w-full max-w-lg flex-col overflow-hidden rounded-t-4xlbg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-5 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ví tiền" : "Thêm ví tiền"}
@@ -869,7 +910,10 @@ export default function WalletsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="overflow-y-auto p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:p-6"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormInput
                   label="Tên ví"
@@ -953,6 +997,80 @@ export default function WalletsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  action,
+  onCancel,
+}: {
+  action: PendingConfirm | null;
+  onCancel: () => void;
+}) {
+  if (!action) return null;
+
+  const isDanger = action.variant === "danger";
+
+  async function handleConfirm() {
+    if (!action) return;
+    await action.onConfirm();
+    onCancel();
+  }
+
+  return (
+    <div className="fixed inset-0 z-90 flex items-end justify-center bg-slate-950/50 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="w-full max-w-md rounded-t-4xlbg-white p-5 shadow-2xl sm:rounded-4xl sm:p-6">
+        <div className="flex items-start gap-3">
+          <div
+            className={
+              "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
+              (isDanger
+                ? "bg-rose-100 text-rose-600"
+                : "bg-amber-100 text-amber-600")
+            }
+          >
+            <AlertTriangle size={20} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-black text-slate-900">
+              {action.title}
+            </h3>
+            {action.description && (
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                {action.description}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className={
+              "flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] " +
+              (isDanger
+                ? "bg-rose-600 shadow-rose-200 hover:bg-rose-700"
+                : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
+            }
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

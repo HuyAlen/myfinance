@@ -61,7 +61,7 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/*
@@ -87,7 +87,7 @@ export default function AppShell({ children }: AppShellProps) {
           sidebarOpen={sidebarOpen}
         />
 
-        <main className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-6">
+        <main className="px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
           {children}
         </main>
       </div>

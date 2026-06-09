@@ -80,7 +80,7 @@ export function CurrencyInput({
   }
 
   const baseInputCls = [
-    "w-full rounded-2xl border bg-slate-50 outline-none transition-colors focus:bg-white",
+    "min-h-12 w-full rounded-2xl border bg-slate-50 text-base outline-none transition-colors focus:bg-white",
     showPrefix
       ? size === "lg"
         ? "py-4 pl-10 pr-4"
@@ -90,7 +90,7 @@ export function CurrencyInput({
         : "py-3 px-4",
     size === "lg"
       ? "text-xl font-black text-slate-900 placeholder:text-slate-300"
-      : "text-sm",
+      : "text-base sm:text-sm",
     error
       ? "border-rose-300 focus:border-rose-500"
       : focused

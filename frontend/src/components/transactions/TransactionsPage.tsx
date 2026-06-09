@@ -13,7 +13,6 @@ import {
   Download,
   Edit3,
   LayoutList,
-  Lightbulb,
   List,
   Plus,
   RefreshCw,
@@ -51,7 +50,6 @@ import {
   getCategories,
   getTransactions,
   getWallets,
-  initFinanceDemoData,
   updateTransaction,
 } from "@/src/services/finance/financeStorage";
 import {
@@ -73,10 +71,31 @@ import { SaveError } from "@/src/components/ui/SaveError";
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
+type TransactionFormMode =
+  | "income"
+  | "expense"
+  | "saving"
+  | "investment"
+  | "transfer";
+
+type PendingConfirm = {
+  title: string;
+  description?: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: "danger" | "warning" | "info";
+  onConfirm: () => void | Promise<void>;
+};
+
+type ToastPayload = {
+  variant?: "success" | "error" | "warning" | "info";
+  message: string;
+};
 
 type FormState = {
   id?: string;
   type: TransactionType;
+  formMode: TransactionFormMode;
   amount: string;
   categoryId: string;
   walletId: string;
@@ -89,6 +108,7 @@ type FormState = {
 
 const emptyForm: FormState = {
   type: "expense",
+  formMode: "expense",
   amount: "",
   categoryId: "",
   walletId: "",
@@ -98,6 +118,53 @@ const emptyForm: FormState = {
   isRecurring: false,
   recurrence: "monthly",
 };
+
+function getCategoryPlanningGroup(category?: Category) {
+  if (!category) return "variable";
+  if (category.type === "income") return "income";
+
+  const normalizedName = category.name.toLowerCase();
+  if (
+    normalizedName.includes("tiết kiệm") ||
+    normalizedName.includes("saving")
+  ) {
+    return "saving";
+  }
+  if (
+    normalizedName.includes("đầu tư") ||
+    normalizedName.includes("dau tu") ||
+    normalizedName.includes("investment")
+  ) {
+    return "investment";
+  }
+
+  return "variable";
+}
+
+function getTransactionFormMode(
+  transaction: Transaction,
+  categories: Category[],
+): TransactionFormMode {
+  if (transaction.type === "income" || transaction.type === "transfer") {
+    return transaction.type;
+  }
+
+  const category = categories.find(
+    (item) => item.id === transaction.categoryId,
+  );
+  const group = getCategoryPlanningGroup(category);
+
+  if (group === "saving") return "saving";
+  if (group === "investment") return "investment";
+  return "expense";
+}
+
+function getTransactionTypeFromFormMode(
+  mode: TransactionFormMode,
+): TransactionType {
+  if (mode === "income" || mode === "transfer") return mode;
+  return "expense";
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
@@ -127,6 +194,16 @@ export default function TransactionsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
+    null,
+  );
+  function toast({ variant = "info", message }: ToastPayload) {
+    if (variant === "error") {
+      console.error(message);
+      return;
+    }
+    console.info(message);
+  }
 
   async function reloadData() {
     const [txns, cats, wlts, bdgs] = await Promise.all([
@@ -142,7 +219,13 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
-    initFinanceDemoData().then(reloadData);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
   useRealtimeTable(["transactions", "wallets", "categories"], reloadData);
 
@@ -150,7 +233,21 @@ export default function TransactionsPage() {
     return transactions.filter((t) => {
       const cat = categories.find((c) => c.id === t.categoryId);
       const wal = wallets.find((w) => w.id === t.walletId);
-      const searchText = [t.note, cat?.name, wal?.name, String(t.amount)]
+      const typeLabel =
+        t.type === "income"
+          ? "thu nhập income thu"
+          : t.type === "expense"
+            ? "chi tiêu expense chi"
+            : "chuyển khoản transfer";
+      const searchText = [
+        t.note,
+        cat?.name,
+        wal?.name,
+        t.date,
+        typeLabel,
+        String(t.amount),
+        formatVND(t.amount),
+      ]
         .join(" ")
         .toLowerCase();
       if (typeFilter !== "all" && t.type !== typeFilter) return false;
@@ -223,6 +320,33 @@ export default function TransactionsPage() {
     [yearTxns, currentYear],
   );
 
+  const monthlyTrendDisplay = useMemo(() => {
+    let lastActiveIndex = -1;
+
+    for (let i = monthlyTrend.length - 1; i >= 0; i -= 1) {
+      const m = monthlyTrend[i];
+      if (m.thu !== 0 || m.chi !== 0 || m.net !== 0) {
+        lastActiveIndex = i;
+        break;
+      }
+    }
+
+    if (lastActiveIndex < 0) return monthlyTrend.slice(0, 6);
+
+    return monthlyTrend.slice(0, lastActiveIndex + 1);
+  }, [monthlyTrend]);
+
+  const monthlyTrendLabel = useMemo(() => {
+    const lastPoint = monthlyTrendDisplay.at(-1);
+    const hasData = monthlyTrendDisplay.some(
+      (m) => m.thu !== 0 || m.chi !== 0 || m.net !== 0,
+    );
+
+    if (!hasData || !lastPoint) return "Chưa có dữ liệu trong " + currentYear;
+
+    return "Dữ liệu đến " + lastPoint.month + " " + currentYear;
+  }, [monthlyTrendDisplay, currentYear]);
+
   const anomalies = useMemo(
     () => detectSpendingAnomalies(transactions, categories, 6),
     [transactions, categories],
@@ -283,7 +407,11 @@ export default function TransactionsPage() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
@@ -294,18 +422,28 @@ export default function TransactionsPage() {
     else setSelectedIds(new Set(sorted.map((t) => t.id)));
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!confirm("Xóa " + selectedIds.size + " giao dịch đã chọn?")) return;
-    for (const id of selectedIds) {
-      const { error } = await deleteTransaction(id);
-      if (error) {
-        alert("Lỗi xóa giao dịch: " + error);
-        break;
-      }
-    }
-    setSelectedIds(new Set());
-    await reloadData();
+    const count = selectedIds.size;
+    const idsToDelete = new Set(selectedIds);
+    setPendingAction({
+      title: `Xóa ${count} giao dịch?`,
+      description: `Hành động này không thể hoàn tác. ${count} giao dịch đã chọn sẽ bị xóa vĩnh viễn.`,
+      variant: "danger",
+      confirmText: "Xóa tất cả",
+      onConfirm: async () => {
+        for (const id of idsToDelete) {
+          const { error } = await deleteTransaction(id);
+          if (error) {
+            toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
+            return;
+          }
+        }
+        setSelectedIds(new Set());
+        toast({ variant: "success", message: `Đã xóa ${count} giao dịch.` });
+        await reloadData();
+      },
+    });
   }
 
   function exportCSV() {
@@ -344,17 +482,53 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url);
   }
 
-  const filteredCategories = useMemo(
-    () => categories.filter((c) => c.type === form.type),
-    [categories, form.type],
-  );
+  const filteredCategories = useMemo(() => {
+    if (form.formMode === "income") {
+      return categories.filter((category) => category.type === "income");
+    }
+
+    if (form.formMode === "saving") {
+      return categories.filter(
+        (category) =>
+          category.type === "expense" &&
+          getCategoryPlanningGroup(category) === "saving",
+      );
+    }
+
+    if (form.formMode === "investment") {
+      return categories.filter(
+        (category) =>
+          category.type === "expense" &&
+          getCategoryPlanningGroup(category) === "investment",
+      );
+    }
+
+    if (form.formMode === "expense") {
+      return categories.filter((category) => {
+        if (category.type !== "expense") return false;
+        const group = getCategoryPlanningGroup(category);
+        return group !== "saving" && group !== "investment";
+      });
+    }
+
+    return [];
+  }, [categories, form.formMode]);
 
   function openCreateForm() {
+    const defaultMode: TransactionFormMode = "expense";
     setForm({
       ...emptyForm,
-      categoryId: categories.find((c) => c.type === "expense")?.id ?? "",
+      formMode: defaultMode,
+      type: getTransactionTypeFromFormMode(defaultMode),
+      categoryId:
+        categories.find((category) => {
+          if (category.type !== "expense") return false;
+          const group = getCategoryPlanningGroup(category);
+          return group !== "saving" && group !== "investment";
+        })?.id ?? "",
       walletId: wallets[0]?.id ?? "",
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
@@ -362,6 +536,7 @@ export default function TransactionsPage() {
     setForm({
       id: t.id,
       type: t.type,
+      formMode: getTransactionFormMode(t, categories),
       amount: String(t.amount),
       categoryId: t.categoryId,
       walletId: t.walletId,
@@ -371,61 +546,79 @@ export default function TransactionsPage() {
       isRecurring: t.isRecurring ?? false,
       recurrence: t.recurrence ?? "monthly",
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
-  function handleTypeChange(type: TransactionType) {
+  function handleTypeChange(mode: TransactionFormMode) {
+    const nextType = getTransactionTypeFromFormMode(mode);
+
+    const nextCategoryId =
+      mode === "transfer"
+        ? ""
+        : (categories.find((category) => {
+            if (mode === "income") return category.type === "income";
+            if (category.type !== "expense") return false;
+
+            const group = getCategoryPlanningGroup(category);
+            if (mode === "saving") return group === "saving";
+            if (mode === "investment") return group === "investment";
+            return group !== "saving" && group !== "investment";
+          })?.id ?? "");
+
     setForm((prev) => ({
       ...prev,
-      type,
-      categoryId:
-        type === "transfer"
-          ? ""
-          : (categories.find((c) => c.type === type)?.id ?? ""),
+      formMode: mode,
+      type: nextType,
+      categoryId: nextCategoryId,
+      transferToWalletId: mode === "transfer" ? prev.transferToWalletId : "",
     }));
+    setSaveError(null);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const amount = Number(form.amount);
     if (!amount || amount <= 0) {
-      alert("Vui lòng nhập số tiền hợp lệ");
+      setSaveError("Vui lòng nhập số tiền hợp lệ");
       return;
     }
     if (form.type === "transfer") {
       if (!form.walletId) {
-        alert("Vui lòng chọn ví nguồn");
+        setSaveError("Vui lòng chọn ví nguồn");
         return;
       }
       if (!form.transferToWalletId) {
-        alert("Vui lòng chọn ví đích");
+        setSaveError("Vui lòng chọn ví đích");
         return;
       }
       if (form.walletId === form.transferToWalletId) {
-        alert("Ví nguồn và ví đích phải khác nhau");
+        setSaveError("Ví nguồn và ví đích phải khác nhau");
         return;
       }
     } else {
       if (!form.categoryId) {
-        alert("Vui lòng chọn danh mục");
+        setSaveError("Vui lòng chọn danh mục");
         return;
       }
       if (!form.walletId) {
-        alert("Vui lòng chọn ví tiền");
+        setSaveError("Vui lòng chọn ví tiền");
         return;
       }
     }
+    const transactionType = getTransactionTypeFromFormMode(form.formMode);
+
     const transaction: Transaction = {
       id: form.id ?? crypto.randomUUID(),
-      type: form.type,
+      type: transactionType,
       amount,
-      categoryId: form.type === "transfer" ? "" : form.categoryId,
+      categoryId: transactionType === "transfer" ? "" : form.categoryId,
       walletId: form.walletId,
       transferToWalletId:
-        form.type === "transfer" ? form.transferToWalletId : undefined,
+        transactionType === "transfer" ? form.transferToWalletId : undefined,
       note:
         form.note ||
-        (form.type === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
+        (transactionType === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
       date: form.date,
       isRecurring: form.isRecurring || undefined,
       recurrence: form.isRecurring ? form.recurrence : undefined,
@@ -443,14 +636,22 @@ export default function TransactionsPage() {
     setForm(emptyForm);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Bạn có chắc muốn xóa giao dịch này?")) return;
-    const { error } = await deleteTransaction(id);
-    if (error) {
-      alert("Lỗi xóa giao dịch: " + error);
-      return;
-    }
-    await reloadData();
+  function handleDelete(id: string) {
+    setPendingAction({
+      title: "Xóa giao dịch?",
+      description:
+        "Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa khỏi tài khoản của bạn.",
+      variant: "danger",
+      onConfirm: async () => {
+        const { error } = await deleteTransaction(id);
+        if (error) {
+          toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
+          return;
+        }
+        toast({ variant: "success", message: "Đã xóa giao dịch thành công." });
+        await reloadData();
+      },
+    });
   }
 
   function clearFilters() {
@@ -494,7 +695,7 @@ export default function TransactionsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-5 md:pb-0">
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ════════════════════════════════════════════════════════════════════ */}
@@ -532,7 +733,7 @@ export default function TransactionsPage() {
             </p>
             <p
               className={
-                "mt-2 text-5xl font-black tracking-tight sm:text-6xl " +
+                "mt-2 text-3xl font-black tracking-tight sm:text-5xl " +
                 (netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500")
               }
             >
@@ -578,7 +779,7 @@ export default function TransactionsPage() {
           </div>
 
           {/* KPI chips strip — horizontal scroll */}
-          <div className="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="relative mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-600">
                 Thu nhập
@@ -912,29 +1113,29 @@ export default function TransactionsPage() {
             Phân tích dòng tiền
           </p>
           <span className="ml-auto text-xs text-slate-400">
-            12 tháng {currentYear}
+            {monthlyTrendLabel}
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <TrendPanel
             title="Thu nhập"
             color="#10b981"
             dataKey="thu"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="area"
           />
           <TrendPanel
             title="Chi tiêu"
             color="#f43f5e"
             dataKey="chi"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="line"
           />
           <TrendPanel
             title="Dòng tiền"
             color="#2563eb"
             dataKey="net"
-            data={monthlyTrend}
+            data={monthlyTrendDisplay}
             chartType="bar"
           />
         </div>
@@ -1224,7 +1425,7 @@ export default function TransactionsPage() {
 
                     <div
                       className={
-                        "grid gap-3 px-6 py-4 transition-all duration-200 hover:bg-blue-50/30 lg:grid-cols-[36px_1fr_130px_120px_100px_150px_88px] lg:items-center " +
+                        "grid gap-3 px-4 py-4 transition-all duration-200 hover:bg-blue-50/30 sm:px-6 lg:grid-cols-[36px_1fr_130px_120px_100px_150px_88px] lg:items-center " +
                         (isSelected ? "bg-blue-50" : "") +
                         " " +
                         (isSwiped ? "-translate-x-24 lg:translate-x-0" : "")
@@ -1523,10 +1724,10 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
@@ -1549,13 +1750,13 @@ export default function TransactionsPage() {
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
-                <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+                <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 sm:grid-cols-3 lg:grid-cols-5">
                   <button
                     type="button"
                     onClick={() => handleTypeChange("income")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "income"
+                      (form.formMode === "income"
                         ? "bg-emerald-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1567,7 +1768,7 @@ export default function TransactionsPage() {
                     onClick={() => handleTypeChange("expense")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "expense"
+                      (form.formMode === "expense"
                         ? "bg-rose-500 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1576,10 +1777,34 @@ export default function TransactionsPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleTypeChange("saving")}
+                    className={
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
+                      (form.formMode === "saving"
+                        ? "bg-cyan-500 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    ◇ Tiết kiệm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTypeChange("investment")}
+                    className={
+                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
+                      (form.formMode === "investment"
+                        ? "bg-violet-500 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    ▣ Đầu tư
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleTypeChange("transfer")}
                     className={
                       "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.type === "transfer"
+                      (form.formMode === "transfer"
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
@@ -1597,11 +1822,15 @@ export default function TransactionsPage() {
                 <div
                   className={
                     "relative rounded-2xl border-2 transition-colors " +
-                    (form.type === "income"
+                    (form.formMode === "income"
                       ? "border-emerald-200 focus-within:border-emerald-400"
-                      : form.type === "transfer"
+                      : form.formMode === "transfer"
                         ? "border-blue-200 focus-within:border-blue-400"
-                        : "border-rose-200 focus-within:border-rose-400")
+                        : form.formMode === "saving"
+                          ? "border-cyan-200 focus-within:border-cyan-400"
+                          : form.formMode === "investment"
+                            ? "border-violet-200 focus-within:border-violet-400"
+                            : "border-rose-200 focus-within:border-rose-400")
                   }
                 >
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">
@@ -1768,6 +1997,92 @@ export default function TransactionsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        action={pendingAction}
+        onCancel={() => setPendingAction(null)}
+      />
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  action,
+  onCancel,
+}: {
+  action: PendingConfirm | null;
+  onCancel: () => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!action) return null;
+
+  async function handleConfirm() {
+    if (!action || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      await action.onConfirm();
+      onCancel();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const isDanger = action.variant === "danger";
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/40 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:p-6">
+      <div className="w-full max-w-md rounded-t-[2rem] border border-white/70 bg-white p-5 shadow-2xl sm:rounded-[2rem]">
+        <div className="flex items-start gap-3">
+          <div
+            className={
+              "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
+              (isDanger
+                ? "bg-rose-50 text-rose-500"
+                : "bg-amber-50 text-amber-500")
+            }
+          >
+            <AlertTriangle size={20} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-black text-slate-900">
+              {action.title}
+            </h3>
+            {action.description && (
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                {action.description}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-60"
+          >
+            {action.cancelText ?? "Hủy"}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isSubmitting}
+            className={
+              "rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] disabled:opacity-60 " +
+              (isDanger
+                ? "bg-rose-500 shadow-rose-200 hover:bg-rose-600"
+                : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
+            }
+          >
+            {isSubmitting
+              ? "Đang xử lý..."
+              : (action.confirmText ?? "Xác nhận")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1821,12 +2136,16 @@ function TrendPanel({
   data: TrendDataPoint[];
   chartType: "area" | "line" | "bar";
 }) {
-  const last = data.at(-1)?.[dataKey] ?? 0;
-  const prev = data.at(-2)?.[dataKey] ?? 0;
+  const activeData =
+    data.length > 0 ? data : [{ month: "T1", thu: 0, chi: 0, net: 0 }];
+
+  const last = activeData.at(-1)?.[dataKey] ?? 0;
+  const prev = activeData.at(-2)?.[dataKey] ?? 0;
   const delta =
     prev !== 0 ? Math.round(((last - prev) / Math.abs(prev)) * 100) : 0;
   const isUp = delta > 0;
   const isGood = dataKey !== "chi" ? isUp : !isUp;
+  const displayValue = Math.abs(last) >= 10 ? last.toFixed(1) : last.toFixed(2);
 
   const cardBg =
     dataKey === "thu"
@@ -1859,13 +2178,13 @@ function TrendPanel({
         )}
       </div>
       <p className="mt-2.5 text-2xl font-black" style={{ color }}>
-        {last.toFixed(1)}M
+        {displayValue}M
       </p>
       <div className="mt-3.5 h-24">
         <ResponsiveContainer width="100%" height={96} minWidth={0}>
           {chartType === "area" ? (
             <AreaChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
             >
               <defs>
@@ -1891,7 +2210,7 @@ function TrendPanel({
             </AreaChart>
           ) : chartType === "line" ? (
             <LineChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
             >
               <Line
@@ -1904,7 +2223,7 @@ function TrendPanel({
             </LineChart>
           ) : (
             <BarChart
-              data={data}
+              data={activeData}
               margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
               barCategoryGap={5}
             >
@@ -1927,7 +2246,6 @@ function IntelCard({
   title,
   accent,
   body,
-  tone,
 }: {
   icon: React.ReactNode;
   title: string;
