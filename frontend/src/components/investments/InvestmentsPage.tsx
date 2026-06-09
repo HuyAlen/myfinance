@@ -1610,9 +1610,9 @@ export default function InvestmentsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="mobile-modal-panel flex w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-w-2xl sm:rounded-[2rem]">
+            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-5 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa tài sản đầu tư" : "Thêm tài sản đầu tư"}
@@ -1629,7 +1629,10 @@ export default function InvestmentsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="mobile-modal-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6"
+            >
               <div className="grid gap-4 md:grid-cols-2">
                 <FormInput
                   label="Tên tài sản *"

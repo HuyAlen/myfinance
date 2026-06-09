@@ -149,7 +149,11 @@ export default function DebtsPage() {
   }
 
   useEffect(() => {
-    reloadData();
+    const timer = window.setTimeout(() => {
+      reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
   useRealtimeTable(["debts"], reloadData);
 
@@ -1153,10 +1157,10 @@ export default function DebtsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 pt-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem] max-h-[calc(var(--app-height,100dvh)-env(safe-area-inset-top)-0.75rem)] sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))]">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Chỉnh sửa khoản nợ" : "Thêm khoản nợ mới"}
@@ -1173,7 +1177,10 @@ export default function DebtsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:pb-6"
+            >
               <div className="space-y-4">
                 <FormInput
                   label="Tên khoản nợ"

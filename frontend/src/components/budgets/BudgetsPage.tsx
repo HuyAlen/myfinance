@@ -2078,10 +2078,10 @@ export default function BudgetsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(var(--app-height,100dvh)-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
+            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ngân sách" : "Tạo ngân sách"}
@@ -2098,7 +2098,10 @@ export default function BudgetsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-[calc(8rem+env(safe-area-inset-bottom))]"
+            >
               <div className="space-y-4">
                 {/* Category select */}
                 <label className="block">
