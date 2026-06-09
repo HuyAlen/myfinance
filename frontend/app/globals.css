@@ -3,13 +3,26 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --app-height: 100dvh;
+  --bottom-nav-height: 5.5rem;
+}
+
+html,
+body,
+#__next,
+#root {
+  min-height: 100%;
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
+  min-height: var(--app-height);
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
 
@@ -17,6 +30,41 @@ body {
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Shared iPhone-safe modal helpers */
+.mobile-modal-panel {
+  max-height: calc(var(--app-height) - env(safe-area-inset-top) - 0.75rem);
+}
+
+.mobile-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(8rem + env(safe-area-inset-bottom));
+}
+
+.safe-bottom-padding {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
 
 ::-webkit-scrollbar {
