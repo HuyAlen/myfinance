@@ -109,7 +109,11 @@ export default function WalletsPage() {
   }
 
   useEffect(() => {
-    reloadData();
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
   useRealtimeTable(["wallets", "transactions"], reloadData);
 
@@ -132,6 +136,10 @@ export default function WalletsPage() {
   const now = new Date();
   const currentMonth =
     now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+
+  const [thirtyDaysAgo] = useState(() =>
+    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
+  );
 
   const liquidBalance = useMemo(
     () =>
@@ -209,10 +217,6 @@ export default function WalletsPage() {
       title: string;
       body: string;
     }[] = [];
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
-      .toISOString()
-      .slice(0, 10);
-
     // Low balance wallets
     for (const w of wallets) {
       if (w.balance < 100_000 && w.type !== "investment") {
@@ -860,10 +864,10 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-w-lg sm:rounded-[2rem]">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ví tiền" : "Thêm ví tiền"}
@@ -873,6 +877,7 @@ export default function WalletsPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsFormOpen(false)}
                 className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
               >
@@ -880,85 +885,97 @@ export default function WalletsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormInput
-                  label="Tên ví"
-                  value={form.name}
-                  onChange={(v) => setForm((p) => ({ ...p, name: v }))}
-                  placeholder="VD: Vietcombank, Tiền mặt..."
-                />
-                {/* Balance with ₫ prefix */}
-                <div>
-                  <p className="mb-1.5 text-sm font-black text-slate-700">
-                    Số dư hiện tại
-                  </p>
-                  <CurrencyInput
-                    value={form.balance}
-                    onChange={(raw) => setForm((p) => ({ ...p, balance: raw }))}
-                    placeholder="0"
+            <form
+              onSubmit={handleSubmit}
+              className="min-h-0 flex flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormInput
+                    label="Tên ví"
+                    value={form.name}
+                    onChange={(v) => setForm((p) => ({ ...p, name: v }))}
+                    placeholder="VD: Vietcombank, Tiền mặt..."
                   />
-                </div>
-              </div>
-
-              {/* Wallet type */}
-              <div className="mt-4">
-                <p className="mb-2.5 text-sm font-black text-slate-700">
-                  Loại ví
-                </p>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {walletTypeOptions.map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, type: o.value }))}
-                      className={
-                        "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all " +
-                        (form.type === o.value
-                          ? "border-blue-300 bg-blue-50 shadow-sm"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
+                  {/* Balance with ₫ prefix */}
+                  <div>
+                    <p className="mb-1.5 text-sm font-black text-slate-700">
+                      Số dư hiện tại
+                    </p>
+                    <CurrencyInput
+                      value={form.balance}
+                      onChange={(raw) =>
+                        setForm((p) => ({ ...p, balance: raw }))
                       }
-                    >
-                      <WalletIcon type={o.value} />
-                      <div>
-                        <p
-                          className={
-                            "text-sm font-black " +
-                            (form.type === o.value
-                              ? "text-blue-700"
-                              : "text-slate-900")
-                          }
-                        >
-                          {o.label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-400">
-                          {o.description}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
+
+                {/* Wallet type */}
+                <div className="mt-4">
+                  <p className="mb-2.5 text-sm font-black text-slate-700">
+                    Loại ví
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {walletTypeOptions.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => ({ ...p, type: o.value }))
+                        }
+                        className={
+                          "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all " +
+                          (form.type === o.value
+                            ? "border-blue-300 bg-blue-50 shadow-sm"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
+                        }
+                      >
+                        <WalletIcon type={o.value} />
+                        <div>
+                          <p
+                            className={
+                              "text-sm font-black " +
+                              (form.type === o.value
+                                ? "text-blue-700"
+                                : "text-slate-900")
+                            }
+                          >
+                            {o.label}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {o.description}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <SaveError
+                  message={saveError}
+                  onDismiss={() => setSaveError(null)}
+                />
               </div>
 
               {/* Actions */}
-              <SaveError
-                message={saveError}
-                onDismiss={() => setSaveError(null)}
-              />
-              <div className="mt-5 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
-                >
-                  {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
-                </button>
+              <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-4">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormOpen(false)}
+                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
+                  >
+                    {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
