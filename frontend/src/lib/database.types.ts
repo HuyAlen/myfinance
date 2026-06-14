@@ -57,7 +57,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          type: "income" | "expense" | "transfer";
+          type: "income" | "expense" | "transfer" | "saving" | "investment";
           amount: number;
           categoryId: string;
           walletId: string;
@@ -71,7 +71,7 @@ export type Database = {
         Insert: {
           id: string;
           user_id: string;
-          type: "income" | "expense" | "transfer";
+          type: "income" | "expense" | "transfer" | "saving" | "investment";
           amount: number;
           categoryId: string;
           walletId: string;
@@ -85,7 +85,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
-          type?: "income" | "expense" | "transfer";
+          type?: "income" | "expense" | "transfer" | "saving" | "investment";
           amount?: number;
           categoryId?: string;
           walletId?: string;
