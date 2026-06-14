@@ -13,7 +13,6 @@ import {
   Download,
   Edit3,
   LayoutList,
-  Lightbulb,
   List,
   Plus,
   RefreshCw,
@@ -70,12 +69,17 @@ import { SaveError } from "@/src/components/ui/SaveError";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
-import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
+
+type ToastPayload = {
+  variant?: "success" | "error" | "info" | "warning";
+  message: string;
+};
+
 type TransactionFormMode =
   | "income"
   | "expense"
@@ -173,7 +177,26 @@ export default function TransactionsPage() {
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
-  const { toast } = useToast();
+  const [toastState, setToastState] = useState<ToastPayload | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  function toast({ variant = "info", message }: ToastPayload) {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    setToastState({ variant, message });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastState(null);
+      toastTimerRef.current = null;
+    }, 2600);
+
+    if (variant === "error") {
+      console.warn(message);
+      return;
+    }
+    console.info(message);
+  }
 
   async function reloadData() {
     const [txns, cats, wlts, bdgs] = await Promise.all([
@@ -195,6 +218,14 @@ export default function TransactionsPage() {
 
     return () => {
       window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
     };
   }, []);
   useRealtimeTable(["transactions", "wallets", "categories"], reloadData);
@@ -377,7 +408,11 @@ export default function TransactionsPage() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
@@ -595,9 +630,16 @@ export default function TransactionsPage() {
       : await addTransaction(transaction);
     if (error) {
       setSaveError(error);
+      toast({ variant: "error", message: error });
       return;
     }
     await reloadData();
+    toast({
+      variant: "success",
+      message: form.id
+        ? "Đã cập nhật giao dịch thành công."
+        : "Đã thêm giao dịch thành công.",
+    });
     setIsFormOpen(false);
     setForm(emptyForm);
   }
@@ -662,6 +704,40 @@ export default function TransactionsPage() {
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-5 md:pb-0">
+      {toastState && (
+        <div
+          className={[
+            "fixed right-4 top-4 z-[120] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl backdrop-blur sm:right-6 sm:top-6 sm:max-w-md",
+            toastState.variant === "error"
+              ? "border-rose-200 bg-rose-50/95 text-rose-700 shadow-rose-100"
+              : toastState.variant === "warning"
+                ? "border-amber-200 bg-amber-50/95 text-amber-700 shadow-amber-100"
+                : toastState.variant === "success"
+                  ? "border-emerald-200 bg-emerald-50/95 text-emerald-700 shadow-emerald-100"
+                  : "border-blue-200 bg-blue-50/95 text-blue-700 shadow-blue-100",
+          ].join(" ")}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/70">
+            {toastState.variant === "success"
+              ? "✓"
+              : toastState.variant === "error"
+                ? "!"
+                : "i"}
+          </span>
+          <span className="leading-5">{toastState.message}</span>
+          <button
+            type="button"
+            onClick={() => setToastState(null)}
+            className="-mr-1 rounded-full p-1 text-current/70 transition hover:bg-white/70 hover:text-current"
+            aria-label="Đóng thông báo"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ════════════════════════════════════════════════════════════════════ */}
@@ -2134,13 +2210,12 @@ function IntelCard({
   title,
   accent,
   body,
-  tone,
 }: {
   icon: React.ReactNode;
   title: string;
   accent: "blue" | "emerald" | "rose" | "amber";
   body: string;
-  tone: "good" | "warning" | "danger";
+  tone?: "good" | "warning" | "danger";
 }) {
   const accentMap = {
     blue: "border-l-blue-500 bg-blue-50/60",

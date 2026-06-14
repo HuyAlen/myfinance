@@ -23,7 +23,6 @@ import {
   Bot,
   Brain,
   BriefcaseBusiness,
-  CheckCircle2,
   Download,
   FileText,
   Landmark,
@@ -53,10 +52,9 @@ import {
   getInvestments,
   getTransactions,
   getWallets,
+  initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
-  buildPlanningGroupSpendingData,
-  calculateFinancialStructureSummary,
   formatVND,
   getDebtRatio,
   getGoalScore,
@@ -66,7 +64,6 @@ import {
   getTotalDebt,
   getTotalExpense,
   getTotalIncome,
-  getCategoryPlanningGroup,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
 import { computeRiskScore } from "@/src/services/finance/analytics/riskAnalytics";
@@ -160,24 +157,6 @@ function periodLabel(
   }
 }
 
-function filterOperatingExpenseTransactions(
-  txns: Transaction[],
-  categories: Category[],
-) {
-  const categoryById = new Map(
-    categories.map((category) => [category.id, category]),
-  );
-
-  return txns.filter((transaction) => {
-    if (transaction.type !== "expense") return false;
-
-    const group = getCategoryPlanningGroup(
-      categoryById.get(transaction.categoryId),
-    );
-    return group === "fixed" || group === "variable";
-  });
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -204,6 +183,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function load() {
+      await initFinanceDemoData();
       const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
         getWallets(),
         getInvestments(),
@@ -239,23 +219,12 @@ export default function ReportsPage() {
     [transactions, periodMode, year, month, quarter, customStart, customEnd],
   );
 
-  // ── Core summary with planningGroup sync (V12.2) ────────────────────────
+  // ── Core summary (preserved) ──────────────────────────────────────────────
   const summary = useMemo(() => {
     const income = getTotalIncome(filtered);
-    const totalOutflow = getTotalExpense(filtered);
-    const financialStructure = calculateFinancialStructureSummary({
-      transactions: filtered,
-      categories,
-    });
-    const operatingExpense =
-      financialStructure.fixedCost + financialStructure.variableCost;
-    const savingAllocation = financialStructure.savingAmount;
-    const investmentAllocation = financialStructure.investmentAmount;
-    const netCashFlow = income - totalOutflow;
-    const planningSurplus = income - operatingExpense;
-    const spendingRate =
-      income > 0 ? Math.round((operatingExpense / income) * 100) : 0;
-    const savingRate = getSavingRate(income, totalOutflow);
+    const expense = getTotalExpense(filtered);
+    const saving = income - expense;
+    const savingRate = getSavingRate(income, expense);
     const investmentAssets = investments.reduce(
       (s, i) => s + i.currentValue,
       0,
@@ -266,20 +235,11 @@ export default function ReportsPage() {
     const netWorth = totalAssets - totalDebt;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
     const goalScore = getGoalScore(goals);
-
     return {
       income,
-      expense: operatingExpense,
-      totalOutflow,
-      operatingExpense,
-      savingAllocation,
-      investmentAllocation,
-      saving: netCashFlow,
-      netCashFlow,
-      planningSurplus,
+      expense,
+      saving,
       savingRate,
-      spendingRate,
-      financialStructure,
       totalAssets,
       totalDebt,
       netWorth,
@@ -287,7 +247,7 @@ export default function ReportsPage() {
       debtRatio,
       goalScore,
     };
-  }, [filtered, categories, wallets, investments, debts, goals]);
+  }, [filtered, wallets, investments, debts, goals]);
 
   // ── Monthly breakdown (preserved) ────────────────────────────────────────
   const yearTxns = useMemo(
@@ -301,49 +261,23 @@ export default function ReportsPage() {
         const m = String(i + 1).padStart(2, "0");
         const mx = yearTxns.filter((t) => t.date.startsWith(year + "-" + m));
         const inc = getTotalIncome(mx);
-        const structure = calculateFinancialStructureSummary({
-          transactions: mx,
-          categories,
-        });
-        const operatingExp = structure.fixedCost + structure.variableCost;
-        const totalOutflow = getTotalExpense(mx);
-
+        const exp = getTotalExpense(mx);
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
-          chi: operatingExp / 1e6,
-          tongRa: totalOutflow / 1e6,
-          tietKiem: (inc - totalOutflow) / 1e6,
+          chi: exp / 1e6,
+          tietKiem: (inc - exp) / 1e6,
           income: inc,
-          expense: operatingExp,
-          totalOutflow,
-          savingAllocation: structure.savingAmount,
-          investmentAllocation: structure.investmentAmount,
+          expense: exp,
         };
       }),
-    [yearTxns, year, categories],
+    [yearTxns, year],
   );
 
-  // ── Running net-worth (preserved) ────────────────────────────────────────
-  const cashFlowRows = useMemo(() => {
-    let running =
-      summary.netWorth -
-      monthly.reduce((s, m) => s + m.income - m.totalOutflow, 0);
-    return monthly.map((m) => {
-      running += m.income - m.totalOutflow;
-      return { ...m, balance: running };
-    });
-  }, [monthly, summary.netWorth]);
-
-  // ── Spending breakdown with planningGroup sync (V12.2) ────────────────
-  const operatingExpenseTransactions = useMemo(
-    () => filterOperatingExpenseTransactions(filtered, categories),
-    [filtered, categories],
-  );
-
+  // ── Spending breakdown (preserved) ────────────────────────────────────────
   const spendingByCategory = useMemo(
-    () => getSpendingByCategory(operatingExpenseTransactions, categories),
-    [operatingExpenseTransactions, categories],
+    () => getSpendingByCategory(filtered, categories),
+    [filtered, categories],
   );
   const spendingPieData = useMemo(
     () =>
@@ -352,19 +286,6 @@ export default function ReportsPage() {
         color: COLORS[i % COLORS.length],
       })),
     [spendingByCategory],
-  );
-
-  const planningGroupBreakdown = useMemo(
-    () =>
-      buildPlanningGroupSpendingData({
-        transactions: filtered,
-        categories,
-        income: summary.income,
-      }).map((item, i) => ({
-        ...item,
-        color: COLORS[i % COLORS.length],
-      })),
-    [filtered, categories, summary.income],
   );
 
   // ── Comparisons: MoM / QoQ / YoY (preserved) ─────────────────────────────
@@ -498,279 +419,15 @@ export default function ReportsPage() {
       .filter((d) => d.value > 0);
   }, [investments]);
 
-  // ── Personal CFO Pro analytics ─────────────────────────────────────────────
-  const hasReportData = useMemo(
-    () =>
-      monthly.some(
-        (item) =>
-          item.income > 0 ||
-          item.totalOutflow > 0 ||
-          item.savingAllocation > 0 ||
-          item.investmentAllocation > 0,
-      ),
-    [monthly],
-  );
-
-  const netWorthTimeline = useMemo(
-    () =>
-      cashFlowRows.map((row) => {
-        const netWorth = row.balance / 1e6;
-        const cashFlow = (row.income - row.totalOutflow) / 1e6;
-
-        return {
-          month: row.month,
-          netWorth:
-            Math.abs(netWorth) < 0.05 ? 0 : Math.round(netWorth * 100) / 100,
-          cashFlow:
-            Math.abs(cashFlow) < 0.05 ? 0 : Math.round(cashFlow * 100) / 100,
-        };
-      }),
-    [cashFlowRows],
-  );
-
-  const cashFlowWaterfall = useMemo(
-    () => [
-      { label: "Thu nhập", value: summary.income, tone: "income" as const },
-      {
-        label: "Chi tiêu thực",
-        value: -summary.operatingExpense,
-        tone: "expense" as const,
-      },
-      {
-        label: "Tiết kiệm phân bổ",
-        value: -summary.savingAllocation,
-        tone: "saving" as const,
-      },
-      {
-        label: "Đầu tư phân bổ",
-        value: -summary.investmentAllocation,
-        tone: "investment" as const,
-      },
-      { label: "Còn lại", value: summary.netCashFlow, tone: "result" as const },
-    ],
-    [
-      summary.income,
-      summary.operatingExpense,
-      summary.savingAllocation,
-      summary.investmentAllocation,
-      summary.netCashFlow,
-    ],
-  );
-
-  const fireProgress = useMemo(() => {
-    const annualExpense = Math.max(summary.operatingExpense * 12, 0);
-    const fireTarget = annualExpense > 0 ? annualExpense * 25 : 0;
-    const currentNetWorth = Math.max(summary.netWorth, 0);
-    const rawProgress =
-      fireTarget > 0 ? (currentNetWorth / fireTarget) * 100 : 0;
-    const progress =
-      fireTarget > 0
-        ? Math.min(
-            100,
-            Number(
-              rawProgress.toFixed(rawProgress > 0 && rawProgress < 1 ? 2 : 1),
-            ),
-          )
-        : 0;
-    const monthlyInvestable = Math.max(summary.netCashFlow, 0);
-    const remaining = Math.max(fireTarget - currentNetWorth, 0);
-    const monthsLeft =
-      monthlyInvestable > 0 ? Math.ceil(remaining / monthlyInvestable) : null;
-
-    return {
-      annualExpense,
-      fireTarget,
-      currentNetWorth,
-      progress,
-      remaining,
-      monthsLeft,
-    };
-  }, [summary.operatingExpense, summary.netCashFlow, summary.netWorth]);
-
-  const budgetPerformance = useMemo(() => {
-    const categoryById = new Map(
-      categories.map((category) => [category.id, category]),
-    );
-    const actualByCategory = new Map<string, number>();
-
-    operatingExpenseTransactions.forEach((transaction) => {
-      actualByCategory.set(
-        transaction.categoryId,
-        (actualByCategory.get(transaction.categoryId) ?? 0) +
-          transaction.amount,
-      );
-    });
-
-    return budgets
-      .map((budget) => {
-        const rawBudget = budget as unknown as Record<string, unknown>;
-        const categoryId = String(
-          rawBudget.categoryId ??
-            rawBudget.category_id ??
-            rawBudget.category ??
-            "",
-        );
-        const limit = Number(
-          rawBudget.limit ??
-            rawBudget.limitAmount ??
-            rawBudget.amount ??
-            rawBudget.monthlyLimit ??
-            rawBudget.budgetLimit ??
-            0,
-        );
-        const category = categoryById.get(categoryId);
-        const actual = actualByCategory.get(categoryId) ?? 0;
-        const percent = limit > 0 ? Math.round((actual / limit) * 100) : 0;
-
-        return {
-          id: String(rawBudget.id ?? categoryId),
-          name: category?.name ?? String(rawBudget.name ?? "Ngân sách"),
-          limit,
-          actual,
-          remaining: limit - actual,
-          percent,
-          status:
-            percent >= 100 ? "danger" : percent >= 85 ? "warning" : "good",
-        };
-      })
-      .filter((item) => item.limit > 0)
-      .sort((a, b) => b.percent - a.percent)
-      .slice(0, 6);
-  }, [budgets, categories, operatingExpenseTransactions]);
-
-  const cashFlowCalendar = useMemo(() => {
-    const categoryById = new Map(
-      categories.map((category) => [category.id, category.name]),
-    );
-    const walletById = new Map(
-      wallets.map((wallet) => [wallet.id, wallet.name]),
-    );
-
-    return filtered
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 10)
-      .map((transaction) => ({
-        id: transaction.id,
-        date: transaction.date,
-        title:
-          categoryById.get(transaction.categoryId) ??
-          transaction.note ??
-          (transaction.type === "income" ? "Thu nhập" : "Chi tiêu"),
-        wallet: walletById.get(transaction.walletId) ?? "Ví tiền",
-        amount: transaction.amount,
-        type: transaction.type,
-      }));
-  }, [filtered, categories, wallets]);
-
-  const cfoActionPlan = useMemo(() => {
-    const actions: {
-      title: string;
-      description: string;
-      metric: string;
-      tone: "good" | "warning" | "danger";
-    }[] = [];
-
-    if (summary.income <= 0) {
-      actions.push({
-        title: "Chưa có dữ liệu thu nhập",
-        description:
-          "Thêm lương, thưởng hoặc nguồn thu để AI CFO đánh giá dòng tiền chính xác hơn.",
-        metric: "Thiếu dữ liệu",
-        tone: "warning",
-      });
-    }
-
-    if (summary.savingRate < 10) {
-      actions.push({
-        title: "Tăng tỷ lệ dòng tiền dương",
-        description:
-          "Ưu tiên giảm chi phí biến đổi hoặc đặt tự động chuyển tiền sang quỹ tiết kiệm ngay khi có thu nhập.",
-        metric: summary.savingRate + "%",
-        tone: "danger",
-      });
-    } else if (summary.savingRate >= 20) {
-      actions.push({
-        title: "Dòng tiền đang khoẻ",
-        description:
-          "Bạn đang duy trì tỷ lệ dòng tiền tốt. Có thể phân bổ thêm vào đầu tư hoặc quỹ mục tiêu dài hạn.",
-        metric: summary.savingRate + "%",
-        tone: "good",
-      });
-    }
-
-    if (smartBudget.violations.length > 0) {
-      actions.push({
-        title: "Kiểm soát danh mục vượt ngân sách",
-        description:
-          "Tập trung vào " +
-          smartBudget.violations
-            .slice(0, 2)
-            .map((item) => item.categoryName)
-            .join(", ") +
-          " để giảm áp lực dòng tiền tháng này.",
-        metric: smartBudget.violations.length + " mục",
-        tone: "warning",
-      });
-    }
-
-    if (summary.debtRatio > 40) {
-      actions.push({
-        title: "Giảm tỷ lệ nợ",
-        description:
-          "Tỷ lệ nợ cao có thể làm điểm sức khoẻ tài chính giảm. Ưu tiên trả khoản lãi cao trước.",
-        metric: summary.debtRatio + "%",
-        tone: "danger",
-      });
-    }
-
-    if (investments.length === 0 && summary.investmentAllocation > 0) {
-      actions.push({
-        title: "Dòng tiền đầu tư chưa gắn tài sản",
-        description:
-          "Bạn đã có khoản phân bổ đầu tư trong giao dịch. Hãy thêm tài sản đầu tư để theo dõi giá trị hiện tại và ROI.",
-        metric: formatVND(summary.investmentAllocation),
-        tone: "warning",
-      });
-    } else if (summary.investmentAssets <= 0) {
-      actions.push({
-        title: "Chưa ghi nhận tài sản đầu tư",
-        description:
-          "Sau khi có quỹ khẩn cấp, bạn có thể theo dõi cổ phiếu, quỹ, vàng hoặc crypto tại mục Đầu tư.",
-        metric: "0 đ",
-        tone: "warning",
-      });
-    }
-
-    return actions.slice(0, 4);
-  }, [
-    summary.income,
-    summary.savingRate,
-    summary.debtRatio,
-    summary.investmentAssets,
-    summary.investmentAllocation,
-    investments.length,
-    smartBudget.violations,
-  ]);
-
   // ── Export helpers (preserved) ────────────────────────────────────────────
   function exportCSV() {
     const rows = [
-      [
-        "Tháng",
-        "Thu nhập (đ)",
-        "Chi tiêu thực (đ)",
-        "Tiết kiệm/Đầu tư (đ)",
-        "Tổng tiền ra (đ)",
-        "Dòng tiền ròng (đ)",
-      ],
+      ["Tháng", "Thu nhập (đ)", "Chi tiêu (đ)", "Tiết kiệm (đ)"],
       ...monthly.map((m) => [
         m.month,
-        String(Math.round(m.income)),
-        String(Math.round(m.expense)),
-        String(Math.round(m.savingAllocation + m.investmentAllocation)),
-        String(Math.round(m.totalOutflow)),
-        String(Math.round(m.income - m.totalOutflow)),
+        String(Math.round(m.thu * 1e6)),
+        String(Math.round(m.chi * 1e6)),
+        String(Math.round(m.tietKiem * 1e6)),
       ]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -832,8 +489,8 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Bright Hero + 5 KPI cards
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
@@ -896,12 +553,7 @@ export default function ReportsPage() {
               label="Tổng đầu tư"
               value={formatVND(summary.investmentAssets)}
               sub={
-                totalInvested > 0
-                  ? "ROI " +
-                    (investmentROI >= 0 ? "+" : "") +
-                    investmentROI +
-                    "%"
-                  : "Chưa có dữ liệu đầu tư"
+                "ROI " + (investmentROI >= 0 ? "+" : "") + investmentROI + "%"
               }
               gradient="from-cyan-500 to-cyan-600"
               iconBg="bg-cyan-400/30"
@@ -910,7 +562,7 @@ export default function ReportsPage() {
             {/* Health Score card */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
                 healthGrade.gradient
               }
             >
@@ -1051,21 +703,21 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi tiêu thực"
+              label="Chi tiêu"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
-              label="Dòng tiền ròng"
+              label="Tiết kiệm"
               value={formatVND(summary.saving)}
               color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Tỷ lệ dòng tiền"
+              label="Tỷ lệ tiết kiệm"
               value={summary.savingRate + "%"}
               color={
                 summary.savingRate >= 20
@@ -1077,66 +729,6 @@ export default function ReportsPage() {
               bg="bg-slate-50"
               border="border-slate-200"
             />
-          </section>
-
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatMini
-              label="Tiết kiệm phân bổ"
-              value={formatVND(summary.savingAllocation)}
-              color="text-blue-600"
-              bg="bg-blue-50"
-              border="border-blue-100"
-            />
-            <StatMini
-              label="Đầu tư phân bổ"
-              value={formatVND(summary.investmentAllocation)}
-              color="text-violet-600"
-              bg="bg-violet-50"
-              border="border-violet-100"
-            />
-            <StatMini
-              label="Tổng tiền ra"
-              value={formatVND(summary.totalOutflow)}
-              color="text-slate-700"
-              bg="bg-slate-50"
-              border="border-slate-200"
-            />
-            <StatMini
-              label="Dư sau chi thực"
-              value={formatVND(summary.planningSurplus)}
-              color={
-                summary.planningSurplus >= 0
-                  ? "text-emerald-600"
-                  : "text-rose-500"
-              }
-              bg="bg-emerald-50"
-              border="border-emerald-100"
-            />
-          </section>
-
-          <CfoActionCenter actions={cfoActionPlan} />
-
-          <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-            <CashFlowWaterfall
-              data={cashFlowWaterfall}
-              income={summary.income}
-            />
-            <FireProgressPanel data={fireProgress} />
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <NetWorthTimeline data={netWorthTimeline} hasData={hasReportData} />
-            <FinancialHealthExplain
-              score={healthV2.total}
-              grade={healthV2.grade}
-              label={healthV2.label}
-              factors={healthV2.factors.slice(0, 4)}
-            />
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-            <BudgetPerformancePanel items={budgetPerformance} />
-            <CashFlowCalendar items={cashFlowCalendar} />
           </section>
 
           {/* Trend sparklines */}
@@ -1155,7 +747,7 @@ export default function ReportsPage() {
                 positive
               />
               <TrendCard
-                title="Chi tiêu thực"
+                title="Chi tiêu"
                 color="#f43f5e"
                 data={monthly.map((m) => ({ v: m.chi }))}
                 unit="M"
@@ -1195,7 +787,7 @@ export default function ReportsPage() {
           </section>
 
           {/* MoM / QoQ / YoY comparisons */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<BarChart3 size={20} />}
               title="So sánh kỳ"
@@ -1234,14 +826,14 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi tiêu thực"
+              label="Tổng chi tiêu"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
-              label="Dòng tiền ròng"
+              label="Lợi nhuận ròng"
               value={formatVND(summary.saving)}
               color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
               bg="bg-blue-50"
@@ -1250,7 +842,7 @@ export default function ReportsPage() {
           </section>
 
           {/* 12-month area chart */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<TrendingUp size={20} />}
               title="Xu hướng thu nhập"
@@ -1325,7 +917,7 @@ export default function ReportsPage() {
           </section>
 
           {/* Income Statement table */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<FileText size={20} />}
               title="Kết quả kinh doanh"
@@ -1358,7 +950,7 @@ export default function ReportsPage() {
                   </tr>
                   <tr className="bg-rose-50/40">
                     <td className="py-3 font-black text-slate-900">
-                      Chi tiêu thực
+                      Tổng chi tiêu
                     </td>
                     <td className="py-3 text-right font-black text-rose-500">
                       {formatVND(summary.expense)}
@@ -1371,7 +963,7 @@ export default function ReportsPage() {
                     </td>
                   </tr>
                   <tr className="font-black">
-                    <td className="py-3 text-slate-900">Dòng tiền ròng</td>
+                    <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
                     <td
                       className={
                         "py-3 text-right " +
@@ -1428,11 +1020,11 @@ export default function ReportsPage() {
       {reportTab === "expense" && (
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           {/* Pie chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<PieChartIcon size={20} />}
-              title="Chi tiêu thực theo danh mục"
-              subtitle="Không bao gồm khoản tiết kiệm và đầu tư"
+              title="Chi tiêu theo danh mục"
+              subtitle="Tỷ trọng từng nhóm"
             />
             <div className="relative mx-auto mt-5 h-56 w-56">
               <PieChart width={224} height={224}>
@@ -1448,17 +1040,14 @@ export default function ReportsPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v) => [
-                    formatVND(Number(v ?? 0)),
-                    "Chi tiêu thực",
-                  ]}
+                  formatter={(v) => [formatVND(Number(v ?? 0)), "Chi tiêu"]}
                 />
               </PieChart>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-black text-rose-500">
                   {Math.round(summary.expense / 1e6)}M
                 </span>
-                <span className="text-xs text-slate-500">Chi thực</span>
+                <span className="text-xs text-slate-500">Tổng chi</span>
               </div>
             </div>
             <div className="mt-5 space-y-3">
@@ -1496,43 +1085,8 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <SectionHeader
-              icon={<BriefcaseBusiness size={20} />}
-              title="Cấu trúc dòng tiền"
-              subtitle="Tách chi tiêu thực, tiết kiệm và đầu tư"
-            />
-            <div className="mt-5 space-y-3">
-              {planningGroupBreakdown.map((item) => (
-                <div key={item.group}>
-                  <div className="mb-1.5 flex justify-between text-sm">
-                    <span className="flex items-center gap-2 font-bold text-slate-700">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ background: item.color }}
-                      />
-                      {item.label}
-                    </span>
-                    <span className="text-slate-500">
-                      {formatVND(item.value)} · {item.percentOfIncome}% thu nhập
-                    </span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-slate-100">
-                    <div
-                      className="h-2.5 rounded-full transition-all"
-                      style={{
-                        width: Math.min(item.percentOfIncome, 100) + "%",
-                        backgroundColor: item.color,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Monthly comparison bar chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<BarChart3 size={20} />}
               title="Thu chi theo tháng"
@@ -1604,7 +1158,7 @@ export default function ReportsPage() {
       {reportTab === "cashflow" && (
         <>
           {/* Cash flow statement tabs */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<FileText size={20} />}
               title="Báo cáo tài chính"
@@ -1765,7 +1319,7 @@ export default function ReportsPage() {
                     </tr>
                     <tr className="bg-rose-50/40">
                       <td className="py-3 font-black text-slate-900">
-                        Chi tiêu thực
+                        Tổng chi tiêu
                       </td>
                       <td className="py-3 text-right font-black text-rose-500">
                         {formatVND(summary.expense)}
@@ -1778,7 +1332,7 @@ export default function ReportsPage() {
                       </td>
                     </tr>
                     <tr className="font-black">
-                      <td className="py-3 text-slate-900">Dòng tiền ròng</td>
+                      <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
                       <td
                         className={
                           "py-3 text-right " +
@@ -1881,7 +1435,7 @@ export default function ReportsPage() {
                         {formatVND(summary.totalDebt)}
                       </span>
                     </div>
-                    <div className="mt-4 flex justify-between rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-4 text-sm font-black text-white">
+                    <div className="mt-4 flex justify-between rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 px-4 py-4 text-sm font-black text-white">
                       <span>Tài sản ròng</span>
                       <span>{formatVND(summary.netWorth)}</span>
                     </div>
@@ -1934,7 +1488,7 @@ export default function ReportsPage() {
 
           <section className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
             {/* Per-investment cards */}
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <SectionHeader
                 icon={<BriefcaseBusiness size={20} />}
                 title="Danh mục đầu tư"
@@ -2026,7 +1580,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Allocation pie */}
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-base font-black text-slate-900">
                 Phân bổ loại tài sản
               </h2>
@@ -2088,7 +1642,7 @@ export default function ReportsPage() {
           TAB: Mục Tiêu
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "goals" && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <SectionHeader
             icon={<Target size={20} />}
             title="Tiến độ mục tiêu"
@@ -2169,9 +1723,9 @@ export default function ReportsPage() {
       {reportTab === "ai" && (
         <>
           {/* 4 engine insight blocks */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-5">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-500 text-white shadow-lg shadow-violet-100">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-violet-600 to-indigo-500 text-white shadow-lg shadow-violet-100">
                 <Bot size={20} />
               </div>
               <div>
@@ -2277,7 +1831,7 @@ export default function ReportsPage() {
           </section>
 
           {/* Health score factors */}
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
               icon={<Zap size={20} />}
               title="Chi tiết điểm sức khoẻ tài chính"
@@ -2315,7 +1869,7 @@ export default function ReportsPage() {
 
           {/* Budget violations (conditional) */}
           {smartBudget.violations.length > 0 && (
-            <section className="rounded-[2rem] border border-rose-100 bg-rose-50/50 p-6 shadow-sm">
+            <section className="rounded-4xl border border-rose-100 bg-rose-50/50 p-6 shadow-sm">
               <SectionHeader
                 icon={<AlertTriangle size={20} />}
                 title={
@@ -2352,7 +1906,7 @@ export default function ReportsPage() {
 
           {/* Risk recommendations */}
           {riskData.recommendations.length > 0 && (
-            <section className="rounded-[2rem] border border-amber-100 bg-amber-50/50 p-6 shadow-sm">
+            <section className="rounded-4xl border border-amber-100 bg-amber-50/50 p-6 shadow-sm">
               <SectionHeader
                 icon={<ShieldCheck size={20} />}
                 title="Khuyến nghị quản lý rủi ro"
@@ -2383,62 +1937,38 @@ export default function ReportsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          Personal CFO Pro Export Center
+          Export Center (always visible)
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-sm print:hidden">
-        <div className="bg-gradient-to-br from-blue-600 via-cyan-500 to-sky-400 p-6 text-white">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-white/15 text-white shadow-sm">
-                <Download size={18} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-cyan-50">
-                  Personal CFO Pro Export
-                </p>
-                <h2 className="mt-1 text-xl font-black">
-                  Xuất báo cáo tài chính chuyên sâu
-                </h2>
-                <p className="mt-1 text-sm text-white/70">
-                  Bao gồm KPI, dòng tiền, sức khoẻ tài chính, ngân sách, mục
-                  tiêu và AI Insights cho kỳ {label}.
-                </p>
-              </div>
+      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-slate-600 to-slate-700 text-white shadow-sm">
+              <Download size={17} />
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={exportCSV}
-                className="flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-2.5 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-white/15"
-              >
-                <Download size={15} />
-                Xuất CSV
-              </button>
-              <button
-                onClick={exportPDF}
-                className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-lg shadow-black/20 hover:bg-blue-50"
-              >
-                <FileText size={15} />
-                Xuất PDF
-              </button>
+            <div>
+              <h2 className="text-base font-black text-slate-900">
+                Export Center
+              </h2>
+              <p className="text-xs text-slate-500">
+                Xuất báo cáo tài chính cho kỳ {label}
+              </p>
             </div>
           </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-            {[
-              "KPI Summary",
-              "Net Worth Timeline",
-              "Cash Flow",
-              "Budget Performance",
-              "Goal Progress",
-              "AI CFO Insights",
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2 text-xs font-bold text-white/90 ring-1 ring-white/10"
-              >
-                <CheckCircle2 size={14} className="text-cyan-50" />
-                {item}
-              </div>
-            ))}
+          <div className="flex gap-3">
+            <button
+              onClick={exportCSV}
+              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+            >
+              <Download size={15} />
+              Xuất CSV
+            </button>
+            <button
+              onClick={exportPDF}
+              className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 hover:bg-blue-700"
+            >
+              <FileText size={15} />
+              Xuất PDF
+            </button>
           </div>
         </div>
       </section>
@@ -2546,7 +2076,6 @@ function TrendCard({
     prev !== 0 ? Math.round(((last - prev) / prev) * 1000) / 10 : null;
   const up = delta !== null && delta > 0;
   const chartData = data.map((d, i) => ({ i, v: d.v }));
-  const hasSignal = chartData.some((item) => Math.abs(item.v) > 0);
   return (
     <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -2566,10 +2095,11 @@ function TrendCard({
         )}
       </div>
       <p className="mt-3 text-2xl font-black" style={{ color }}>
-        {hasSignal ? last.toFixed(1) + unit : "—"}
+        {last.toFixed(1)}
+        {unit}
       </p>
       <div className="mt-3 h-16">
-        {chartData.length > 1 && hasSignal ? (
+        {chartData.length > 1 ? (
           <ResponsiveContainer width="100%" height={64} minWidth={0}>
             <LineChart
               data={chartData}
@@ -2585,8 +2115,8 @@ function TrendCard({
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-center text-xs font-bold text-slate-400">
-            Chưa có dữ liệu
+          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+            Không đủ dữ liệu
           </div>
         )}
       </div>
@@ -2657,487 +2187,6 @@ function DeltaChip({
         {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
         {up ? "+" : ""}
         {delta}%
-      </p>
-    </div>
-  );
-}
-
-function CfoActionCenter({
-  actions,
-}: {
-  actions: {
-    title: string;
-    description: string;
-    metric: string;
-    tone: "good" | "warning" | "danger";
-  }[];
-}) {
-  const palette = {
-    good: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    warning: "border-amber-100 bg-amber-50 text-amber-700",
-    danger: "border-rose-100 bg-rose-50 text-rose-700",
-  };
-
-  return (
-    <section className="overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-sm">
-      <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 p-6 text-white">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-cyan-100">
-              Personal CFO Pro
-            </p>
-            <h2 className="mt-1 text-2xl font-black">
-              Kế hoạch hành động ưu tiên
-            </h2>
-            <p className="mt-1 text-sm text-white/75">
-              Các việc nên làm tiếp theo dựa trên dòng tiền, ngân sách, nợ và
-              mục tiêu.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-black ring-1 ring-white/20">
-            {actions.length} đề xuất
-          </div>
-        </div>
-      </div>
-      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
-        {actions.length === 0 ? (
-          <div className="col-span-full rounded-2xl bg-slate-50 p-5 text-center text-sm font-bold text-slate-400">
-            Chưa đủ dữ liệu để tạo kế hoạch CFO. Hãy thêm giao dịch, ngân sách
-            và mục tiêu.
-          </div>
-        ) : (
-          actions.map((action) => (
-            <div
-              key={action.title}
-              className={"rounded-2xl border p-4 " + palette[action.tone]}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-black">{action.title}</p>
-                <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-xs font-black">
-                  {action.metric}
-                </span>
-              </div>
-              <p className="mt-2 text-xs leading-5 opacity-80">
-                {action.description}
-              </p>
-            </div>
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-function CashFlowWaterfall({
-  data,
-  income,
-}: {
-  data: {
-    label: string;
-    value: number;
-    tone: "income" | "expense" | "saving" | "investment" | "result";
-  }[];
-  income: number;
-}) {
-  const maxBase = Math.max(
-    income,
-    ...data.map((item) => Math.abs(item.value)),
-    1,
-  );
-  const palette = {
-    income: "bg-emerald-500 text-emerald-700",
-    expense: "bg-rose-500 text-rose-700",
-    saving: "bg-blue-500 text-blue-700",
-    investment: "bg-violet-500 text-violet-700",
-    result: "bg-slate-800 text-slate-800",
-  };
-
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<TrendingUp size={20} />}
-        title="Cash Flow Waterfall"
-        subtitle="Tiền vào, tiền ra và số còn lại trong kỳ"
-      />
-      <div className="mt-5 space-y-4">
-        {data.map((item) => {
-          const width = Math.max(
-            6,
-            Math.round((Math.abs(item.value) / maxBase) * 100),
-          );
-          const isResult = item.tone === "result";
-          const isPositive = item.value >= 0;
-
-          return (
-            <div key={item.label}>
-              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                <span className="font-black text-slate-700">{item.label}</span>
-                <span
-                  className={
-                    (isPositive ? "text-emerald-600" : "text-rose-500") +
-                    " font-black"
-                  }
-                >
-                  {isPositive && !isResult ? "+" : ""}
-                  {formatVND(item.value)}
-                </span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className={
-                    "h-3 rounded-full " + palette[item.tone].split(" ")[0]
-                  }
-                  style={{ width: width + "%" }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function FireProgressPanel({
-  data,
-}: {
-  data: {
-    annualExpense: number;
-    fireTarget: number;
-    currentNetWorth: number;
-    progress: number;
-    remaining: number;
-    monthsLeft: number | null;
-  };
-}) {
-  const yearsLeft =
-    data.monthsLeft === null ? null : Math.ceil(data.monthsLeft / 12);
-  const yearsLeftLabel =
-    yearsLeft === null
-      ? "Cần dòng tiền dương"
-      : yearsLeft > 50
-        ? "Trên 50 năm"
-        : yearsLeft + " năm";
-  const progressLabel =
-    data.progress > 0 && data.progress < 1
-      ? `${data.progress.toFixed(2)}%`
-      : `${data.progress.toFixed(1)}%`;
-  const progressWidth = Math.max(0.8, Math.min(100, data.progress));
-
-  return (
-    <section className="rounded-[2rem] border border-blue-100 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<Zap size={20} />}
-        title="FIRE Progress"
-        subtitle="Độc lập tài chính theo quy tắc 25x chi tiêu năm"
-      />
-      <div className="mt-5 rounded-3xl bg-gradient-to-r from-blue-600 via-cyan-500 to-sky-400 p-5 text-white shadow-lg shadow-cyan-500/20">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold text-white/75">Tiến độ FIRE</p>
-            <p className="mt-1 text-4xl font-black">{progressLabel}</p>
-          </div>
-          <div className="text-right text-xs text-white/80">
-            <p>Mục tiêu</p>
-            <p className="text-sm font-black text-white">
-              {data.fireTarget > 0
-                ? formatVND(data.fireTarget)
-                : "Chưa đủ dữ liệu"}
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/30">
-          <div
-            className="h-2 rounded-full bg-white shadow-sm"
-            style={{ width: progressWidth + "%" }}
-          />
-        </div>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-xs lg:grid-cols-4">
-        <div className="rounded-2xl bg-blue-50 p-4">
-          <p className="font-bold text-blue-500">Tài sản hiện tại</p>
-          <p className="mt-1 font-black text-slate-900">
-            {formatVND(data.currentNetWorth)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-cyan-50 p-4">
-          <p className="font-bold text-cyan-600">Còn thiếu</p>
-          <p className="mt-1 font-black text-slate-900">
-            {formatVND(data.remaining)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-sky-50 p-4">
-          <p className="font-bold text-sky-600">Chi tiêu năm</p>
-          <p className="mt-1 font-black text-slate-900">
-            {formatVND(data.annualExpense)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-indigo-50 p-4">
-          <p className="font-bold text-indigo-500">Dự kiến</p>
-          <p className="mt-1 font-black text-slate-900">{yearsLeftLabel}</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function NetWorthTimeline({
-  data,
-  hasData,
-}: {
-  data: { month: string; netWorth: number; cashFlow: number }[];
-  hasData: boolean;
-}) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<Landmark size={20} />}
-        title="Net Worth Timeline"
-        subtitle="Tài sản ròng và dòng tiền theo tháng"
-      />
-      <div className="mt-5 h-56">
-        {hasData ? (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <AreaChart
-              data={data}
-              margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-            >
-              <defs>
-                <linearGradient
-                  id="netWorthProGrad"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#e2e8f0"
-              />
-              <XAxis
-                dataKey="month"
-                axisLine={false}
-                tickLine={false}
-                fontSize={11}
-              />
-              <YAxis axisLine={false} tickLine={false} fontSize={11} />
-              <Tooltip />
-              <Area
-                type="monotone"
-                dataKey="netWorth"
-                name="Tài sản ròng (M)"
-                stroke="#2563eb"
-                strokeWidth={2.5}
-                fill="url(#netWorthProGrad)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyChartState
-            title="Chưa có Timeline"
-            description="Thêm giao dịch và số dư ví để theo dõi tài sản ròng theo tháng."
-          />
-        )}
-      </div>
-    </section>
-  );
-}
-
-function FinancialHealthExplain({
-  score,
-  grade,
-  label,
-  factors,
-}: {
-  score: number;
-  grade: string;
-  label: string;
-  factors: { label: string; score: number; weight: number; note: string }[];
-}) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<ShieldCheck size={20} />}
-        title="Vì sao điểm này?"
-        subtitle={grade + " · " + label + " · " + score + "/100"}
-      />
-      <div className="mt-5 space-y-3">
-        {factors.map((factor) => (
-          <div key={factor.label} className="rounded-2xl bg-slate-50 p-4">
-            <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-black text-slate-700">{factor.label}</span>
-              <span className="font-black text-slate-900">
-                {factor.score * factor.weight}/{10 * factor.weight}
-              </span>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div
-                className={
-                  "h-2 rounded-full " +
-                  (factor.score >= 7
-                    ? "bg-emerald-500"
-                    : factor.score >= 4
-                      ? "bg-amber-400"
-                      : "bg-rose-500")
-                }
-                style={{ width: (factor.score / 10) * 100 + "%" }}
-              />
-            </div>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              {factor.note}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function BudgetPerformancePanel({
-  items,
-}: {
-  items: {
-    id: string;
-    name: string;
-    limit: number;
-    actual: number;
-    remaining: number;
-    percent: number;
-    status: string;
-  }[];
-}) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<PieChartIcon size={20} />}
-        title="Budget Performance"
-        subtitle="Theo dõi danh mục có nguy cơ vượt ngân sách"
-      />
-      <div className="mt-5 space-y-3">
-        {items.length === 0 ? (
-          <EmptyChartState
-            title="Chưa có ngân sách"
-            description="Tạo ngân sách để xem tỷ lệ sử dụng và cảnh báo vượt hạn mức."
-          />
-        ) : (
-          items.map((item) => (
-            <div key={item.id} className="rounded-2xl bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-black text-slate-800">{item.name}</p>
-                <span
-                  className={
-                    "rounded-full px-2 py-0.5 text-xs font-black " +
-                    (item.status === "danger"
-                      ? "bg-rose-100 text-rose-700"
-                      : item.status === "warning"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-emerald-100 text-emerald-700")
-                  }
-                >
-                  {item.percent}%
-                </span>
-              </div>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white">
-                <div
-                  className={
-                    "h-2.5 rounded-full " +
-                    (item.status === "danger"
-                      ? "bg-rose-500"
-                      : item.status === "warning"
-                        ? "bg-amber-400"
-                        : "bg-emerald-500")
-                  }
-                  style={{ width: Math.min(item.percent, 100) + "%" }}
-                />
-              </div>
-              <div className="mt-2 flex justify-between text-xs text-slate-500">
-                <span>Đã dùng {formatVND(item.actual)}</span>
-                <span>Hạn mức {formatVND(item.limit)}</span>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-function CashFlowCalendar({
-  items,
-}: {
-  items: {
-    id: string;
-    date: string;
-    title: string;
-    wallet: string;
-    amount: number;
-    type: string;
-  }[];
-}) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <SectionHeader
-        icon={<FileText size={20} />}
-        title="Cash Flow Calendar"
-        subtitle="Các dòng tiền gần nhất trong kỳ báo cáo"
-      />
-      <div className="mt-5 space-y-2">
-        {items.length === 0 ? (
-          <EmptyChartState
-            title="Chưa có dòng tiền"
-            description="Thêm giao dịch để xem lịch dòng tiền theo ngày."
-          />
-        ) : (
-          items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
-            >
-              <div className="w-14 shrink-0 rounded-xl bg-white px-2 py-1 text-center text-xs font-black text-slate-500 shadow-sm">
-                {item.date.slice(5)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black text-slate-800">
-                  {item.title}
-                </p>
-                <p className="truncate text-xs text-slate-400">{item.wallet}</p>
-              </div>
-              <p
-                className={
-                  "shrink-0 text-sm font-black " +
-                  (item.type === "income"
-                    ? "text-emerald-600"
-                    : "text-rose-500")
-                }
-              >
-                {item.type === "income" ? "+" : "-"}
-                {formatVND(item.amount)}
-              </p>
-            </div>
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
-
-function EmptyChartState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex h-full min-h-32 flex-col items-center justify-center rounded-2xl bg-slate-50 px-5 text-center">
-      <p className="text-sm font-black text-slate-500">{title}</p>
-      <p className="mt-1 max-w-sm text-xs leading-5 text-slate-400">
-        {description}
       </p>
     </div>
   );

@@ -15,6 +15,11 @@ import type {
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
+function stripClientUserId<T extends object>(item: T): Omit<T, "userId"> {
+  const { userId: _ignoredUserId, ...rest } = item as T & { userId?: unknown };
+  return rest;
+}
+
 async function getAuthUserId(): Promise<string | null> {
   const {
     data: { user },
@@ -251,7 +256,10 @@ export async function initFinanceDemoData() {
 
   await Promise.all([
     supabase.from("wallets").upsert(
-      demoData.wallets.map((w) => ({ ...w, user_id: userId })),
+      demoData.wallets.map((w) => ({
+        ...stripClientUserId(w),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("categories").upsert(
@@ -262,28 +270,35 @@ export async function initFinanceDemoData() {
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("transactions").upsert(
-      demoData.transactions.map((t) => ({ ...t, user_id: userId })),
+      demoData.transactions.map((t) => ({
+        ...stripClientUserId(t),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("debts").upsert(
-      demoData.debts.map((d) => ({ ...d, user_id: userId })),
+      demoData.debts.map((d) => ({ ...stripClientUserId(d), user_id: userId })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
-    supabase
-      .from("goals")
-      .upsert(
-        demoData.goals.map((g) => ({
-          ...toGoalRow(g),
-          user_id: userId,
-        })) as never,
-        { onConflict: "id", ignoreDuplicates: true },
-      ),
+    supabase.from("goals").upsert(
+      demoData.goals.map((g) => ({
+        ...toGoalRow(g),
+        user_id: userId,
+      })) as never,
+      { onConflict: "id", ignoreDuplicates: true },
+    ),
     supabase.from("budgets").upsert(
-      demoData.budgets.map((b) => ({ ...b, user_id: userId })),
+      demoData.budgets.map((b) => ({
+        ...stripClientUserId(b),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("investments").upsert(
-      demoData.investments.map((i) => ({ ...i, user_id: userId })),
+      demoData.investments.map((i) => ({
+        ...stripClientUserId(i),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
   ]);
@@ -321,7 +336,12 @@ export async function resetFinanceDemoData(): Promise<{
   const insertErrors = await Promise.all([
     supabase
       .from("wallets")
-      .insert(demoData.wallets.map((w) => ({ ...w, user_id: userId }))),
+      .insert(
+        demoData.wallets.map((w) => ({
+          ...stripClientUserId(w),
+          user_id: userId,
+        })),
+      ),
     supabase.from("categories").insert(
       demoData.categories.map((c) => ({
         ...toCategoryRow(c),
@@ -330,24 +350,42 @@ export async function resetFinanceDemoData(): Promise<{
     ),
     supabase
       .from("transactions")
-      .insert(demoData.transactions.map((t) => ({ ...t, user_id: userId }))),
-    supabase
-      .from("debts")
-      .insert(demoData.debts.map((d) => ({ ...d, user_id: userId }))),
-    supabase
-      .from("goals")
       .insert(
-        demoData.goals.map((g) => ({
-          ...toGoalRow(g),
+        demoData.transactions.map((t) => ({
+          ...stripClientUserId(t),
           user_id: userId,
-        })) as never,
+        })),
       ),
     supabase
+      .from("debts")
+      .insert(
+        demoData.debts.map((d) => ({
+          ...stripClientUserId(d),
+          user_id: userId,
+        })),
+      ),
+    supabase.from("goals").insert(
+      demoData.goals.map((g) => ({
+        ...toGoalRow(g),
+        user_id: userId,
+      })) as never,
+    ),
+    supabase
       .from("budgets")
-      .insert(demoData.budgets.map((b) => ({ ...b, user_id: userId }))),
+      .insert(
+        demoData.budgets.map((b) => ({
+          ...stripClientUserId(b),
+          user_id: userId,
+        })),
+      ),
     supabase
       .from("investments")
-      .insert(demoData.investments.map((i) => ({ ...i, user_id: userId }))),
+      .insert(
+        demoData.investments.map((i) => ({
+          ...stripClientUserId(i),
+          user_id: userId,
+        })),
+      ),
   ]);
   const firstInsertErr = insertErrors.find((r) => r.error)?.error;
   if (firstInsertErr) {
@@ -562,7 +600,19 @@ export async function addTransaction(
     }
   }
 
-  // Insert the transaction first. If it fails, wallet balances remain untouched.
+  const negativeWallet = [...nextBalances.entries()].find(
+    ([, balance]) => balance < 0,
+  );
+
+  if (negativeWallet) {
+    return {
+      error:
+        "Số dư ví không đủ để thêm giao dịch. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
+    };
+  }
+
+  // Insert the transaction only after validating wallet balances. This prevents
+  // Supabase check constraint errors from wallets_balance_nn and avoids rollback.
   const { error: txErr } = await supabase
     .from("transactions")
     .insert({ ...transaction, user_id: userId });
@@ -596,11 +646,11 @@ export async function addTransaction(
       .eq("id", transaction.id)
       .eq("user_id", userId);
 
-    console.error(
-      "[financeStorage] addTransaction – wallet rollback:",
-      walletErr.message,
-    );
-    return { error: walletErr.message };
+    return {
+      error:
+        walletErr.message ||
+        "Không thể cập nhật số dư ví. Giao dịch đã được hoàn tác.",
+    };
   }
 
   return { error: null };
@@ -672,8 +722,28 @@ export async function updateTransaction(
     reverseEffect(oldTransaction, -1);
     reverseEffect(updatedTransaction, 1);
 
+    const negativeWallet = [...balanceMap.entries()].find(
+      ([, balance]) => balance < 0,
+    );
+
+    if (negativeWallet) {
+      return {
+        error:
+          "Số dư ví không đủ để lưu thay đổi. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
+      };
+    }
+
+    const changedBalances = [...balanceMap.entries()].filter(
+      ([id, balance]) => {
+        const originalWallet = ((walletData ?? []) as Wallet[]).find(
+          (wallet) => wallet.id === id,
+        );
+        return originalWallet?.balance !== balance;
+      },
+    );
+
     const updateResults = await Promise.all(
-      [...balanceMap.entries()].map(([id, balance]) =>
+      changedBalances.map(([id, balance]) =>
         supabase
           .from("wallets")
           .update({ balance })

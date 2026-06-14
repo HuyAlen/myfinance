@@ -15,46 +15,14 @@ export const demoWallets: Wallet[] = [
 ];
 
 export const demoCategories: Category[] = [
-  { id: "salary", name: "Lương", type: "income", planningGroup: "income" },
-  {
-    id: "freelance",
-    name: "Freelance",
-    type: "income",
-    planningGroup: "income",
-  },
-  { id: "food", name: "Ăn uống", type: "expense", planningGroup: "variable" },
-  { id: "housing", name: "Nhà ở", type: "expense", planningGroup: "fixed" },
-  {
-    id: "transport",
-    name: "Di chuyển",
-    type: "expense",
-    planningGroup: "variable",
-  },
-  {
-    id: "shopping",
-    name: "Mua sắm",
-    type: "expense",
-    planningGroup: "variable",
-  },
-  {
-    id: "entertainment",
-    name: "Giải trí",
-    type: "expense",
-    planningGroup: "variable",
-  },
-  {
-    id: "saving",
-    name: "Quỹ tiết kiệm",
-    type: "expense",
-    planningGroup: "saving",
-  },
-  {
-    id: "capital-trading",
-    name: "Capital Trading",
-    type: "expense",
-    planningGroup: "investment",
-  },
-  { id: "other", name: "Khác", type: "expense", planningGroup: "variable" },
+  { id: "salary", name: "Lương", type: "income" },
+  { id: "freelance", name: "Freelance", type: "income" },
+  { id: "food", name: "Ăn uống", type: "expense" },
+  { id: "housing", name: "Nhà ở", type: "expense" },
+  { id: "transport", name: "Di chuyển", type: "expense" },
+  { id: "shopping", name: "Mua sắm", type: "expense" },
+  { id: "entertainment", name: "Giải trí", type: "expense" },
+  { id: "other", name: "Khác", type: "expense" },
 ];
 
 export const demoTransactions: Transaction[] = [
@@ -173,13 +141,6 @@ export const demoBudgets: Budget[] = [
   { id: "b2", categoryId: "housing", month: "2026-06", limitAmount: 5000000 },
   { id: "b3", categoryId: "transport", month: "2026-06", limitAmount: 4000000 },
   { id: "b4", categoryId: "shopping", month: "2026-06", limitAmount: 3500000 },
-  { id: "b5", categoryId: "saving", month: "2026-06", limitAmount: 5000000 },
-  {
-    id: "b6",
-    categoryId: "capital-trading",
-    month: "2026-06",
-    limitAmount: 3000000,
-  },
 ];
 
 export const demoInvestments: Investment[] = [
@@ -213,52 +174,19 @@ export const demoInvestments: Investment[] = [
   },
 ];
 
-export type DemoFinanceData = {
-  wallets: Wallet[];
-  categories: Category[];
-  transactions: Transaction[];
-  debts: Debt[];
-  goals: Goal[];
-  budgets: Budget[];
-  investments: Investment[];
-};
-
-/**
- * Build demo data with IDs scoped to the current user.
- *
- * Supabase tables currently use `id` as the primary key. If every user seeds
- * demo rows with fixed IDs like "cash" or "t1", the second user can hit
- * duplicate-key errors. Prefixing demo IDs keeps demo data isolated per user
- * while preserving all wallet/category references inside transactions/budgets.
- */
-export function buildDemoFinanceData(userId: string): DemoFinanceData {
-  const id = (value: string) => `${userId}-${value}`;
+export function buildDemoFinanceData(userId?: string) {
+  const withUserId = <T extends object>(item: T) => ({
+    ...item,
+    ...(userId ? { userId } : {}),
+  });
 
   return {
-    wallets: demoWallets.map((wallet) => ({ ...wallet, id: id(wallet.id) })),
-    categories: demoCategories.map((category) => ({
-      ...category,
-      id: id(category.id),
-    })),
-    transactions: demoTransactions.map((transaction) => ({
-      ...transaction,
-      id: id(transaction.id),
-      walletId: id(transaction.walletId),
-      categoryId: id(transaction.categoryId),
-      transferToWalletId: transaction.transferToWalletId
-        ? id(transaction.transferToWalletId)
-        : undefined,
-    })),
-    debts: demoDebts.map((debt) => ({ ...debt, id: id(debt.id) })),
-    goals: demoGoals.map((goal) => ({ ...goal, id: id(goal.id) })),
-    budgets: demoBudgets.map((budget) => ({
-      ...budget,
-      id: id(budget.id),
-      categoryId: id(budget.categoryId),
-    })),
-    investments: demoInvestments.map((investment) => ({
-      ...investment,
-      id: id(investment.id),
-    })),
+    wallets: demoWallets.map(withUserId),
+    categories: demoCategories.map(withUserId),
+    transactions: demoTransactions.map(withUserId),
+    debts: demoDebts.map(withUserId),
+    goals: demoGoals.map(withUserId),
+    budgets: demoBudgets.map(withUserId),
+    investments: demoInvestments.map(withUserId),
   };
 }

@@ -13,7 +13,6 @@ import {
   Landmark,
   Lightbulb,
   Plus,
-  Shield,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -21,7 +20,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
 
 import type {
   Transaction,
@@ -270,7 +269,14 @@ export default function WalletsPage() {
     }
 
     return out.slice(0, 6);
-  }, [wallets, transactions, totalCash, liquidityScore, totalAssets]);
+  }, [
+    wallets,
+    transactions,
+    totalCash,
+    liquidityScore,
+    totalAssets,
+    thirtyDaysAgo,
+  ]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   function openCreateForm() {
@@ -696,18 +702,20 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
+                className="group relative rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
               >
                 {/* Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <WalletIcon type={wallet.type} />
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
+                <div className="min-w-0 pr-20">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="shrink-0">
+                      <WalletIcon type={wallet.type} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-black leading-tight text-slate-900 [overflow-wrap:anywhere]">
                         {wallet.name}
                       </h3>
                       <span
-                        className="mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                        className="mt-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-bold"
                         style={{
                           borderColor: color + "33",
                           background: color + "11",
@@ -718,16 +726,21 @@ export default function WalletsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+
+                  <div className="absolute right-6 top-6 z-10 flex shrink-0 gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <button
+                      type="button"
                       onClick={() => openEditForm(wallet)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      aria-label="Sửa ví"
                     >
                       <Edit3 size={13} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDelete(wallet.id)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      aria-label="Xóa ví"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -904,7 +917,7 @@ export default function WalletsPage() {
                     </p>
                     <CurrencyInput
                       value={form.balance}
-                      onChange={(raw) =>
+                      onChange={(raw: string) =>
                         setForm((p) => ({ ...p, balance: raw }))
                       }
                       placeholder="0"
