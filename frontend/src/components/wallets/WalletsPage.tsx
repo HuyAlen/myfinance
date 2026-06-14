@@ -44,6 +44,10 @@ import {
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
+import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 type FormState = {
@@ -58,10 +62,6 @@ const emptyForm: FormState = {
   type: "cash",
   balance: "",
 };
-
-const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86400000)
-  .toISOString()
-  .slice(0, 10);
 
 const walletTypeOptions: {
   label: string;
@@ -89,31 +89,6 @@ const TYPE_COLORS: Record<FinanceWalletType, string> = {
   investment: "#10b981",
 };
 
-type PendingConfirm = {
-  title: string;
-  description?: string;
-  variant?: "danger" | "warning" | "info";
-  onConfirm: () => void | Promise<void>;
-};
-
-type ToastOptions = {
-  variant?: "success" | "error" | "warning" | "info";
-  message: string;
-};
-
-function notifyToast({ variant = "info", message }: ToastOptions) {
-  if (typeof window === "undefined") return;
-
-  const prefix: Record<NonNullable<ToastOptions["variant"]>, string> = {
-    success: "✅",
-    error: "❌",
-    warning: "⚠️",
-    info: "ℹ️",
-  };
-
-  window.alert(`${prefix[variant]} ${message}`);
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
@@ -124,6 +99,7 @@ export default function WalletsPage() {
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
+  const { toast } = useToast();
 
   async function reloadData() {
     const [w, t] = await Promise.all([getWallets(), getTransactions()]);
@@ -132,9 +108,11 @@ export default function WalletsPage() {
   }
 
   useEffect(() => {
-    queueMicrotask(() => {
-      reloadData();
-    });
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
   useRealtimeTable(["wallets", "transactions"], reloadData);
 
@@ -157,6 +135,10 @@ export default function WalletsPage() {
   const now = new Date();
   const currentMonth =
     now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+
+  const [thirtyDaysAgo] = useState(() =>
+    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
+  );
 
   const liquidBalance = useMemo(
     () =>
@@ -226,8 +208,6 @@ export default function WalletsPage() {
         .filter((d) => d.value > 0),
     [walletStats],
   );
-
-  const thirtyDaysAgo = THIRTY_DAYS_AGO;
 
   // Intelligence alerts
   const alerts = useMemo(() => {
@@ -348,7 +328,7 @@ export default function WalletsPage() {
     const wallet = wallets.find((w) => w.id === id);
     const linked = transactions.filter((t) => t.walletId === id);
     if (linked.length > 0) {
-      notifyToast({
+      toast({
         variant: "warning",
         message: `Không thể xóa ví "${wallet?.name ?? "này"}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
       });
@@ -362,10 +342,10 @@ export default function WalletsPage() {
       onConfirm: async () => {
         const { error } = await deleteWallet(id);
         if (error) {
-          notifyToast({ variant: "error", message: "Lỗi xóa ví: " + error });
+          toast({ variant: "error", message: "Lỗi xóa ví: " + error });
           return;
         }
-        notifyToast({ variant: "success", message: "Đã xóa ví thành công." });
+        toast({ variant: "success", message: "Đã xóa ví thành công." });
         await reloadData();
       },
     });
@@ -377,7 +357,7 @@ export default function WalletsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
         <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -483,7 +463,7 @@ export default function WalletsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         {/* Allocation breakdown */}
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
               <Landmark size={17} />
@@ -549,7 +529,7 @@ export default function WalletsPage() {
         {/* Right panel: Pie + highlights */}
         <div className="flex flex-col gap-5">
           {/* Pie chart */}
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-black text-slate-900">
               Biểu đồ phân bổ
             </h2>
@@ -722,18 +702,20 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group rounded-4xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
+                className="group relative rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
               >
                 {/* Header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <WalletIcon type={wallet.type} />
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
+                <div className="min-w-0 pr-20">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="shrink-0">
+                      <WalletIcon type={wallet.type} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-black leading-tight text-slate-900 [overflow-wrap:anywhere]">
                         {wallet.name}
                       </h3>
                       <span
-                        className="mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                        className="mt-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-bold"
                         style={{
                           borderColor: color + "33",
                           background: color + "11",
@@ -744,16 +726,21 @@ export default function WalletsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+
+                  <div className="absolute right-6 top-6 z-10 flex shrink-0 gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <button
+                      type="button"
                       onClick={() => openEditForm(wallet)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      aria-label="Sửa ví"
                     >
                       <Edit3 size={13} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDelete(wallet.id)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      aria-label="Xóa ví"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -864,7 +851,7 @@ export default function WalletsPage() {
 
           {/* Empty state */}
           {wallets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Wallet size={24} className="text-blue-400" />
               </div>
@@ -890,10 +877,10 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-900/40 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(100dvh-0.75rem-env(safe-area-inset-bottom))] w-full max-w-lg flex-col overflow-hidden rounded-t-4xlbg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-4xl">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-w-lg sm:rounded-[2rem]">
             {/* Modal header */}
-            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-5 pb-4 sm:p-6 sm:pb-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ví tiền" : "Thêm ví tiền"}
@@ -903,6 +890,7 @@ export default function WalletsPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsFormOpen(false)}
                 className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
               >
@@ -912,86 +900,95 @@ export default function WalletsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="overflow-y-auto p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:p-6"
+              className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormInput
-                  label="Tên ví"
-                  value={form.name}
-                  onChange={(v) => setForm((p) => ({ ...p, name: v }))}
-                  placeholder="VD: Vietcombank, Tiền mặt..."
-                />
-                {/* Balance with ₫ prefix */}
-                <div>
-                  <p className="mb-1.5 text-sm font-black text-slate-700">
-                    Số dư hiện tại
-                  </p>
-                  <CurrencyInput
-                    value={form.balance}
-                    onChange={(raw) => setForm((p) => ({ ...p, balance: raw }))}
-                    placeholder="0"
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormInput
+                    label="Tên ví"
+                    value={form.name}
+                    onChange={(v) => setForm((p) => ({ ...p, name: v }))}
+                    placeholder="VD: Vietcombank, Tiền mặt..."
                   />
-                </div>
-              </div>
-
-              {/* Wallet type */}
-              <div className="mt-4">
-                <p className="mb-2.5 text-sm font-black text-slate-700">
-                  Loại ví
-                </p>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {walletTypeOptions.map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, type: o.value }))}
-                      className={
-                        "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all " +
-                        (form.type === o.value
-                          ? "border-blue-300 bg-blue-50 shadow-sm"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
+                  {/* Balance with ₫ prefix */}
+                  <div>
+                    <p className="mb-1.5 text-sm font-black text-slate-700">
+                      Số dư hiện tại
+                    </p>
+                    <CurrencyInput
+                      value={form.balance}
+                      onChange={(raw: string) =>
+                        setForm((p) => ({ ...p, balance: raw }))
                       }
-                    >
-                      <WalletIcon type={o.value} />
-                      <div>
-                        <p
-                          className={
-                            "text-sm font-black " +
-                            (form.type === o.value
-                              ? "text-blue-700"
-                              : "text-slate-900")
-                          }
-                        >
-                          {o.label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-400">
-                          {o.description}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
+
+                {/* Wallet type */}
+                <div className="mt-4">
+                  <p className="mb-2.5 text-sm font-black text-slate-700">
+                    Loại ví
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {walletTypeOptions.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => ({ ...p, type: o.value }))
+                        }
+                        className={
+                          "flex items-center gap-3 rounded-2xl border p-4 text-left transition-all " +
+                          (form.type === o.value
+                            ? "border-blue-300 bg-blue-50 shadow-sm"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
+                        }
+                      >
+                        <WalletIcon type={o.value} />
+                        <div>
+                          <p
+                            className={
+                              "text-sm font-black " +
+                              (form.type === o.value
+                                ? "text-blue-700"
+                                : "text-slate-900")
+                            }
+                          >
+                            {o.label}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {o.description}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <SaveError
+                  message={saveError}
+                  onDismiss={() => setSaveError(null)}
+                />
               </div>
 
               {/* Actions */}
-              <SaveError
-                message={saveError}
-                onDismiss={() => setSaveError(null)}
-              />
-              <div className="mt-5 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
-                >
-                  {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
-                </button>
+              <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-4">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormOpen(false)}
+                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
+                  >
+                    {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1002,75 +999,6 @@ export default function WalletsPage() {
         action={pendingAction}
         onCancel={() => setPendingAction(null)}
       />
-    </div>
-  );
-}
-
-function ConfirmDialog({
-  action,
-  onCancel,
-}: {
-  action: PendingConfirm | null;
-  onCancel: () => void;
-}) {
-  if (!action) return null;
-
-  const isDanger = action.variant === "danger";
-
-  async function handleConfirm() {
-    if (!action) return;
-    await action.onConfirm();
-    onCancel();
-  }
-
-  return (
-    <div className="fixed inset-0 z-90 flex items-end justify-center bg-slate-950/50 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="w-full max-w-md rounded-t-4xlbg-white p-5 shadow-2xl sm:rounded-4xl sm:p-6">
-        <div className="flex items-start gap-3">
-          <div
-            className={
-              "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
-              (isDanger
-                ? "bg-rose-100 text-rose-600"
-                : "bg-amber-100 text-amber-600")
-            }
-          >
-            <AlertTriangle size={20} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-black text-slate-900">
-              {action.title}
-            </h3>
-            {action.description && (
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                {action.description}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-5 flex gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
-          >
-            Hủy
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            className={
-              "flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] " +
-              (isDanger
-                ? "bg-rose-600 shadow-rose-200 hover:bg-rose-700"
-                : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
-            }
-          >
-            Xác nhận
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

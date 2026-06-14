@@ -17,6 +17,7 @@ export type Category = {
   id: string;
   name: string;
   type: CategoryType;
+  planningGroup?: CategoryPlanningGroup;
 };
 
 export type Transaction = {
@@ -52,6 +53,7 @@ export type Goal = {
   name: string;
   targetAmount: number;
   currentAmount: number;
+  savingCategoryIds?: string[];
 };
 
 export type Budget = {
@@ -81,3 +83,10 @@ export type Investment = {
   averageCost?: number;
   currentPrice?: number;
 };
+
+export type CategoryPlanningGroup =
+  | "income"
+  | "fixed"
+  | "variable"
+  | "saving"
+  | "investment";

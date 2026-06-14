@@ -1,18 +1,11 @@
 import { supabase } from "@/src/lib/supabase";
 
-import {
-  demoBudgets,
-  demoCategories,
-  demoDebts,
-  demoGoals,
-  demoInvestments,
-  demoTransactions,
-  demoWallets,
-} from "@/src/data/demoFinanceData";
+import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
 
 import type {
   Budget,
   Category,
+  CategoryPlanningGroup,
   Debt,
   Goal,
   Investment,
@@ -22,6 +15,11 @@ import type {
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
+function stripClientUserId<T extends object>(item: T): Omit<T, "userId"> {
+  const { userId: _ignoredUserId, ...rest } = item as T & { userId?: unknown };
+  return rest;
+}
+
 async function getAuthUserId(): Promise<string | null> {
   const {
     data: { user },
@@ -30,6 +28,100 @@ async function getAuthUserId(): Promise<string | null> {
 }
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
+
+// ─── Category planning group mapping ─────────────────────────────────────────
+
+type CategoryDbRow = Category & {
+  planning_group?: CategoryPlanningGroup | null;
+  user_id?: string;
+};
+
+function inferDefaultPlanningGroup(
+  category: Pick<Category, "type" | "name">,
+): CategoryPlanningGroup {
+  const name = category.name.toLowerCase();
+
+  if (category.type === "income") return "income";
+
+  if (
+    name.includes("nhà") ||
+    name.includes("điện") ||
+    name.includes("nước") ||
+    name.includes("gửi xe") ||
+    name.includes("phí quản lý") ||
+    name.includes("internet") ||
+    name.includes("bảo hiểm") ||
+    name.includes("học phí")
+  ) {
+    return "fixed";
+  }
+
+  if (
+    name.includes("trading") ||
+    name.includes("đầu tư") ||
+    name.includes("crypto") ||
+    name.includes("cổ phiếu") ||
+    name.includes("etf") ||
+    name.includes("vàng")
+  ) {
+    return "investment";
+  }
+
+  if (
+    name.includes("tiết kiệm") ||
+    name.includes("quỹ") ||
+    name.includes("dự phòng")
+  ) {
+    return "saving";
+  }
+
+  return "variable";
+}
+
+function fromCategoryRow(row: CategoryDbRow): Category {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    planningGroup:
+      row.planning_group ?? row.planningGroup ?? inferDefaultPlanningGroup(row),
+  };
+}
+
+function toCategoryRow(category: Category): Omit<CategoryDbRow, "user_id"> {
+  return {
+    id: category.id,
+    name: category.name,
+    type: category.type,
+    planning_group:
+      category.planningGroup ?? inferDefaultPlanningGroup(category),
+  };
+}
+
+type GoalDbRow = Goal & {
+  saving_category_ids?: string[] | null;
+  user_id?: string;
+};
+
+function fromGoalRow(row: GoalDbRow): Goal {
+  return {
+    id: row.id,
+    name: row.name,
+    targetAmount: row.targetAmount,
+    currentAmount: row.currentAmount,
+    savingCategoryIds: row.saving_category_ids ?? row.savingCategoryIds ?? [],
+  };
+}
+
+function toGoalRow(goal: Goal): Omit<GoalDbRow, "user_id"> {
+  return {
+    id: goal.id,
+    name: goal.name,
+    targetAmount: goal.targetAmount,
+    currentAmount: goal.currentAmount,
+    saving_category_ids: goal.savingCategoryIds ?? [],
+  };
+}
 
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
@@ -52,7 +144,7 @@ export async function getCategories(): Promise<Category[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getCategories:", error.message);
-  return (data ?? []) as Category[];
+  return ((data ?? []) as CategoryDbRow[]).map(fromCategoryRow);
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
@@ -86,7 +178,7 @@ export async function getGoals(): Promise<Goal[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getGoals:", error.message);
-  return (data ?? []) as Goal[];
+  return ((data ?? []) as GoalDbRow[]).map(fromGoalRow);
 }
 
 export async function getBudgets(): Promise<Budget[]> {
@@ -111,11 +203,46 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+// ─── Demo seed guard ──────────────────────────────────────────────────────────
+// Key stored in localStorage per user. When set, initFinanceDemoData() is a
+// no-op — ensures demo data never re-seeds after "Clear All Data".
+
+function seedGuardKey(userId: string): string {
+  return `mf-skip-auto-seed-${userId}`;
+}
+
+function isSeedBlocked(userId: string): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(seedGuardKey(userId)) === "1";
+}
+
+function blockSeed(userId: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(seedGuardKey(userId), "1");
+  }
+}
+
+function unblockSeed(userId: string): void {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(seedGuardKey(userId));
+  }
+}
+
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
+/**
+ * Seeds demo data on first login ONLY.
+ * Skipped when:
+ *  (a) the user already has wallets in Supabase, OR
+ *  (b) the seed-guard flag is set (e.g. after "Clear All Data").
+ * Safe to call on every page mount — it is a no-op in both cases above.
+ */
 export async function initFinanceDemoData() {
   const userId = await getAuthUserId();
   if (!userId) return;
+
+  // Respect explicit "do not auto-seed" flag set by clearAllUserData
+  if (isSeedBlocked(userId)) return;
 
   // Check whether this user already has data
   const { data } = await supabase
@@ -125,33 +252,53 @@ export async function initFinanceDemoData() {
     .limit(1);
   if (data && data.length > 0) return;
 
+  const demoData = buildDemoFinanceData(userId);
+
   await Promise.all([
     supabase.from("wallets").upsert(
-      demoWallets.map((w) => ({ ...w, user_id: userId })),
+      demoData.wallets.map((w) => ({
+        ...stripClientUserId(w),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("categories").upsert(
-      demoCategories.map((c) => ({ ...c, user_id: userId })),
+      demoData.categories.map((c) => ({
+        ...toCategoryRow(c),
+        user_id: userId,
+      })) as never,
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("transactions").upsert(
-      demoTransactions.map((t) => ({ ...t, user_id: userId })),
+      demoData.transactions.map((t) => ({
+        ...stripClientUserId(t),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("debts").upsert(
-      demoDebts.map((d) => ({ ...d, user_id: userId })),
+      demoData.debts.map((d) => ({ ...stripClientUserId(d), user_id: userId })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("goals").upsert(
-      demoGoals.map((g) => ({ ...g, user_id: userId })),
+      demoData.goals.map((g) => ({
+        ...toGoalRow(g),
+        user_id: userId,
+      })) as never,
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("budgets").upsert(
-      demoBudgets.map((b) => ({ ...b, user_id: userId })),
+      demoData.budgets.map((b) => ({
+        ...stripClientUserId(b),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("investments").upsert(
-      demoInvestments.map((i) => ({ ...i, user_id: userId })),
+      demoData.investments.map((i) => ({
+        ...stripClientUserId(i),
+        user_id: userId,
+      })),
       { onConflict: "id", ignoreDuplicates: true },
     ),
   ]);
@@ -162,6 +309,9 @@ export async function resetFinanceDemoData(): Promise<{
 }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
+
+  // Allow auto-seed to work again after an explicit reset
+  unblockSeed(userId);
 
   const deleteErrors = await Promise.all([
     supabase.from("transactions").delete().eq("user_id", userId),
@@ -181,28 +331,61 @@ export async function resetFinanceDemoData(): Promise<{
     return { error: firstDeleteErr.message };
   }
 
+  const demoData = buildDemoFinanceData(userId);
+
   const insertErrors = await Promise.all([
     supabase
       .from("wallets")
-      .insert(demoWallets.map((w) => ({ ...w, user_id: userId }))),
-    supabase
-      .from("categories")
-      .insert(demoCategories.map((c) => ({ ...c, user_id: userId }))),
+      .insert(
+        demoData.wallets.map((w) => ({
+          ...stripClientUserId(w),
+          user_id: userId,
+        })),
+      ),
+    supabase.from("categories").insert(
+      demoData.categories.map((c) => ({
+        ...toCategoryRow(c),
+        user_id: userId,
+      })) as never,
+    ),
     supabase
       .from("transactions")
-      .insert(demoTransactions.map((t) => ({ ...t, user_id: userId }))),
+      .insert(
+        demoData.transactions.map((t) => ({
+          ...stripClientUserId(t),
+          user_id: userId,
+        })),
+      ),
     supabase
       .from("debts")
-      .insert(demoDebts.map((d) => ({ ...d, user_id: userId }))),
-    supabase
-      .from("goals")
-      .insert(demoGoals.map((g) => ({ ...g, user_id: userId }))),
+      .insert(
+        demoData.debts.map((d) => ({
+          ...stripClientUserId(d),
+          user_id: userId,
+        })),
+      ),
+    supabase.from("goals").insert(
+      demoData.goals.map((g) => ({
+        ...toGoalRow(g),
+        user_id: userId,
+      })) as never,
+    ),
     supabase
       .from("budgets")
-      .insert(demoBudgets.map((b) => ({ ...b, user_id: userId }))),
+      .insert(
+        demoData.budgets.map((b) => ({
+          ...stripClientUserId(b),
+          user_id: userId,
+        })),
+      ),
     supabase
       .from("investments")
-      .insert(demoInvestments.map((i) => ({ ...i, user_id: userId }))),
+      .insert(
+        demoData.investments.map((i) => ({
+          ...stripClientUserId(i),
+          user_id: userId,
+        })),
+      ),
   ]);
   const firstInsertErr = insertErrors.find((r) => r.error)?.error;
   if (firstInsertErr) {
@@ -248,6 +431,9 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
     }
   }
 
+  // Prevent auto-seed from re-populating demo data on next page load
+  blockSeed(userId);
+
   return { error: null };
 }
 
@@ -269,7 +455,6 @@ export async function importAllData(data: {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const run = async (
     table: string,
     rows: object[],
@@ -292,7 +477,7 @@ export async function importAllData(data: {
     inserts.push(
       run(
         "categories",
-        data.categories.map((c) => ({ ...c, user_id: userId })),
+        data.categories.map((c) => ({ ...toCategoryRow(c), user_id: userId })),
       ),
     );
   if (data.transactions?.length)
@@ -313,7 +498,7 @@ export async function importAllData(data: {
     inserts.push(
       run(
         "goals",
-        data.goals.map((g) => ({ ...g, user_id: userId })),
+        data.goals.map((g) => ({ ...toGoalRow(g), user_id: userId })),
       ),
     );
   if (data.budgets?.length)
@@ -358,101 +543,116 @@ export async function addTransaction(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  if (transaction.type === "transfer") {
-    const walletsToUpdate = [
-      transaction.walletId,
-      transaction.transferToWalletId,
-    ].filter(Boolean) as string[];
+  const walletIds = [
+    transaction.walletId,
+    transaction.type === "transfer"
+      ? transaction.transferToWalletId
+      : undefined,
+  ].filter((id): id is string => !!id);
 
-    const { data: walletData, error: fetchErr } = await supabase
-      .from("wallets")
-      .select("*")
-      .eq("user_id", userId)
-      .in("id", walletsToUpdate);
+  const uniqueWalletIds = [...new Set(walletIds)];
 
-    if (fetchErr) {
-      console.error(
-        "[financeStorage] addTransaction – fetch wallets:",
-        fetchErr.message,
-      );
-      return { error: fetchErr.message };
-    }
-
-    const wallets = (walletData ?? []) as Wallet[];
-    const updateResults = await Promise.all(
-      wallets.map((w) => {
-        const delta =
-          w.id === transaction.walletId
-            ? -transaction.amount
-            : transaction.amount;
-        return supabase
-          .from("wallets")
-          .update({ balance: w.balance + delta })
-          .eq("id", w.id)
-          .eq("user_id", userId);
-      }),
-    );
-    const walletErr = updateResults.find((r) => r.error)?.error;
-    if (walletErr) {
-      console.error(
-        "[financeStorage] addTransaction – update wallet:",
-        walletErr.message,
-      );
-      return { error: walletErr.message };
-    }
-
-    const { error: txErr } = await supabase
-      .from("transactions")
-      .insert({ ...transaction, user_id: userId });
-    if (txErr) {
-      console.error(
-        "[financeStorage] addTransaction (transfer):",
-        txErr.message,
-      );
-      return { error: txErr.message };
-    }
-    return { error: null };
-  }
-
-  // Income / Expense
   const { data: walletData, error: fetchErr } = await supabase
     .from("wallets")
     .select("*")
-    .eq("id", transaction.walletId)
     .eq("user_id", userId)
-    .limit(1);
+    .in("id", uniqueWalletIds);
 
   if (fetchErr) {
     console.error(
-      "[financeStorage] addTransaction – fetch wallet:",
+      "[financeStorage] addTransaction – fetch wallets:",
       fetchErr.message,
     );
     return { error: fetchErr.message };
   }
 
-  const wallet = walletData?.[0] as Wallet | undefined;
-  if (wallet) {
-    const { error: balErr } = await supabase
-      .from("wallets")
-      .update({ balance: wallet.balance + walletDelta(transaction) })
-      .eq("id", wallet.id)
-      .eq("user_id", userId);
-    if (balErr) {
-      console.error(
-        "[financeStorage] addTransaction – balance update:",
-        balErr.message,
+  const wallets = (walletData ?? []) as Wallet[];
+  const originalBalances = new Map(wallets.map((w) => [w.id, w.balance]));
+  const nextBalances = new Map(originalBalances);
+
+  if (transaction.type === "transfer") {
+    if (!transaction.transferToWalletId) {
+      return { error: "Vui lòng chọn ví nhận tiền." };
+    }
+    if (transaction.walletId === transaction.transferToWalletId) {
+      return { error: "Ví chuyển và ví nhận không được trùng nhau." };
+    }
+
+    const sourceBalance = nextBalances.get(transaction.walletId);
+    const targetBalance = nextBalances.get(transaction.transferToWalletId);
+
+    if (sourceBalance === undefined || targetBalance === undefined) {
+      return { error: "Không tìm thấy ví chuyển hoặc ví nhận." };
+    }
+
+    nextBalances.set(transaction.walletId, sourceBalance - transaction.amount);
+    nextBalances.set(
+      transaction.transferToWalletId,
+      targetBalance + transaction.amount,
+    );
+  } else {
+    const currentBalance = nextBalances.get(transaction.walletId);
+    if (currentBalance !== undefined) {
+      nextBalances.set(
+        transaction.walletId,
+        currentBalance + walletDelta(transaction),
       );
-      return { error: balErr.message };
     }
   }
 
+  const negativeWallet = [...nextBalances.entries()].find(
+    ([, balance]) => balance < 0,
+  );
+
+  if (negativeWallet) {
+    return {
+      error:
+        "Số dư ví không đủ để thêm giao dịch. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
+    };
+  }
+
+  // Insert the transaction only after validating wallet balances. This prevents
+  // Supabase check constraint errors from wallets_balance_nn and avoids rollback.
   const { error: txErr } = await supabase
     .from("transactions")
     .insert({ ...transaction, user_id: userId });
+
   if (txErr) {
     console.error("[financeStorage] addTransaction:", txErr.message);
     return { error: txErr.message };
   }
+
+  // Then sync wallet balances. If a wallet update fails, roll the inserted
+  // transaction back so transaction history and balances do not diverge.
+  const changedBalances = [...nextBalances.entries()].filter(
+    ([id, balance]) => originalBalances.get(id) !== balance,
+  );
+
+  const updateResults = await Promise.all(
+    changedBalances.map(([id, balance]) =>
+      supabase
+        .from("wallets")
+        .update({ balance })
+        .eq("id", id)
+        .eq("user_id", userId),
+    ),
+  );
+
+  const walletErr = updateResults.find((r) => r.error)?.error;
+  if (walletErr) {
+    await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", transaction.id)
+      .eq("user_id", userId);
+
+    return {
+      error:
+        walletErr.message ||
+        "Không thể cập nhật số dư ví. Giao dịch đã được hoàn tác.",
+    };
+  }
+
   return { error: null };
 }
 
@@ -522,8 +722,28 @@ export async function updateTransaction(
     reverseEffect(oldTransaction, -1);
     reverseEffect(updatedTransaction, 1);
 
+    const negativeWallet = [...balanceMap.entries()].find(
+      ([, balance]) => balance < 0,
+    );
+
+    if (negativeWallet) {
+      return {
+        error:
+          "Số dư ví không đủ để lưu thay đổi. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
+      };
+    }
+
+    const changedBalances = [...balanceMap.entries()].filter(
+      ([id, balance]) => {
+        const originalWallet = ((walletData ?? []) as Wallet[]).find(
+          (wallet) => wallet.id === id,
+        );
+        return originalWallet?.balance !== balance;
+      },
+    );
+
     const updateResults = await Promise.all(
-      [...balanceMap.entries()].map(([id, balance]) =>
+      changedBalances.map(([id, balance]) =>
         supabase
           .from("wallets")
           .update({ balance })
@@ -727,7 +947,7 @@ export async function addCategory(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("categories")
-    .insert({ ...category, user_id: userId });
+    .insert({ ...toCategoryRow(category), user_id: userId } as never);
   if (error) {
     console.error("[financeStorage] addCategory:", error.message);
     return { error: error.message };
@@ -742,7 +962,7 @@ export async function updateCategory(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("categories")
-    .update(updatedCategory)
+    .update(toCategoryRow(updatedCategory) as never)
     .eq("id", updatedCategory.id)
     .eq("user_id", userId);
   if (error) {
@@ -827,7 +1047,7 @@ export async function addGoal(goal: Goal): Promise<{ error: string | null }> {
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("goals")
-    .insert({ ...goal, user_id: userId });
+    .insert({ ...toGoalRow(goal), user_id: userId } as never);
   if (error) {
     console.error("[financeStorage] addGoal:", error.message);
     return { error: error.message };
@@ -842,7 +1062,7 @@ export async function updateGoal(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("goals")
-    .update(updatedGoal)
+    .update(toGoalRow(updatedGoal) as never)
     .eq("id", updatedGoal.id)
     .eq("user_id", userId);
   if (error) {

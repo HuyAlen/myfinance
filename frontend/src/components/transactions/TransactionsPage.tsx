@@ -66,31 +66,26 @@ import {
   parseCurrencyInput,
 } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
+import ConfirmDialog, {
+  type PendingConfirm,
+} from "@/src/components/ui/ConfirmDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
+
+type ToastPayload = {
+  variant?: "success" | "error" | "info" | "warning";
+  message: string;
+};
+
 type TransactionFormMode =
   | "income"
   | "expense"
   | "saving"
   | "investment"
   | "transfer";
-
-type PendingConfirm = {
-  title: string;
-  description?: string;
-  confirmText?: string;
-  cancelText?: string;
-  variant?: "danger" | "warning" | "info";
-  onConfirm: () => void | Promise<void>;
-};
-
-type ToastPayload = {
-  variant?: "success" | "error" | "warning" | "info";
-  message: string;
-};
 
 type FormState = {
   id?: string;
@@ -120,25 +115,10 @@ const emptyForm: FormState = {
 };
 
 function getCategoryPlanningGroup(category?: Category) {
-  if (!category) return "variable";
-  if (category.type === "income") return "income";
-
-  const normalizedName = category.name.toLowerCase();
-  if (
-    normalizedName.includes("tiết kiệm") ||
-    normalizedName.includes("saving")
-  ) {
-    return "saving";
-  }
-  if (
-    normalizedName.includes("đầu tư") ||
-    normalizedName.includes("dau tu") ||
-    normalizedName.includes("investment")
-  ) {
-    return "investment";
-  }
-
-  return "variable";
+  return (
+    category?.planningGroup ??
+    (category?.type === "income" ? "income" : "variable")
+  );
 }
 
 function getTransactionFormMode(
@@ -197,9 +177,22 @@ export default function TransactionsPage() {
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
+  const [toastState, setToastState] = useState<ToastPayload | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
   function toast({ variant = "info", message }: ToastPayload) {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    setToastState({ variant, message });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastState(null);
+      toastTimerRef.current = null;
+    }, 2600);
+
     if (variant === "error") {
-      console.error(message);
+      console.warn(message);
       return;
     }
     console.info(message);
@@ -225,6 +218,14 @@ export default function TransactionsPage() {
 
     return () => {
       window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
     };
   }, []);
   useRealtimeTable(["transactions", "wallets", "categories"], reloadData);
@@ -629,9 +630,16 @@ export default function TransactionsPage() {
       : await addTransaction(transaction);
     if (error) {
       setSaveError(error);
+      toast({ variant: "error", message: error });
       return;
     }
     await reloadData();
+    toast({
+      variant: "success",
+      message: form.id
+        ? "Đã cập nhật giao dịch thành công."
+        : "Đã thêm giao dịch thành công.",
+    });
     setIsFormOpen(false);
     setForm(emptyForm);
   }
@@ -696,6 +704,40 @@ export default function TransactionsPage() {
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-5 md:pb-0">
+      {toastState && (
+        <div
+          className={[
+            "fixed right-4 top-4 z-[120] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl backdrop-blur sm:right-6 sm:top-6 sm:max-w-md",
+            toastState.variant === "error"
+              ? "border-rose-200 bg-rose-50/95 text-rose-700 shadow-rose-100"
+              : toastState.variant === "warning"
+                ? "border-amber-200 bg-amber-50/95 text-amber-700 shadow-amber-100"
+                : toastState.variant === "success"
+                  ? "border-emerald-200 bg-emerald-50/95 text-emerald-700 shadow-emerald-100"
+                  : "border-blue-200 bg-blue-50/95 text-blue-700 shadow-blue-100",
+          ].join(" ")}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/70">
+            {toastState.variant === "success"
+              ? "✓"
+              : toastState.variant === "error"
+                ? "!"
+                : "i"}
+          </span>
+          <span className="leading-5">{toastState.message}</span>
+          <button
+            type="button"
+            onClick={() => setToastState(null)}
+            className="-mr-1 rounded-full p-1 text-current/70 transition hover:bg-white/70 hover:text-current"
+            aria-label="Đóng thông báo"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ════════════════════════════════════════════════════════════════════ */}
@@ -1724,10 +1766,10 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-[2rem]">
             {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
+            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
@@ -1744,7 +1786,10 @@ export default function TransactionsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form
+              onSubmit={handleSubmit}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-6"
+            >
               {/* Type selector — segmented control */}
               <div className="mb-5">
                 <p className="mb-2 text-sm font-black text-slate-700">
@@ -2006,87 +2051,6 @@ export default function TransactionsPage() {
   );
 }
 
-function ConfirmDialog({
-  action,
-  onCancel,
-}: {
-  action: PendingConfirm | null;
-  onCancel: () => void;
-}) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!action) return null;
-
-  async function handleConfirm() {
-    if (!action || isSubmitting) return;
-
-    try {
-      setIsSubmitting(true);
-      await action.onConfirm();
-      onCancel();
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  const isDanger = action.variant === "danger";
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/40 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:p-6">
-      <div className="w-full max-w-md rounded-t-[2rem] border border-white/70 bg-white p-5 shadow-2xl sm:rounded-[2rem]">
-        <div className="flex items-start gap-3">
-          <div
-            className={
-              "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
-              (isDanger
-                ? "bg-rose-50 text-rose-500"
-                : "bg-amber-50 text-amber-500")
-            }
-          >
-            <AlertTriangle size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-base font-black text-slate-900">
-              {action.title}
-            </h3>
-            {action.description && (
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                {action.description}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-60"
-          >
-            {action.cancelText ?? "Hủy"}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={isSubmitting}
-            className={
-              "rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] disabled:opacity-60 " +
-              (isDanger
-                ? "bg-rose-500 shadow-rose-200 hover:bg-rose-600"
-                : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
-            }
-          >
-            {isSubmitting
-              ? "Đang xử lý..."
-              : (action.confirmText ?? "Xác nhận")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function FilterChip({
@@ -2251,7 +2215,7 @@ function IntelCard({
   title: string;
   accent: "blue" | "emerald" | "rose" | "amber";
   body: string;
-  tone: "good" | "warning" | "danger";
+  tone?: "good" | "warning" | "danger";
 }) {
   const accentMap = {
     blue: "border-l-blue-500 bg-blue-50/60",

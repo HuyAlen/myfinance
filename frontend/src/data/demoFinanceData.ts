@@ -26,25 +26,114 @@ export const demoCategories: Category[] = [
 ];
 
 export const demoTransactions: Transaction[] = [
-  { id: "t1", type: "income", amount: 15000000, categoryId: "salary", walletId: "vcb", note: "Lương tháng 6", date: "2026-06-01" },
-  { id: "t2", type: "income", amount: 3000000, categoryId: "freelance", walletId: "vcb", note: "Freelance Project", date: "2026-06-03" },
-  { id: "t3", type: "expense", amount: 6250000, categoryId: "food", walletId: "cash", note: "Ăn uống tháng 6", date: "2026-06-04" },
-  { id: "t4", type: "expense", amount: 4550000, categoryId: "housing", walletId: "vcb", note: "Nhà ở", date: "2026-06-05" },
-  { id: "t5", type: "expense", amount: 3250000, categoryId: "transport", walletId: "cash", note: "Di chuyển", date: "2026-06-06" },
-  { id: "t6", type: "expense", amount: 2600000, categoryId: "shopping", walletId: "cash", note: "Mua sắm", date: "2026-06-07" },
-  { id: "t7", type: "expense", amount: 1950000, categoryId: "entertainment", walletId: "cash", note: "Giải trí", date: "2026-06-08" },
-  { id: "t8", type: "expense", amount: 3050000, categoryId: "other", walletId: "vcb", note: "Chi phí khác", date: "2026-06-09" },
+  {
+    id: "t1",
+    type: "income",
+    amount: 15000000,
+    categoryId: "salary",
+    walletId: "vcb",
+    note: "Lương tháng 6",
+    date: "2026-06-01",
+  },
+  {
+    id: "t2",
+    type: "income",
+    amount: 3000000,
+    categoryId: "freelance",
+    walletId: "vcb",
+    note: "Freelance Project",
+    date: "2026-06-03",
+  },
+  {
+    id: "t3",
+    type: "expense",
+    amount: 6250000,
+    categoryId: "food",
+    walletId: "cash",
+    note: "Ăn uống tháng 6",
+    date: "2026-06-04",
+  },
+  {
+    id: "t4",
+    type: "expense",
+    amount: 4550000,
+    categoryId: "housing",
+    walletId: "vcb",
+    note: "Nhà ở",
+    date: "2026-06-05",
+  },
+  {
+    id: "t5",
+    type: "expense",
+    amount: 3250000,
+    categoryId: "transport",
+    walletId: "cash",
+    note: "Di chuyển",
+    date: "2026-06-06",
+  },
+  {
+    id: "t6",
+    type: "expense",
+    amount: 2600000,
+    categoryId: "shopping",
+    walletId: "cash",
+    note: "Mua sắm",
+    date: "2026-06-07",
+  },
+  {
+    id: "t7",
+    type: "expense",
+    amount: 1950000,
+    categoryId: "entertainment",
+    walletId: "cash",
+    note: "Giải trí",
+    date: "2026-06-08",
+  },
+  {
+    id: "t8",
+    type: "expense",
+    amount: 3050000,
+    categoryId: "other",
+    walletId: "vcb",
+    note: "Chi phí khác",
+    date: "2026-06-09",
+  },
 ];
 
 export const demoDebts: Debt[] = [
-  { id: "d1", name: "Vay mua xe", totalAmount: 50000000, remainingAmount: 25000000 },
-  { id: "d2", name: "Thẻ tín dụng", totalAmount: 10000000, remainingAmount: 7000000 },
+  {
+    id: "d1",
+    name: "Vay mua xe",
+    totalAmount: 50000000,
+    remainingAmount: 25000000,
+  },
+  {
+    id: "d2",
+    name: "Thẻ tín dụng",
+    totalAmount: 10000000,
+    remainingAmount: 7000000,
+  },
 ];
 
 export const demoGoals: Goal[] = [
-  { id: "g1", name: "Mua laptop", targetAmount: 30000000, currentAmount: 12000000 },
-  { id: "g2", name: "Quỹ khẩn cấp", targetAmount: 20000000, currentAmount: 13000000 },
-  { id: "g3", name: "Du lịch Đà Nẵng", targetAmount: 10000000, currentAmount: 5500000 },
+  {
+    id: "g1",
+    name: "Mua laptop",
+    targetAmount: 30000000,
+    currentAmount: 12000000,
+  },
+  {
+    id: "g2",
+    name: "Quỹ khẩn cấp",
+    targetAmount: 20000000,
+    currentAmount: 13000000,
+  },
+  {
+    id: "g3",
+    name: "Du lịch Đà Nẵng",
+    targetAmount: 10000000,
+    currentAmount: 5500000,
+  },
 ];
 
 export const demoBudgets: Budget[] = [
@@ -84,3 +173,20 @@ export const demoInvestments: Investment[] = [
     currentValue: 13200000,
   },
 ];
+
+export function buildDemoFinanceData(userId?: string) {
+  const withUserId = <T extends object>(item: T) => ({
+    ...item,
+    ...(userId ? { userId } : {}),
+  });
+
+  return {
+    wallets: demoWallets.map(withUserId),
+    categories: demoCategories.map(withUserId),
+    transactions: demoTransactions.map(withUserId),
+    debts: demoDebts.map(withUserId),
+    goals: demoGoals.map(withUserId),
+    budgets: demoBudgets.map(withUserId),
+    investments: demoInvestments.map(withUserId),
+  };
+}
