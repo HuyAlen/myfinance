@@ -26,3 +26,7 @@ export function useToast() {
     info: (message: string) => showToast({ message, variant: "info" }),
   };
 }
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
