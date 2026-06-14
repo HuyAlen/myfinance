@@ -177,6 +177,140 @@ export function getCategoryPlanningGroup(
   );
 }
 
+export interface Rule503020Summary {
+  income: number;
+  needsAmount: number;
+  wantsAmount: number;
+  savingsAmount: number;
+  investmentAmount: number;
+  futureAllocationAmount: number;
+  unclassifiedAmount: number;
+  needsPercentOfIncome: number;
+  wantsPercentOfIncome: number;
+  savingsPercentOfIncome: number;
+  needsPercentOfTarget: number;
+  wantsPercentOfTarget: number;
+  savingsPercentOfTarget: number;
+  needsTargetAmount: number;
+  wantsTargetAmount: number;
+  savingsTargetAmount: number;
+}
+
+export function calculateRule503020(input: {
+  transactions: Transaction[];
+  categories: Category[];
+  month?: string;
+  income?: number;
+}): Rule503020Summary {
+  const inScopeTransactions = input.month
+    ? input.transactions.filter((transaction) =>
+        transaction.date.startsWith(input.month ?? ""),
+      )
+    : input.transactions;
+
+  const categoryById = new Map(
+    input.categories.map((category) => [category.id, category]),
+  );
+
+  const calculatedIncome = inScopeTransactions
+    .filter((transaction) => String(transaction.type) === "income")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const income = input.income ?? calculatedIncome;
+
+  const summary = inScopeTransactions.reduce(
+    (current, transaction) => {
+      const transactionType = String(transaction.type);
+
+      if (transactionType === "income" || transactionType === "transfer") {
+        return current;
+      }
+
+      if (transactionType === "saving") {
+        current.savings += transaction.amount;
+        return current;
+      }
+
+      if (transactionType === "investment") {
+        current.investment += transaction.amount;
+        return current;
+      }
+
+      if (transactionType !== "expense") {
+        return current;
+      }
+
+      const category = categoryById.get(transaction.categoryId);
+      if (!category) {
+        current.wants += transaction.amount;
+        current.unclassified += transaction.amount;
+        return current;
+      }
+
+      const group = getCategoryPlanningGroup(category);
+
+      if (group === "fixed") {
+        current.needs += transaction.amount;
+        return current;
+      }
+
+      if (group === "saving") {
+        current.savings += transaction.amount;
+        return current;
+      }
+
+      if (group === "investment") {
+        current.investment += transaction.amount;
+        return current;
+      }
+
+      if (group === "income") {
+        return current;
+      }
+
+      current.wants += transaction.amount;
+      return current;
+    },
+    {
+      needs: 0,
+      wants: 0,
+      savings: 0,
+      investment: 0,
+      unclassified: 0,
+    },
+  );
+
+  const futureAllocationAmount = summary.savings + summary.investment;
+  const needsTargetAmount = income > 0 ? income * 0.5 : 0;
+  const wantsTargetAmount = income > 0 ? income * 0.3 : 0;
+  const savingsTargetAmount = income > 0 ? income * 0.2 : 0;
+  const percentOfIncome = (value: number) =>
+    income > 0 ? Math.round((value / income) * 100) : 0;
+  const percentOfTarget = (value: number, target: number) =>
+    target > 0 ? Math.round((value / target) * 100) : 0;
+
+  return {
+    income,
+    needsAmount: summary.needs,
+    wantsAmount: summary.wants,
+    savingsAmount: futureAllocationAmount,
+    investmentAmount: summary.investment,
+    futureAllocationAmount,
+    unclassifiedAmount: summary.unclassified,
+    needsPercentOfIncome: percentOfIncome(summary.needs),
+    wantsPercentOfIncome: percentOfIncome(summary.wants),
+    savingsPercentOfIncome: percentOfIncome(futureAllocationAmount),
+    needsPercentOfTarget: percentOfTarget(summary.needs, needsTargetAmount),
+    wantsPercentOfTarget: percentOfTarget(summary.wants, wantsTargetAmount),
+    savingsPercentOfTarget: percentOfTarget(
+      futureAllocationAmount,
+      savingsTargetAmount,
+    ),
+    needsTargetAmount,
+    wantsTargetAmount,
+    savingsTargetAmount,
+  };
+}
+
 export function getPlanningGroupLabel(group: CategoryPlanningGroup) {
   switch (group) {
     case "income":
@@ -215,9 +349,10 @@ export function getGoalLinkedSavingAmount(input: {
   if (linkedCategoryIds.size === 0) return 0;
 
   return input.transactions.reduce((sum, transaction) => {
+    const transactionType = String(transaction.type);
     if (
-      transaction.type === "expense" &&
-      linkedCategoryIds.has(transaction.categoryId)
+      linkedCategoryIds.has(transaction.categoryId) &&
+      (transactionType === "expense" || transactionType === "saving")
     ) {
       return sum + transaction.amount;
     }
@@ -279,10 +414,120 @@ export function getTotalIncome(transactions: Transaction[]) {
     .reduce((sum, item) => sum + item.amount, 0);
 }
 
-export function getTotalExpense(transactions: Transaction[]) {
+function buildCategoryMap(categories: Category[] = []) {
+  return new Map(categories.map((category) => [category.id, category]));
+}
+
+function getTransactionPlanningGroup(
+  transaction: Transaction,
+  categoryById?: Map<string, Category>,
+): CategoryPlanningGroup | undefined {
+  const category = categoryById?.get(transaction.categoryId);
+  return category ? getCategoryPlanningGroup(category) : undefined;
+}
+
+export function isSavingAllocationTransaction(
+  transaction: Transaction,
+  categoryById?: Map<string, Category>,
+) {
+  const transactionType = String(transaction.type);
+  return (
+    transactionType === "saving" ||
+    (transactionType === "expense" &&
+      getTransactionPlanningGroup(transaction, categoryById) === "saving")
+  );
+}
+
+export function isInvestmentAllocationTransaction(
+  transaction: Transaction,
+  categoryById?: Map<string, Category>,
+) {
+  const transactionType = String(transaction.type);
+  return (
+    transactionType === "investment" ||
+    (transactionType === "expense" &&
+      getTransactionPlanningGroup(transaction, categoryById) === "investment")
+  );
+}
+
+export function isFutureAllocationTransaction(
+  transaction: Transaction,
+  categoryById?: Map<string, Category>,
+) {
+  return (
+    isSavingAllocationTransaction(transaction, categoryById) ||
+    isInvestmentAllocationTransaction(transaction, categoryById)
+  );
+}
+
+export function isRealExpenseTransaction(
+  transaction: Transaction,
+  categoryById?: Map<string, Category>,
+) {
+  const transactionType = String(transaction.type);
+  if (transactionType !== "expense") return false;
+
+  const group = getTransactionPlanningGroup(transaction, categoryById);
+  return group !== "saving" && group !== "investment";
+}
+
+export function getTotalExpense(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  const categoryById = buildCategoryMap(categories);
   return transactions
-    .filter((item) => item.type === "expense")
+    .filter((item) => isRealExpenseTransaction(item, categoryById))
     .reduce((sum, item) => sum + item.amount, 0);
+}
+
+export function getTotalSavingAllocation(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  const categoryById = buildCategoryMap(categories);
+  return transactions
+    .filter((item) => isSavingAllocationTransaction(item, categoryById))
+    .reduce((sum, item) => sum + item.amount, 0);
+}
+
+export function getTotalInvestmentAllocation(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  const categoryById = buildCategoryMap(categories);
+  return transactions
+    .filter((item) => isInvestmentAllocationTransaction(item, categoryById))
+    .reduce((sum, item) => sum + item.amount, 0);
+}
+
+export function getTotalFutureAllocation(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  const categoryById = buildCategoryMap(categories);
+  return transactions
+    .filter((item) => isFutureAllocationTransaction(item, categoryById))
+    .reduce((sum, item) => sum + item.amount, 0);
+}
+
+export function getDisposableCashFlow(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  return (
+    getTotalIncome(transactions) - getTotalExpense(transactions, categories)
+  );
+}
+
+export function getAvailableAfterFutureAllocation(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  return (
+    getDisposableCashFlow(transactions, categories) -
+    getTotalFutureAllocation(transactions, categories)
+  );
 }
 
 export function getSavingRate(income: number, expense: number) {
@@ -311,9 +556,11 @@ export function getGoalScore(goals: Goal[]) {
 export function getMonthlyExpenseEstimate(
   transactions: Transaction[],
   months = 6,
+  categories: Category[] = [],
 ) {
-  const expenseTransactions = transactions.filter(
-    (item) => item.type === "expense",
+  const categoryById = buildCategoryMap(categories);
+  const expenseTransactions = transactions.filter((item) =>
+    isRealExpenseTransaction(item, categoryById),
   );
 
   if (expenseTransactions.length === 0) return 0;
@@ -410,6 +657,7 @@ export interface DashboardSummary {
   expense: number;
   monthlyExpense: number;
   saving: number;
+  futureAllocation: number;
   savingRate: number;
   debtRatio: number;
   goalScore: number;
@@ -422,6 +670,7 @@ export function calculateDashboardSummary(input: {
   investments: Investment[];
   debts: Debt[];
   transactions: Transaction[];
+  categories?: Category[];
   goals: Goal[];
 }): DashboardSummary {
   const walletAssets = getTotalAssets(input.wallets);
@@ -433,8 +682,16 @@ export function calculateDashboardSummary(input: {
   const totalAssets = walletAssets + investmentAssets;
   const totalDebt = getTotalDebt(input.debts);
   const income = getTotalIncome(input.transactions);
-  const expense = getTotalExpense(input.transactions);
-  const monthlyExpense = getMonthlyExpenseEstimate(input.transactions);
+  const expense = getTotalExpense(input.transactions, input.categories ?? []);
+  const futureAllocation = getTotalFutureAllocation(
+    input.transactions,
+    input.categories ?? [],
+  );
+  const monthlyExpense = getMonthlyExpenseEstimate(
+    input.transactions,
+    6,
+    input.categories ?? [],
+  );
   const saving = income - expense;
   const investmentPL = investmentAssets - investedAmount;
   const liquidBalance = input.wallets
@@ -458,12 +715,15 @@ export function calculateDashboardSummary(input: {
     expense,
     monthlyExpense,
     saving,
-    savingRate: getSavingRate(income, expense),
+    futureAllocation,
+    savingRate:
+      income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0,
     debtRatio: getDebtRatio(totalDebt, totalAssets),
     goalScore: getGoalScore(input.goals),
     emergencyMonths: getEmergencyMonths(liquidBalance, monthlyExpense),
     financialHealthScore: getFinancialHealthScore({
-      savingRate: getSavingRate(income, expense),
+      savingRate:
+        income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0,
       totalDebt,
       totalAssets,
       emergencyMonths: getEmergencyMonths(liquidBalance, monthlyExpense),
@@ -484,15 +744,13 @@ export function buildCategorySpendingData(
   transactions: Transaction[],
   categories: Category[],
 ): CategorySpending[] {
-  const expenseTransactions = transactions.filter(
-    (item) => item.type === "expense",
+  const categoryById = buildCategoryMap(categories);
+  const expenseTransactions = transactions.filter((item) =>
+    isRealExpenseTransaction(item, categoryById),
   );
   const totalExpense = expenseTransactions.reduce(
     (sum, item) => sum + item.amount,
     0,
-  );
-  const categoryById = new Map(
-    categories.map((category) => [category.id, category]),
   );
   const totals = new Map<
     string,
@@ -538,10 +796,7 @@ export function buildPlanningGroupSpendingData(input: {
   income?: number;
 }): PlanningGroupSpending[] {
   const income = input.income ?? getTotalIncome(input.transactions);
-  const expenseTransactions = input.transactions.filter(
-    (transaction) => transaction.type === "expense",
-  );
-  const totalExpense = getTotalExpense(input.transactions);
+  const totalExpense = getTotalExpense(input.transactions, input.categories);
   const categoryById = new Map(
     input.categories.map((category) => [category.id, category]),
   );
@@ -552,7 +807,30 @@ export function buildPlanningGroupSpendingData(input: {
     ["investment", 0],
   ]);
 
-  for (const transaction of expenseTransactions) {
+  for (const transaction of input.transactions) {
+    const transactionType = String(transaction.type);
+
+    if (transactionType === "income" || transactionType === "transfer") {
+      continue;
+    }
+
+    if (transactionType === "saving") {
+      totals.set("saving", (totals.get("saving") ?? 0) + transaction.amount);
+      continue;
+    }
+
+    if (transactionType === "investment") {
+      totals.set(
+        "investment",
+        (totals.get("investment") ?? 0) + transaction.amount,
+      );
+      continue;
+    }
+
+    if (transactionType !== "expense") {
+      continue;
+    }
+
     const category = categoryById.get(transaction.categoryId);
     const group = getCategoryPlanningGroup(category);
 
@@ -572,7 +850,9 @@ export function buildPlanningGroupSpendingData(input: {
       value,
       percentOfIncome: income > 0 ? Math.round((value / income) * 100) : 0,
       percentOfExpense:
-        totalExpense > 0 ? Math.round((value / totalExpense) * 100) : 0,
+        totalExpense > 0 && (group === "fixed" || group === "variable")
+          ? Math.round((value / totalExpense) * 100)
+          : 0,
     };
   });
 }
@@ -590,14 +870,46 @@ export function getPlanningGroupAmount(input: {
     input.categories.map((category) => [category.id, category]),
   );
 
-  return input.transactions
-    .filter((transaction) => transaction.type === "expense")
-    .reduce((sum, transaction) => {
-      const category = categoryById.get(transaction.categoryId);
-      const group = getCategoryPlanningGroup(category);
+  return input.transactions.reduce((sum, transaction) => {
+    const transactionType = String(transaction.type);
 
-      return group === input.group ? sum + transaction.amount : sum;
-    }, 0);
+    if (transactionType === "income" || transactionType === "transfer") {
+      return sum;
+    }
+
+    if (input.group === "saving") {
+      if (transactionType === "saving") return sum + transaction.amount;
+
+      if (transactionType === "expense") {
+        const category = categoryById.get(transaction.categoryId);
+        return getCategoryPlanningGroup(category) === "saving"
+          ? sum + transaction.amount
+          : sum;
+      }
+
+      return sum;
+    }
+
+    if (input.group === "investment") {
+      if (transactionType === "investment") return sum + transaction.amount;
+
+      if (transactionType === "expense") {
+        const category = categoryById.get(transaction.categoryId);
+        return getCategoryPlanningGroup(category) === "investment"
+          ? sum + transaction.amount
+          : sum;
+      }
+
+      return sum;
+    }
+
+    if (transactionType !== "expense") return sum;
+
+    const category = categoryById.get(transaction.categoryId);
+    const group = getCategoryPlanningGroup(category);
+
+    return group === input.group ? sum + transaction.amount : sum;
+  }, 0);
 }
 
 export function getFixedCostAmount(input: {
@@ -727,7 +1039,7 @@ export function calculateFinancialStructureSummary(input: {
   categories: Category[];
 }): FinancialStructureSummary {
   const income = getTotalIncome(input.transactions);
-  const expense = getTotalExpense(input.transactions);
+  const expense = getTotalExpense(input.transactions, input.categories);
   const fixedCost = getFixedCostAmount(input);
   const variableCost = getVariableCostAmount(input);
   const savingAmount = getPlanningSavingAmount(input);
@@ -1201,6 +1513,19 @@ function getLastMonthKeys(months: number): string[] {
   return keys;
 }
 
+/** Converts a date/string value to YYYY-MM. Empty string means invalid date. */
+function getMonthKey(dateValue: string | Date): string {
+  const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return (
+    date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0")
+  );
+}
+
 /** Month key (YYYY-MM) → Vietnamese short label "T1" … "T12" */
 function monthLabel(key: string): string {
   return "T" + parseInt(key.split("-")[1], 10);
@@ -1210,8 +1535,9 @@ export interface MonthlyCashFlow {
   month: string; // YYYY-MM
   label: string; // "T1" … "T12"
   thu: number; // income in VND (transfers excluded)
-  chi: number; // expense in VND (transfers excluded)
-  tietKiem: number; // income − expense
+  chi: number; // real expense in VND (saving/investment/transfer excluded)
+  tietKiem: number; // income − real expense
+  tichLuy: number; // saving + investment allocations
 }
 
 /**
@@ -1220,15 +1546,27 @@ export interface MonthlyCashFlow {
  */
 export function buildMonthlyCashFlowData(
   transactions: Transaction[],
-  months = 6,
+  categoriesOrMonths: Category[] | number = 6,
+  maybeMonths = 6,
 ): MonthlyCashFlow[] {
+  const categories = Array.isArray(categoriesOrMonths)
+    ? categoriesOrMonths
+    : [];
+  const months = Array.isArray(categoriesOrMonths)
+    ? maybeMonths
+    : categoriesOrMonths;
+  const categoryById = buildCategoryMap(categories);
+
   return getLastMonthKeys(months).map((key) => {
     const txns = transactions.filter((t) => t.date.startsWith(key));
     const thu = txns
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
     const chi = txns
-      .filter((t) => t.type === "expense")
+      .filter((t) => isRealExpenseTransaction(t, categoryById))
+      .reduce((sum, t) => sum + t.amount, 0);
+    const tichLuy = txns
+      .filter((t) => isFutureAllocationTransaction(t, categoryById))
       .reduce((sum, t) => sum + t.amount, 0);
     return {
       month: key,
@@ -1236,6 +1574,7 @@ export function buildMonthlyCashFlowData(
       thu,
       chi,
       tietKiem: thu - chi,
+      tichLuy,
     };
   });
 }
@@ -1243,20 +1582,17 @@ export function buildMonthlyCashFlowData(
 export interface MonthlyNetWorth {
   month: string; // YYYY-MM
   label: string; // "T1" … "T12"
-  value: number; // net worth in VND
+  value: number | null; // null = no reliable historical net-worth snapshot
+  hasData: boolean;
 }
 
 /**
- * Reconstructs approximate monthly net-worth trend by walking backwards from
- * the current snapshot using transaction-derived monthly cash-flow deltas.
+ * Builds the net-worth trend without inventing historical balances.
  *
- * Algorithm:
- *   netWorth[currentMonth] = currentNetWorth          (Supabase snapshot)
- *   netWorth[m−1]          = netWorth[m] − Δ[m]
- *   Δ[m] = income[m] − expense[m]   (transfers excluded)
- *
- * Anchoring to the real persisted wallet/investment/debt values ensures the
- * endpoint is always accurate; historical months are best-effort reconstructions.
+ * The current persisted wallet/investment/debt snapshot is reliable, but older
+ * months are not unless the app stores monthly snapshots. Do not walk backwards
+ * from the current balance using this month's cash flow because it can create
+ * fake negative balances for months with no data.
  */
 export function buildMonthlyNetWorthData(
   input:
@@ -1265,6 +1601,7 @@ export function buildMonthlyNetWorthData(
         investments: Investment[];
         debts: Debt[];
         transactions: Transaction[];
+        categories?: Category[];
         months?: number;
       }
     | Transaction[],
@@ -1272,36 +1609,23 @@ export function buildMonthlyNetWorthData(
   legacyMonths = 6,
 ): MonthlyNetWorth[] {
   const isLegacyCall = Array.isArray(input);
-  const transactions = isLegacyCall ? input : input.transactions;
   const currentNetWorth = isLegacyCall
     ? (legacyCurrentNetWorth ?? 0)
     : getNetWorth(input.wallets, input.debts, input.investments);
   const months = isLegacyCall ? legacyMonths : (input.months ?? 6);
   const keys = getLastMonthKeys(months);
+  const currentMonthKey = getMonthKey(new Date());
 
-  const deltas = keys.map((key) => {
-    const txns = transactions.filter((t) => t.date.startsWith(key));
-    const income = txns
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const expense = txns
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
-    return income - expense;
+  return keys.map((key) => {
+    const isCurrentMonth = key === currentMonthKey;
+
+    return {
+      month: key,
+      label: monthLabel(key),
+      value: isCurrentMonth ? currentNetWorth : null,
+      hasData: isCurrentMonth,
+    };
   });
-
-  // Fill right-to-left: the last element is anchored to currentNetWorth
-  const values = new Array<number>(months);
-  values[months - 1] = currentNetWorth;
-  for (let i = months - 2; i >= 0; i--) {
-    values[i] = values[i + 1] - deltas[i + 1];
-  }
-
-  return keys.map((key, i) => ({
-    month: key,
-    label: monthLabel(key),
-    value: values[i],
-  }));
 }
 
 export type DashboardActionTone = "danger" | "warning" | "good";

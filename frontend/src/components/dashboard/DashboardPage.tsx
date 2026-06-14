@@ -55,6 +55,7 @@ import {
   calculateFinancialStabilitySummary,
   calculateFinancialIndependenceSummary,
   calculateAiCfoInsightSummary,
+  calculateRule503020,
   formatVND,
   generateDashboardActions,
   getFinancialGrade,
@@ -100,89 +101,6 @@ const INV_TYPE_LABELS: Record<string, string> = {
 };
 const SPARK = [30, 44, 38, 58, 52, 70, 63];
 
-const NEED_KEYWORDS = [
-  "food",
-  "meal",
-  "grocery",
-  "market",
-  "housing",
-  "rent",
-  "home",
-  "transport",
-  "fuel",
-  "gas",
-  "electric",
-  "water",
-  "internet",
-  "phone",
-  "medical",
-  "health",
-  "insurance",
-  "education",
-  "school",
-  "tuition",
-  "ăn",
-  "uống",
-  "chợ",
-  "siêu thị",
-  "nhà",
-  "thuê",
-  "điện",
-  "nước",
-  "mạng",
-  "đi lại",
-  "xăng",
-  "xe",
-  "y tế",
-  "sức khỏe",
-  "bảo hiểm",
-  "học",
-];
-
-const WANT_KEYWORDS = [
-  "shopping",
-  "entertainment",
-  "coffee",
-  "travel",
-  "game",
-  "movie",
-  "restaurant",
-  "fashion",
-  "gift",
-  "mua sắm",
-  "giải trí",
-  "cafe",
-  "cà phê",
-  "du lịch",
-  "ăn ngoài",
-  "thời trang",
-  "quà",
-];
-
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function categoryText(category?: Category) {
-  if (!category) return "";
-  return normalizeText(`${category.id} ${category.name}`);
-}
-
-function isNeedCategory(category?: Category) {
-  const text = categoryText(category);
-  if (!text) return false;
-  return NEED_KEYWORDS.some((keyword) => text.includes(normalizeText(keyword)));
-}
-
-function isWantCategory(category?: Category) {
-  const text = categoryText(category);
-  if (!text) return false;
-  return WANT_KEYWORDS.some((keyword) => text.includes(normalizeText(keyword)));
-}
-
 function formatOneDecimal(value: number) {
   if (!Number.isFinite(value)) return "0";
   return new Intl.NumberFormat("vi-VN", {
@@ -204,6 +122,7 @@ export default function DashboardPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isHealthDrawerOpen, setIsHealthDrawerOpen] = useState(false);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
   const reloadData = useCallback(async () => {
     const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
@@ -247,9 +166,10 @@ export default function DashboardPage() {
         investments,
         debts,
         transactions,
+        categories,
         goals,
       }),
-    [wallets, investments, debts, transactions, goals],
+    [wallets, investments, debts, transactions, categories, goals],
   );
 
   // ── Net-worth trend (real monthly reconstruction) ─────────────────────────
@@ -260,15 +180,16 @@ export default function DashboardPage() {
         investments,
         debts,
         transactions,
+        categories,
         months: 6,
       }),
-    [wallets, investments, debts, transactions],
+    [wallets, investments, debts, transactions, categories],
   );
 
   // ── Cash-flow trend (real monthly transaction data) ───────────────────────
   const cashFlowTrend = useMemo(
-    () => buildMonthlyCashFlowData(transactions, 6),
-    [transactions],
+    () => buildMonthlyCashFlowData(transactions, categories, 6),
+    [transactions, categories],
   );
 
   // ── Asset pie ─────────────────────────────────────────────────────────────
@@ -306,41 +227,23 @@ export default function DashboardPage() {
 
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
-    const income = Math.max(summary.income, 0);
-    const expenseTxns = transactions.filter((t) => t.type === "expense");
-
-    const needs = expenseTxns
-      .filter((t) =>
-        isNeedCategory(categories.find((c) => c.id === t.categoryId)),
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const explicitWants = expenseTxns
-      .filter((t) =>
-        isWantCategory(categories.find((c) => c.id === t.categoryId)),
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const unclassifiedExpense = Math.max(
-      summary.expense - needs - explicitWants,
-      0,
-    );
-    const wants = explicitWants + unclassifiedExpense;
-    const savings = Math.max(summary.saving, 0);
-
-    const pct = (value: number) =>
-      income > 0 ? Math.round((value / income) * 100) : 0;
+    const allocation = calculateRule503020({
+      transactions,
+      categories,
+      month: currentMonth,
+      income: summary.income,
+    });
 
     return {
-      needs: pct(needs),
-      wants: pct(wants),
-      savings: pct(savings),
-      needsAmount: needs,
-      wantsAmount: wants,
-      savingsAmount: savings,
-      unclassifiedAmount: unclassifiedExpense,
+      needs: allocation.needsPercentOfIncome,
+      wants: allocation.wantsPercentOfIncome,
+      savings: allocation.savingsPercentOfIncome,
+      needsAmount: allocation.needsAmount,
+      wantsAmount: allocation.wantsAmount,
+      savingsAmount: allocation.savingsAmount,
+      unclassifiedAmount: allocation.unclassifiedAmount,
     };
-  }, [transactions, categories, summary]);
+  }, [transactions, categories, currentMonth, summary.income]);
 
   const cashFlowData = useMemo(
     () =>
@@ -961,13 +864,14 @@ export default function DashboardPage() {
                     labelStyle={{ fontWeight: 700, color: "#475569" }}
                     itemStyle={{ color: "#1e293b", fontWeight: 600 }}
                     formatter={(v) => [
-                      formatVND(Number(v ?? 0)),
+                      v == null ? "Không có dữ liệu" : formatVND(Number(v)),
                       "Tài sản ròng",
                     ]}
                   />
                   <Area
                     type="monotone"
                     dataKey="value"
+                    connectNulls={false}
                     stroke="#2563eb"
                     strokeWidth={3}
                     fill="url(#nwGrad)"
@@ -1538,11 +1442,15 @@ export default function DashboardPage() {
                   }}
                   labelStyle={{ fontWeight: 700, color: "#475569" }}
                   itemStyle={{ color: "#1e293b", fontWeight: 600 }}
-                  formatter={(v) => [formatVND(Number(v ?? 0)), "Tài sản ròng"]}
+                  formatter={(v) => [
+                    v == null ? "Không có dữ liệu" : formatVND(Number(v)),
+                    "Tài sản ròng",
+                  ]}
                 />
                 <Area
                   type="monotone"
                   dataKey="value"
+                  connectNulls={false}
                   stroke="#2563eb"
                   strokeWidth={2.5}
                   fill="url(#wealthGrad)"
@@ -1652,7 +1560,7 @@ export default function DashboardPage() {
               color="text-emerald-600"
             />
             <MiniStat
-              label="Chi tiêu"
+              label="Chi tiêu thật"
               value={formatVND(summary.expense)}
               color="text-rose-500"
             />
@@ -1662,7 +1570,7 @@ export default function DashboardPage() {
               color={netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500"}
             />
             <MiniStat
-              label="Tỷ lệ tiết kiệm"
+              label="Tỷ lệ tích lũy"
               value={`${summary.savingRate}%`}
               color={
                 summary.savingRate >= 20 ? "text-emerald-600" : "text-rose-500"
@@ -1717,8 +1625,14 @@ export default function DashboardPage() {
                 />
                 <Bar
                   dataKey="chi"
-                  name="Chi tiêu"
+                  name="Chi tiêu thật"
                   fill="#f43f5e"
+                  radius={[6, 6, 0, 0]}
+                />
+                <Bar
+                  dataKey="tichLuy"
+                  name="Tiết kiệm + Đầu tư"
+                  fill="#14b8a6"
                   radius={[6, 6, 0, 0]}
                 />
                 <Bar
@@ -1737,7 +1651,11 @@ export default function DashboardPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-rose-500" />
-              Chi tiêu
+              Chi tiêu thật
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-teal-500" />
+              Tiết kiệm + Đầu tư
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-blue-600" />

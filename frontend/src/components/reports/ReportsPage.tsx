@@ -58,11 +58,8 @@ import {
   formatVND,
   getDebtRatio,
   getGoalScore,
-  getSavingRate,
-  getSpendingByCategory,
   getTotalAssets,
   getTotalDebt,
-  getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
@@ -157,6 +154,160 @@ function periodLabel(
   }
 }
 
+function normalizeVietnamese(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function getCategoryOfTransaction(
+  transaction: Transaction,
+  categories: Category[],
+): Category | undefined {
+  return categories.find((category) => category.id === transaction.categoryId);
+}
+
+function isSavingCategory(category?: Category): boolean {
+  if (!category) return false;
+  const planningGroup = String(category.planningGroup ?? "");
+  const name = normalizeVietnamese(category.name ?? "");
+
+  return (
+    planningGroup === "saving" ||
+    name.includes("tiet kiem") ||
+    name.includes("quy") ||
+    name.includes("du phong") ||
+    name.includes("tich luy")
+  );
+}
+
+function isInvestmentCategory(category?: Category): boolean {
+  if (!category) return false;
+  const planningGroup = String(category.planningGroup ?? "");
+  const name = normalizeVietnamese(category.name ?? "");
+
+  return (
+    planningGroup === "investment" ||
+    name.includes("dau tu") ||
+    name.includes("trading") ||
+    name.includes("forex") ||
+    name.includes("exness") ||
+    name.includes("crypto") ||
+    name.includes("vang") ||
+    name.includes("co phieu") ||
+    name.includes("chung khoan")
+  );
+}
+
+function isSavingTransaction(
+  transaction: Transaction,
+  categories: Category[],
+): boolean {
+  const type = String(transaction.type);
+  return (
+    type === "saving" ||
+    (type === "expense" &&
+      isSavingCategory(getCategoryOfTransaction(transaction, categories)))
+  );
+}
+
+function isInvestmentTransaction(
+  transaction: Transaction,
+  categories: Category[],
+): boolean {
+  const type = String(transaction.type);
+  return (
+    type === "investment" ||
+    (type === "expense" &&
+      isInvestmentCategory(getCategoryOfTransaction(transaction, categories)))
+  );
+}
+
+function isRealExpenseTransaction(
+  transaction: Transaction,
+  categories: Category[],
+): boolean {
+  return (
+    String(transaction.type) === "expense" &&
+    !isSavingTransaction(transaction, categories) &&
+    !isInvestmentTransaction(transaction, categories)
+  );
+}
+
+function sumTransactions(transactions: Transaction[]): number {
+  return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+}
+
+function getRealExpenseTotal(
+  transactions: Transaction[],
+  categories: Category[],
+): number {
+  return sumTransactions(
+    transactions.filter((transaction) =>
+      isRealExpenseTransaction(transaction, categories),
+    ),
+  );
+}
+
+function getSavingCapitalTotal(
+  transactions: Transaction[],
+  categories: Category[],
+): number {
+  return sumTransactions(
+    transactions.filter((transaction) =>
+      isSavingTransaction(transaction, categories),
+    ),
+  );
+}
+
+function getInvestmentCapitalTotal(
+  transactions: Transaction[],
+  categories: Category[],
+): number {
+  return sumTransactions(
+    transactions.filter((transaction) =>
+      isInvestmentTransaction(transaction, categories),
+    ),
+  );
+}
+
+function getFutureAllocationTotal(
+  transactions: Transaction[],
+  categories: Category[],
+): number {
+  return (
+    getSavingCapitalTotal(transactions, categories) +
+    getInvestmentCapitalTotal(transactions, categories)
+  );
+}
+
+function getRealSpendingByCategory(
+  transactions: Transaction[],
+  categories: Category[],
+) {
+  const realExpenses = transactions.filter((transaction) =>
+    isRealExpenseTransaction(transaction, categories),
+  );
+  const total = sumTransactions(realExpenses);
+  const map = new Map<string, number>();
+
+  for (const transaction of realExpenses) {
+    const category = getCategoryOfTransaction(transaction, categories);
+    const name = category?.name ?? "Khác";
+    map.set(name, (map.get(name) ?? 0) + transaction.amount);
+  }
+
+  return Array.from(map.entries())
+    .map(([name, value]) => ({
+      name,
+      value,
+      percent: total > 0 ? Math.round((value / total) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -219,14 +370,22 @@ export default function ReportsPage() {
     [transactions, periodMode, year, month, quarter, customStart, customEnd],
   );
 
-  // ── Core summary (preserved) ──────────────────────────────────────────────
+  // ── Core summary ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
     const income = getTotalIncome(filtered);
-    const expense = getTotalExpense(filtered);
+    const expense = getRealExpenseTotal(filtered, categories);
+    const savingAllocation = getSavingCapitalTotal(filtered, categories);
+    const investmentAllocation = getInvestmentCapitalTotal(
+      filtered,
+      categories,
+    );
+    const futureAllocation = savingAllocation + investmentAllocation;
     const saving = income - expense;
-    const savingRate = getSavingRate(income, expense);
+    const availableAfterFutureAllocation = saving - futureAllocation;
+    const savingRate =
+      income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0;
     const investmentAssets = investments.reduce(
-      (s, i) => s + i.currentValue,
+      (sum, investment) => sum + investment.currentValue,
       0,
     );
     const walletAssets = getTotalAssets(wallets);
@@ -235,10 +394,15 @@ export default function ReportsPage() {
     const netWorth = totalAssets - totalDebt;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
     const goalScore = getGoalScore(goals);
+
     return {
       income,
       expense,
       saving,
+      savingAllocation,
+      investmentAllocation,
+      futureAllocation,
+      availableAfterFutureAllocation,
       savingRate,
       totalAssets,
       totalDebt,
@@ -247,7 +411,7 @@ export default function ReportsPage() {
       debtRatio,
       goalScore,
     };
-  }, [filtered, wallets, investments, debts, goals]);
+  }, [filtered, categories, wallets, investments, debts, goals]);
 
   // ── Monthly breakdown (preserved) ────────────────────────────────────────
   const yearTxns = useMemo(
@@ -261,22 +425,31 @@ export default function ReportsPage() {
         const m = String(i + 1).padStart(2, "0");
         const mx = yearTxns.filter((t) => t.date.startsWith(year + "-" + m));
         const inc = getTotalIncome(mx);
-        const exp = getTotalExpense(mx);
+        const exp = getRealExpenseTotal(mx, categories);
+        const savingCapital = getSavingCapitalTotal(mx, categories);
+        const investmentCapital = getInvestmentCapitalTotal(mx, categories);
+        const futureAllocation = savingCapital + investmentCapital;
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
           chi: exp / 1e6,
           tietKiem: (inc - exp) / 1e6,
+          tichLuy: futureAllocation / 1e6,
+          dauTu: investmentCapital / 1e6,
           income: inc,
           expense: exp,
+          savingAllocation: savingCapital,
+          investmentAllocation: investmentCapital,
+          futureAllocation,
+          cashFlow: inc - exp,
         };
       }),
-    [yearTxns, year],
+    [yearTxns, year, categories],
   );
 
   // ── Spending breakdown (preserved) ────────────────────────────────────────
   const spendingByCategory = useMemo(
-    () => getSpendingByCategory(filtered, categories),
+    () => getRealSpendingByCategory(filtered, categories),
     [filtered, categories],
   );
   const spendingPieData = useMemo(
@@ -335,35 +508,42 @@ export default function ReportsPage() {
           getTotalIncome(prevMonthTxns),
         ),
         expense: delta(
-          getTotalExpense(curMonthTxns),
-          getTotalExpense(prevMonthTxns),
+          getRealExpenseTotal(curMonthTxns, categories),
+          getRealExpenseTotal(prevMonthTxns, categories),
         ),
         saving: delta(
-          getTotalIncome(curMonthTxns) - getTotalExpense(curMonthTxns),
-          getTotalIncome(prevMonthTxns) - getTotalExpense(prevMonthTxns),
+          getTotalIncome(curMonthTxns) -
+            getRealExpenseTotal(curMonthTxns, categories),
+          getTotalIncome(prevMonthTxns) -
+            getRealExpenseTotal(prevMonthTxns, categories),
         ),
       },
       qoq: {
         income: delta(getTotalIncome(curQTxns), getTotalIncome(prevQTxns)),
-        expense: delta(getTotalExpense(curQTxns), getTotalExpense(prevQTxns)),
+        expense: delta(
+          getRealExpenseTotal(curQTxns, categories),
+          getRealExpenseTotal(prevQTxns, categories),
+        ),
         saving: delta(
-          getTotalIncome(curQTxns) - getTotalExpense(curQTxns),
-          getTotalIncome(prevQTxns) - getTotalExpense(prevQTxns),
+          getTotalIncome(curQTxns) - getRealExpenseTotal(curQTxns, categories),
+          getTotalIncome(prevQTxns) -
+            getRealExpenseTotal(prevQTxns, categories),
         ),
       },
       yoy: {
         income: delta(getTotalIncome(yearTxns), getTotalIncome(prevYearTxns)),
         expense: delta(
-          getTotalExpense(yearTxns),
-          getTotalExpense(prevYearTxns),
+          getRealExpenseTotal(yearTxns, categories),
+          getRealExpenseTotal(prevYearTxns, categories),
         ),
         saving: delta(
-          getTotalIncome(yearTxns) - getTotalExpense(yearTxns),
-          getTotalIncome(prevYearTxns) - getTotalExpense(prevYearTxns),
+          getTotalIncome(yearTxns) - getRealExpenseTotal(yearTxns, categories),
+          getTotalIncome(prevYearTxns) -
+            getRealExpenseTotal(prevYearTxns, categories),
         ),
       },
     };
-  }, [transactions, year, yearTxns]);
+  }, [transactions, year, yearTxns, categories]);
 
   // ── Analytics engine (preserved) ─────────────────────────────────────────
   const healthV2 = useMemo(
@@ -397,6 +577,10 @@ export default function ReportsPage() {
     () => investments.reduce((s, inv) => s + inv.investedAmount, 0),
     [investments],
   );
+  const displayedInvestmentCapital =
+    summary.investmentAssets > 0
+      ? summary.investmentAssets
+      : summary.investmentAllocation;
   const investmentROI = useMemo(
     () =>
       totalInvested > 0
@@ -422,11 +606,18 @@ export default function ReportsPage() {
   // ── Export helpers (preserved) ────────────────────────────────────────────
   function exportCSV() {
     const rows = [
-      ["Tháng", "Thu nhập (đ)", "Chi tiêu (đ)", "Tiết kiệm (đ)"],
+      [
+        "Tháng",
+        "Thu nhập (đ)",
+        "Chi phí thật (đ)",
+        "Tiết kiệm + Đầu tư (đ)",
+        "Dòng tiền sau chi phí (đ)",
+      ],
       ...monthly.map((m) => [
         m.month,
         String(Math.round(m.thu * 1e6)),
         String(Math.round(m.chi * 1e6)),
+        String(Math.round((m.tichLuy ?? 0) * 1e6)),
         String(Math.round(m.tietKiem * 1e6)),
       ]),
     ];
@@ -550,8 +741,8 @@ export default function ReportsPage() {
               icon={<AlertTriangle size={16} />}
             />
             <KpiCard
-              label="Tổng đầu tư"
-              value={formatVND(summary.investmentAssets)}
+              label="Danh mục đầu tư"
+              value={formatVND(displayedInvestmentCapital)}
               sub={
                 "ROI " + (investmentROI >= 0 ? "+" : "") + investmentROI + "%"
               }
@@ -703,7 +894,7 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi tiêu"
+              label="Chi phí thật"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
@@ -747,7 +938,7 @@ export default function ReportsPage() {
                 positive
               />
               <TrendCard
-                title="Chi tiêu"
+                title="Chi phí thật"
                 color="#f43f5e"
                 data={monthly.map((m) => ({ v: m.chi }))}
                 unit="M"
@@ -826,7 +1017,7 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Tổng chi tiêu"
+              label="Chi phí thật"
               value={formatVND(summary.expense)}
               color="text-rose-500"
               bg="bg-rose-50"
@@ -950,7 +1141,7 @@ export default function ReportsPage() {
                   </tr>
                   <tr className="bg-rose-50/40">
                     <td className="py-3 font-black text-slate-900">
-                      Tổng chi tiêu
+                      Chi phí thật
                     </td>
                     <td className="py-3 text-right font-black text-rose-500">
                       {formatVND(summary.expense)}
@@ -1247,16 +1438,19 @@ export default function ReportsPage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        {["Tháng", "Thu (M)", "Chi (M)", "Tiết kiệm (M)"].map(
-                          (h) => (
-                            <th
-                              key={h}
-                              className="pb-2 text-right font-bold text-slate-500 first:text-left"
-                            >
-                              {h}
-                            </th>
-                          ),
-                        )}
+                        {[
+                          "Tháng",
+                          "Thu (M)",
+                          "Chi thật (M)",
+                          "Dòng tiền (M)",
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className="pb-2 text-right font-bold text-slate-500 first:text-left"
+                          >
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1319,7 +1513,7 @@ export default function ReportsPage() {
                     </tr>
                     <tr className="bg-rose-50/40">
                       <td className="py-3 font-black text-slate-900">
-                        Tổng chi tiêu
+                        Chi phí thật
                       </td>
                       <td className="py-3 text-right font-black text-rose-500">
                         {formatVND(summary.expense)}
@@ -1455,15 +1649,15 @@ export default function ReportsPage() {
           {/* Investment KPIs */}
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatMini
-              label="Tổng đầu tư"
+              label="Danh mục đầu tư"
               value={formatVND(summary.investmentAssets)}
               color="text-blue-600"
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Vốn bỏ vào"
-              value={formatVND(totalInvested)}
+              label="Vốn giao dịch kỳ này"
+              value={formatVND(summary.investmentAllocation)}
               color="text-slate-600"
               bg="bg-slate-50"
               border="border-slate-200"
@@ -2140,7 +2334,7 @@ function CompareSection({
       <p className="mb-2 text-xs font-black text-slate-500">{title}</p>
       <div className="grid grid-cols-3 gap-2">
         <DeltaChip label="Thu nhập" delta={data.income} positive />
-        <DeltaChip label="Chi tiêu" delta={data.expense} positive={false} />
+        <DeltaChip label="Chi phí thật" delta={data.expense} positive={false} />
         <DeltaChip label="Tiết kiệm" delta={data.saving} positive />
       </div>
     </div>

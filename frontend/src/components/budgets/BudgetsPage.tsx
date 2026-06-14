@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useDateFilter } from "../layout/DateFilterProvider";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -39,6 +40,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
+  calculateRule503020,
   formatVND,
   getCategoryPlanningGroup,
   getPlanningGroupLabel,
@@ -266,12 +268,8 @@ export default function BudgetsPage() {
   );
   const { toast } = useToast();
   const router = useRouter();
-  const [activeMonth, setActiveMonth] = useState(() => {
-    const now = new Date();
-    return (
-      now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0")
-    );
-  });
+  const { selectedMonth: activeMonth, setSelectedMonth: setActiveMonth } =
+    useDateFilter();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
@@ -323,13 +321,30 @@ export default function BudgetsPage() {
 
   // ── PRESERVED: getSpent ───────────────────────────────────────────────────
   function getSpent(categoryId: string, month: string) {
+    const group = getCategoryGroup(categoryId);
+
     return transactions
-      .filter(
-        (item) =>
-          item.type === "expense" &&
-          item.categoryId === categoryId &&
-          item.date.startsWith(month),
-      )
+      .filter((item) => {
+        if (item.categoryId !== categoryId || !item.date.startsWith(month)) {
+          return false;
+        }
+
+        const transactionType = String(item.type);
+
+        if (group === "saving") {
+          return transactionType === "expense" || transactionType === "saving";
+        }
+
+        if (group === "investment") {
+          return (
+            transactionType === "expense" ||
+            transactionType === "saving" ||
+            transactionType === "investment"
+          );
+        }
+
+        return transactionType === "expense";
+      })
       .reduce((sum, item) => sum + item.amount, 0);
   }
 
@@ -470,15 +485,92 @@ export default function BudgetsPage() {
       key: "spent" | "limit" | "projectedSpend",
     ) => items.reduce((sum, item) => sum + item[key], 0);
 
-    const fixedSpent = sumBy(fixedItems, "spent");
-    const variableSpent = sumBy(variableItems, "spent");
-    const savingSpent = sumBy(savingItems, "spent");
-    const investmentSpent = sumBy(investmentItems, "spent");
-    const uncategorizedSpent = sumBy(uncategorizedItems, "spent");
     const fixedLimit = sumBy(fixedItems, "limit");
     const variableLimit = sumBy(variableItems, "limit");
     const savingLimit = sumBy(savingItems, "limit");
     const investmentLimit = sumBy(investmentItems, "limit");
+
+    const classifyPlanningTransaction = (
+      transaction: Transaction,
+    ): CategoryPlanningGroup | null => {
+      const transactionType = String(transaction.type);
+      const category = categoryById.get(transaction.categoryId);
+      const categoryName = (category?.name ?? "").toLowerCase();
+      const categoryGroup = getCategoryPlanningGroup(category);
+
+      if (transactionType === "income" || transactionType === "transfer") {
+        return null;
+      }
+
+      if (transactionType === "saving") {
+        return "saving";
+      }
+
+      if (transactionType === "investment") {
+        return "investment";
+      }
+
+      if (
+        categoryGroup === "fixed" ||
+        categoryGroup === "variable" ||
+        categoryGroup === "saving" ||
+        categoryGroup === "investment"
+      ) {
+        return categoryGroup;
+      }
+
+      if (
+        categoryName.includes("tiết kiệm") ||
+        categoryName.includes("tiet kiem") ||
+        categoryName.includes("quỹ") ||
+        categoryName.includes("quy") ||
+        categoryName.includes("dự phòng") ||
+        categoryName.includes("du phong")
+      ) {
+        return "saving";
+      }
+
+      if (
+        categoryName.includes("đầu tư") ||
+        categoryName.includes("dau tu") ||
+        categoryName.includes("vàng") ||
+        categoryName.includes("vang") ||
+        categoryName.includes("crypto") ||
+        categoryName.includes("coin") ||
+        categoryName.includes("cổ phiếu") ||
+        categoryName.includes("co phieu") ||
+        categoryName.includes("trading")
+      ) {
+        return "investment";
+      }
+
+      return null;
+    };
+
+    const actualPlanningSpent = transactions
+      .filter((transaction) => transaction.date.startsWith(activeMonth))
+      .reduce(
+        (summary, transaction) => {
+          const group = classifyPlanningTransaction(transaction);
+          if (group === "fixed") summary.fixed += transaction.amount;
+          if (group === "variable") summary.variable += transaction.amount;
+          if (group === "saving") summary.saving += transaction.amount;
+          if (group === "investment") summary.investment += transaction.amount;
+          return summary;
+        },
+        {
+          fixed: 0,
+          variable: 0,
+          saving: 0,
+          investment: 0,
+        },
+      );
+
+    const fixedSpent = actualPlanningSpent.fixed;
+    const variableSpent = actualPlanningSpent.variable;
+    const savingSpent = actualPlanningSpent.saving;
+    const investmentSpent = actualPlanningSpent.investment;
+    const uncategorizedSpent = sumBy(uncategorizedItems, "spent");
     const fixedProjected = sumBy(fixedItems, "projectedSpend");
     const variableProjected = sumBy(variableItems, "projectedSpend");
     const savingProjected = sumBy(savingItems, "projectedSpend");
@@ -542,6 +634,7 @@ export default function BudgetsPage() {
       effectiveIncome,
     };
   }, [
+    activeMonth,
     categoryById,
     filteredBudgets,
     filteredSummary.totalLimit,
@@ -669,15 +762,21 @@ export default function BudgetsPage() {
   }, [activeMonth, isRealExpenseGroup, previousMonth, transactions]);
 
   const v7Allocation = useMemo(() => {
-    const income = financialPlanning.effectiveIncome;
+    const allocation = calculateRule503020({
+      transactions,
+      categories,
+      month: activeMonth,
+      income: financialPlanning.effectiveIncome,
+    });
+
     const makeBucket = (
       label: string,
       actualAmount: number,
+      targetAmount: number,
       targetPercent: number,
       color: string,
       textColor: string,
     ) => {
-      const targetAmount = income > 0 ? (income * targetPercent) / 100 : 0;
       const percentOfTarget =
         targetAmount > 0 ? Math.round((actualAmount / targetAmount) * 100) : 0;
       const status =
@@ -704,27 +803,35 @@ export default function BudgetsPage() {
     return [
       makeBucket(
         "Nhu cầu thiết yếu",
-        financialPlanning.fixedSpent,
+        allocation.needsAmount,
+        allocation.needsTargetAmount,
         50,
         "#2563eb",
         "text-blue-700",
       ),
       makeBucket(
         "Muốn & Giải trí",
-        financialPlanning.variableSpent,
+        allocation.wantsAmount,
+        allocation.wantsTargetAmount,
         30,
         "#f59e0b",
         "text-amber-700",
       ),
       makeBucket(
         "Tiết kiệm & Đầu tư",
-        financialPlanning.futureAllocationSpent,
+        allocation.savingsAmount,
+        allocation.savingsTargetAmount,
         20,
         "#10b981",
         "text-emerald-700",
       ),
     ];
-  }, [financialPlanning]);
+  }, [
+    activeMonth,
+    categories,
+    financialPlanning.effectiveIncome,
+    transactions,
+  ]);
 
   const topRiskCategories = useMemo(() => {
     const byCategory = new Map<

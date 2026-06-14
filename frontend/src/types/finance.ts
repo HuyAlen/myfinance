@@ -1,10 +1,22 @@
-export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionType =
+  | "income"
+  | "expense"
+  | "transfer"
+  | "saving"
+  | "investment";
 
 export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
 
 export type WalletType = "cash" | "bank" | "ewallet" | "investment";
 
 export type CategoryType = "income" | "expense";
+
+export type CategoryPlanningGroup =
+  | "income"
+  | "fixed"
+  | "variable"
+  | "saving"
+  | "investment";
 
 export type Wallet = {
   id: string;
@@ -17,6 +29,16 @@ export type Category = {
   id: string;
   name: string;
   type: CategoryType;
+  /**
+   * Financial planning classification used by Budget/Dashboard AI.
+   * Stored in Supabase as `planning_group`.
+   *
+   * income     -> income category
+   * fixed      -> fixed monthly expense, e.g. rent, utilities, insurance
+   * variable   -> controllable/flexible expense, e.g. food, shopping
+   * saving     -> saving allocation, e.g. emergency fund
+   * investment -> investing allocation, e.g. trading, ETF, crypto
+   */
   planningGroup?: CategoryPlanningGroup;
 };
 
@@ -53,6 +75,10 @@ export type Goal = {
   name: string;
   targetAmount: number;
   currentAmount: number;
+  /**
+   * Saving categories that automatically contribute to this goal.
+   * Stored in Supabase as `saving_category_ids`.
+   */
   savingCategoryIds?: string[];
 };
 
@@ -83,10 +109,3 @@ export type Investment = {
   averageCost?: number;
   currentPrice?: number;
 };
-
-export type CategoryPlanningGroup =
-  | "income"
-  | "fixed"
-  | "variable"
-  | "saving"
-  | "investment";

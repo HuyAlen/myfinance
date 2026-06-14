@@ -23,6 +23,10 @@ import {
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
+import {
+  useDateFilter,
+  type DateFilterMode,
+} from "../layout/DateFilterProvider";
 import { signOut } from "@/src/lib/auth";
 
 import {
@@ -307,20 +311,6 @@ function buildNotifications(data: AppData): NotificationItem[] {
   return out.slice(0, 8);
 }
 
-// ─── Month helpers ────────────────────────────────────────────────────────────
-function getLast12Months(): { value: string; label: string }[] {
-  const out = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({
-      value: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"),
-      label: d.toLocaleDateString("vi-VN", { month: "long", year: "numeric" }),
-    });
-  }
-  return out;
-}
-
 // ─── KindIcon ─────────────────────────────────────────────────────────────────
 function KindIcon({ kind }: { kind: SearchResult["kind"] }) {
   const cls = "shrink-0 text-slate-400";
@@ -423,6 +413,22 @@ export default function Header({
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const {
+    filterMode,
+    setFilterMode,
+    selectedMonth,
+    selectedQuarter,
+    selectedYear,
+    setSelectedMonth,
+    setSelectedQuarter,
+    setSelectedYearFilter,
+    setCustomRange,
+    filterLabel,
+    dateRange,
+    months12,
+    quarters8,
+    years5,
+  } = useDateFilter();
 
   // UI toggles
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -430,9 +436,8 @@ export default function Header({
   const [searchFocus, setSearchFocus] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(() =>
-    new Date().toISOString().slice(0, 7),
-  );
+  const [customStart, setCustomStart] = useState(dateRange.startDate);
+  const [customEnd, setCustomEnd] = useState(dateRange.endDate);
 
   // App data (loaded once for search + notifications)
   const [appData, setAppData] = useState<AppData>(EMPTY);
@@ -446,10 +451,6 @@ export default function Header({
   const unreadCount = notifList.filter((n) => !n.read).length;
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
-  const months12 = getLast12Months();
-  const monthLabel =
-    months12.find((m) => m.value === selectedMonth)?.label ??
-    new Date().toLocaleDateString("vi-VN", { month: "long", year: "numeric" });
 
   // Load all data once on mount
   useEffect(() => {
@@ -501,11 +502,32 @@ export default function Header({
     router.replace("/login");
   }
 
+  function updateUrlFilter(key: string, value: string) {
+    router.replace(`${pathname}?${key}=${encodeURIComponent(value)}`);
+  }
+
   function handleSelectMonth(month: string) {
     setSelectedMonth(month);
     setMonthOpen(false);
-    // Persist month in URL so pages can read via useSearchParams().get("month")
-    router.replace(pathname + "?month=" + month);
+    updateUrlFilter("month", month);
+  }
+
+  function handleSelectQuarter(quarter: string) {
+    setSelectedQuarter(quarter);
+    setMonthOpen(false);
+    updateUrlFilter("quarter", quarter);
+  }
+
+  function handleSelectYear(year: string) {
+    setSelectedYearFilter(Number(year));
+    setMonthOpen(false);
+    updateUrlFilter("year", year);
+  }
+
+  function handleApplyCustomRange() {
+    setCustomRange(customStart, customEnd);
+    setMonthOpen(false);
+    updateUrlFilter("range", `${customStart}_${customEnd}`);
   }
 
   function handleNotifClick(href: string, id: string) {
@@ -693,7 +715,7 @@ export default function Header({
 
         {/* ══ RIGHT ══ */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Month picker */}
+          {/* Period picker */}
           <div className="relative hidden md:block">
             <button
               onClick={() => {
@@ -701,41 +723,252 @@ export default function Header({
                 setDropdownOpen(false);
                 setNotifOpen(false);
               }}
-              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 shadow-sm transition hover:bg-blue-50 hover:text-blue-700"
+              className={[
+                "flex min-w-[220px] items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-2.5 text-left shadow-sm transition",
+                monthOpen
+                  ? "border-blue-300 shadow-md shadow-blue-100"
+                  : "border-slate-200 hover:border-blue-200 hover:bg-slate-50",
+              ].join(" ")}
+              aria-haspopup="dialog"
+              aria-expanded={monthOpen}
+              title="Chọn kỳ báo cáo dùng chung cho toàn bộ ứng dụng"
             >
-              {monthLabel}
+              <span className="min-w-0">
+                <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                  Kỳ báo cáo
+                </span>
+                <span className="block truncate text-sm font-extrabold text-slate-900">
+                  {filterLabel}
+                </span>
+              </span>
               <ChevronDown
-                size={11}
+                size={16}
                 className={[
-                  "text-slate-400 transition-transform duration-200",
-                  monthOpen ? "rotate-180" : "",
+                  "shrink-0 text-slate-400 transition-transform duration-200",
+                  monthOpen ? "rotate-180 text-blue-600" : "",
                 ].join(" ")}
               />
             </button>
+
             {monthOpen && (
               <>
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setMonthOpen(false)}
                 />
-                <div className="absolute right-0 top-full z-50 mt-2 w-52 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
-                  {months12.map((m) => (
+                <div
+                  className="absolute right-0 top-full z-50 mt-2 w-[360px] overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
+                  role="dialog"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3 px-1">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        Chọn kỳ dữ liệu
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-slate-500">
+                        Áp dụng cho Dashboard, Giao dịch, Ngân sách và Báo cáo
+                      </p>
+                    </div>
                     <button
-                      key={m.value}
-                      onClick={() => handleSelectMonth(m.value)}
-                      className={
-                        "flex w-full items-center justify-between px-4 py-2.5 text-sm transition hover:bg-blue-50 " +
-                        (m.value === selectedMonth
-                          ? "bg-blue-50 font-black text-blue-700"
-                          : "text-slate-600 font-medium")
-                      }
+                      type="button"
+                      onClick={() => setMonthOpen(false)}
+                      className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                      aria-label="Đóng"
                     >
-                      <span>{m.label}</span>
-                      {m.value === selectedMonth && (
-                        <span className="size-1.5 rounded-full bg-blue-500" />
-                      )}
+                      <X size={15} />
                     </button>
-                  ))}
+                  </div>
+
+                  <div className="mb-3 grid grid-cols-4 gap-1 rounded-2xl bg-slate-100 p-1 text-xs font-black">
+                    {(
+                      [
+                        ["month", "Tháng"],
+                        ["quarter", "Quý"],
+                        ["year", "Năm"],
+                        ["custom", "Tùy chọn"],
+                      ] as Array<[DateFilterMode, string]>
+                    ).map(([mode, label]) => {
+                      const active = filterMode === mode;
+
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setFilterMode(mode);
+                            if (mode === "custom") {
+                              setCustomStart(dateRange.startDate);
+                              setCustomEnd(dateRange.endDate);
+                            }
+                          }}
+                          className={[
+                            "rounded-xl px-2 py-2 transition",
+                            active
+                              ? "bg-white text-blue-700 shadow-sm"
+                              : "text-slate-500 hover:text-slate-900",
+                          ].join(" ")}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {filterMode === "month" && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        {months12.slice(0, 2).map((m, index) => {
+                          const active = m.value === selectedMonth;
+
+                          return (
+                            <button
+                              key={m.value + "-quick"}
+                              type="button"
+                              onClick={() => handleSelectMonth(m.value)}
+                              className={[
+                                "rounded-2xl border px-3 py-2.5 text-left transition",
+                                active
+                                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                              ].join(" ")}
+                            >
+                              <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                                {index === 0 ? "Tháng này" : "Tháng trước"}
+                              </span>
+                              <span className="mt-0.5 block text-sm font-extrabold">
+                                {m.label.replace(" năm ", "/")}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-100 p-1">
+                        {months12.map((m) => {
+                          const active = m.value === selectedMonth;
+
+                          return (
+                            <button
+                              key={m.value}
+                              type="button"
+                              onClick={() => handleSelectMonth(m.value)}
+                              className={[
+                                "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm transition",
+                                active
+                                  ? "bg-blue-600 font-extrabold text-white shadow-sm shadow-blue-100"
+                                  : "font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                              ].join(" ")}
+                            >
+                              <span>{m.label}</span>
+                              {active ? (
+                                <span className="size-2 rounded-full bg-white" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {filterMode === "quarter" && (
+                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-100 p-1">
+                      {quarters8.map((q) => {
+                        const active = q.value === selectedQuarter;
+
+                        return (
+                          <button
+                            key={q.value}
+                            type="button"
+                            onClick={() => handleSelectQuarter(q.value)}
+                            className={[
+                              "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition",
+                              active
+                                ? "bg-blue-600 text-white shadow-sm shadow-blue-100"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                            ].join(" ")}
+                          >
+                            <span>
+                              <span className="block text-sm font-extrabold">
+                                {q.label}
+                              </span>
+                              <span
+                                className={
+                                  active
+                                    ? "text-xs text-blue-100"
+                                    : "text-xs text-slate-400"
+                                }
+                              >
+                                {q.subLabel}
+                              </span>
+                            </span>
+                            {active ? (
+                              <span className="size-2 rounded-full bg-white" />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {filterMode === "year" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {years5.map((year) => {
+                        const active = Number(year.value) === selectedYear;
+
+                        return (
+                          <button
+                            key={year.value}
+                            type="button"
+                            onClick={() => handleSelectYear(year.value)}
+                            className={[
+                              "rounded-2xl border px-3 py-3 text-center text-sm font-extrabold transition",
+                              active
+                                ? "border-blue-200 bg-blue-600 text-white shadow-sm shadow-blue-100"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                            ].join(" ")}
+                          >
+                            {year.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {filterMode === "custom" && (
+                    <div className="space-y-3 rounded-2xl border border-slate-100 p-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="text-xs font-bold text-slate-500">
+                          Từ ngày
+                          <input
+                            type="date"
+                            value={customStart}
+                            onChange={(event) =>
+                              setCustomStart(event.target.value)
+                            }
+                            className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-300"
+                          />
+                        </label>
+                        <label className="text-xs font-bold text-slate-500">
+                          Đến ngày
+                          <input
+                            type="date"
+                            value={customEnd}
+                            onChange={(event) =>
+                              setCustomEnd(event.target.value)
+                            }
+                            className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-300"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleApplyCustomRange}
+                        className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
+                      >
+                        Áp dụng khoảng thời gian
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

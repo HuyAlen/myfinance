@@ -11,6 +11,7 @@ import ProductTour from "@/src/components/onboarding/ProductTour";
 import OnboardingChecklist from "@/src/components/onboarding/OnboardingChecklist";
 import QuickActionFab from "@/src/components/onboarding/QuickActionFab";
 import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
+import { DateFilterProvider } from "./DateFilterProvider";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -89,45 +90,47 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-[var(--app-height)] overflow-x-hidden bg-slate-50 text-slate-950">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <DateFilterProvider>
+      <div className="min-h-[var(--app-height)] overflow-x-hidden bg-slate-50 text-slate-950">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/*
+        {/*
         Overlay backdrop — always mounted so it can fade in/out smoothly.
         On desktop (lg+) it is permanently invisible and non-interactive.
       */}
-      <div
-        aria-hidden="true"
-        onClick={() => setSidebarOpen(false)}
-        className={[
-          "fixed inset-0 z-30 lg:hidden",
-          "bg-slate-950/40 backdrop-blur-sm",
-          "transition-opacity duration-300 ease-in-out",
-          sidebarOpen
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none",
-        ].join(" ")}
-      />
-
-      <div className="min-h-[var(--app-height)] lg:pl-72">
-        <Header
-          onMenuOpen={() => setSidebarOpen(true)}
-          sidebarOpen={sidebarOpen}
+        <div
+          aria-hidden="true"
+          onClick={() => setSidebarOpen(false)}
+          className={[
+            "fixed inset-0 z-30 lg:hidden",
+            "bg-slate-950/40 backdrop-blur-sm",
+            "transition-opacity duration-300 ease-in-out",
+            sidebarOpen
+              ? "opacity-100 pointer-events-auto"
+              : "opacity-0 pointer-events-none",
+          ].join(" ")}
         />
 
-        <main className="px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
-          {children}
-        </main>
+        <div className="min-h-[var(--app-height)] lg:pl-72">
+          <Header
+            onMenuOpen={() => setSidebarOpen(true)}
+            sidebarOpen={sidebarOpen}
+          />
+
+          <main className="px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+            {children}
+          </main>
+        </div>
+
+        <BottomNav />
+
+        {/* ── Onboarding Layer ─────────────────────────────────────────────── */}
+        <WelcomeWizard />
+        <ProductTour />
+        <OnboardingChecklist />
+        <QuickActionFab />
+        <AchievementToast />
       </div>
-
-      <BottomNav />
-
-      {/* ── Onboarding Layer ─────────────────────────────────────────────── */}
-      <WelcomeWizard />
-      <ProductTour />
-      <OnboardingChecklist />
-      <QuickActionFab />
-      <AchievementToast />
-    </div>
+    </DateFilterProvider>
   );
 }

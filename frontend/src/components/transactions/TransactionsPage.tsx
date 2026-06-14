@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -148,6 +149,7 @@ function getTransactionTypeFromFormMode(
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
+  const { selectedMonth, selectedYear } = useDateFilter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -232,6 +234,7 @@ export default function TransactionsPage() {
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
+      if (!t.date.startsWith(selectedMonth)) return false;
       const cat = categories.find((c) => c.id === t.categoryId);
       const wal = wallets.find((w) => w.id === t.walletId);
       const typeLabel =
@@ -263,6 +266,7 @@ export default function TransactionsPage() {
     });
   }, [
     transactions,
+    selectedMonth,
     categories,
     wallets,
     keyword,
@@ -294,10 +298,13 @@ export default function TransactionsPage() {
   }, [filtered, sortKey, sortDir, categories, wallets]);
 
   const totalIncome = useMemo(() => getTotalIncome(filtered), [filtered]);
-  const totalExpense = useMemo(() => getTotalExpense(filtered), [filtered]);
+  const totalExpense = useMemo(
+    () => getTotalExpense(filtered, categories),
+    [filtered, categories],
+  );
   const netCashFlow = totalIncome - totalExpense;
 
-  const currentYear = new Date().getFullYear().toString();
+  const currentYear = String(selectedYear);
   const yearTxns = useMemo(
     () => transactions.filter((t) => t.date.startsWith(currentYear)),
     [transactions, currentYear],
@@ -310,7 +317,7 @@ export default function TransactionsPage() {
           t.date.startsWith(currentYear + "-" + m),
         );
         const inc = getTotalIncome(mx);
-        const exp = getTotalExpense(mx);
+        const exp = getTotalExpense(mx, categories);
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
@@ -318,7 +325,7 @@ export default function TransactionsPage() {
           net: (inc - exp) / 1e6,
         };
       }),
-    [yearTxns, currentYear],
+    [yearTxns, currentYear, categories],
   );
 
   const monthlyTrendDisplay = useMemo(() => {
@@ -1193,7 +1200,7 @@ export default function TransactionsPage() {
             Phân tích thông minh
           </p>
         </div>
-        <div className="-mx-1 flex gap-3 overflow-x-auto no-scrollbar px-1 pb-1">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
           {/* Spending */}
           <IntelCard
             icon={<Sparkles size={14} />}
@@ -2232,11 +2239,11 @@ function IntelCard({
   return (
     <div
       className={
-        "flex w-64 shrink-0 flex-col gap-2 rounded-2xl border-l-[3px] border-r border-t border-b border-slate-200 p-4 shadow-sm " +
+        "flex h-full min-h-[120px] min-w-0 flex-col gap-2 overflow-hidden rounded-2xl border-l-[3px] border-r border-t border-b border-slate-200 p-4 shadow-sm " +
         accentMap[accent]
       }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <div
           className={
             "flex size-7 shrink-0 items-center justify-center rounded-xl " +
@@ -2245,9 +2252,13 @@ function IntelCard({
         >
           {icon}
         </div>
-        <p className="text-xs font-black text-slate-800">{title}</p>
+        <p className="min-w-0 truncate text-xs font-black text-slate-800">
+          {title}
+        </p>
       </div>
-      <p className="text-xs leading-5 text-slate-500">{body}</p>
+      <p className="min-w-0 break-words text-xs leading-5 text-slate-500">
+        {body}
+      </p>
     </div>
   );
 }

@@ -23,6 +23,18 @@ export const demoCategories: Category[] = [
   { id: "shopping", name: "Mua sắm", type: "expense" },
   { id: "entertainment", name: "Giải trí", type: "expense" },
   { id: "other", name: "Khác", type: "expense" },
+  {
+    id: "saving-demo",
+    name: "Tiết kiệm",
+    type: "expense",
+    planningGroup: "saving",
+  },
+  {
+    id: "trading-capital",
+    name: "Vốn giao dịch",
+    type: "expense",
+    planningGroup: "investment",
+  },
 ];
 
 export const demoTransactions: Transaction[] = [
@@ -97,6 +109,24 @@ export const demoTransactions: Transaction[] = [
     walletId: "vcb",
     note: "Chi phí khác",
     date: "2026-06-09",
+  },
+  {
+    id: "t-saving-demo",
+    type: "saving",
+    amount: 2590483,
+    categoryId: "saving-demo",
+    walletId: "vcb",
+    note: "Tiết kiệm tháng 6",
+    date: "2026-06-10",
+  },
+  {
+    id: "t-trading-demo",
+    type: "investment",
+    amount: 1059517,
+    categoryId: "trading-capital",
+    walletId: "invest",
+    note: "Nạp vốn trading",
+    date: "2026-06-11",
   },
 ];
 
