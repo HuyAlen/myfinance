@@ -357,8 +357,8 @@ export default function WalletsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -432,7 +432,7 @@ export default function WalletsPage() {
               iconBg="bg-indigo-400/30"
               icon={<Banknote size={16} />}
             />
-            <div className="col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 shadow-sm shadow-amber-200/60">
+            <div className="col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br from-amber-400 to-orange-500 p-4 shadow-sm shadow-amber-200/60">
               <p className="text-[10px] font-black uppercase tracking-wide text-amber-100">
                 Liquidity Score
               </p>
@@ -463,9 +463,9 @@ export default function WalletsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         {/* Allocation breakdown */}
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
               <Landmark size={17} />
             </div>
             <div>
@@ -529,7 +529,7 @@ export default function WalletsPage() {
         {/* Right panel: Pie + highlights */}
         <div className="flex flex-col gap-5">
           {/* Pie chart */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-black text-slate-900">
               Biểu đồ phân bổ
             </h2>
@@ -702,7 +702,7 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group relative rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
+                className="group relative rounded-4xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-blue-100 hover:shadow-lg hover:shadow-blue-50"
               >
                 {/* Header */}
                 <div className="min-w-0 pr-20">
@@ -711,7 +711,7 @@ export default function WalletsPage() {
                       <WalletIcon type={wallet.type} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-black leading-tight text-slate-900 [overflow-wrap:anywhere]">
+                      <h3 className="text-base font-black leading-tight text-slate-900 wrap-anywhere">
                         {wallet.name}
                       </h3>
                       <span
@@ -851,7 +851,7 @@ export default function WalletsPage() {
 
           {/* Empty state */}
           {wallets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Wallet size={24} className="text-blue-400" />
               </div>
@@ -877,8 +877,8 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-w-lg sm:rounded-[2rem]">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-w-lg sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:p-6 sm:pb-5">
               <div>
@@ -1021,7 +1021,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
@@ -1046,26 +1046,26 @@ function WalletIcon({ type }: { type: FinanceWalletType }) {
     "flex size-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm";
   if (type === "bank")
     return (
-      <div className={base + " bg-gradient-to-br from-blue-600 to-cyan-500"}>
+      <div className={base + " bg-linear-to-br from-blue-600 to-cyan-500"}>
         <Landmark size={20} />
       </div>
     );
   if (type === "ewallet")
     return (
       <div
-        className={base + " bg-gradient-to-br from-violet-500 to-indigo-500"}
+        className={base + " bg-linear-to-br from-violet-500 to-indigo-500"}
       >
         <Wallet size={20} />
       </div>
     );
   if (type === "investment")
     return (
-      <div className={base + " bg-gradient-to-br from-emerald-500 to-teal-400"}>
+      <div className={base + " bg-linear-to-br from-emerald-500 to-teal-400"}>
         <BriefcaseBusiness size={20} />
       </div>
     );
   return (
-    <div className={base + " bg-gradient-to-br from-amber-400 to-orange-500"}>
+    <div className={base + " bg-linear-to-br from-amber-400 to-orange-500"}>
       <Banknote size={20} />
     </div>
   );

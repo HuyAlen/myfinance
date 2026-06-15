@@ -320,6 +320,7 @@ export default function BudgetsPage() {
   );
 
   // ── PRESERVED: getSpent ───────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   function getSpent(categoryId: string, month: string) {
     const group = getCategoryGroup(categoryId);
 
@@ -408,7 +409,7 @@ export default function BudgetsPage() {
       remaining: totalLimit - totalSpent,
       percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
-  }, [filteredBudgets, isRealExpenseGroup, transactions]);
+  }, [filteredBudgets, getSpent, isRealExpenseGroup]);
 
   const budgetForecast = useMemo(
     () =>
@@ -638,6 +639,7 @@ export default function BudgetsPage() {
     categoryById,
     filteredBudgets,
     filteredSummary.totalLimit,
+    getSpent,
     monthlyIncome,
     transactions,
   ]);
@@ -2185,7 +2187,7 @@ export default function BudgetsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex max-h-[calc(var(--app-height,100dvh)-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
             <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">

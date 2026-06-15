@@ -57,6 +57,8 @@ import {
 import {
   formatVND,
   getDebtRatio,
+  getGoalEffectiveCurrentAmount,
+  getGoalEffectiveProgress,
   getGoalScore,
   getTotalAssets,
   getTotalDebt,
@@ -393,7 +395,7 @@ export default function ReportsPage() {
     const totalDebt = getTotalDebt(debts);
     const netWorth = totalAssets - totalDebt;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
-    const goalScore = getGoalScore(goals);
+    const goalScore = getGoalScore(goals, transactions);
 
     return {
       income,
@@ -969,7 +971,10 @@ export default function ReportsPage() {
                 title="Mục tiêu"
                 color="#6366f1"
                 data={goals.map((g) => ({
-                  v: Math.round((g.currentAmount / g.targetAmount) * 100),
+                  v: getGoalEffectiveProgress({
+                    goal: g,
+                    transactions,
+                  }),
                 }))}
                 unit="%"
                 positive
@@ -1849,8 +1854,19 @@ export default function ReportsPage() {
               </p>
             ) : (
               goals.map((g) => {
+                const effectiveCurrentAmount = getGoalEffectiveCurrentAmount({
+                  goal: g,
+                  transactions,
+                });
+                const remainingAmount = Math.max(
+                  g.targetAmount - effectiveCurrentAmount,
+                  0,
+                );
                 const pct = Math.min(
-                  Math.round((g.currentAmount / g.targetAmount) * 100),
+                  getGoalEffectiveProgress({
+                    goal: g,
+                    transactions,
+                  }),
                   100,
                 );
                 const isComplete = pct >= 100;
@@ -1883,7 +1899,8 @@ export default function ReportsPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      {formatVND(g.currentAmount)} / {formatVND(g.targetAmount)}
+                      {formatVND(effectiveCurrentAmount)} /{" "}
+                      {formatVND(g.targetAmount)}
                     </p>
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
                       <div
@@ -1901,7 +1918,7 @@ export default function ReportsPage() {
                     <p className="mt-2 text-[10px] font-bold text-slate-400">
                       {isComplete
                         ? "Đã hoàn thành!"
-                        : "Còn " + formatVND(g.targetAmount - g.currentAmount)}
+                        : "Còn " + formatVND(remainingAmount)}
                     </p>
                   </div>
                 );

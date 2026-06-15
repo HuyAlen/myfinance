@@ -80,7 +80,7 @@ export default function AppShell({ children }: AppShellProps) {
   // Show loading spinner while resolving session
   if (loading || !user) {
     return (
-      <div className="flex min-h-[var(--app-height)] items-center justify-center bg-slate-50">
+      <div className="flex min-h-(--app-height) items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <div className="size-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
           <p className="text-sm text-slate-500">Đang tải...</p>
@@ -91,7 +91,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <DateFilterProvider>
-      <div className="min-h-[var(--app-height)] overflow-x-hidden bg-slate-50 text-slate-950">
+      <div className="min-h-(--app-height) overflow-x-hidden bg-slate-50 text-slate-950">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/*
@@ -111,7 +111,7 @@ export default function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         />
 
-        <div className="min-h-[var(--app-height)] lg:pl-72">
+        <div className="min-h-(--app-height) lg:pl-72">
           <Header
             onMenuOpen={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}

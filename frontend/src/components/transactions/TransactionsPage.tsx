@@ -714,7 +714,7 @@ export default function TransactionsPage() {
       {toastState && (
         <div
           className={[
-            "fixed right-4 top-4 z-[120] flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl backdrop-blur sm:right-6 sm:top-6 sm:max-w-md",
+            "fixed right-4 top-4 z-120 flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-2xl backdrop-blur sm:right-6 sm:top-6 sm:max-w-md",
             toastState.variant === "error"
               ? "border-rose-200 bg-rose-50/95 text-rose-700 shadow-rose-100"
               : toastState.variant === "warning"
@@ -748,8 +748,8 @@ export default function TransactionsPage() {
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ════════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="relative bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           {/* Top row */}
           <div className="relative flex items-start justify-between gap-3">
             <div>
@@ -821,7 +821,7 @@ export default function TransactionsPage() {
             </div>
             <div className="relative h-2.5 overflow-hidden rounded-full bg-blue-100">
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
+                className="absolute inset-y-0 left-0 rounded-full bg-linear-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
                 style={{ width: incomePct + "%" }}
               />
             </div>
@@ -829,7 +829,7 @@ export default function TransactionsPage() {
 
           {/* KPI chips strip — horizontal scroll */}
           <div className="relative mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60 px-4 py-3.5">
+            <div className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-emerald-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-emerald-600">
                 Thu nhập
               </p>
@@ -837,7 +837,7 @@ export default function TransactionsPage() {
                 {formatVND(totalIncome)}
               </p>
             </div>
-            <div className="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-rose-100/60 px-4 py-3.5">
+            <div className="rounded-2xl border border-rose-200 bg-linear-to-br from-rose-50 to-rose-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-rose-500">
                 Chi tiêu
               </p>
@@ -845,7 +845,7 @@ export default function TransactionsPage() {
                 {formatVND(totalExpense)}
               </p>
             </div>
-            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60 px-4 py-3.5">
+            <div className="rounded-2xl border border-blue-200 bg-linear-to-br from-blue-50 to-blue-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-blue-600">
                 Giao dịch
               </p>
@@ -853,7 +853,7 @@ export default function TransactionsPage() {
                 {sorted.length}
               </p>
             </div>
-            <div className="rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-cyan-100/60 px-4 py-3.5">
+            <div className="rounded-2xl border border-cyan-200 bg-linear-to-br from-cyan-50 to-cyan-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-cyan-600">
                 Danh mục
               </p>
@@ -875,7 +875,7 @@ export default function TransactionsPage() {
           SECTION 2 · Smart Filter Command Bar (sticky)
           ════════════════════════════════════════════════════════════════════ */}
       <div className="sticky top-0 z-20">
-        <div className="rounded-[2rem] border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md">
+        <div className="rounded-4xl border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md">
           {/* Main bar */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-3.5">
             {/* Search */}
@@ -1363,7 +1363,7 @@ export default function TransactionsPage() {
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 4 · Transaction Feed
           ════════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         {/* Feed header */}
         <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/40 px-6 py-3.5">
           <div className="flex items-center gap-2">
@@ -1521,7 +1521,7 @@ export default function TransactionsPage() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="max-w-[200px] truncate text-sm font-bold text-slate-900">
+                          <p className="max-w-50 truncate text-sm font-bold text-slate-900">
                             {t.note}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-400 lg:hidden">
@@ -1773,8 +1773,8 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-[2rem]">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
             <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
@@ -2128,7 +2128,7 @@ function TrendPanel({
   return (
     <div
       className={
-        "rounded-[2rem] border p-5 shadow-sm transition-shadow hover:shadow-md " +
+        "rounded-4xl border p-5 shadow-sm transition-shadow hover:shadow-md " +
         cardBg
       }
     >
@@ -2239,7 +2239,7 @@ function IntelCard({
   return (
     <div
       className={
-        "flex h-full min-h-[120px] min-w-0 flex-col gap-2 overflow-hidden rounded-2xl border-l-[3px] border-r border-t border-b border-slate-200 p-4 shadow-sm " +
+        "flex h-full min-h-30 min-w-0 flex-col gap-2 overflow-hidden rounded-2xl border-l-[3px] border-r border-t border-b border-slate-200 p-4 shadow-sm " +
         accentMap[accent]
       }
     >
@@ -2256,7 +2256,7 @@ function IntelCard({
           {title}
         </p>
       </div>
-      <p className="min-w-0 break-words text-xs leading-5 text-slate-500">
+      <p className="min-w-0 wrap-break-word text-xs leading-5 text-slate-500">
         {body}
       </p>
     </div>
@@ -2274,7 +2274,7 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="flex size-20 items-center justify-center rounded-[2rem] bg-blue-50 shadow-inner">
+      <div className="flex size-20 items-center justify-center rounded-4xl bg-blue-50 shadow-inner">
         {hasFilters ? (
           <Search size={28} className="text-blue-300" />
         ) : (
@@ -2284,7 +2284,7 @@ function EmptyState({
       <h3 className="mt-5 text-base font-black text-slate-700">
         {hasFilters ? "Không tìm thấy kết quả" : "Chưa có giao dịch"}
       </h3>
-      <p className="mt-2 max-w-[240px] text-sm leading-6 text-slate-400">
+      <p className="mt-2 max-w-60 text-sm leading-6 text-slate-400">
         {hasFilters
           ? "Hãy thay đổi bộ lọc hoặc từ khóa tìm kiếm."
           : "Bắt đầu bằng cách ghi lại khoản thu hoặc chi đầu tiên."}

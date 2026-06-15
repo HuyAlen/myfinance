@@ -790,9 +790,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       {/* ── 1. Executive Strip ─────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 xl:grid-cols-[1.4fr_0.8fr]">
-          <div className="bg-gradient-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-8">
+          <div className="bg-linear-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-8">
             <div>
               <p className="text-sm font-bold text-blue-600">
                 Personal CFO Dashboard
@@ -829,7 +829,7 @@ export default function DashboardPage() {
                 valueClass="text-rose-500"
               />
             </div>
-            <div className="mt-6 h-[160px]">
+            <div className="mt-6 h-40">
               <ResponsiveContainer width="100%" height={160} minWidth={0}>
                 <AreaChart
                   data={netWorthTrend}
@@ -881,7 +881,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex flex-col justify-between border-t border-slate-200 bg-gradient-to-br from-emerald-50 via-sky-50 to-blue-50 p-5 sm:p-8 xl:border-l xl:border-t-0">
+          <div className="flex flex-col justify-between border-t border-slate-200 bg-linear-to-br from-emerald-50 via-sky-50 to-blue-50 p-5 sm:p-8 xl:border-l xl:border-t-0">
             <div>
               <p className="text-sm font-bold text-slate-600">
                 Sức khoẻ tài chính
@@ -890,7 +890,7 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setIsHealthDrawerOpen(true)}
-                  className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${financialGrade.gradient} p-2 shadow-lg transition hover:scale-[1.03] focus:outline-none focus:ring-4 ${financialGrade.ring}`}
+                  className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-linear-to-br ${financialGrade.gradient} p-2 shadow-lg transition hover:scale-[1.03] focus:outline-none focus:ring-4 ${financialGrade.ring}`}
                   title="Xem giải thích điểm sức khỏe tài chính"
                 >
                   <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
@@ -955,7 +955,7 @@ export default function DashboardPage() {
       <section className="-mx-4 sm:mx-0">
         <div className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scroll-smooth no-scrollbar md:hidden">
           {kpiCards.map((item) => (
-            <div key={item.title} className="shrink-0 w-[200px] snap-start">
+            <div key={item.title} className="shrink-0 w-50 snap-start">
               <KpiCard {...item} />
             </div>
           ))}
@@ -968,7 +968,7 @@ export default function DashboardPage() {
       </section>
 
       {/* ── 3. Financial Structure V11.1 ───────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.2em] text-blue-600">
@@ -1179,7 +1179,7 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-[260px]">
+            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-65">
               <p
                 className={`text-5xl font-black ${
                   financialIndependence.tone === "good"
@@ -1268,7 +1268,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-[220px]">
+            <div className="rounded-3xl bg-white/80 p-5 text-right shadow-sm lg:min-w-55">
               <p
                 className={`text-5xl font-black ${
                   aiCfoInsight.tone === "good"
@@ -1403,7 +1403,7 @@ export default function DashboardPage() {
               color={summary.saving >= 0 ? "text-emerald-600" : "text-rose-500"}
             />
           </div>
-          <div className="mt-5 h-[220px]">
+          <div className="mt-5 h-55">
             <ResponsiveContainer width="100%" height={220} minWidth={0}>
               <AreaChart
                 data={netWorthTrend}
@@ -1577,7 +1577,7 @@ export default function DashboardPage() {
               }
             />
           </div>
-          <div className="mt-5 h-[220px]">
+          <div className="mt-5 h-55">
             <ResponsiveContainer width="100%" height={220} minWidth={0}>
               <BarChart
                 data={cashFlowData}
@@ -1730,7 +1730,7 @@ export default function DashboardPage() {
                   </p>
                   <div className="mt-3 h-2.5 rounded-full bg-white">
                     <div
-                      className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-500"
+                      className="h-2.5 rounded-full bg-linear-to-r from-blue-500 to-cyan-400 transition-all duration-500"
                       style={{ width: `${g.percent}%` }}
                     />
                   </div>
@@ -1757,7 +1757,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid gap-5 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
                 {/* Donut */}
-                <div className="relative mx-auto h-[180px] w-[180px] shrink-0 md:mx-0">
+                <div className="relative mx-auto h-45 w-45 shrink-0 md:mx-0">
                   <PieChart width={180} height={180}>
                     <Pie
                       data={spendingPieData}
@@ -1775,7 +1775,7 @@ export default function DashboardPage() {
                     <Tooltip content={<CategorySpendingTooltip />} />
                   </PieChart>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
-                    <span className="max-w-[90px] truncate text-xl font-black text-rose-500">
+                    <span className="max-w-22.5 truncate text-xl font-black text-rose-500">
                       {formatCompactVND(summary.expense)}
                     </span>
                     <span className="mt-0.5 text-[10px] font-medium text-slate-400">
@@ -1950,7 +1950,7 @@ export default function DashboardPage() {
         >
           <div className="mt-5 flex items-center gap-5">
             <div
-              className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${riskBg} p-2 shadow-lg`}
+              className={`flex size-28 shrink-0 items-center justify-center rounded-full bg-linear-to-br ${riskBg} p-2 shadow-lg`}
             >
               <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
                 <span className={`text-3xl font-black ${riskColor}`}>
@@ -2019,7 +2019,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="mt-2 h-2 rounded-full bg-white">
                         <div
-                          className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                          className="h-2 rounded-full bg-linear-to-r from-emerald-500 to-teal-400"
                           style={{ width: `${paidPct}%` }}
                         />
                       </div>
@@ -2037,9 +2037,9 @@ export default function DashboardPage() {
 
       {/* ── 5. AI Action Center + Recent Transactions ───────────────────── */}
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
               <Bot size={20} />
             </div>
             <div>
@@ -2210,7 +2210,7 @@ function FinancialHealthDrawer({
           </button>
         </div>
 
-        <div className="mt-6 rounded-[2rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-5">
+        <div className="mt-6 rounded-4xl border border-slate-200 bg-linear-to-br from-blue-50 via-white to-emerald-50 p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-slate-500">Tổng điểm</p>
@@ -2251,7 +2251,7 @@ function FinancialHealthDrawer({
               </div>
               <div className="mt-3 h-2.5 rounded-full bg-white">
                 <div
-                  className="h-2.5 rounded-full bg-gradient-to-r from-emerald-400 to-blue-500"
+                  className="h-2.5 rounded-full bg-linear-to-r from-emerald-400 to-blue-500"
                   style={{ width: `${clampScore(item.score)}%` }}
                 />
               </div>
@@ -2323,7 +2323,7 @@ function CategorySpendingTooltip({
           className="size-2.5 rounded-full"
           style={{ background: item.color }}
         />
-        <span className="max-w-[180px] truncate font-bold text-slate-700">
+        <span className="max-w-45 truncate font-bold text-slate-700">
           {item.name}
         </span>
       </div>
@@ -2390,7 +2390,7 @@ function KpiCard({
           <p className="mt-1 text-xs text-slate-500">{note}</p>
         </div>
         <div
-          className={`flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${iconClass} text-white shadow-lg`}
+          className={`flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br ${iconClass} text-white shadow-lg`}
         >
           <Icon size={20} />
         </div>
@@ -2400,7 +2400,7 @@ function KpiCard({
         {SPARK.map((h, i) => (
           <div
             key={i}
-            className={`flex-1 rounded-t-lg bg-gradient-to-t ${barClass}`}
+            className={`flex-1 rounded-t-lg bg-linear-to-t ${barClass}`}
             style={{ height: `${h}%` }}
           />
         ))}
@@ -2419,7 +2419,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
       <h3 className="text-lg font-black text-slate-900">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       {children}
@@ -2454,7 +2454,7 @@ function ScoreLine({ label, value }: { label: string; value: number }) {
       </div>
       <div className="h-2 rounded-full bg-white/80">
         <div
-          className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-blue-500 transition-all"
+          className="h-2 rounded-full bg-linear-to-r from-emerald-400 to-blue-500 transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -2531,7 +2531,7 @@ function RiskDimension({
       </div>
       <div className="h-2.5 rounded-full bg-slate-100">
         <div
-          className={`h-2.5 rounded-full bg-gradient-to-r ${barColor} transition-all`}
+          className={`h-2.5 rounded-full bg-linear-to-r ${barColor} transition-all`}
           style={{ width: `${pct}%` }}
         />
       </div>

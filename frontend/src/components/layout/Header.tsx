@@ -724,7 +724,7 @@ export default function Header({
                 setNotifOpen(false);
               }}
               className={[
-                "flex min-w-[220px] items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-2.5 text-left shadow-sm transition",
+                "flex min-w-55 items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-2.5 text-left shadow-sm transition",
                 monthOpen
                   ? "border-blue-300 shadow-md shadow-blue-100"
                   : "border-slate-200 hover:border-blue-200 hover:bg-slate-50",
@@ -757,7 +757,7 @@ export default function Header({
                   onClick={() => setMonthOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-full z-50 mt-2 w-[360px] overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
+                  className="absolute right-0 top-full z-50 mt-2 w-90 overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
                   role="dialog"
                 >
                   <div className="mb-3 flex items-start justify-between gap-3 px-1">

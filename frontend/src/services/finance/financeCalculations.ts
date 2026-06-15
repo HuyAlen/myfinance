@@ -542,12 +542,18 @@ export function getDebtRatio(totalDebt: number, totalAssets: number) {
   return Math.round((totalDebt / totalAssets) * 1000) / 10;
 }
 
-export function getGoalScore(goals: Goal[]) {
+export function getGoalScore(goals: Goal[], transactions: Transaction[] = []) {
   if (goals.length === 0) return 0;
 
   const progressScore = goals.reduce((sum, goal) => {
     if (goal.targetAmount <= 0) return sum;
-    return sum + Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
+
+    const currentAmount =
+      transactions.length > 0
+        ? getGoalEffectiveCurrentAmount({ goal, transactions })
+        : goal.currentAmount;
+
+    return sum + Math.min((currentAmount / goal.targetAmount) * 100, 100);
   }, 0);
 
   return Math.round(progressScore / goals.length);
