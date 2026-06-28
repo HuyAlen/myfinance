@@ -9,6 +9,13 @@ export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
 
 export type WalletType = "cash" | "bank" | "ewallet" | "investment";
 
+export type SavingType =
+  | "savings_account"
+  | "term_deposit"
+  | "certificate"
+  | "emergency_fund"
+  | "other";
+
 export type CategoryType = "income" | "expense";
 
 export type CategoryPlanningGroup =
@@ -23,6 +30,17 @@ export type Wallet = {
   name: string;
   type: WalletType;
   balance: number;
+};
+
+export type SavingAccount = {
+  id: string;
+  name: string;
+  type: SavingType;
+  balance: number;
+  targetAmount?: number;
+  interestRate?: number;
+  maturityDate?: string;
+  notes?: string;
 };
 
 export type Category = {
@@ -50,8 +68,11 @@ export type Transaction = {
   walletId: string;
   note: string;
   date: string;
-  // Phase 1 — wallet transfers
+  // Sprint Wallet Transfer v2 — wallet transfers
   transferToWalletId?: string;
+  transferFee?: number;
+  exchangeRate?: number;
+  transferReference?: string;
   // Phase 2 — recurring transactions
   isRecurring?: boolean;
   recurrence?: RecurrenceFrequency;

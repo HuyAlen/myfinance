@@ -91,7 +91,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <DateFilterProvider>
-      <div className="min-h-(--app-height) overflow-x-hidden bg-slate-50 text-slate-950">
+      <div className="h-[var(--app-height)] overflow-hidden bg-slate-50 text-slate-950">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/*
@@ -111,13 +111,13 @@ export default function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         />
 
-        <div className="min-h-(--app-height) lg:pl-72">
+        <div className="flex h-full min-w-0 flex-col lg:pl-72">
           <Header
             onMenuOpen={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
           />
 
-          <main className="px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
             {children}
           </main>
         </div>

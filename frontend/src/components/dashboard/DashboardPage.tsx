@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 
 import {
   Area,
   AreaChart,
+  LabelList,
   Bar,
   BarChart,
   CartesianGrid,
@@ -49,13 +52,14 @@ import {
 import {
   buildCategorySpendingData,
   buildMonthlyCashFlowData,
-  buildMonthlyNetWorthData,
   calculateDashboardSummary,
   calculateFinancialStructureSummary,
   calculateFinancialStabilitySummary,
   calculateFinancialIndependenceSummary,
   calculateAiCfoInsightSummary,
   calculateRule503020,
+  filterBudgetsByDateRange,
+  filterTransactionsByDateRange,
   formatVND,
   generateDashboardActions,
   getFinancialGrade,
@@ -74,6 +78,7 @@ import type {
   Investment,
   Transaction,
   Wallet as WalletType,
+  SavingAccount,
 } from "@/src/types/finance";
 
 const ASSET_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#38bdf8", "#6366f1"];
@@ -101,6 +106,121 @@ const INV_TYPE_LABELS: Record<string, string> = {
 };
 const SPARK = [30, 44, 38, 58, 52, 70, 63];
 
+type SavingRow = {
+  id: string;
+  name: string;
+  type: SavingAccount["type"];
+  balance: number | string | null;
+  interest_rate: number | string | null;
+  maturity_date: string | null;
+  notes: string | null;
+};
+
+type SavingTransactionRow = {
+  id: string;
+  saving_id: string;
+  type: "deposit" | "withdraw" | "interest" | "settlement";
+  amount: number | string | null;
+  transaction_date: string | null;
+  note: string | null;
+};
+
+type DashboardSavingTransaction = {
+  id: string;
+  savingId: string;
+  type: SavingTransactionRow["type"];
+  amount: number;
+  date: string;
+  note: string;
+};
+
+type WalletTransferRow = {
+  id?: string | number | null;
+  amount?: number | string | null;
+  transfer_date?: string | null;
+  transaction_date?: string | null;
+  date?: string | null;
+  created_at?: string | null;
+  note?: string | null;
+};
+
+type DashboardWalletTransfer = {
+  id: string;
+  amount: number;
+  date: string;
+  note: string;
+};
+
+const WALLET_TRANSFER_TABLES = [
+  "wallet_transfers",
+  "wallet_transfer_transactions",
+  "transfer_transactions",
+] as const;
+
+const mapWalletTransferRow = (
+  row: WalletTransferRow,
+  index: number,
+  tableName: string,
+): DashboardWalletTransfer => ({
+  id: String(row.id ?? `${tableName}-${index}`),
+  amount: Number(row.amount ?? 0),
+  date:
+    row.transfer_date ??
+    row.transaction_date ??
+    row.date ??
+    row.created_at ??
+    new Date().toISOString(),
+  note: row.note ?? "Chuyển ví",
+});
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const savingsSupabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+const mapSavingRowToSavingAccount = (row: SavingRow): SavingAccount => ({
+  id: row.id,
+  name: row.name,
+  type: row.type,
+  balance: Number(row.balance ?? 0),
+  interestRate:
+    row.interest_rate === null || row.interest_rate === undefined
+      ? undefined
+      : Number(row.interest_rate),
+  maturityDate: row.maturity_date ?? undefined,
+  notes: row.notes ?? undefined,
+});
+
+const mapSavingTransactionRow = (
+  row: SavingTransactionRow,
+): DashboardSavingTransaction => ({
+  id: row.id,
+  savingId: row.saving_id,
+  type: row.type,
+  amount: Number(row.amount ?? 0),
+  date: row.transaction_date ?? new Date().toISOString().slice(0, 10),
+  note: row.note ?? "Giao dịch tiết kiệm",
+});
+
+const getSavingTransactionLabel = (
+  type: DashboardSavingTransaction["type"],
+) => {
+  switch (type) {
+    case "deposit":
+      return "Nạp tiết kiệm";
+    case "withdraw":
+      return "Rút tiết kiệm";
+    case "settlement":
+      return "Tất toán tiết kiệm";
+    case "interest":
+      return "Lãi tiết kiệm";
+    default:
+      return "Giao dịch tiết kiệm";
+  }
+};
+
 function formatOneDecimal(value: number) {
   if (!Number.isFinite(value)) return "0";
   return new Intl.NumberFormat("vi-VN", {
@@ -116,16 +236,87 @@ export default function DashboardPage() {
   const router = useRouter();
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [savings, setSavings] = useState<SavingAccount[]>([]);
+  const [savingTransactions, setSavingTransactions] = useState<
+    DashboardSavingTransaction[]
+  >([]);
+  const [walletTransfers, setWalletTransfers] = useState<
+    DashboardWalletTransfer[]
+  >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isHealthDrawerOpen, setIsHealthDrawerOpen] = useState(false);
-  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const { dateRange, selectedYear } = useDateFilter();
+
+  const filteredTransactions = useMemo(
+    () => filterTransactionsByDateRange(transactions, dateRange),
+    [transactions, dateRange],
+  );
+
+  const filteredBudgets = useMemo(
+    () => filterBudgetsByDateRange(budgets, dateRange),
+    [budgets, dateRange],
+  );
+
+  /**
+   * Dashboard v5 data model
+   *
+   * Flow data is scoped by the Date Timeline picker. This includes income,
+   * expense, cash flow, spending, budgets, recent transactions, and AI
+   * recommendations related to movement inside the selected period.
+   *
+   * Asset data is a current snapshot until the app has asset history tables.
+   * This includes wallets, investments, debts, goals, net worth, and asset
+   * allocation. Do not empty these arrays when the selected date range is in
+   * the past or future.
+   */
+  const snapshotWallets = wallets;
+  const snapshotInvestments = investments;
+  const snapshotDebts = debts;
+  const snapshotGoals = goals;
 
   const reloadData = useCallback(async () => {
-    const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
+    const transferHistoryPromise = savingsSupabase
+      ? Promise.all(
+          WALLET_TRANSFER_TABLES.map(async (tableName) => {
+            const result = await savingsSupabase
+              .from(tableName)
+              .select("*")
+              .order("created_at", { ascending: false });
+
+            if (result.error) return [];
+
+            return ((result.data ?? []) as WalletTransferRow[]).map(
+              (row, index) => mapWalletTransferRow(row, index, tableName),
+            );
+          }),
+        ).then((groups) => {
+          const byId = new Map<string, DashboardWalletTransfer>();
+
+          groups.flat().forEach((transfer) => {
+            const key = `${transfer.id}-${transfer.date}-${transfer.amount}`;
+            byId.set(key, transfer);
+          });
+
+          return Array.from(byId.values());
+        })
+      : Promise.resolve([] as DashboardWalletTransfer[]);
+
+    const [
+      w,
+      inv,
+      cat,
+      txn,
+      dbt,
+      gls,
+      bdg,
+      savingRows,
+      savingTxnRows,
+      transferRows,
+    ] = await Promise.all([
       getWallets(),
       getInvestments(),
       getCategories(),
@@ -133,7 +324,22 @@ export default function DashboardPage() {
       getDebts(),
       getGoals(),
       getBudgets(),
+      savingsSupabase
+        ? savingsSupabase
+            .from("savings")
+            .select("id,name,type,balance,interest_rate,maturity_date,notes")
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      savingsSupabase
+        ? savingsSupabase
+            .from("saving_transactions")
+            .select("id,saving_id,type,amount,transaction_date,note")
+            .order("transaction_date", { ascending: false })
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      transferHistoryPromise,
     ]);
+
     setWallets(w);
     setInvestments(inv);
     setCategories(cat);
@@ -141,6 +347,23 @@ export default function DashboardPage() {
     setDebts(dbt);
     setGoals(gls);
     setBudgets(bdg);
+    setWalletTransfers(transferRows);
+
+    if (!savingRows.error) {
+      setSavings(
+        ((savingRows.data ?? []) as SavingRow[]).map(
+          mapSavingRowToSavingAccount,
+        ),
+      );
+    }
+
+    if (!savingTxnRows.error) {
+      setSavingTransactions(
+        ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
+          mapSavingTransactionRow,
+        ),
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -159,46 +382,188 @@ export default function DashboardPage() {
   );
 
   // ── Core summary ──────────────────────────────────────────────────────────
-  const summary = useMemo(
+  const baseSummary = useMemo(
     () =>
       calculateDashboardSummary({
-        wallets,
-        investments,
-        debts,
-        transactions,
+        wallets: snapshotWallets,
+        savings,
+        investments: snapshotInvestments,
+        debts: snapshotDebts,
+        transactions: filteredTransactions,
         categories,
-        goals,
+        goals: snapshotGoals,
       }),
-    [wallets, investments, debts, transactions, categories, goals],
+    [
+      snapshotWallets,
+      savings,
+      snapshotInvestments,
+      snapshotDebts,
+      filteredTransactions,
+      categories,
+      snapshotGoals,
+    ],
   );
 
-  // ── Net-worth trend (real monthly reconstruction) ─────────────────────────
+  const savingsSnapshot = useMemo(() => {
+    const totalSavings = savings.reduce((sum, item) => sum + item.balance, 0);
+    const emergencyFund = savings
+      .filter((item) => item.type === "emergency_fund")
+      .reduce((sum, item) => sum + item.balance, 0);
+    const expectedInterest = savings.reduce((sum, item) => {
+      const rate = item.interestRate ?? 0;
+      return sum + (item.balance * rate) / 100;
+    }, 0);
+
+    return { totalSavings, emergencyFund, expectedInterest };
+  }, [savings]);
+
+  const goalSnapshot = useMemo(() => {
+    const trackedGoals = snapshotGoals.filter((goal) => goal.targetAmount > 0);
+    const totalTarget = trackedGoals.reduce(
+      (sum, goal) => sum + goal.targetAmount,
+      0,
+    );
+    const totalSaved = trackedGoals.reduce(
+      (sum, goal) => sum + Math.min(goal.currentAmount, goal.targetAmount),
+      0,
+    );
+    const averageProgress =
+      totalTarget > 0 ? clampScore((totalSaved / totalTarget) * 100) : 0;
+
+    return {
+      trackedCount: trackedGoals.length,
+      totalTarget,
+      totalSaved,
+      averageProgress,
+    };
+  }, [snapshotGoals]);
+
+  const walletLiquidity = useMemo(
+    () => snapshotWallets.reduce((sum, wallet) => sum + wallet.balance, 0),
+    [snapshotWallets],
+  );
+
+  const savingsRateFromSavings = useMemo(() => {
+    if (baseSummary.income <= 0) return 0;
+    return clampScore(
+      (savingsSnapshot.totalSavings / baseSummary.income) * 100,
+    );
+  }, [baseSummary.income, savingsSnapshot.totalSavings]);
+
+  const netWorthWithSavings = useMemo(
+    () =>
+      walletLiquidity +
+      savingsSnapshot.totalSavings +
+      baseSummary.investmentAssets -
+      baseSummary.totalDebt,
+    [
+      walletLiquidity,
+      savingsSnapshot.totalSavings,
+      baseSummary.investmentAssets,
+      baseSummary.totalDebt,
+    ],
+  );
+
+  const summary = useMemo(
+    () => ({
+      ...baseSummary,
+      liquidBalance: walletLiquidity,
+      netWorth: netWorthWithSavings,
+      saving: savingsSnapshot.totalSavings,
+      savingRate: savingsRateFromSavings,
+      goalScore: goalSnapshot.averageProgress,
+    }),
+    [
+      baseSummary,
+      walletLiquidity,
+      netWorthWithSavings,
+      savingsSnapshot.totalSavings,
+      savingsRateFromSavings,
+      goalSnapshot.averageProgress,
+    ],
+  );
+
+  // ── Net-worth snapshot (not affected by date filter) ───────────────────────
+  const netWorthSnapshotMonth = useMemo(() => new Date().getMonth() + 1, []);
+
   const netWorthTrend = useMemo(
     () =>
-      buildMonthlyNetWorthData({
-        wallets,
-        investments,
-        debts,
-        transactions,
-        categories,
-        months: 6,
+      Array.from({ length: 12 }, (_, index) => {
+        const month = index + 1;
+        const isSnapshotMonth = month === netWorthSnapshotMonth;
+
+        return {
+          label: `T${month}`,
+          month,
+          value: isSnapshotMonth ? summary.netWorth : null,
+          hasData: isSnapshotMonth,
+          isSnapshotMonth,
+        };
       }),
-    [wallets, investments, debts, transactions, categories],
+    [netWorthSnapshotMonth, summary.netWorth],
   );
 
+  const netWorthChartStats = useMemo(() => {
+    const points = netWorthTrend.filter(
+      (point) =>
+        typeof point.value === "number" && Number.isFinite(point.value),
+    );
+    const currentPoint = points.find((point) => point.hasData) ?? null;
+    const currentValue = currentPoint
+      ? Number(currentPoint.value)
+      : summary.netWorth;
+    const highestValue = points.length
+      ? Math.max(...points.map((point) => Number(point.value)))
+      : currentValue;
+    const lowestValue = points.length
+      ? Math.min(...points.map((point) => Number(point.value)))
+      : currentValue;
+
+    return {
+      currentLabel: currentPoint
+        ? `Hiện tại • ${currentPoint.label}`
+        : "Snapshot hiện tại",
+      currentValue,
+      highestValue,
+      lowestValue,
+      changeFromPrevious: 0,
+    };
+  }, [netWorthTrend, summary.netWorth]);
+
   // ── Cash-flow trend (real monthly transaction data) ───────────────────────
+  const selectedYearTransactions = useMemo(
+    () =>
+      filterTransactionsByDateRange(transactions, {
+        startDate: `${selectedYear}-01-01`,
+        endDate: `${selectedYear}-12-31`,
+      }),
+    [transactions, selectedYear],
+  );
+
   const cashFlowTrend = useMemo(
-    () => buildMonthlyCashFlowData(transactions, categories, 6),
-    [transactions, categories],
+    () =>
+      buildMonthlyCashFlowData(
+        selectedYearTransactions,
+        categories,
+        12,
+        selectedYear,
+      ),
+    [selectedYearTransactions, categories, selectedYear],
   );
 
   // ── Asset pie ─────────────────────────────────────────────────────────────
   const assetPieData = useMemo(() => {
-    const items = wallets.map((w, i) => ({
+    const items = snapshotWallets.map((w, i) => ({
       name: w.name,
       value: w.balance,
       color: ASSET_COLORS[i % ASSET_COLORS.length],
     }));
+    if (savingsSnapshot.totalSavings > 0)
+      items.push({
+        name: "Tiết kiệm",
+        value: savingsSnapshot.totalSavings,
+        color: "#38bdf8",
+      });
     if (summary.investmentAssets > 0)
       items.push({
         name: "Đầu tư",
@@ -206,12 +571,12 @@ export default function DashboardPage() {
         color: "#10b981",
       });
     return items;
-  }, [wallets, summary.investmentAssets]);
+  }, [snapshotWallets, savingsSnapshot.totalSavings, summary.investmentAssets]);
 
   // ── Spending ──────────────────────────────────────────────────────────────
   const spendingByCategory = useMemo(
-    () => buildCategorySpendingData(transactions, categories),
-    [transactions, categories],
+    () => buildCategorySpendingData(filteredTransactions, categories),
+    [filteredTransactions, categories],
   );
   const spendingPieData = useMemo(
     () =>
@@ -228,9 +593,8 @@ export default function DashboardPage() {
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
     const allocation = calculateRule503020({
-      transactions,
+      transactions: filteredTransactions,
       categories,
-      month: currentMonth,
       income: summary.income,
     });
 
@@ -243,7 +607,7 @@ export default function DashboardPage() {
       savingsAmount: allocation.savingsAmount,
       unclassifiedAmount: allocation.unclassifiedAmount,
     };
-  }, [transactions, categories, currentMonth, summary.income]);
+  }, [filteredTransactions, categories, summary.income]);
 
   const cashFlowData = useMemo(
     () =>
@@ -260,11 +624,56 @@ export default function DashboardPage() {
   );
 
   const cashFlowSubtitle =
-    cashFlowMonthsWithData <= 1
-      ? "Dữ liệu tháng hiện tại; chưa đủ lịch sử 6 tháng"
-      : "Xu hướng 6 tháng và phân bổ thu nhập";
+    cashFlowMonthsWithData <= 0
+      ? `Chưa có dữ liệu trong năm ${selectedYear}`
+      : `Dòng tiền 12 tháng trong năm ${selectedYear}`;
 
   const netCashFlow = summary.income - summary.expense;
+
+  const filteredWalletTransfers = useMemo(() => {
+    const start = new Date(`${dateRange.startDate}T00:00:00`).getTime();
+    const end = new Date(`${dateRange.endDate}T23:59:59`).getTime();
+
+    return walletTransfers.filter((transfer) => {
+      const time = new Date(transfer.date).getTime();
+      return Number.isFinite(time) && time >= start && time <= end;
+    });
+  }, [walletTransfers, dateRange.startDate, dateRange.endDate]);
+
+  const transferAmount = useMemo(() => {
+    const transactionTransfers = filteredTransactions
+      .filter((transaction) => transaction.type === "transfer")
+      .reduce((sum, transaction) => sum + Number(transaction.amount ?? 0), 0);
+
+    const transferHistory = filteredWalletTransfers.reduce(
+      (sum, transfer) => sum + transfer.amount,
+      0,
+    );
+
+    return transactionTransfers + transferHistory;
+  }, [filteredTransactions, filteredWalletTransfers]);
+
+  const cashFlowFormulaRows = useMemo(
+    () => [
+      {
+        label: "Thu nhập trong kỳ",
+        value: summary.income,
+        tone: "text-emerald-600",
+      },
+      {
+        label: "Chi tiêu trong kỳ",
+        value: -summary.expense,
+        tone: "text-rose-500",
+      },
+      {
+        label: "Chuyển ví",
+        value: transferAmount,
+        tone: "text-slate-500",
+        note: "Lấy từ lịch sử chuyển ví, không tính vào dòng tiền",
+      },
+    ],
+    [summary.income, summary.expense, transferAmount],
+  );
 
   const netWorthForecast = useMemo(() => {
     const monthlyGrowth = Number.isFinite(summary.saving) ? summary.saving : 0;
@@ -280,126 +689,144 @@ export default function DashboardPage() {
 
   const emergencyMonthsExact = useMemo(() => {
     if (summary.monthlyExpense <= 0) return 0;
-    return summary.liquidBalance / summary.monthlyExpense;
-  }, [summary.liquidBalance, summary.monthlyExpense]);
+    return savingsSnapshot.emergencyFund / summary.monthlyExpense;
+  }, [savingsSnapshot.emergencyFund, summary.monthlyExpense]);
 
   // ── V11.1 Financial Structure ───────────────────────────────────────────
   const financialStructure = useMemo(
     () =>
       calculateFinancialStructureSummary({
-        transactions,
+        transactions: filteredTransactions,
         categories,
       }),
-    [transactions, categories],
+    [filteredTransactions, categories],
   );
+
+  const financialStructureAdjusted = useMemo(() => {
+    const income = financialStructure.income || summary.income;
+    const savingAmount = savingsSnapshot.totalSavings;
+    const planningSavingRate =
+      income > 0 ? clampScore((savingAmount / income) * 100) : 0;
+
+    return {
+      ...financialStructure,
+      income,
+      savingAmount,
+      planningSavingRate,
+    };
+  }, [financialStructure, summary.income, savingsSnapshot.totalSavings]);
 
   const financialStructureCards = useMemo(
     () => [
       {
         title: "Chi phí cố định",
-        value: `${financialStructure.fixedCostRatio}%`,
-        amount: `${formatVND(financialStructure.fixedCost)} / ${formatVND(financialStructure.income)}`,
+        value: `${financialStructureAdjusted.fixedCostRatio}%`,
+        amount: `${formatVND(financialStructureAdjusted.fixedCost)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructure.fixedCostRatio < 40
+          financialStructureAdjusted.fixedCostRatio < 40
             ? "Tốt · dưới 40% thu nhập"
-            : financialStructure.fixedCostRatio <= 60
+            : financialStructureAdjusted.fixedCostRatio <= 60
               ? "Cần theo dõi · 40–60% thu nhập"
               : "Rủi ro · trên 60% thu nhập",
         tone:
-          financialStructure.fixedCostRatio < 40
+          financialStructureAdjusted.fixedCostRatio < 40
             ? "good"
-            : financialStructure.fixedCostRatio <= 60
+            : financialStructureAdjusted.fixedCostRatio <= 60
               ? "warning"
               : "danger",
-        bar: Math.min(financialStructure.fixedCostRatio, 100),
+        bar: Math.min(financialStructureAdjusted.fixedCostRatio, 100),
       },
       {
         title: "Chi phí biến đổi",
-        value: `${financialStructure.variableCostRatio}%`,
-        amount: `${formatVND(financialStructure.variableCost)} / ${formatVND(financialStructure.income)}`,
+        value: `${financialStructureAdjusted.variableCostRatio}%`,
+        amount: `${formatVND(financialStructureAdjusted.variableCost)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructure.variableCostRatio <= 30
+          financialStructureAdjusted.variableCostRatio <= 30
             ? "Gọn nhẹ · dễ kiểm soát"
-            : financialStructure.variableCostRatio <= 50
+            : financialStructureAdjusted.variableCostRatio <= 50
               ? "Trung bình · nên theo dõi"
               : "Cao · cần tối ưu",
         tone:
-          financialStructure.variableCostRatio <= 30
+          financialStructureAdjusted.variableCostRatio <= 30
             ? "good"
-            : financialStructure.variableCostRatio <= 50
+            : financialStructureAdjusted.variableCostRatio <= 50
               ? "warning"
               : "danger",
-        bar: Math.min(financialStructure.variableCostRatio, 100),
+        bar: Math.min(financialStructureAdjusted.variableCostRatio, 100),
       },
       {
         title: "Tỷ lệ tiết kiệm",
-        value: `${financialStructure.planningSavingRate}%`,
-        amount: `${formatVND(financialStructure.savingAmount)} / ${formatVND(financialStructure.income)}`,
+        value: `${financialStructureAdjusted.planningSavingRate}%`,
+        amount: `${formatVND(financialStructureAdjusted.savingAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructure.planningSavingRate >= 20
+          financialStructureAdjusted.planningSavingRate >= 20
             ? "Xuất sắc · trên 20% thu nhập"
-            : financialStructure.planningSavingRate >= 10
+            : financialStructureAdjusted.planningSavingRate >= 10
               ? "Tốt · 10–20% thu nhập"
               : "Thấp · nên tăng dần",
         tone:
-          financialStructure.planningSavingRate >= 20
+          financialStructureAdjusted.planningSavingRate >= 20
             ? "good"
-            : financialStructure.planningSavingRate >= 10
+            : financialStructureAdjusted.planningSavingRate >= 10
               ? "warning"
               : "danger",
-        bar: Math.min(financialStructure.planningSavingRate, 100),
+        bar: Math.min(financialStructureAdjusted.planningSavingRate, 100),
       },
       {
         title: "Tỷ lệ đầu tư",
-        value: `${financialStructure.investmentRate}%`,
-        amount: `${formatVND(financialStructure.investmentAmount)} / ${formatVND(financialStructure.income)}`,
+        value: `${financialStructureAdjusted.investmentRate}%`,
+        amount: `${formatVND(financialStructureAdjusted.investmentAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructure.investmentRate >= 15
+          financialStructureAdjusted.investmentRate >= 15
             ? "Tích cực xây tài sản"
-            : financialStructure.investmentRate >= 5
+            : financialStructureAdjusted.investmentRate >= 5
               ? "Đang bắt đầu"
               : "Cần tăng đầu tư",
         tone:
-          financialStructure.investmentRate >= 15
+          financialStructureAdjusted.investmentRate >= 15
             ? "good"
-            : financialStructure.investmentRate >= 5
+            : financialStructureAdjusted.investmentRate >= 5
               ? "warning"
               : "danger",
-        bar: Math.min(financialStructure.investmentRate, 100),
+        bar: Math.min(financialStructureAdjusted.investmentRate, 100),
       },
     ],
-    [financialStructure],
+    [financialStructureAdjusted],
   );
 
   const financialStability = useMemo(
     () =>
       calculateFinancialStabilitySummary({
-        financialStructure,
+        financialStructure: financialStructureAdjusted,
         emergencyMonths: emergencyMonthsExact,
       }),
-    [financialStructure, emergencyMonthsExact],
+    [financialStructureAdjusted, emergencyMonthsExact],
   );
 
   const financialIndependence = useMemo(
     () =>
       calculateFinancialIndependenceSummary({
-        investments,
+        investments: snapshotInvestments,
         monthlyExpense: summary.monthlyExpense,
-        monthlyInvestment: financialStructure.investmentAmount,
+        monthlyInvestment: financialStructureAdjusted.investmentAmount,
       }),
-    [investments, summary.monthlyExpense, financialStructure.investmentAmount],
+    [
+      snapshotInvestments,
+      summary.monthlyExpense,
+      financialStructureAdjusted.investmentAmount,
+    ],
   );
 
   const aiCfoInsight = useMemo(
     () =>
       calculateAiCfoInsightSummary({
-        financialStructure,
+        financialStructure: financialStructureAdjusted,
         financialStability,
         financialIndependence,
         emergencyMonths: emergencyMonthsExact,
       }),
     [
-      financialStructure,
+      financialStructureAdjusted,
       financialStability,
       financialIndependence,
       emergencyMonthsExact,
@@ -409,7 +836,7 @@ export default function DashboardPage() {
   // ── Investment rows ───────────────────────────────────────────────────────
   const investmentRows = useMemo(
     () =>
-      investments.map((inv) => {
+      snapshotInvestments.map((inv) => {
         const pl = inv.currentValue - inv.investedAmount;
         return {
           ...inv,
@@ -420,17 +847,17 @@ export default function DashboardPage() {
               : 0,
         };
       }),
-    [investments],
+    [snapshotInvestments],
   );
   const investPieData = useMemo(
     () =>
-      investments.map((inv, i) => ({
+      snapshotInvestments.map((inv, i) => ({
         name: inv.name,
         value: inv.currentValue,
         color:
           INV_TYPE_COLORS[inv.type] ?? ASSET_COLORS[i % ASSET_COLORS.length],
       })),
-    [investments],
+    [snapshotInvestments],
   );
 
   // ── Goal rows with estimate ───────────────────────────────────────────────
@@ -458,16 +885,36 @@ export default function DashboardPage() {
   );
 
   // ── Recent transactions ───────────────────────────────────────────────────
-  const recentTxns = useMemo(
-    () =>
-      transactions.slice(0, 5).map((t) => ({
-        ...t,
-        categoryName:
-          categories.find((c) => c.id === t.categoryId)?.name ?? "Khác",
-        walletName: wallets.find((w) => w.id === t.walletId)?.name ?? "Ví",
-      })),
-    [transactions, categories, wallets],
-  );
+  const recentTxns = useMemo(() => {
+    const financeTxns = filteredTransactions.map((t) => ({
+      ...t,
+      sortDate: t.date,
+      categoryName:
+        categories.find((c) => c.id === t.categoryId)?.name ?? "Khác",
+      walletName: wallets.find((w) => w.id === t.walletId)?.name ?? "Ví",
+      source: "finance" as const,
+    }));
+
+    const savingTxns = savingTransactions.map((t) => ({
+      id: t.id,
+      type:
+        t.type === "withdraw" || t.type === "settlement"
+          ? ("expense" as const)
+          : ("income" as const),
+      amount: t.amount,
+      date: t.date,
+      sortDate: t.date,
+      note: t.note,
+      categoryName: getSavingTransactionLabel(t.type),
+      walletName:
+        savings.find((saving) => saving.id === t.savingId)?.name ?? "Tiết kiệm",
+      source: "savings" as const,
+    }));
+
+    return [...financeTxns, ...savingTxns]
+      .sort((a, b) => b.sortDate.localeCompare(a.sortDate))
+      .slice(0, 5);
+  }, [filteredTransactions, categories, wallets, savingTransactions, savings]);
 
   // ── Financial health score v2 ─────────────────────────────────────────────
   const healthMetrics = useMemo(() => {
@@ -539,7 +986,7 @@ export default function DashboardPage() {
         score: healthMetrics.goalScore,
         weight: 15,
         points: Math.round(healthMetrics.goalScore * 0.15),
-        note: `${goals.length} mục tiêu · tiến độ trung bình ${summary.goalScore}%`,
+        note: `${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`,
       },
     ],
     [
@@ -548,7 +995,7 @@ export default function DashboardPage() {
       summary.debtRatio,
       summary.goalScore,
       emergencyMonthsExact,
-      goals.length,
+      goalSnapshot.trackedCount,
     ],
   );
 
@@ -634,22 +1081,22 @@ export default function DashboardPage() {
   const aiActions = useMemo(
     () =>
       generateDashboardActions({
-        transactions,
-        wallets,
-        budgets,
-        goals,
-        debts,
-        investments,
+        transactions: filteredTransactions,
+        wallets: snapshotWallets,
+        budgets: filteredBudgets,
+        goals: snapshotGoals,
+        debts: snapshotDebts,
+        investments: snapshotInvestments,
         categories,
         summary,
       }),
     [
-      transactions,
-      wallets,
-      budgets,
-      goals,
-      debts,
-      investments,
+      filteredTransactions,
+      snapshotWallets,
+      filteredBudgets,
+      snapshotGoals,
+      snapshotDebts,
+      snapshotInvestments,
       categories,
       summary,
     ],
@@ -677,7 +1124,10 @@ export default function DashboardPage() {
     }[] = [];
 
     const emergencyTarget = (summary.monthlyExpense || summary.expense) * 3;
-    const emergencyGap = Math.max(emergencyTarget - summary.liquidBalance, 0);
+    const emergencyGap = Math.max(
+      emergencyTarget - savingsSnapshot.emergencyFund,
+      0,
+    );
 
     if (emergencyMonthsExact < 3) {
       actions.push({
@@ -730,7 +1180,7 @@ export default function DashboardPage() {
     healthMetrics.goalScore,
     summary.monthlyExpense,
     summary.expense,
-    summary.liquidBalance,
+    savingsSnapshot.emergencyFund,
     summary.goalScore,
     summary.savingRate,
     summary.debtRatio,
@@ -739,20 +1189,20 @@ export default function DashboardPage() {
   // ── KPI bar ───────────────────────────────────────────────────────────────
   const kpiCards = [
     {
-      title: "Dòng tiền",
-      value: formatVND(summary.saving),
-      valueClass: summary.saving >= 0 ? "text-emerald-600" : "text-rose-500",
-      note: `Thu ${formatVND(summary.income)}`,
+      title: "Dòng tiền ròng",
+      value: formatVND(netCashFlow),
+      valueClass: netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500",
+      note: `Thu ${formatVND(summary.income)} − Chi ${formatVND(summary.expense)}`,
       icon: TrendingUp,
       iconClass: "from-blue-600 to-sky-500",
       barClass: "from-blue-500 to-sky-400",
     },
     {
-      title: "Tiết kiệm",
+      title: "Tỷ lệ tiết kiệm",
       value: `${summary.savingRate}%`,
       valueClass:
         summary.savingRate >= 20 ? "text-emerald-600" : "text-rose-500",
-      note: "Mục tiêu: 40%",
+      note: `${formatVND(savingsSnapshot.totalSavings)} / ${formatVND(summary.income)}`,
       icon: PiggyBank,
       iconClass: "from-emerald-500 to-teal-400",
       barClass: "from-emerald-500 to-teal-400",
@@ -780,7 +1230,7 @@ export default function DashboardPage() {
       title: "Mục tiêu",
       value: `${summary.goalScore}%`,
       valueClass: "text-blue-600",
-      note: `${goals.length} mục tiêu`,
+      note: `${goalSnapshot.trackedCount} mục tiêu đang theo dõi`,
       icon: Target,
       iconClass: "from-blue-500 to-cyan-400",
       barClass: "from-blue-500 to-sky-400",
@@ -806,15 +1256,21 @@ export default function DashboardPage() {
                 {formatVND(summary.netWorth)}
               </p>
               <span className="mb-2 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-bold text-emerald-600 ring-1 ring-emerald-100">
-                Tài sản − Nợ
+                Thanh khoản + Tiết kiệm + Đầu tư − Nợ
               </span>
             </div>
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HeroMini
                 icon={<Wallet size={16} />}
                 label="Thanh khoản"
                 value={formatVND(summary.liquidBalance)}
                 valueClass="text-blue-600"
+              />
+              <HeroMini
+                icon={<PiggyBank size={16} />}
+                label="Tiết kiệm"
+                value={formatVND(savingsSnapshot.totalSavings)}
+                valueClass="text-cyan-600"
               />
               <HeroMini
                 icon={<Briefcase size={16} />}
@@ -824,60 +1280,140 @@ export default function DashboardPage() {
               />
               <HeroMini
                 icon={<CreditCard size={16} />}
-                label="Nợ"
+                label="Nợ phải trả"
                 value={formatVND(summary.totalDebt)}
                 valueClass="text-rose-500"
               />
             </div>
-            <div className="mt-6 h-40">
-              <ResponsiveContainer width="100%" height={160} minWidth={0}>
-                <AreaChart
-                  data={netWorthTrend}
-                  margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis
-                    dataKey="label"
-                    axisLine={false}
-                    tickLine={false}
-                    fontSize={11}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "0.75rem",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
-                      padding: "8px 12px",
-                      fontSize: "12px",
-                    }}
-                    labelStyle={{ fontWeight: 700, color: "#475569" }}
-                    itemStyle={{ color: "#1e293b", fontWeight: 600 }}
-                    formatter={(v) => [
-                      v == null ? "Không có dữ liệu" : formatVND(Number(v)),
-                      "Tài sản ròng",
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    connectNulls={false}
-                    stroke="#2563eb"
-                    strokeWidth={3}
-                    fill="url(#nwGrad)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
+                    Net Worth Timeline
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Tài sản ròng là snapshot hiện tại, không bị ảnh hưởng bởi bộ
+                    lọc tháng.
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height={224} minWidth={0}>
+                  <AreaChart
+                    data={netWorthTrend}
+                    margin={{ top: 28, right: 20, bottom: 10, left: 18 }}
+                  >
+                    <defs>
+                      <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="#2563eb"
+                          stopOpacity={0.28}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#2563eb"
+                          stopOpacity={0.04}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="4 4"
+                      vertical
+                      stroke="#e2e8f0"
+                    />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={{ stroke: "#cbd5e1" }}
+                      tickLine={false}
+                      fontSize={12}
+                      tickMargin={10}
+                    />
+                    <YAxis
+                      axisLine={{ stroke: "#cbd5e1" }}
+                      tickLine={false}
+                      width={58}
+                      fontSize={11}
+                      tickFormatter={(value) => formatCompactVND(Number(value))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "1rem",
+                        border: "1px solid #dbeafe",
+                        boxShadow: "0 10px 25px -12px rgb(37 99 235 / 0.35)",
+                        padding: "10px 14px",
+                        fontSize: "12px",
+                      }}
+                      labelStyle={{ fontWeight: 800, color: "#1e293b" }}
+                      itemStyle={{ color: "#1d4ed8", fontWeight: 800 }}
+                      formatter={(v) => [
+                        v == null ? "Không có dữ liệu" : formatVND(Number(v)),
+                        "Tài sản ròng",
+                      ]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      connectNulls={false}
+                      stroke="#2563eb"
+                      strokeWidth={3}
+                      fill="url(#nwGrad)"
+                      dot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }}
+                      activeDot={{ r: 6, strokeWidth: 3 }}
+                    >
+                      <LabelList
+                        dataKey="value"
+                        position="top"
+                        offset={10}
+                        className="fill-slate-900 text-[11px] font-black"
+                        formatter={(value: unknown) =>
+                          typeof value === "number"
+                            ? formatCompactVND(value)
+                            : ""
+                        }
+                      />
+                    </Area>
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold text-slate-400">Hiện tại</p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {formatVND(netWorthChartStats.currentValue)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold text-slate-400">Cao nhất</p>
+                  <p className="mt-1 font-black text-emerald-600">
+                    {formatVND(netWorthChartStats.highestValue)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold text-slate-400">Thấp nhất</p>
+                  <p className="mt-1 font-black text-blue-600">
+                    {formatVND(netWorthChartStats.lowestValue)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-xs font-bold text-slate-400">
+                    So với snapshot trước
+                  </p>
+                  <p
+                    className={`mt-1 font-black ${
+                      netWorthChartStats.changeFromPrevious >= 0
+                        ? "text-emerald-600"
+                        : "text-rose-500"
+                    }`}
+                  >
+                    {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
+                    {formatVND(netWorthChartStats.changeFromPrevious)}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -948,6 +1484,29 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <FormulaCard
+          title="Dòng tiền ròng theo kỳ báo cáo"
+          formula="Dòng tiền ròng = Thu nhập − Chi tiêu"
+          resultLabel="Dòng tiền ròng"
+          resultValue={netCashFlow}
+          rows={cashFlowFormulaRows}
+        />
+        <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-600">
+          <p className="font-black text-blue-700">Cách đọc số liệu</p>
+          <p className="mt-2">
+            <span className="font-bold text-slate-900">Tài sản ròng</span> là
+            tổng số dư ví hiện tại, tiết kiệm, đầu tư trừ nợ. Date Timeline chỉ
+            ảnh hưởng phần dòng tiền.
+          </p>
+          <p className="mt-2">
+            <span className="font-bold text-slate-900">Dòng tiền ròng</span> là
+            thu nhập trừ chi tiêu trong kỳ đang chọn. Giao dịch chuyển ví chỉ
+            đổi nơi giữ tiền nên không tính là thu hoặc chi.
+          </p>
         </div>
       </section>
 
@@ -2332,6 +2891,71 @@ function CategorySpendingTooltip({
           {formatVND(Number(item.value ?? 0))}
         </span>
         <span className="font-bold text-rose-500">{item.percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+type FormulaRow = {
+  label: string;
+  value: number;
+  tone: string;
+  note?: string;
+};
+
+function FormulaCard({
+  title,
+  formula,
+  rows,
+  resultLabel,
+  resultValue,
+}: {
+  title: string;
+  formula: string;
+  rows: FormulaRow[];
+  resultLabel: string;
+  resultValue: number;
+}) {
+  return (
+    <div className="mt-5 rounded-3xl border border-slate-200 bg-white/75 p-4 shadow-sm backdrop-blur">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+            Breakdown
+          </p>
+          <p className="mt-1 text-sm font-black text-slate-900">{title}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{formula}</p>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+            {resultLabel}
+          </p>
+          <p
+            className={`text-sm font-black ${
+              resultValue >= 0 ? "text-emerald-600" : "text-rose-500"
+            }`}
+          >
+            {formatVND(resultValue)}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-2xl bg-slate-50 px-3 py-2">
+            <p className="truncate text-[11px] font-bold text-slate-500">
+              {row.label}
+            </p>
+            <p className={`mt-1 text-sm font-black ${row.tone}`}>
+              {row.value < 0 ? "−" : row.label === "Chuyển ví" ? "" : "+"}
+              {formatVND(Math.abs(row.value))}
+            </p>
+            {row.note ? (
+              <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                {row.note}
+              </p>
+            ) : null}
+          </div>
+        ))}
       </div>
     </div>
   );

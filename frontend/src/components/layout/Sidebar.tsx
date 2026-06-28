@@ -37,9 +37,10 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: "Phân tích & Đầu tư",
+    label: "Phân tích & Tài sản",
     items: [
       { label: "Báo cáo", icon: BarChart3, href: "/reports" },
+      { label: "Tiết kiệm", icon: PiggyBank, href: "/savings" },
       { label: "Đầu Tư", icon: BriefcaseBusiness, href: "/investments" },
       { label: "Nợ & Khoản Vay", icon: Landmark, href: "/debts" },
       { label: "AI Advisor", icon: Bot, href: "/ai-insights" },
@@ -67,9 +68,9 @@ const QUICK_ACTIONS = [
     cls: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200",
   },
   {
-    label: "Thêm mục tiêu",
-    href: "/goals",
-    cls: "bg-cyan-600 text-white hover:bg-cyan-700 shadow-sm shadow-cyan-200",
+    label: "Thêm tiết kiệm",
+    href: "/savings",
+    cls: "bg-teal-600 text-white hover:bg-teal-700 shadow-sm shadow-teal-200",
   },
 ];
 

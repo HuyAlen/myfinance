@@ -15,11 +15,6 @@ import type {
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
-function stripClientUserId<T extends object>(item: T): Omit<T, "userId"> {
-  const { userId: _ignoredUserId, ...rest } = item as T & { userId?: unknown };
-  return rest;
-}
-
 async function getAuthUserId(): Promise<string | null> {
   const {
     data: { user },
@@ -123,6 +118,311 @@ function toGoalRow(goal: Goal): Omit<GoalDbRow, "user_id"> {
   };
 }
 
+type TransactionDbRow = Omit<
+  Transaction,
+  | "transferFee"
+  | "exchangeRate"
+  | "transferReference"
+  | "transferReferenceType"
+  | "sourceType"
+  | "destinationType"
+> & {
+  user_id?: string;
+  transfer_fee?: number | null;
+  exchange_rate?: number | null;
+  transfer_reference?: string | null;
+  transfer_reference_type?: string | null;
+  source_type?: string | null;
+  destination_type?: string | null;
+  transferFee?: number | null;
+  exchangeRate?: number | null;
+  transferReference?: string | null;
+  transferReferenceType?: string | null;
+  sourceType?: string | null;
+  destinationType?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+function fromTransactionRow(row: TransactionDbRow): Transaction {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: row.amount,
+    categoryId: row.categoryId,
+    walletId: row.walletId,
+    note: row.note ?? "",
+    date: row.date,
+    transferToWalletId: row.transferToWalletId ?? undefined,
+    transferFee: row.transfer_fee ?? row.transferFee ?? undefined,
+    exchangeRate: row.exchange_rate ?? row.exchangeRate ?? undefined,
+    transferReference:
+      row.transfer_reference ?? row.transferReference ?? undefined,
+    transferReferenceType:
+      row.transfer_reference_type ?? row.transferReferenceType ?? undefined,
+    sourceType: row.source_type ?? row.sourceType ?? undefined,
+    destinationType: row.destination_type ?? row.destinationType ?? undefined,
+    isRecurring: row.isRecurring ?? undefined,
+    recurrence: row.recurrence ?? undefined,
+    nextRunDate: row.nextRunDate ?? undefined,
+    ...((row.created_at ?? row.createdAt)
+      ? { createdAt: row.created_at ?? row.createdAt ?? undefined }
+      : {}),
+    ...((row.updated_at ?? row.updatedAt)
+      ? { updatedAt: row.updated_at ?? row.updatedAt ?? undefined }
+      : {}),
+  } as Transaction;
+}
+
+function toTransactionRow(
+  transaction: Transaction,
+): Omit<TransactionDbRow, "user_id"> {
+  return {
+    id: transaction.id,
+    type: transaction.type,
+    amount: transaction.amount,
+    categoryId: transaction.categoryId,
+    walletId: transaction.walletId,
+    note: transaction.note ?? "",
+    date: transaction.date,
+    transferToWalletId: transaction.transferToWalletId,
+    isRecurring: transaction.isRecurring,
+    recurrence: transaction.recurrence,
+    nextRunDate: transaction.nextRunDate,
+    transfer_fee: transaction.transferFee,
+    exchange_rate: transaction.exchangeRate,
+    transfer_reference: transaction.transferReference,
+    transfer_reference_type:
+      getTransferReferenceType(transaction) ??
+      inferTransferReferenceType(transaction),
+    source_type: getSourceType(transaction) ?? inferSourceType(transaction),
+    destination_type:
+      getDestinationType(transaction) ?? inferDestinationType(transaction),
+  };
+}
+
+type WalletDbRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  type: Wallet["type"];
+  balance: number;
+};
+
+type DebtDbRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  totalAmount: number;
+  remainingAmount: number;
+  interestRate?: number | null;
+  minimumPayment?: number | null;
+  dueDate?: string | null;
+  loanTermMonths?: number | null;
+};
+
+type BudgetDbRow = {
+  id: string;
+  user_id: string;
+  categoryId: string;
+  month: string;
+  limitAmount: number;
+  rolloverAmount?: number | null;
+  warningThreshold?: number | null;
+  criticalThreshold?: number | null;
+};
+
+type InvestmentDbRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  type: Investment["type"];
+  symbol?: string | null;
+  investedAmount: number;
+  currentValue: number;
+  purchaseDate?: string | null;
+  notes?: string | null;
+  quantity?: number | null;
+  averageCost?: number | null;
+  currentPrice?: number | null;
+};
+
+function toWalletRow(wallet: Wallet, userId: string): WalletDbRow {
+  return {
+    id: wallet.id,
+    user_id: userId,
+    name: wallet.name,
+    type: wallet.type,
+    balance: wallet.balance,
+  };
+}
+
+function toDebtRow(debt: Debt, userId: string): DebtDbRow {
+  return {
+    id: debt.id,
+    user_id: userId,
+    name: debt.name,
+    totalAmount: debt.totalAmount,
+    remainingAmount: debt.remainingAmount,
+    interestRate: debt.interestRate ?? null,
+    minimumPayment: debt.minimumPayment ?? null,
+    dueDate: debt.dueDate ?? null,
+    loanTermMonths: debt.loanTermMonths ?? null,
+  };
+}
+
+function toBudgetRow(budget: Budget, userId: string): BudgetDbRow {
+  return {
+    id: budget.id,
+    user_id: userId,
+    categoryId: budget.categoryId,
+    month: budget.month,
+    limitAmount: budget.limitAmount,
+    rolloverAmount: budget.rolloverAmount ?? null,
+    warningThreshold: budget.warningThreshold ?? null,
+    criticalThreshold: budget.criticalThreshold ?? null,
+  };
+}
+
+function toInvestmentRow(
+  investment: Investment,
+  userId: string,
+): InvestmentDbRow {
+  return {
+    id: investment.id,
+    user_id: userId,
+    name: investment.name,
+    type: investment.type,
+    symbol: investment.symbol ?? null,
+    investedAmount: investment.investedAmount,
+    currentValue: investment.currentValue,
+    purchaseDate: investment.purchaseDate ?? null,
+    notes: investment.notes ?? null,
+    quantity: investment.quantity ?? null,
+    averageCost: investment.averageCost ?? null,
+    currentPrice: investment.currentPrice ?? null,
+  };
+}
+
+function toCategoryInsertRow(
+  category: Category,
+  userId: string,
+): Omit<CategoryDbRow, "userId"> {
+  return {
+    ...toCategoryRow(category),
+    user_id: userId,
+  };
+}
+
+function toGoalInsertRow(
+  goal: Goal,
+  userId: string,
+): Omit<GoalDbRow, "userId"> {
+  return {
+    ...toGoalRow(goal),
+    user_id: userId,
+  };
+}
+
+type TransactionWithEngineFields = Transaction & {
+  transferReferenceType?: string | null;
+  transfer_reference_type?: string | null;
+  sourceType?: string | null;
+  source_type?: string | null;
+  destinationType?: string | null;
+  destination_type?: string | null;
+};
+
+function getTransferReferenceType(transaction: Transaction) {
+  const tx = transaction as TransactionWithEngineFields;
+  return tx.transferReferenceType ?? tx.transfer_reference_type ?? undefined;
+}
+
+function getSourceType(transaction: Transaction) {
+  const tx = transaction as TransactionWithEngineFields;
+  return tx.sourceType ?? tx.source_type ?? undefined;
+}
+
+function getDestinationType(transaction: Transaction) {
+  const tx = transaction as TransactionWithEngineFields;
+  return tx.destinationType ?? tx.destination_type ?? undefined;
+}
+
+function inferTransferReferenceType(transaction: Transaction) {
+  const explicitType = normalizeEngineText(
+    getTransferReferenceType(transaction),
+  );
+  if (explicitType) return explicitType;
+
+  const kind = inferTransactionKind(transaction);
+  if (
+    kind === "saving_deposit" ||
+    kind === "saving_withdraw" ||
+    kind === "saving_close"
+  ) {
+    return "saving";
+  }
+
+  if (transaction.type === "transfer") return "wallet";
+  return undefined;
+}
+
+function inferSourceType(transaction: Transaction) {
+  const explicitType = normalizeEngineText(getSourceType(transaction));
+  if (explicitType) return explicitType;
+
+  const kind = inferTransactionKind(transaction);
+  if (kind === "income") return "external";
+  if (kind === "expense") return "wallet";
+  if (kind === "saving_deposit") return "wallet";
+  if (kind === "saving_withdraw" || kind === "saving_close") return "saving";
+  if (kind === "wallet_transfer") return "wallet";
+
+  return undefined;
+}
+
+function inferDestinationType(transaction: Transaction) {
+  const explicitType = normalizeEngineText(getDestinationType(transaction));
+  if (explicitType) return explicitType;
+
+  const kind = inferTransactionKind(transaction);
+  if (kind === "income") return "wallet";
+  if (kind === "expense") return "external";
+  if (kind === "saving_deposit") return "saving";
+  if (kind === "saving_withdraw" || kind === "saving_close") return "wallet";
+  if (kind === "wallet_transfer") return "wallet";
+
+  return undefined;
+}
+
+function normalizeTransactionForStorage(transaction: Transaction): Transaction {
+  // Finance Engine v2 stores every asset movement as a transfer.
+  // Saving deposit / withdraw / close are classified by
+  // transfer_reference_type + source_type + destination_type, not by income/expense.
+  return {
+    ...transaction,
+    type:
+      inferTransferReferenceType(transaction) === "saving"
+        ? "transfer"
+        : transaction.type,
+  } as Transaction;
+}
+
+function toTransactionInsertRow(
+  transaction: Transaction,
+  userId: string,
+): Omit<TransactionDbRow, "userId"> {
+  const normalizedTransaction = normalizeTransactionForStorage(transaction);
+  const row = toTransactionRow(normalizedTransaction);
+
+  return {
+    ...row,
+    user_id: userId,
+  };
+}
+
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
 export async function getWallets(): Promise<Wallet[]> {
@@ -156,7 +456,7 @@ export async function getTransactions(): Promise<Transaction[]> {
     .eq("user_id", userId)
     .order("date", { ascending: false });
   if (error) console.error("[financeStorage] getTransactions:", error.message);
-  return (data ?? []) as Transaction[];
+  return ((data ?? []) as TransactionDbRow[]).map(fromTransactionRow);
 }
 
 export async function getDebts(): Promise<Debt[]> {
@@ -256,49 +556,43 @@ export async function initFinanceDemoData() {
 
   await Promise.all([
     supabase.from("wallets").upsert(
-      demoData.wallets.map((w) => ({
-        ...stripClientUserId(w),
-        user_id: userId,
-      })),
+      demoData.wallets.map((wallet) => toWalletRow(wallet, userId)),
       { onConflict: "id", ignoreDuplicates: true },
     ),
-    supabase.from("categories").upsert(
-      demoData.categories.map((c) => ({
-        ...toCategoryRow(c),
-        user_id: userId,
-      })) as never,
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
-    supabase.from("transactions").upsert(
-      demoData.transactions.map((t) => ({
-        ...stripClientUserId(t),
-        user_id: userId,
-      })),
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
+    supabase
+      .from("categories")
+      .upsert(
+        demoData.categories.map((category) =>
+          toCategoryInsertRow(category, userId),
+        ) as never,
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
+    supabase
+      .from("transactions")
+      .upsert(
+        demoData.transactions.map((transaction) =>
+          toTransactionInsertRow(transaction, userId),
+        ) as never,
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
     supabase.from("debts").upsert(
-      demoData.debts.map((d) => ({ ...stripClientUserId(d), user_id: userId })),
+      demoData.debts.map((debt) => toDebtRow(debt, userId)),
       { onConflict: "id", ignoreDuplicates: true },
     ),
-    supabase.from("goals").upsert(
-      demoData.goals.map((g) => ({
-        ...toGoalRow(g),
-        user_id: userId,
-      })) as never,
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
+    supabase
+      .from("goals")
+      .upsert(
+        demoData.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
     supabase.from("budgets").upsert(
-      demoData.budgets.map((b) => ({
-        ...stripClientUserId(b),
-        user_id: userId,
-      })),
+      demoData.budgets.map((budget) => toBudgetRow(budget, userId)),
       { onConflict: "id", ignoreDuplicates: true },
     ),
     supabase.from("investments").upsert(
-      demoData.investments.map((i) => ({
-        ...stripClientUserId(i),
-        user_id: userId,
-      })),
+      demoData.investments.map((investment) =>
+        toInvestmentRow(investment, userId),
+      ),
       { onConflict: "id", ignoreDuplicates: true },
     ),
   ]);
@@ -336,55 +630,38 @@ export async function resetFinanceDemoData(): Promise<{
   const insertErrors = await Promise.all([
     supabase
       .from("wallets")
+      .insert(demoData.wallets.map((wallet) => toWalletRow(wallet, userId))),
+    supabase
+      .from("categories")
       .insert(
-        demoData.wallets.map((w) => ({
-          ...stripClientUserId(w),
-          user_id: userId,
-        })),
+        demoData.categories.map((category) =>
+          toCategoryInsertRow(category, userId),
+        ) as never,
       ),
-    supabase.from("categories").insert(
-      demoData.categories.map((c) => ({
-        ...toCategoryRow(c),
-        user_id: userId,
-      })) as never,
-    ),
     supabase
       .from("transactions")
       .insert(
-        demoData.transactions.map((t) => ({
-          ...stripClientUserId(t),
-          user_id: userId,
-        })),
+        demoData.transactions.map((transaction) =>
+          toTransactionInsertRow(transaction, userId),
+        ) as never,
       ),
     supabase
       .from("debts")
+      .insert(demoData.debts.map((debt) => toDebtRow(debt, userId))),
+    supabase
+      .from("goals")
       .insert(
-        demoData.debts.map((d) => ({
-          ...stripClientUserId(d),
-          user_id: userId,
-        })),
+        demoData.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
       ),
-    supabase.from("goals").insert(
-      demoData.goals.map((g) => ({
-        ...toGoalRow(g),
-        user_id: userId,
-      })) as never,
-    ),
     supabase
       .from("budgets")
-      .insert(
-        demoData.budgets.map((b) => ({
-          ...stripClientUserId(b),
-          user_id: userId,
-        })),
-      ),
+      .insert(demoData.budgets.map((budget) => toBudgetRow(budget, userId))),
     supabase
       .from("investments")
       .insert(
-        demoData.investments.map((i) => ({
-          ...stripClientUserId(i),
-          user_id: userId,
-        })),
+        demoData.investments.map((investment) =>
+          toInvestmentRow(investment, userId),
+        ),
       ),
   ]);
   const firstInsertErr = insertErrors.find((r) => r.error)?.error;
@@ -403,31 +680,45 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // Sequential deletes to respect FK dependency order:
-  // child rows first, parent rows (wallets) last.
-  const steps: [string, string][] = [
-    ["transactions", "Giao dịch"],
-    ["budgets", "Ngân sách"],
-    ["goals", "Mục tiêu"],
-    ["debts", "Khoản nợ"],
-    ["investments", "Đầu tư"],
-    ["categories", "Danh mục"],
-    ["wallets", "Ví tiền"],
-  ];
+  const deleteSteps = [
+    {
+      label: "Giao dịch",
+      run: () => supabase.from("transactions").delete().eq("user_id", userId),
+    },
+    {
+      label: "Ngân sách",
+      run: () => supabase.from("budgets").delete().eq("user_id", userId),
+    },
+    {
+      label: "Mục tiêu",
+      run: () => supabase.from("goals").delete().eq("user_id", userId),
+    },
+    {
+      label: "Khoản nợ",
+      run: () => supabase.from("debts").delete().eq("user_id", userId),
+    },
+    {
+      label: "Đầu tư",
+      run: () => supabase.from("investments").delete().eq("user_id", userId),
+    },
+    {
+      label: "Danh mục",
+      run: () => supabase.from("categories").delete().eq("user_id", userId),
+    },
+    {
+      label: "Ví tiền",
+      run: () => supabase.from("wallets").delete().eq("user_id", userId),
+    },
+  ] as const;
 
-  for (const [table, label] of steps) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from(table) as any)
-      .delete()
-      .eq("user_id", userId);
+  for (const step of deleteSteps) {
+    const { error } = await step.run();
     if (error) {
       console.error(
-        `[financeStorage] clearAllUserData – ${label} (${table}):`,
+        `[financeStorage] clearAllUserData – ${step.label}:`,
         error.message,
       );
-      return {
-        error: `Không thể xóa ${label}: ${(error as { message: string }).message}`,
-      };
+      return { error: `Không thể xóa ${step.label}: ${error.message}` };
     }
   }
 
@@ -455,86 +746,314 @@ export async function importAllData(data: {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const run = async (
-    table: string,
-    rows: object[],
-  ): Promise<{ error: string | null }> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from(table) as any).insert(rows);
-    return { error: (error as { message: string } | null)?.message ?? null };
-  };
+  const inserts: PromiseLike<{ error: { message: string } | null }>[] = [];
 
-  const inserts: Promise<{ error: string | null }>[] = [];
+  if (data.wallets?.length) {
+    inserts.push(
+      supabase
+        .from("wallets")
+        .insert(data.wallets.map((wallet) => toWalletRow(wallet, userId))),
+    );
+  }
 
-  if (data.wallets?.length)
+  if (data.categories?.length) {
     inserts.push(
-      run(
-        "wallets",
-        data.wallets.map((w) => ({ ...w, user_id: userId })),
-      ),
+      supabase
+        .from("categories")
+        .insert(
+          data.categories.map((category) =>
+            toCategoryInsertRow(category, userId),
+          ) as never,
+        ),
     );
-  if (data.categories?.length)
+  }
+
+  if (data.transactions?.length) {
     inserts.push(
-      run(
-        "categories",
-        data.categories.map((c) => ({ ...toCategoryRow(c), user_id: userId })),
-      ),
+      supabase
+        .from("transactions")
+        .insert(
+          data.transactions.map((transaction) =>
+            toTransactionInsertRow(transaction, userId),
+          ) as never,
+        ),
     );
-  if (data.transactions?.length)
+  }
+
+  if (data.debts?.length) {
     inserts.push(
-      run(
-        "transactions",
-        data.transactions.map((t) => ({ ...t, user_id: userId })),
-      ),
+      supabase
+        .from("debts")
+        .insert(data.debts.map((debt) => toDebtRow(debt, userId))),
     );
-  if (data.debts?.length)
+  }
+
+  if (data.goals?.length) {
     inserts.push(
-      run(
-        "debts",
-        data.debts.map((d) => ({ ...d, user_id: userId })),
-      ),
+      supabase
+        .from("goals")
+        .insert(
+          data.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
+        ),
     );
-  if (data.goals?.length)
+  }
+
+  if (data.budgets?.length) {
     inserts.push(
-      run(
-        "goals",
-        data.goals.map((g) => ({ ...toGoalRow(g), user_id: userId })),
-      ),
+      supabase
+        .from("budgets")
+        .insert(data.budgets.map((budget) => toBudgetRow(budget, userId))),
     );
-  if (data.budgets?.length)
+  }
+
+  if (data.investments?.length) {
     inserts.push(
-      run(
-        "budgets",
-        data.budgets.map((b) => ({ ...b, user_id: userId })),
-      ),
+      supabase
+        .from("investments")
+        .insert(
+          data.investments.map((investment) =>
+            toInvestmentRow(investment, userId),
+          ),
+        ),
     );
-  if (data.investments?.length)
-    inserts.push(
-      run(
-        "investments",
-        data.investments.map((i) => ({ ...i, user_id: userId })),
-      ),
-    );
+  }
 
   const results = await Promise.all(inserts);
-  const firstErr = results.find((r) => r.error !== null)?.error ?? null;
+  const firstErr =
+    results.find((result) => result.error !== null)?.error ?? null;
   if (firstErr) {
-    console.error("[financeStorage] importAllData:", firstErr);
-    return { error: firstErr };
+    console.error("[financeStorage] importAllData:", firstErr.message);
+    return { error: firstErr.message };
   }
+
   return { error: null };
 }
 
-// ─── Transaction CRUD + Wallet Balance Sync ───────────────────────────────────
+// ─── Finance Engine v2: Transaction CRUD + Balance Sync ────────────────
 
-/**
- * Compute the signed delta a transaction applies to its source wallet.
- * Transfers are handled separately (negative on source, positive on destination).
- */
-function walletDelta(tx: Transaction): number {
-  if (tx.type === "income") return tx.amount;
-  if (tx.type === "expense") return -tx.amount;
-  return -tx.amount; // transfer: source loses amount
+type TransactionKind =
+  | "income"
+  | "expense"
+  | "wallet_transfer"
+  | "saving_deposit"
+  | "saving_withdraw"
+  | "saving_close";
+
+type BalanceEffect = {
+  walletId: string;
+  delta: number;
+};
+
+function normalizeEngineText(value: string | null | undefined) {
+  return (value ?? "")
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function inferTransactionKind(transaction: Transaction): TransactionKind {
+  const transferReferenceType = normalizeEngineText(
+    getTransferReferenceType(transaction),
+  );
+  const sourceType = normalizeEngineText(getSourceType(transaction));
+  const destinationType = normalizeEngineText(getDestinationType(transaction));
+
+  if (transaction.type === "transfer" && transferReferenceType === "saving") {
+    if (sourceType === "saving" && destinationType === "wallet") {
+      const reference = normalizeEngineText(transaction.transferReference);
+      const note = normalizeEngineText(transaction.note);
+      if (
+        reference.includes("saving_close") ||
+        note.includes("tat toan tiet kiem")
+      ) {
+        return "saving_close";
+      }
+      return "saving_withdraw";
+    }
+
+    if (sourceType === "wallet" && destinationType === "saving") {
+      return "saving_deposit";
+    }
+  }
+
+  if (transaction.type === "income") return "income";
+  if (transaction.type === "expense") return "expense";
+
+  const note = normalizeEngineText(transaction.note);
+  const reference = normalizeEngineText(transaction.transferReference);
+  const text = `${note} ${reference}`.trim();
+
+  if (
+    text.includes("tat toan tiet kiem") ||
+    text.startsWith("tat toan") ||
+    text.includes("saving_close")
+  ) {
+    return "saving_close";
+  }
+
+  if (
+    text.startsWith("rut tu tiet kiem") ||
+    text.startsWith("rut tien tu tiet kiem") ||
+    text.includes("saving_withdraw")
+  ) {
+    return "saving_withdraw";
+  }
+
+  if (
+    text.startsWith("nap vao tiet kiem") ||
+    text.startsWith("gui vao tiet kiem") ||
+    text.startsWith("nap them vao tiet kiem") ||
+    text.includes("saving_deposit")
+  ) {
+    return "saving_deposit";
+  }
+
+  return "wallet_transfer";
+}
+
+function getTransactionEffects(transaction: Transaction): BalanceEffect[] {
+  const amount = Math.max(0, Number(transaction.amount) || 0);
+  const kind = inferTransactionKind(transaction);
+
+  switch (kind) {
+    case "income":
+      return [{ walletId: transaction.walletId, delta: amount }];
+
+    case "expense":
+      return [{ walletId: transaction.walletId, delta: -amount }];
+
+    case "wallet_transfer":
+      if (!transaction.transferToWalletId) return [];
+      return [
+        { walletId: transaction.walletId, delta: -amount },
+        { walletId: transaction.transferToWalletId, delta: amount },
+      ];
+
+    case "saving_deposit":
+      // Money leaves a wallet and becomes a saving asset.
+      // Saving balance is handled by the Savings module / saving_transactions.
+      return [{ walletId: transaction.walletId, delta: -amount }];
+
+    case "saving_withdraw":
+    case "saving_close":
+      // Money leaves a saving asset and enters the selected wallet.
+      // Saving balance is handled by the Savings module / saving_transactions.
+      return [{ walletId: transaction.walletId, delta: amount }];
+  }
+}
+
+function collectWalletIdsFromTransactions(transactions: Transaction[]) {
+  const ids = new Set<string>();
+  transactions.forEach((transaction) => {
+    getTransactionEffects(transaction).forEach((effect) => {
+      if (effect.walletId) ids.add(effect.walletId);
+    });
+  });
+  return [...ids];
+}
+
+async function fetchWalletBalanceMap(userId: string, walletIds: string[]) {
+  const uniqueWalletIds = [...new Set(walletIds)].filter(Boolean);
+  if (uniqueWalletIds.length === 0) {
+    return {
+      wallets: [] as Wallet[],
+      balanceMap: new Map<string, number>(),
+      error: null as string | null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("wallets")
+    .select("*")
+    .eq("user_id", userId)
+    .in("id", uniqueWalletIds);
+
+  if (error) {
+    return {
+      wallets: [] as Wallet[],
+      balanceMap: new Map<string, number>(),
+      error: error.message,
+    };
+  }
+
+  const wallets = (data ?? []) as Wallet[];
+  const balanceMap = new Map(
+    wallets.map((wallet) => [wallet.id, wallet.balance]),
+  );
+
+  for (const walletId of uniqueWalletIds) {
+    if (!balanceMap.has(walletId)) {
+      return {
+        wallets,
+        balanceMap,
+        error: "Không tìm thấy ví liên quan đến giao dịch.",
+      };
+    }
+  }
+
+  return { wallets, balanceMap, error: null };
+}
+
+function applyEffectsToBalanceMap(
+  balanceMap: Map<string, number>,
+  transaction: Transaction,
+  direction: 1 | -1,
+) {
+  for (const effect of getTransactionEffects(transaction)) {
+    const currentBalance = balanceMap.get(effect.walletId);
+    if (currentBalance === undefined) {
+      return "Không tìm thấy ví liên quan đến giao dịch.";
+    }
+    balanceMap.set(effect.walletId, currentBalance + effect.delta * direction);
+  }
+  return null;
+}
+
+function getNegativeWalletError(balanceMap: Map<string, number>) {
+  const negativeWallet = [...balanceMap.entries()].find(
+    ([, balance]) => balance < 0,
+  );
+  if (!negativeWallet) return null;
+  return "Số dư ví không đủ để thực hiện thao tác này. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.";
+}
+
+async function persistWalletBalances(
+  userId: string,
+  originalWallets: Wallet[],
+  nextBalanceMap: Map<string, number>,
+) {
+  const changedWallets = originalWallets.filter(
+    (wallet) =>
+      nextBalanceMap.has(wallet.id) &&
+      nextBalanceMap.get(wallet.id) !== wallet.balance,
+  );
+
+  const updateResults = await Promise.all(
+    changedWallets.map((wallet) =>
+      supabase
+        .from("wallets")
+        .update({ balance: nextBalanceMap.get(wallet.id) ?? wallet.balance })
+        .eq("id", wallet.id)
+        .eq("user_id", userId),
+    ),
+  );
+
+  const firstError = updateResults.find((result) => result.error)?.error;
+  return firstError?.message ?? null;
+}
+
+async function restoreWalletBalances(userId: string, wallets: Wallet[]) {
+  await Promise.all(
+    wallets.map((wallet) =>
+      supabase
+        .from("wallets")
+        .update({ balance: wallet.balance })
+        .eq("id", wallet.id)
+        .eq("user_id", userId),
+    ),
+  );
 }
 
 export async function addTransaction(
@@ -543,114 +1062,59 @@ export async function addTransaction(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const walletIds = [
-    transaction.walletId,
-    transaction.type === "transfer"
-      ? transaction.transferToWalletId
-      : undefined,
-  ].filter((id): id is string => !!id);
-
-  const uniqueWalletIds = [...new Set(walletIds)];
-
-  const { data: walletData, error: fetchErr } = await supabase
-    .from("wallets")
-    .select("*")
-    .eq("user_id", userId)
-    .in("id", uniqueWalletIds);
-
-  if (fetchErr) {
-    console.error(
-      "[financeStorage] addTransaction – fetch wallets:",
-      fetchErr.message,
-    );
-    return { error: fetchErr.message };
-  }
-
-  const wallets = (walletData ?? []) as Wallet[];
-  const originalBalances = new Map(wallets.map((w) => [w.id, w.balance]));
-  const nextBalances = new Map(originalBalances);
-
-  if (transaction.type === "transfer") {
-    if (!transaction.transferToWalletId) {
+  if (
+    transaction.type === "transfer" &&
+    inferTransactionKind(transaction) === "wallet_transfer"
+  ) {
+    if (!transaction.transferToWalletId)
       return { error: "Vui lòng chọn ví nhận tiền." };
-    }
     if (transaction.walletId === transaction.transferToWalletId) {
       return { error: "Ví chuyển và ví nhận không được trùng nhau." };
     }
+  }
 
-    const sourceBalance = nextBalances.get(transaction.walletId);
-    const targetBalance = nextBalances.get(transaction.transferToWalletId);
-
-    if (sourceBalance === undefined || targetBalance === undefined) {
-      return { error: "Không tìm thấy ví chuyển hoặc ví nhận." };
-    }
-
-    nextBalances.set(transaction.walletId, sourceBalance - transaction.amount);
-    nextBalances.set(
-      transaction.transferToWalletId,
-      targetBalance + transaction.amount,
+  const walletIds = collectWalletIdsFromTransactions([transaction]);
+  const {
+    wallets,
+    balanceMap,
+    error: walletFetchError,
+  } = await fetchWalletBalanceMap(userId, walletIds);
+  if (walletFetchError) {
+    console.error(
+      "[financeStorage] addTransaction – fetch wallets:",
+      walletFetchError,
     );
-  } else {
-    const currentBalance = nextBalances.get(transaction.walletId);
-    if (currentBalance !== undefined) {
-      nextBalances.set(
-        transaction.walletId,
-        currentBalance + walletDelta(transaction),
-      );
-    }
+    return { error: walletFetchError };
   }
 
-  const negativeWallet = [...nextBalances.entries()].find(
-    ([, balance]) => balance < 0,
-  );
+  const effectError = applyEffectsToBalanceMap(balanceMap, transaction, 1);
+  if (effectError) return { error: effectError };
 
-  if (negativeWallet) {
-    return {
-      error:
-        "Số dư ví không đủ để thêm giao dịch. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
-    };
-  }
+  const negativeError = getNegativeWalletError(balanceMap);
+  if (negativeError) return { error: negativeError };
 
-  // Insert the transaction only after validating wallet balances. This prevents
-  // Supabase check constraint errors from wallets_balance_nn and avoids rollback.
   const { error: txErr } = await supabase
     .from("transactions")
-    .insert({ ...transaction, user_id: userId });
+    .insert(toTransactionInsertRow(transaction, userId) as never);
 
   if (txErr) {
     console.error("[financeStorage] addTransaction:", txErr.message);
     return { error: txErr.message };
   }
 
-  // Then sync wallet balances. If a wallet update fails, roll the inserted
-  // transaction back so transaction history and balances do not diverge.
-  const changedBalances = [...nextBalances.entries()].filter(
-    ([id, balance]) => originalBalances.get(id) !== balance,
-  );
-
-  const updateResults = await Promise.all(
-    changedBalances.map(([id, balance]) =>
-      supabase
-        .from("wallets")
-        .update({ balance })
-        .eq("id", id)
-        .eq("user_id", userId),
-    ),
-  );
-
-  const walletErr = updateResults.find((r) => r.error)?.error;
-  if (walletErr) {
+  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
+  if (balanceError) {
     await supabase
       .from("transactions")
       .delete()
       .eq("id", transaction.id)
       .eq("user_id", userId);
 
-    return {
-      error:
-        walletErr.message ||
-        "Không thể cập nhật số dư ví. Giao dịch đã được hoàn tác.",
-    };
+    console.error(
+      "[financeStorage] addTransaction – wallet balance:",
+      balanceError,
+    );
+    return { error: balanceError };
   }
 
   return { error: null };
@@ -677,93 +1141,58 @@ export async function updateTransaction(
     return { error: fetchErr.message };
   }
 
-  const oldTransaction = oldData?.[0] as Transaction | undefined;
+  const oldTransaction = oldData?.[0]
+    ? fromTransactionRow(oldData[0] as TransactionDbRow)
+    : undefined;
 
-  if (oldTransaction) {
-    const allIds = [
-      oldTransaction.walletId,
-      oldTransaction.transferToWalletId,
-      updatedTransaction.walletId,
-      updatedTransaction.transferToWalletId,
-    ].filter((id): id is string => !!id);
-    const uniqueIds = [...new Set(allIds)];
+  if (!oldTransaction) {
+    return { error: "Không tìm thấy giao dịch cần cập nhật." };
+  }
 
-    const { data: walletData, error: walletFetchErr } = await supabase
-      .from("wallets")
-      .select("*")
-      .eq("user_id", userId)
-      .in("id", uniqueIds);
-
-    if (walletFetchErr) {
-      console.error(
-        "[financeStorage] updateTransaction – fetch wallets:",
-        walletFetchErr.message,
-      );
-      return { error: walletFetchErr.message };
-    }
-
-    const balanceMap = new Map<string, number>(
-      ((walletData ?? []) as Wallet[]).map((w) => [w.id, w.balance]),
-    );
-
-    const reverseEffect = (tx: Transaction, sign: -1 | 1) => {
-      const srcBal = balanceMap.get(tx.walletId);
-      if (srcBal !== undefined) {
-        balanceMap.set(tx.walletId, srcBal + walletDelta(tx) * sign);
-      }
-      if (tx.type === "transfer" && tx.transferToWalletId) {
-        const dstBal = balanceMap.get(tx.transferToWalletId);
-        if (dstBal !== undefined) {
-          balanceMap.set(tx.transferToWalletId, dstBal - tx.amount * sign);
-        }
-      }
-    };
-
-    reverseEffect(oldTransaction, -1);
-    reverseEffect(updatedTransaction, 1);
-
-    const negativeWallet = [...balanceMap.entries()].find(
-      ([, balance]) => balance < 0,
-    );
-
-    if (negativeWallet) {
-      return {
-        error:
-          "Số dư ví không đủ để lưu thay đổi. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.",
-      };
-    }
-
-    const changedBalances = [...balanceMap.entries()].filter(
-      ([id, balance]) => {
-        const originalWallet = ((walletData ?? []) as Wallet[]).find(
-          (wallet) => wallet.id === id,
-        );
-        return originalWallet?.balance !== balance;
-      },
-    );
-
-    const updateResults = await Promise.all(
-      changedBalances.map(([id, balance]) =>
-        supabase
-          .from("wallets")
-          .update({ balance })
-          .eq("id", id)
-          .eq("user_id", userId),
-      ),
-    );
-    const balErr = updateResults.find((r) => r.error)?.error;
-    if (balErr) {
-      console.error(
-        "[financeStorage] updateTransaction – wallet balance:",
-        balErr.message,
-      );
-      return { error: balErr.message };
+  if (
+    updatedTransaction.type === "transfer" &&
+    inferTransactionKind(updatedTransaction) === "wallet_transfer"
+  ) {
+    if (!updatedTransaction.transferToWalletId)
+      return { error: "Vui lòng chọn ví nhận tiền." };
+    if (updatedTransaction.walletId === updatedTransaction.transferToWalletId) {
+      return { error: "Ví chuyển và ví nhận không được trùng nhau." };
     }
   }
 
+  const walletIds = collectWalletIdsFromTransactions([
+    oldTransaction,
+    updatedTransaction,
+  ]);
+  const {
+    wallets,
+    balanceMap,
+    error: walletFetchError,
+  } = await fetchWalletBalanceMap(userId, walletIds);
+  if (walletFetchError) {
+    console.error(
+      "[financeStorage] updateTransaction – fetch wallets:",
+      walletFetchError,
+    );
+    return { error: walletFetchError };
+  }
+
+  const reverseError = applyEffectsToBalanceMap(balanceMap, oldTransaction, -1);
+  if (reverseError) return { error: reverseError };
+
+  const applyError = applyEffectsToBalanceMap(
+    balanceMap,
+    updatedTransaction,
+    1,
+  );
+  if (applyError) return { error: applyError };
+
+  const negativeError = getNegativeWalletError(balanceMap);
+  if (negativeError) return { error: negativeError };
+
   const { error: txErr } = await supabase
     .from("transactions")
-    .update({ ...updatedTransaction, user_id: userId })
+    .update({ ...toTransactionInsertRow(updatedTransaction, userId) } as never)
     .eq("id", updatedTransaction.id)
     .eq("user_id", userId);
 
@@ -771,6 +1200,23 @@ export async function updateTransaction(
     console.error("[financeStorage] updateTransaction:", txErr.message);
     return { error: txErr.message };
   }
+
+  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
+  if (balanceError) {
+    await supabase
+      .from("transactions")
+      .update({ ...toTransactionInsertRow(oldTransaction, userId) } as never)
+      .eq("id", oldTransaction.id)
+      .eq("user_id", userId);
+    await restoreWalletBalances(userId, wallets);
+
+    console.error(
+      "[financeStorage] updateTransaction – wallet balance:",
+      balanceError,
+    );
+    return { error: balanceError };
+  }
+
   return { error: null };
 }
 
@@ -795,84 +1241,33 @@ export async function deleteTransaction(
     return { error: fetchErr.message };
   }
 
-  const transaction = transactionData?.[0] as Transaction | undefined;
+  const transaction = transactionData?.[0]
+    ? fromTransactionRow(transactionData[0] as TransactionDbRow)
+    : undefined;
 
-  if (transaction) {
-    if (transaction.type === "transfer") {
-      const walletsToUpdate = [
-        transaction.walletId,
-        transaction.transferToWalletId,
-      ].filter(Boolean) as string[];
-
-      const { data: walletData, error: walletFetchErr } = await supabase
-        .from("wallets")
-        .select("*")
-        .eq("user_id", userId)
-        .in("id", walletsToUpdate);
-
-      if (walletFetchErr) {
-        console.error(
-          "[financeStorage] deleteTransaction – fetch wallets:",
-          walletFetchErr.message,
-        );
-        return { error: walletFetchErr.message };
-      }
-
-      const wallets = (walletData ?? []) as Wallet[];
-      const updateResults = await Promise.all(
-        wallets.map((w) => {
-          const delta =
-            w.id === transaction.walletId
-              ? transaction.amount
-              : -transaction.amount;
-          return supabase
-            .from("wallets")
-            .update({ balance: w.balance + delta })
-            .eq("id", w.id)
-            .eq("user_id", userId);
-        }),
-      );
-      const balErr = updateResults.find((r) => r.error)?.error;
-      if (balErr) {
-        console.error(
-          "[financeStorage] deleteTransaction – wallet balance:",
-          balErr.message,
-        );
-        return { error: balErr.message };
-      }
-    } else {
-      const { data: walletData, error: walletFetchErr } = await supabase
-        .from("wallets")
-        .select("*")
-        .eq("id", transaction.walletId)
-        .eq("user_id", userId)
-        .limit(1);
-
-      if (walletFetchErr) {
-        console.error(
-          "[financeStorage] deleteTransaction – fetch wallet:",
-          walletFetchErr.message,
-        );
-        return { error: walletFetchErr.message };
-      }
-
-      const wallet = walletData?.[0] as Wallet | undefined;
-      if (wallet) {
-        const { error: balErr } = await supabase
-          .from("wallets")
-          .update({ balance: wallet.balance - walletDelta(transaction) })
-          .eq("id", wallet.id)
-          .eq("user_id", userId);
-        if (balErr) {
-          console.error(
-            "[financeStorage] deleteTransaction – balance:",
-            balErr.message,
-          );
-          return { error: balErr.message };
-        }
-      }
-    }
+  if (!transaction) {
+    return { error: "Không tìm thấy giao dịch cần xóa." };
   }
+
+  const walletIds = collectWalletIdsFromTransactions([transaction]);
+  const {
+    wallets,
+    balanceMap,
+    error: walletFetchError,
+  } = await fetchWalletBalanceMap(userId, walletIds);
+  if (walletFetchError) {
+    console.error(
+      "[financeStorage] deleteTransaction – fetch wallets:",
+      walletFetchError,
+    );
+    return { error: walletFetchError };
+  }
+
+  const reverseError = applyEffectsToBalanceMap(balanceMap, transaction, -1);
+  if (reverseError) return { error: reverseError };
+
+  const negativeError = getNegativeWalletError(balanceMap);
+  if (negativeError) return { error: negativeError };
 
   const { error: delErr } = await supabase
     .from("transactions")
@@ -884,6 +1279,21 @@ export async function deleteTransaction(
     console.error("[financeStorage] deleteTransaction:", delErr.message);
     return { error: delErr.message };
   }
+
+  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
+  if (balanceError) {
+    await supabase
+      .from("transactions")
+      .insert(toTransactionInsertRow(transaction, userId) as never);
+    await restoreWalletBalances(userId, wallets);
+
+    console.error(
+      "[financeStorage] deleteTransaction – wallet balance:",
+      balanceError,
+    );
+    return { error: balanceError };
+  }
+
   return { error: null };
 }
 
@@ -896,7 +1306,7 @@ export async function addWallet(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("wallets")
-    .insert({ ...wallet, user_id: userId });
+    .insert(toWalletRow(wallet, userId));
   if (error) {
     console.error("[financeStorage] addWallet:", error.message);
     return { error: error.message };
@@ -911,7 +1321,7 @@ export async function updateWallet(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("wallets")
-    .update(updatedWallet)
+    .update(toWalletRow(updatedWallet, userId))
     .eq("id", updatedWallet.id)
     .eq("user_id", userId);
   if (error) {
@@ -947,7 +1357,7 @@ export async function addCategory(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("categories")
-    .insert({ ...toCategoryRow(category), user_id: userId } as never);
+    .insert(toCategoryInsertRow(category, userId) as never);
   if (error) {
     console.error("[financeStorage] addCategory:", error.message);
     return { error: error.message };
@@ -998,7 +1408,7 @@ export async function addBudget(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("budgets")
-    .insert({ ...budget, user_id: userId });
+    .insert(toBudgetRow(budget, userId));
   if (error) {
     console.error("[financeStorage] addBudget:", error.message);
     return { error: error.message };
@@ -1013,7 +1423,7 @@ export async function updateBudget(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("budgets")
-    .update(updatedBudget)
+    .update(toBudgetRow(updatedBudget, userId))
     .eq("id", updatedBudget.id)
     .eq("user_id", userId);
   if (error) {
@@ -1047,7 +1457,7 @@ export async function addGoal(goal: Goal): Promise<{ error: string | null }> {
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("goals")
-    .insert({ ...toGoalRow(goal), user_id: userId } as never);
+    .insert(toGoalInsertRow(goal, userId) as never);
   if (error) {
     console.error("[financeStorage] addGoal:", error.message);
     return { error: error.message };
@@ -1096,7 +1506,7 @@ export async function addDebt(debt: Debt): Promise<{ error: string | null }> {
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("debts")
-    .insert({ ...debt, user_id: userId });
+    .insert(toDebtRow(debt, userId));
   if (error) {
     console.error("[financeStorage] addDebt:", error.message);
     return { error: error.message };
@@ -1111,7 +1521,7 @@ export async function updateDebt(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("debts")
-    .update(updatedDebt)
+    .update(toDebtRow(updatedDebt, userId))
     .eq("id", updatedDebt.id)
     .eq("user_id", userId);
   if (error) {
@@ -1147,7 +1557,7 @@ export async function addInvestment(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("investments")
-    .insert({ ...investment, user_id: userId });
+    .insert(toInvestmentRow(investment, userId));
   if (error) {
     console.error("[financeStorage] addInvestment:", error.message);
     return { error: error.message };
@@ -1162,7 +1572,7 @@ export async function updateInvestment(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("investments")
-    .update(updatedInvestment)
+    .update(toInvestmentRow(updatedInvestment, userId))
     .eq("id", updatedInvestment.id)
     .eq("user_id", userId);
   if (error) {

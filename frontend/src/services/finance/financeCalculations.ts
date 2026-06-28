@@ -5,6 +5,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
@@ -17,6 +18,60 @@ export function formatVND(value: number) {
       maximumFractionDigits: 0,
     }).format(normalized) + " \u0111"
   );
+}
+
+export type DateRangeInput = {
+  startDate: string;
+  endDate: string;
+};
+
+function normalizeDateKey(value: string | null | undefined) {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
+
+export function isDateInRange(
+  value: string | null | undefined,
+  range: DateRangeInput,
+) {
+  const date = normalizeDateKey(value);
+  if (!date) return false;
+  return date >= range.startDate && date <= range.endDate;
+}
+
+export function filterByDateRange<T>(
+  items: T[],
+  range: DateRangeInput,
+  getDate: (item: T) => string | null | undefined,
+): T[] {
+  return items.filter((item) => isDateInRange(getDate(item), range));
+}
+
+export function filterTransactionsByDateRange(
+  transactions: Transaction[],
+  range: DateRangeInput,
+): Transaction[] {
+  return filterByDateRange(
+    transactions,
+    range,
+    (transaction) => transaction.date,
+  );
+}
+
+export function filterBudgetsByDateRange(
+  budgets: Budget[],
+  range: DateRangeInput,
+): Budget[] {
+  return budgets.filter((budget) => {
+    const budgetStart = `${budget.month}-01`;
+    const budgetEnd = `${budget.month}-31`;
+    return budgetEnd >= range.startDate && budgetStart <= range.endDate;
+  });
+}
+
+export function doesDateRangeIncludeToday(range: DateRangeInput) {
+  const today = new Date().toISOString().slice(0, 10);
+  return today >= range.startDate && today <= range.endDate;
 }
 
 export function getFinancialGrade(score: number) {
@@ -396,13 +451,19 @@ export function getTotalInvestmentValue(investments: Investment[]) {
   return investments.reduce((sum, item) => sum + item.currentValue, 0);
 }
 
+export function getTotalSavings(savings: SavingAccount[] = []) {
+  return savings.reduce((sum, item) => sum + item.balance, 0);
+}
+
 export function getNetWorth(
   wallets: Wallet[],
   debts: Debt[],
   investments: Investment[] = [],
+  savings: SavingAccount[] = [],
 ) {
   return (
     getTotalAssets(wallets) +
+    getTotalSavings(savings) +
     getTotalInvestmentValue(investments) -
     getTotalDebt(debts)
   );
@@ -412,6 +473,75 @@ export function getTotalIncome(transactions: Transaction[]) {
   return transactions
     .filter((item) => item.type === "income")
     .reduce((sum, item) => sum + item.amount, 0);
+}
+
+export function getTotalTransferAmount(transactions: Transaction[]) {
+  return transactions
+    .filter((transaction) => transaction.type === "transfer")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+}
+
+export function getWalletTransferStats(
+  transactions: Transaction[],
+  wallets: Wallet[],
+) {
+  const stats = new Map<
+    string,
+    {
+      wallet: Wallet;
+      sent: number;
+      received: number;
+      count: number;
+    }
+  >();
+
+  for (const wallet of wallets) {
+    stats.set(wallet.id, {
+      wallet,
+      sent: 0,
+      received: 0,
+      count: 0,
+    });
+  }
+
+  for (const transaction of transactions) {
+    if (transaction.type !== "transfer") continue;
+
+    const fromWallet = stats.get(transaction.walletId);
+    if (fromWallet) {
+      fromWallet.sent += transaction.amount;
+      fromWallet.count += 1;
+    }
+
+    if (transaction.transferToWalletId) {
+      const toWallet = stats.get(transaction.transferToWalletId);
+      if (toWallet) {
+        toWallet.received += transaction.amount;
+        toWallet.count += 1;
+      }
+    }
+  }
+
+  return Array.from(stats.values()).sort((a, b) => b.count - a.count);
+}
+
+export function getWalletTransferInsight(
+  transactions: Transaction[],
+  wallets: Wallet[],
+) {
+  const [mostActive] = getWalletTransferStats(transactions, wallets).filter(
+    (item) => item.count > 0,
+  );
+
+  if (!mostActive) {
+    return "Chưa có dữ liệu chuyển tiền giữa các ví.";
+  }
+
+  if (mostActive.count >= 2) {
+    return `Ví ${mostActive.wallet.name} tham gia ${mostActive.count} lần chuyển tiền. Cân nhắc giữ số dư dự phòng ở ví này để giảm thao tác chuyển qua lại.`;
+  }
+
+  return `Ví ${mostActive.wallet.name} có phát sinh chuyển tiền trong kỳ. Tiếp tục theo dõi để tối ưu phân bổ số dư.`;
 }
 
 function buildCategoryMap(categories: Category[] = []) {
@@ -651,6 +781,7 @@ export function getSpendingByCategory(
 
 export interface DashboardSummary {
   walletAssets: number;
+  savingAssets: number;
   investmentAssets: number;
   investedAmount: number;
   investmentPL: number;
@@ -673,39 +804,59 @@ export interface DashboardSummary {
 
 export function calculateDashboardSummary(input: {
   wallets: Wallet[];
+  savings?: SavingAccount[];
   investments: Investment[];
   debts: Debt[];
   transactions: Transaction[];
   categories?: Category[];
   goals: Goal[];
 }): DashboardSummary {
+  const categories = input.categories ?? [];
+
+  /**
+   * Snapshot data: current asset position.
+   * Do not derive net worth from transactions and do not apply cash-flow logic here.
+   */
   const walletAssets = getTotalAssets(input.wallets);
+  const liquidBalance = input.wallets
+    .filter((wallet) => wallet.type !== "investment")
+    .reduce((sum, wallet) => sum + wallet.balance, 0);
+  const savingAssets = getTotalSavings(input.savings ?? []);
   const investmentAssets = getTotalInvestmentValue(input.investments);
   const investedAmount = input.investments.reduce(
     (sum, item) => sum + item.investedAmount,
     0,
   );
-  const totalAssets = walletAssets + investmentAssets;
+  const investmentPL = investmentAssets - investedAmount;
   const totalDebt = getTotalDebt(input.debts);
+  const totalAssets = walletAssets + savingAssets + investmentAssets;
+  const netWorth = totalAssets - totalDebt;
+
+  /**
+   * Flow data: period movement from the already filtered transactions.
+   * Transfer transactions only move money between wallets, so they are never
+   * included in income, expense, or net cash flow.
+   */
   const income = getTotalIncome(input.transactions);
-  const expense = getTotalExpense(input.transactions, input.categories ?? []);
+  const expense = getTotalExpense(input.transactions, categories);
+  const netCashFlow = income - expense;
   const futureAllocation = getTotalFutureAllocation(
     input.transactions,
-    input.categories ?? [],
+    categories,
   );
   const monthlyExpense = getMonthlyExpenseEstimate(
     input.transactions,
     6,
-    input.categories ?? [],
+    categories,
   );
-  const saving = income - expense;
-  const investmentPL = investmentAssets - investedAmount;
-  const liquidBalance = input.wallets
-    .filter((wallet) => wallet.type !== "investment")
-    .reduce((sum, wallet) => sum + wallet.balance, 0);
+  const savingRate =
+    income > 0 ? Math.round((netCashFlow / income) * 1000) / 10 : 0;
+  const emergencyMonths = getEmergencyMonths(liquidBalance, monthlyExpense);
+  const goalScore = getGoalScore(input.goals);
 
   return {
     walletAssets,
+    savingAssets,
     investmentAssets,
     investedAmount,
     investmentPL,
@@ -715,25 +866,23 @@ export function calculateDashboardSummary(input: {
         : 0,
     totalAssets,
     totalDebt,
-    netWorth: walletAssets + investmentAssets - totalDebt,
+    netWorth,
     liquidBalance,
     income,
     expense,
     monthlyExpense,
-    saving,
+    saving: netCashFlow,
     futureAllocation,
-    savingRate:
-      income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0,
+    savingRate,
     debtRatio: getDebtRatio(totalDebt, totalAssets),
-    goalScore: getGoalScore(input.goals),
-    emergencyMonths: getEmergencyMonths(liquidBalance, monthlyExpense),
+    goalScore,
+    emergencyMonths,
     financialHealthScore: getFinancialHealthScore({
-      savingRate:
-        income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0,
+      savingRate,
       totalDebt,
       totalAssets,
-      emergencyMonths: getEmergencyMonths(liquidBalance, monthlyExpense),
-      goalScore: getGoalScore(input.goals),
+      emergencyMonths,
+      goalScore,
     }),
   };
 }
@@ -1247,7 +1396,9 @@ export function calculateFinancialStabilitySummary(input: {
 
 // ─── V11.3 Financial Independence Tracker ───────────────────────────────────
 export interface FinancialIndependenceSummary {
+  savingAssets: number;
   investmentAssets: number;
+  fiAssets: number;
   monthlyExpense: number;
   monthlyInvestment: number;
   annualExpense: number;
@@ -1262,18 +1413,21 @@ export interface FinancialIndependenceSummary {
 
 export function calculateFinancialIndependenceSummary(input: {
   investments: Investment[];
+  savings?: SavingAccount[];
   monthlyExpense: number;
   monthlyInvestment?: number;
 }): FinancialIndependenceSummary {
+  const savingAssets = getTotalSavings(input.savings ?? []);
   const investmentAssets = getTotalInvestmentValue(input.investments);
+  const fiAssets = savingAssets + investmentAssets;
   const monthlyExpense = Math.max(0, input.monthlyExpense);
   const monthlyInvestment = Math.max(0, input.monthlyInvestment ?? 0);
   const annualExpense = monthlyExpense * 12;
   const targetAssets = annualExpense * 25;
-  const remainingAmount = Math.max(targetAssets - investmentAssets, 0);
+  const remainingAmount = Math.max(targetAssets - fiAssets, 0);
   const progressPercent =
     targetAssets > 0
-      ? Math.min(100, Math.round((investmentAssets / targetAssets) * 1000) / 10)
+      ? Math.min(100, Math.round((fiAssets / targetAssets) * 1000) / 10)
       : 0;
   const yearsToFI =
     remainingAmount > 0 && monthlyInvestment > 0
@@ -1308,7 +1462,9 @@ export function calculateFinancialIndependenceSummary(input: {
           : "Hãy thiết lập dòng tiền đầu tư hằng tháng để ước tính thời gian đạt FI.";
 
   return {
+    savingAssets,
     investmentAssets,
+    fiAssets,
     monthlyExpense,
     monthlyInvestment,
     annualExpense,
@@ -1519,6 +1675,14 @@ function getLastMonthKeys(months: number): string[] {
   return keys;
 }
 
+/** Returns all 12 months of a calendar year as YYYY-MM strings. */
+function getYearMonthKeys(year: number): string[] {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = String(index + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  });
+}
+
 /** Converts a date/string value to YYYY-MM. Empty string means invalid date. */
 function getMonthKey(dateValue: string | Date): string {
   const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
@@ -1554,6 +1718,7 @@ export function buildMonthlyCashFlowData(
   transactions: Transaction[],
   categoriesOrMonths: Category[] | number = 6,
   maybeMonths = 6,
+  selectedYear?: number,
 ): MonthlyCashFlow[] {
   const categories = Array.isArray(categoriesOrMonths)
     ? categoriesOrMonths
@@ -1562,8 +1727,11 @@ export function buildMonthlyCashFlowData(
     ? maybeMonths
     : categoriesOrMonths;
   const categoryById = buildCategoryMap(categories);
+  const monthKeys = Number.isFinite(selectedYear)
+    ? getYearMonthKeys(Number(selectedYear))
+    : getLastMonthKeys(months);
 
-  return getLastMonthKeys(months).map((key) => {
+  return monthKeys.map((key) => {
     const txns = transactions.filter((t) => t.date.startsWith(key));
     const thu = txns
       .filter((t) => t.type === "income")
@@ -1595,7 +1763,7 @@ export interface MonthlyNetWorth {
 /**
  * Builds the net-worth trend without inventing historical balances.
  *
- * The current persisted wallet/investment/debt snapshot is reliable, but older
+ * The current persisted wallet/savings/investment/debt snapshot is reliable, but older
  * months are not unless the app stores monthly snapshots. Do not walk backwards
  * from the current balance using this month's cash flow because it can create
  * fake negative balances for months with no data.
@@ -1604,11 +1772,13 @@ export function buildMonthlyNetWorthData(
   input:
     | {
         wallets: Wallet[];
+        savings?: SavingAccount[];
         investments: Investment[];
         debts: Debt[];
         transactions: Transaction[];
         categories?: Category[];
         months?: number;
+        selectedYear?: number;
       }
     | Transaction[],
   legacyCurrentNetWorth?: number,
@@ -1617,9 +1787,17 @@ export function buildMonthlyNetWorthData(
   const isLegacyCall = Array.isArray(input);
   const currentNetWorth = isLegacyCall
     ? (legacyCurrentNetWorth ?? 0)
-    : getNetWorth(input.wallets, input.debts, input.investments);
+    : getNetWorth(
+        input.wallets,
+        input.debts,
+        input.investments,
+        input.savings ?? [],
+      );
   const months = isLegacyCall ? legacyMonths : (input.months ?? 6);
-  const keys = getLastMonthKeys(months);
+  const keys =
+    !isLegacyCall && Number.isFinite(input.selectedYear)
+      ? getYearMonthKeys(Number(input.selectedYear))
+      : getLastMonthKeys(months);
   const currentMonthKey = getMonthKey(new Date());
 
   return keys.map((key) => {
@@ -1662,6 +1840,7 @@ export function generateDashboardActions(input: {
   goals: Goal[];
   debts: Debt[];
   investments: Investment[];
+  savings?: SavingAccount[];
   categories: Category[];
   summary?: DashboardSummary;
 }): DashboardAction[] {
@@ -1670,6 +1849,7 @@ export function generateDashboardActions(input: {
     calculateDashboardSummary({
       wallets: input.wallets,
       investments: input.investments,
+      savings: input.savings ?? [],
       debts: input.debts,
       transactions: input.transactions,
       goals: input.goals,

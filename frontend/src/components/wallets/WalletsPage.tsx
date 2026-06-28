@@ -5,6 +5,7 @@ import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowLeftRight,
   ArrowUpRight,
   Banknote,
   Bot,
@@ -29,6 +30,7 @@ import type {
 } from "@/src/types/finance";
 
 import {
+  addTransaction,
   addWallet,
   deleteWallet,
   getTransactions,
@@ -56,6 +58,22 @@ type FormState = {
   type: FinanceWalletType;
   balance: string;
 };
+
+type TransferFormState = {
+  fromWalletId: string;
+  toWalletId: string;
+  amount: string;
+  date: string;
+  note: string;
+};
+
+const createEmptyTransferForm = (): TransferFormState => ({
+  fromWalletId: "",
+  toWalletId: "",
+  amount: "",
+  date: new Date().toISOString().slice(0, 10),
+  note: "",
+});
 
 const emptyForm: FormState = {
   name: "",
@@ -94,7 +112,11 @@ export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [transferForm, setTransferForm] = useState<TransferFormState>(
+    createEmptyTransferForm,
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
@@ -166,6 +188,49 @@ export default function WalletsPage() {
     [currentMonthTxns],
   );
 
+  const currentMonthTransfers = useMemo(
+    () => currentMonthTxns.filter((t) => t.type === "transfer"),
+    [currentMonthTxns],
+  );
+
+  const currentMonthTransferTotal = useMemo(
+    () => currentMonthTransfers.reduce((sum, t) => sum + t.amount, 0),
+    [currentMonthTransfers],
+  );
+
+  const transferWalletStats = useMemo(() => {
+    const map = new Map<
+      string,
+      { wallet: WalletType; sent: number; received: number; count: number }
+    >();
+
+    for (const wallet of wallets) {
+      map.set(wallet.id, { wallet, sent: 0, received: 0, count: 0 });
+    }
+
+    for (const transaction of currentMonthTransfers) {
+      const from = map.get(transaction.walletId);
+      if (from) {
+        from.sent += transaction.amount;
+        from.count += 1;
+      }
+
+      if (transaction.transferToWalletId) {
+        const to = map.get(transaction.transferToWalletId);
+        if (to) {
+          to.received += transaction.amount;
+          to.count += 1;
+        }
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [wallets, currentMonthTransfers]);
+
+  const mostTransferActiveWallet = transferWalletStats.find(
+    (item) => item.count > 0,
+  );
+
   const largestWallet = useMemo(
     () =>
       wallets.length > 0
@@ -178,23 +243,39 @@ export default function WalletsPage() {
     if (wallets.length === 0) return null;
     const counts = wallets.map((w) => ({
       wallet: w,
-      count: transactions.filter((t) => t.walletId === w.id).length,
+      count: transactions.filter(
+        (t) => t.walletId === w.id || t.transferToWalletId === w.id,
+      ).length,
     }));
     return counts.sort((a, b) => b.count - a.count)[0]?.wallet ?? null;
   }, [wallets, transactions]);
 
   // Per-wallet monthly flow
   const walletFlow = useMemo(() => {
-    const map = new Map<string, { income: number; expense: number }>();
+    const map = new Map<
+      string,
+      {
+        income: number;
+        expense: number;
+        transferIn: number;
+        transferOut: number;
+      }
+    >();
     for (const w of wallets) {
       const wt = currentMonthTxns.filter((t) => t.walletId === w.id);
       map.set(w.id, {
         income: getTotalIncome(wt),
         expense: getTotalExpense(wt),
+        transferIn: currentMonthTransfers
+          .filter((t) => t.transferToWalletId === w.id)
+          .reduce((sum, t) => sum + t.amount, 0),
+        transferOut: currentMonthTransfers
+          .filter((t) => t.walletId === w.id)
+          .reduce((sum, t) => sum + t.amount, 0),
       });
     }
     return map;
-  }, [wallets, currentMonthTxns]);
+  }, [wallets, currentMonthTxns, currentMonthTransfers]);
 
   // Allocation pie data
   const pieData = useMemo(
@@ -268,6 +349,17 @@ export default function WalletsPage() {
       });
     }
 
+    if (mostTransferActiveWallet && mostTransferActiveWallet.count >= 2) {
+      out.push({
+        type: "info",
+        title: "AI phân bổ ví · " + mostTransferActiveWallet.wallet.name,
+        body:
+          "Tháng này ví này tham gia " +
+          mostTransferActiveWallet.count +
+          " lần chuyển tiền. Cân nhắc giữ số dư dự phòng ở ví thường dùng để giảm thao tác chuyển qua lại.",
+      });
+    }
+
     return out.slice(0, 6);
   }, [
     wallets,
@@ -276,6 +368,7 @@ export default function WalletsPage() {
     liquidityScore,
     totalAssets,
     thirtyDaysAgo,
+    mostTransferActiveWallet,
   ]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -292,6 +385,109 @@ export default function WalletsPage() {
       balance: String(wallet.balance),
     });
     setIsFormOpen(true);
+  }
+
+  function openTransferForm(defaultFromWalletId?: string) {
+    const fromWalletId = defaultFromWalletId ?? wallets[0]?.id ?? "";
+    const toWalletId =
+      wallets.find((wallet) => wallet.id !== fromWalletId)?.id ?? "";
+
+    setTransferForm({
+      ...createEmptyTransferForm(),
+      fromWalletId,
+      toWalletId,
+    });
+    setSaveError(null);
+    setIsTransferOpen(true);
+  }
+
+  async function handleTransferSubmit(event: React.FormEvent) {
+    event.preventDefault();
+
+    const amount = Number(transferForm.amount);
+    const fromWallet = wallets.find(
+      (wallet) => wallet.id === transferForm.fromWalletId,
+    );
+    const toWallet = wallets.find(
+      (wallet) => wallet.id === transferForm.toWalletId,
+    );
+
+    if (!fromWallet) {
+      setSaveError("Vui lòng chọn ví nguồn");
+      return;
+    }
+
+    if (!toWallet) {
+      setSaveError("Vui lòng chọn ví đích");
+      return;
+    }
+
+    if (fromWallet.id === toWallet.id) {
+      setSaveError("Ví nguồn và ví đích phải khác nhau");
+      return;
+    }
+
+    if (!amount || amount <= 0) {
+      setSaveError("Vui lòng nhập số tiền hợp lệ");
+      return;
+    }
+
+    if (fromWallet.balance < amount) {
+      setSaveError("Ví nguồn không đủ số dư để chuyển tiền");
+      return;
+    }
+
+    const nextFromWallet: WalletType = {
+      ...fromWallet,
+      balance: fromWallet.balance - amount,
+    };
+    const nextToWallet: WalletType = {
+      ...toWallet,
+      balance: toWallet.balance + amount,
+    };
+
+    const transaction: Transaction = {
+      id: crypto.randomUUID(),
+      type: "transfer",
+      amount,
+      categoryId: "",
+      walletId: fromWallet.id,
+      transferToWalletId: toWallet.id,
+      note:
+        transferForm.note.trim() ||
+        `Chuyển tiền từ ${fromWallet.name} sang ${toWallet.name}`,
+      date: transferForm.date,
+    };
+
+    setSaveError(null);
+
+    const fromResult = await updateWallet(nextFromWallet);
+    if (fromResult.error) {
+      setSaveError(fromResult.error);
+      return;
+    }
+
+    const toResult = await updateWallet(nextToWallet);
+    if (toResult.error) {
+      await updateWallet(fromWallet);
+      setSaveError(toResult.error);
+      return;
+    }
+
+    const transactionResult = await addTransaction(transaction);
+    if (transactionResult.error) {
+      await Promise.all([updateWallet(fromWallet), updateWallet(toWallet)]);
+      setSaveError(transactionResult.error);
+      return;
+    }
+
+    toast({
+      variant: "success",
+      message: `Đã chuyển ${formatVND(amount)} từ ${fromWallet.name} sang ${toWallet.name}.`,
+    });
+    await reloadData();
+    setIsTransferOpen(false);
+    setTransferForm(createEmptyTransferForm());
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -326,7 +522,9 @@ export default function WalletsPage() {
 
   function handleDelete(id: string) {
     const wallet = wallets.find((w) => w.id === id);
-    const linked = transactions.filter((t) => t.walletId === id);
+    const linked = transactions.filter(
+      (t) => t.walletId === id || t.transferToWalletId === id,
+    );
     if (linked.length > 0) {
       toast({
         variant: "warning",
@@ -372,13 +570,23 @@ export default function WalletsPage() {
                 Quản lý tiền mặt, ngân hàng, ví điện tử và tài sản đầu tư.
               </p>
             </div>
-            <button
-              onClick={openCreateForm}
-              className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95"
-            >
-              <Plus size={17} />
-              Thêm ví tiền
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => openTransferForm()}
+                disabled={wallets.length < 2}
+                className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-3 text-sm font-bold text-blue-700 shadow-sm transition-all hover:bg-blue-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowLeftRight size={17} />
+                Chuyển tiền
+              </button>
+              <button
+                onClick={openCreateForm}
+                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95"
+              >
+                <Plus size={17} />
+                Thêm ví tiền
+              </button>
+            </div>
           </div>
 
           {/* 5 KPI cards */}
@@ -420,17 +628,12 @@ export default function WalletsPage() {
               }
             />
             <KpiCard
-              label="Số lượng ví"
-              value={String(wallets.length)}
-              sub={
-                wallets.filter((w) => w.type !== "investment").length +
-                " thanh khoản · " +
-                wallets.filter((w) => w.type === "investment").length +
-                " đầu tư"
-              }
+              label="Chuyển giữa ví"
+              value={formatVND(currentMonthTransferTotal)}
+              sub={currentMonthTransfers.length + " giao dịch tháng này"}
               gradient="from-indigo-500 to-indigo-600"
               iconBg="bg-indigo-400/30"
-              icon={<Banknote size={16} />}
+              icon={<ArrowLeftRight size={16} />}
             />
             <div className="col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br from-amber-400 to-orange-500 p-4 shadow-sm shadow-amber-200/60">
               <p className="text-[10px] font-black uppercase tracking-wide text-amber-100">
@@ -582,6 +785,36 @@ export default function WalletsPage() {
             )}
           </div>
 
+          {/* Transfer stats */}
+          <div className="rounded-4xl border border-indigo-100 bg-indigo-50/50 p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+                <ArrowLeftRight size={14} />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900">
+                  Chuyển tiền tháng này
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  Không tính vào thu nhập / chi tiêu
+                </p>
+              </div>
+            </div>
+            <p className="text-2xl font-black text-indigo-700">
+              {formatVND(currentMonthTransferTotal)}
+            </p>
+            <p className="mt-1 text-xs font-bold text-indigo-500">
+              {currentMonthTransfers.length} giao dịch chuyển ví
+            </p>
+            {mostTransferActiveWallet && (
+              <p className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+                Ví hoạt động nhiều nhất:{" "}
+                <b>{mostTransferActiveWallet.wallet.name}</b> ·{" "}
+                {mostTransferActiveWallet.count} lượt.
+              </p>
+            )}
+          </div>
+
           {/* Largest + most active */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
@@ -692,10 +925,16 @@ export default function WalletsPage() {
               totalAssets > 0
                 ? Math.round((wallet.balance / totalAssets) * 100)
                 : 0;
-            const flow = walletFlow.get(wallet.id) ?? { income: 0, expense: 0 };
+            const flow = walletFlow.get(wallet.id) ?? {
+              income: 0,
+              expense: 0,
+              transferIn: 0,
+              transferOut: 0,
+            };
             const net = flow.income - flow.expense;
             const txCount = transactions.filter(
-              (t) => t.walletId === wallet.id,
+              (t) =>
+                t.walletId === wallet.id || t.transferToWalletId === wallet.id,
             ).length;
             const color = TYPE_COLORS[wallet.type];
 
@@ -828,8 +1067,18 @@ export default function WalletsPage() {
                   </div>
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => openTransferForm(wallet.id)}
+                  disabled={wallets.length < 2}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs font-black text-indigo-600 transition-all hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ArrowLeftRight size={13} />
+                  Chuyển tiền từ ví này
+                </button>
+
                 {/* Mobile edit buttons (always visible) */}
-                <div className="mt-4 flex gap-2 lg:hidden">
+                <div className="mt-3 flex gap-2 lg:hidden">
                   <button
                     onClick={() => openEditForm(wallet)}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500"
@@ -872,6 +1121,142 @@ export default function WalletsPage() {
           )}
         </div>
       </section>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          Transfer Modal
+          ══════════════════════════════════════════════════════════════════ */}
+      {isTransferOpen && (
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 px-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-w-xl sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:p-6 sm:pb-5">
+              <div>
+                <div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
+                  <ArrowLeftRight size={18} />
+                </div>
+                <h2 className="text-xl font-black text-slate-900">
+                  Chuyển tiền giữa các ví
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-400">
+                  Transfer chỉ đổi số dư ví, không tính vào thu nhập hoặc chi
+                  tiêu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTransferOpen(false)}
+                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleTransferSubmit}
+              className="min-h-0 flex flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 sm:pb-6">
+                {wallets.length < 2 ? (
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-700">
+                    Bạn cần ít nhất 2 ví để dùng tính năng chuyển tiền.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <WalletSelect
+                      label="Từ ví"
+                      wallets={wallets}
+                      value={transferForm.fromWalletId}
+                      onChange={(value) => {
+                        setTransferForm((prev) => ({
+                          ...prev,
+                          fromWalletId: value,
+                          toWalletId:
+                            prev.toWalletId && prev.toWalletId !== value
+                              ? prev.toWalletId
+                              : (wallets.find((wallet) => wallet.id !== value)
+                                  ?.id ?? ""),
+                        }));
+                      }}
+                    />
+
+                    <WalletSelect
+                      label="Đến ví"
+                      wallets={wallets.filter(
+                        (wallet) => wallet.id !== transferForm.fromWalletId,
+                      )}
+                      value={transferForm.toWalletId}
+                      onChange={(value) =>
+                        setTransferForm((prev) => ({
+                          ...prev,
+                          toWalletId: value,
+                        }))
+                      }
+                    />
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1.5 text-sm font-black text-slate-700">
+                          Số tiền chuyển
+                        </p>
+                        <CurrencyInput
+                          value={transferForm.amount}
+                          onChange={(raw: string) =>
+                            setTransferForm((prev) => ({
+                              ...prev,
+                              amount: raw,
+                            }))
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <FormInput
+                        label="Ngày chuyển"
+                        type="date"
+                        value={transferForm.date}
+                        onChange={(value) =>
+                          setTransferForm((prev) => ({ ...prev, date: value }))
+                        }
+                      />
+                    </div>
+
+                    <FormInput
+                      label="Ghi chú"
+                      value={transferForm.note}
+                      onChange={(value) =>
+                        setTransferForm((prev) => ({ ...prev, note: value }))
+                      }
+                      placeholder="VD: Rút tiền mặt, chuyển sang ví chi tiêu..."
+                    />
+                  </div>
+                )}
+
+                <SaveError
+                  message={saveError}
+                  onDismiss={() => setSaveError(null)}
+                />
+              </div>
+
+              <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-4">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsTransferOpen(false)}
+                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={wallets.length < 2}
+                    className="flex-1 rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Chuyển tiền
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           CRUD Modal
@@ -1052,9 +1437,7 @@ function WalletIcon({ type }: { type: FinanceWalletType }) {
     );
   if (type === "ewallet")
     return (
-      <div
-        className={base + " bg-linear-to-br from-violet-500 to-indigo-500"}
-      >
+      <div className={base + " bg-linear-to-br from-violet-500 to-indigo-500"}>
         <Wallet size={20} />
       </div>
     );
@@ -1071,11 +1454,173 @@ function WalletIcon({ type }: { type: FinanceWalletType }) {
   );
 }
 
+function WalletBrandLogo({
+  wallet,
+  size = "sm",
+}: {
+  wallet?: Pick<WalletType, "name" | "type"> | null;
+  size?: "sm" | "md";
+}) {
+  const name = (wallet?.name ?? "").toLowerCase();
+  const type = wallet?.type ?? "cash";
+  const dimension =
+    size === "md" ? "size-10 rounded-2xl text-sm" : "size-8 rounded-xl text-xs";
+
+  if (type === "bank") {
+    if (name.includes("vietcombank") || name.includes("vcb")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-emerald-50 text-emerald-700 shadow-sm`}
+        >
+          <span className="font-black">VCB</span>
+        </span>
+      );
+    }
+
+    if (name.includes("mb") || name.includes("mbbank")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-blue-50 text-blue-700 shadow-sm`}
+        >
+          <span className="font-black">MB</span>
+        </span>
+      );
+    }
+
+    if (name.includes("techcombank") || name.includes("tcb")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-red-50 text-red-600 shadow-sm`}
+        >
+          <span className="font-black">TCB</span>
+        </span>
+      );
+    }
+
+    if (name.includes("vpbank") || name.includes("vpb")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-emerald-50 text-emerald-600 shadow-sm`}
+        >
+          <span className="font-black">VP</span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={`flex ${dimension} shrink-0 items-center justify-center bg-blue-50 text-blue-600 shadow-sm`}
+      >
+        <Landmark size={size === "md" ? 18 : 15} />
+      </span>
+    );
+  }
+
+  if (type === "ewallet") {
+    if (name.includes("momo")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-pink-50 text-pink-600 shadow-sm`}
+        >
+          <span className="font-black">mo</span>
+        </span>
+      );
+    }
+
+    if (name.includes("zalopay") || name.includes("zalo")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-blue-50 text-blue-600 shadow-sm`}
+        >
+          <span className="font-black">ZP</span>
+        </span>
+      );
+    }
+
+    if (name.includes("vn pay") || name.includes("vnpay")) {
+      return (
+        <span
+          className={`flex ${dimension} shrink-0 items-center justify-center bg-indigo-50 text-indigo-600 shadow-sm`}
+        >
+          <span className="font-black">VN</span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={`flex ${dimension} shrink-0 items-center justify-center bg-violet-50 text-violet-600 shadow-sm`}
+      >
+        <Wallet size={size === "md" ? 18 : 15} />
+      </span>
+    );
+  }
+
+  return <WalletIcon type={type} />;
+}
+
 function getWalletTypeLabel(type: FinanceWalletType) {
   if (type === "bank") return "Ngân hàng";
   if (type === "ewallet") return "Ví điện tử";
   if (type === "investment") return "Đầu tư";
   return "Tiền mặt";
+}
+
+function WalletSelect({
+  label,
+  wallets,
+  value,
+  onChange,
+}: {
+  label: string;
+  wallets: WalletType[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selectedWallet = wallets.find((wallet) => wallet.id === value);
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-black text-slate-700">
+        {label}
+      </span>
+      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
+        <div className="relative">
+          {selectedWallet && (
+            <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2">
+              <WalletBrandLogo wallet={selectedWallet} />
+            </div>
+          )}
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className={
+              "w-full rounded-2xl border border-slate-200 bg-white py-3 pr-4 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 " +
+              (selectedWallet ? "pl-14" : "pl-4")
+            }
+          >
+            <option value="">Chọn ví</option>
+            {wallets.map((wallet) => (
+              <option key={wallet.id} value={wallet.id}>
+                {wallet.name} · {formatVND(wallet.balance)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedWallet && (
+          <div className="mt-3 flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-xs">
+            <span className="flex items-center gap-2 font-bold text-slate-500">
+              <WalletBrandLogo wallet={selectedWallet} />
+              {getWalletTypeLabel(selectedWallet.type)}
+            </span>
+            <span className="font-black text-slate-900">
+              {formatVND(selectedWallet.balance)}
+            </span>
+          </div>
+        )}
+      </div>
+    </label>
+  );
 }
 
 function FormInput({

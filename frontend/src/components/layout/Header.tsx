@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
   Bell,
   BriefcaseBusiness,
+  CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Folder,
   Landmark,
   LogOut,
@@ -59,6 +62,10 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
   "/reports": {
     title: "Báo cáo",
     desc: "Phân tích dòng tiền & sức khoẻ tài chính",
+  },
+  "/savings": {
+    title: "Tiết kiệm",
+    desc: "Sổ tiết kiệm, quỹ khẩn cấp & tiền gửi",
   },
   "/investments": { title: "Đầu Tư", desc: "Danh mục & hiệu suất đầu tư" },
   "/debts": {
@@ -383,8 +390,14 @@ function RealtimeStatusChip() {
 
   return (
     <div
-      className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm"
-      title={connected ? "Realtime đang kết nối" : "Đang kết nối..."}
+      className="flex h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/80 px-3 text-xs font-semibold text-slate-500 shadow-sm"
+      title={
+        connected
+          ? timeStr
+            ? "Đã đồng bộ lúc " + timeStr
+            : "Realtime đang kết nối"
+          : "Đang kết nối..."
+      }
     >
       <span
         className={[
@@ -392,12 +405,8 @@ function RealtimeStatusChip() {
           connected ? "bg-emerald-500" : "bg-amber-400 animate-pulse",
         ].join(" ")}
       />
-      <span className="hidden text-slate-500 sm:block">
-        {timeStr
-          ? "Đồng bộ: " + timeStr
-          : connected
-            ? "Đã kết nối"
-            : "Đang kết nối..."}
+      <span className="hidden sm:block">
+        {connected ? "Online" : "Sync..."}
       </span>
     </div>
   );
@@ -425,9 +434,6 @@ export default function Header({
     setCustomRange,
     filterLabel,
     dateRange,
-    months12,
-    quarters8,
-    years5,
   } = useDateFilter();
 
   // UI toggles
@@ -448,6 +454,14 @@ export default function Header({
   const pageMeta = PAGE_META[pathname] ?? { title: "MyFinance", desc: "" };
   const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
   const displayEmail = user?.email ?? "";
+  const displayName = displayEmail
+    ? displayEmail.split("@")[0].replace(/[._-]+/g, " ")
+    : "Tài khoản";
+  const compactName = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
   const unreadCount = notifList.filter((n) => !n.read).length;
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
@@ -524,6 +538,128 @@ export default function Header({
     updateUrlFilter("year", year);
   }
 
+  function formatCompactMonth(monthKey: string) {
+    const [year, month] = monthKey.split("-");
+    return `${month}/${year}`;
+  }
+
+  function formatTimelineLabel() {
+    if (filterMode === "month") return formatCompactMonth(selectedMonth);
+    if (filterMode === "quarter") return selectedQuarter.replace("-Q", " · Q");
+    if (filterMode === "year") return String(selectedYear);
+    return "Tùy chọn";
+  }
+
+  const selectedMonthNumber = Number(selectedMonth.split("-")[1] ?? "1");
+  const selectedQuarterNumber = Number(selectedQuarter.split("-Q")[1] ?? "1");
+
+  const monthOptionsForYear = useMemo(() => {
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const value = `${selectedYear}-${String(month).padStart(2, "0")}`;
+      return {
+        value,
+        label: `${String(month).padStart(2, "0")}/${selectedYear}`,
+      };
+    });
+  }, [selectedYear]);
+
+  const quarterOptionsForYear = useMemo(() => {
+    return [1, 2, 3, 4].map((quarter) => {
+      const startMonth = (quarter - 1) * 3 + 1;
+      const endMonth = startMonth + 2;
+      return {
+        value: `${selectedYear}-Q${quarter}`,
+        label: `Quý ${quarter}/${selectedYear}`,
+        subLabel: `Tháng ${startMonth} - ${endMonth}/${selectedYear}`,
+      };
+    });
+  }, [selectedYear]);
+
+  const yearOptionsAroundSelected = useMemo(() => {
+    return Array.from({ length: 9 }, (_, index) =>
+      String(selectedYear - 4 + index),
+    );
+  }, [selectedYear]);
+
+  function shiftMonthYear(offset: number) {
+    const nextYear = selectedYear + offset;
+    const nextMonth = `${nextYear}-${String(selectedMonthNumber).padStart(2, "0")}`;
+    setSelectedMonth(nextMonth);
+    updateUrlFilter("month", nextMonth);
+  }
+
+  function shiftQuarterYear(offset: number) {
+    const nextYear = selectedYear + offset;
+    const nextQuarter = `${nextYear}-Q${selectedQuarterNumber}`;
+    setSelectedQuarter(nextQuarter);
+    updateUrlFilter("quarter", nextQuarter);
+  }
+
+  function shiftMonth(offset: number) {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const date = new Date(year, month - 1 + offset, 1);
+    const nextMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    setSelectedMonth(nextMonth);
+    updateUrlFilter("month", nextMonth);
+  }
+
+  function shiftQuarter(offset: number) {
+    const [yearRaw, quarterRaw] = selectedQuarter.split("-Q");
+    const absolute = Number(yearRaw) * 4 + Number(quarterRaw) - 1 + offset;
+    const year = Math.floor(absolute / 4);
+    const quarter = (absolute % 4) + 1;
+    const nextQuarter = `${year}-Q${quarter}`;
+    setSelectedQuarter(nextQuarter);
+    updateUrlFilter("quarter", nextQuarter);
+  }
+
+  function shiftYear(offset: number) {
+    const nextYear = selectedYear + offset;
+    setSelectedYearFilter(nextYear);
+    updateUrlFilter("year", String(nextYear));
+  }
+
+  function handleTimelineStep(offset: number) {
+    if (filterMode === "quarter") {
+      shiftQuarter(offset);
+      return;
+    }
+
+    if (filterMode === "year") {
+      shiftYear(offset);
+      return;
+    }
+
+    if (filterMode === "custom") {
+      setMonthOpen(true);
+      return;
+    }
+
+    shiftMonth(offset);
+  }
+
+  function handleApplyCurrentMode() {
+    setMonthOpen(false);
+
+    if (filterMode === "quarter") {
+      updateUrlFilter("quarter", selectedQuarter);
+      return;
+    }
+
+    if (filterMode === "year") {
+      updateUrlFilter("year", String(selectedYear));
+      return;
+    }
+
+    if (filterMode === "custom") {
+      handleApplyCustomRange();
+      return;
+    }
+
+    updateUrlFilter("month", selectedMonth);
+  }
+
   function handleApplyCustomRange() {
     setCustomRange(customStart, customEnd);
     setMonthOpen(false);
@@ -578,8 +714,8 @@ export default function Header({
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur-xl sm:px-6 sm:py-3.5 lg:px-8">
-      <div className="flex items-center justify-between gap-2 sm:gap-4">
+    <header className="sticky top-0 z-30 h-[72px] shrink-0 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:px-8">
+      <div className="flex h-full items-center justify-between gap-3 sm:gap-5">
         {/* ══ LEFT ══ */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Hamburger mobile */}
@@ -614,17 +750,17 @@ export default function Header({
 
           {/* Page title */}
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-black tracking-tight text-slate-900 sm:text-lg">
+            <h2 className="truncate text-[15px] font-black tracking-tight text-slate-900 sm:text-[22px] sm:leading-7">
               {pageMeta.title}
             </h2>
-            <p className="hidden truncate text-xs text-slate-500 sm:block">
+            <p className="hidden truncate text-[11px] font-medium text-slate-400 lg:block">
               {pageMeta.desc}
             </p>
           </div>
         </div>
 
         {/* ══ CENTER: Global Search ══ */}
-        <div className="relative hidden flex-1 max-w-sm md:block">
+        <div className="relative hidden w-full max-w-[460px] flex-1 lg:block">
           {/* click-outside backdrop */}
           {showDrop && (
             <div
@@ -638,7 +774,7 @@ export default function Header({
 
           <div
             className={[
-              "flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm shadow-sm transition-all",
+              "flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm shadow-sm transition-all",
               searchFocus
                 ? "border-blue-300 bg-white shadow-md"
                 : "border-slate-200 bg-slate-50",
@@ -714,41 +850,53 @@ export default function Header({
         </div>
 
         {/* ══ RIGHT ══ */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Period picker */}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {/* Period timeline picker */}
           <div className="relative hidden md:block">
-            <button
-              onClick={() => {
-                setMonthOpen((v) => !v);
-                setDropdownOpen(false);
-                setNotifOpen(false);
-              }}
+            <div
               className={[
-                "flex min-w-55 items-center justify-between gap-3 rounded-2xl border bg-white px-4 py-2.5 text-left shadow-sm transition",
+                "flex h-11 items-center overflow-hidden rounded-2xl border bg-slate-50/90 shadow-sm transition",
                 monthOpen
                   ? "border-blue-300 shadow-md shadow-blue-100"
-                  : "border-slate-200 hover:border-blue-200 hover:bg-slate-50",
+                  : "border-slate-200 hover:border-blue-200 hover:bg-white",
               ].join(" ")}
-              aria-haspopup="dialog"
-              aria-expanded={monthOpen}
-              title="Chọn kỳ báo cáo dùng chung cho toàn bộ ứng dụng"
+              title="Kỳ báo cáo dùng chung cho toàn bộ ứng dụng"
             >
-              <span className="min-w-0">
-                <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                  Kỳ báo cáo
+              <button
+                type="button"
+                onClick={() => handleTimelineStep(-1)}
+                className="flex h-11 w-9 items-center justify-center text-slate-400 transition hover:bg-white hover:text-blue-600"
+                aria-label="Kỳ trước"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMonthOpen((v) => !v);
+                  setDropdownOpen(false);
+                  setNotifOpen(false);
+                }}
+                className="flex h-11 min-w-[132px] items-center justify-center gap-2 border-x border-slate-200 px-3 text-sm font-black text-slate-900 transition hover:bg-white"
+                aria-haspopup="dialog"
+                aria-expanded={monthOpen}
+              >
+                <CalendarDays size={15} className="text-blue-600" />
+                <span className="whitespace-nowrap">
+                  {formatTimelineLabel()}
                 </span>
-                <span className="block truncate text-sm font-extrabold text-slate-900">
-                  {filterLabel}
-                </span>
-              </span>
-              <ChevronDown
-                size={16}
-                className={[
-                  "shrink-0 text-slate-400 transition-transform duration-200",
-                  monthOpen ? "rotate-180 text-blue-600" : "",
-                ].join(" ")}
-              />
-            </button>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTimelineStep(1)}
+                className="flex h-11 w-9 items-center justify-center text-slate-400 transition hover:bg-white hover:text-blue-600"
+                aria-label="Kỳ sau"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
 
             {monthOpen && (
               <>
@@ -757,29 +905,24 @@ export default function Header({
                   onClick={() => setMonthOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-full z-50 mt-2 w-90 overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
+                  className="absolute right-0 top-full z-50 mt-2 w-[360px] overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
                   role="dialog"
                 >
-                  <div className="mb-3 flex items-start justify-between gap-3 px-1">
+                  <div className="mb-3 flex items-center justify-between gap-3 px-1">
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                        Chọn kỳ dữ liệu
+                      <p className="text-sm font-black text-slate-900">
+                        Kỳ báo cáo
                       </p>
-                      <p className="mt-1 text-xs font-medium text-slate-500">
+                      <p className="mt-0.5 text-xs font-medium text-slate-400">
                         Áp dụng cho Dashboard, Giao dịch, Ngân sách và Báo cáo
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setMonthOpen(false)}
-                      className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                      aria-label="Đóng"
-                    >
-                      <X size={15} />
-                    </button>
+                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+                      {formatTimelineLabel()}
+                    </span>
                   </div>
 
-                  <div className="mb-3 grid grid-cols-4 gap-1 rounded-2xl bg-slate-100 p-1 text-xs font-black">
+                  <div className="mb-4 grid grid-cols-4 gap-1 rounded-2xl bg-slate-100 p-1 text-xs font-black">
                     {(
                       [
                         ["month", "Tháng"],
@@ -815,36 +958,36 @@ export default function Header({
                   </div>
 
                   {filterMode === "month" && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        {months12.slice(0, 2).map((m, index) => {
-                          const active = m.value === selectedMonth;
-
-                          return (
-                            <button
-                              key={m.value + "-quick"}
-                              type="button"
-                              onClick={() => handleSelectMonth(m.value)}
-                              className={[
-                                "rounded-2xl border px-3 py-2.5 text-left transition",
-                                active
-                                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                              ].join(" ")}
-                            >
-                              <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                                {index === 0 ? "Tháng này" : "Tháng trước"}
-                              </span>
-                              <span className="mt-0.5 block text-sm font-extrabold">
-                                {m.label.replace(" năm ", "/")}
-                              </span>
-                            </button>
-                          );
-                        })}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                        <button
+                          type="button"
+                          onClick={() => shiftMonthYear(-1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm trước"
+                        >
+                          <ChevronLeft size={17} />
+                        </button>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                            Đang xem
+                          </p>
+                          <p className="text-lg font-black text-slate-900">
+                            {selectedYear}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => shiftMonthYear(1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm sau"
+                        >
+                          <ChevronRight size={17} />
+                        </button>
                       </div>
 
-                      <div className="max-h-64 overflow-y-auto rounded-2xl border border-slate-100 p-1">
-                        {months12.map((m) => {
+                      <div className="grid grid-cols-3 gap-2">
+                        {monthOptionsForYear.map((m) => {
                           const active = m.value === selectedMonth;
 
                           return (
@@ -853,16 +996,13 @@ export default function Header({
                               type="button"
                               onClick={() => handleSelectMonth(m.value)}
                               className={[
-                                "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm transition",
+                                "rounded-2xl border px-3 py-2.5 text-sm font-black transition",
                                 active
-                                  ? "bg-blue-600 font-extrabold text-white shadow-sm shadow-blue-100"
-                                  : "font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                                  ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-100"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
                               ].join(" ")}
                             >
-                              <span>{m.label}</span>
-                              {active ? (
-                                <span className="size-2 rounded-full bg-white" />
-                              ) : null}
+                              {formatCompactMonth(m.value)}
                             </button>
                           );
                         })}
@@ -871,66 +1011,118 @@ export default function Header({
                   )}
 
                   {filterMode === "quarter" && (
-                    <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-100 p-1">
-                      {quarters8.map((q) => {
-                        const active = q.value === selectedQuarter;
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                        <button
+                          type="button"
+                          onClick={() => shiftQuarterYear(-1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm trước"
+                        >
+                          <ChevronLeft size={17} />
+                        </button>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                            Đang xem
+                          </p>
+                          <p className="text-lg font-black text-slate-900">
+                            {selectedYear}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => shiftQuarterYear(1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm sau"
+                        >
+                          <ChevronRight size={17} />
+                        </button>
+                      </div>
 
-                        return (
-                          <button
-                            key={q.value}
-                            type="button"
-                            onClick={() => handleSelectQuarter(q.value)}
-                            className={[
-                              "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition",
-                              active
-                                ? "bg-blue-600 text-white shadow-sm shadow-blue-100"
-                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                            ].join(" ")}
-                          >
-                            <span>
-                              <span className="block text-sm font-extrabold">
+                      <div className="grid grid-cols-2 gap-2">
+                        {quarterOptionsForYear.map((q) => {
+                          const active = q.value === selectedQuarter;
+
+                          return (
+                            <button
+                              key={q.value}
+                              type="button"
+                              onClick={() => handleSelectQuarter(q.value)}
+                              className={[
+                                "rounded-2xl border px-3 py-2.5 text-left transition",
+                                active
+                                  ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-100"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                              ].join(" ")}
+                            >
+                              <span className="block text-sm font-black">
                                 {q.label}
                               </span>
                               <span
-                                className={
-                                  active
-                                    ? "text-xs text-blue-100"
-                                    : "text-xs text-slate-400"
-                                }
+                                className={[
+                                  "block text-[11px] font-semibold",
+                                  active ? "text-blue-100" : "text-slate-400",
+                                ].join(" ")}
                               >
                                 {q.subLabel}
                               </span>
-                            </span>
-                            {active ? (
-                              <span className="size-2 rounded-full bg-white" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
                   {filterMode === "year" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {years5.map((year) => {
-                        const active = Number(year.value) === selectedYear;
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                        <button
+                          type="button"
+                          onClick={() => shiftYear(-1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm trước"
+                        >
+                          <ChevronLeft size={17} />
+                        </button>
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                            Đang xem
+                          </p>
+                          <p className="text-lg font-black text-slate-900">
+                            {selectedYear}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => shiftYear(1)}
+                          className="flex size-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm transition hover:text-blue-600"
+                          aria-label="Năm sau"
+                        >
+                          <ChevronRight size={17} />
+                        </button>
+                      </div>
 
-                        return (
-                          <button
-                            key={year.value}
-                            type="button"
-                            onClick={() => handleSelectYear(year.value)}
-                            className={[
-                              "rounded-2xl border px-3 py-3 text-center text-sm font-extrabold transition",
-                              active
-                                ? "border-blue-200 bg-blue-600 text-white shadow-sm shadow-blue-100"
-                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                            ].join(" ")}
-                          >
-                            {year.label}
-                          </button>
-                        );
-                      })}
+                      <div className="grid grid-cols-3 gap-2">
+                        {yearOptionsAroundSelected.map((year) => {
+                          const active = Number(year) === selectedYear;
+
+                          return (
+                            <button
+                              key={year}
+                              type="button"
+                              onClick={() => handleSelectYear(year)}
+                              className={[
+                                "rounded-2xl border px-3 py-2.5 text-sm font-black transition",
+                                active
+                                  ? "border-blue-600 bg-blue-600 text-white shadow-sm shadow-blue-100"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                              ].join(" ")}
+                            >
+                              {year}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -960,15 +1152,16 @@ export default function Header({
                           />
                         </label>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleApplyCustomRange}
-                        className="w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
-                      >
-                        Áp dụng khoảng thời gian
-                      </button>
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleApplyCurrentMode}
+                    className="mt-4 w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
+                  >
+                    Áp dụng kỳ báo cáo
+                  </button>
                 </div>
               </>
             )}
@@ -977,10 +1170,14 @@ export default function Header({
           {/* AI Advisor */}
           <button
             onClick={handleAIAdvisor}
-            className="hidden items-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-200/60 transition hover:opacity-90 active:scale-[.98] md:flex"
+            className="hidden h-11 items-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 px-3 text-xs font-black text-white shadow-lg shadow-blue-200/60 transition hover:opacity-90 active:scale-[.98] md:flex"
+            title="Mở AI cố vấn tài chính"
           >
             <Sparkles size={14} />
-            AI Cố vấn
+            <span className="hidden xl:inline">AI</span>
+            <span className="hidden rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide xl:inline">
+              Beta
+            </span>
           </button>
 
           {/* Notification bell */}
@@ -991,7 +1188,7 @@ export default function Header({
                 setDropdownOpen(false);
                 setMonthOpen(false);
               }}
-              className="relative min-h-11 min-w-11 rounded-2xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition hover:bg-blue-50 hover:text-blue-600"
+              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white p-0 text-slate-500 shadow-sm transition hover:bg-blue-50 hover:text-blue-600"
               aria-label="Thông báo"
             >
               <Bell size={17} />
@@ -1011,7 +1208,7 @@ export default function Header({
                 <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
                   {/* Header */}
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                    <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                       <p className="text-sm font-black text-slate-900">
                         Thông báo
                       </p>
@@ -1107,13 +1304,13 @@ export default function Header({
                 setNotifOpen(false);
                 setMonthOpen(false);
               }}
-              className="flex min-h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-2 shadow-sm transition hover:bg-slate-50 active:scale-[.98] sm:pr-3"
+              className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1.5 pl-1.5 pr-2 shadow-sm transition hover:bg-slate-50 active:scale-[.98] sm:pr-3"
             >
               <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-cyan-500 text-sm font-black text-white">
                 {avatarLetter}
               </div>
-              <span className="hidden max-w-35 truncate text-sm font-semibold text-slate-700 md:block">
-                {displayEmail}
+              <span className="hidden max-w-32 truncate text-sm font-bold text-slate-700 xl:block">
+                {compactName}
               </span>
               <ChevronDown
                 size={13}
@@ -1139,10 +1336,10 @@ export default function Header({
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-black text-slate-900">
-                          {displayEmail}
+                          {compactName}
                         </p>
-                        <p className="text-[11px] text-slate-500">
-                          Tài khoản cá nhân
+                        <p className="truncate text-[11px] text-slate-500">
+                          {displayEmail}
                         </p>
                       </div>
                     </div>

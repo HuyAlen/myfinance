@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { createClient } from "@supabase/supabase-js";
 import {
   AlertTriangle,
-  ArrowDownRight,
   ArrowUpRight,
   Bot,
   CheckCircle2,
@@ -20,7 +20,12 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 
-import type { Category, Goal, Transaction } from "@/src/types/finance";
+import type {
+  Category,
+  Goal,
+  SavingAccount,
+  Transaction,
+} from "@/src/types/finance";
 
 import {
   addGoal,
@@ -33,7 +38,6 @@ import {
 
 import {
   formatVND,
-  getCategoryPlanningGroup,
   getGoalEffectiveCurrentAmount,
   getGoalLinkedSavingAmount,
 } from "@/src/services/finance/financeCalculations";
@@ -116,9 +120,84 @@ const PIE_COLORS: Record<GoalTier, string> = {
   started: "#f59e0b",
 };
 
+type SavingRow = {
+  id: string;
+  name: string;
+  type: SavingAccount["type"];
+  balance: number | string | null;
+  interest_rate: number | string | null;
+  maturity_date: string | null;
+  notes: string | null;
+};
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const goalsSupabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+const mapSavingRowToSavingAccount = (row: SavingRow): SavingAccount => ({
+  id: row.id,
+  name: row.name,
+  type: row.type,
+  balance: Number(row.balance ?? 0),
+  interestRate:
+    row.interest_rate === null || row.interest_rate === undefined
+      ? undefined
+      : Number(row.interest_rate),
+  maturityDate: row.maturity_date ?? undefined,
+  notes: row.notes ?? undefined,
+});
+
+const normalizeGoalText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+
+const getSupabaseSavingAmountForGoal = (
+  goal: Goal,
+  savings: SavingAccount[],
+) => {
+  const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
+  const selectedSavingsAmount = savings.reduce((sum, saving) => {
+    if (!linkedSavingIds.has(saving.id)) return sum;
+    return sum + saving.balance;
+  }, 0);
+
+  if (selectedSavingsAmount > 0) {
+    return selectedSavingsAmount;
+  }
+
+  const goalName = normalizeGoalText(goal.name);
+
+  return savings.reduce((sum, saving) => {
+    const savingName = normalizeGoalText(saving.name);
+    const isEmergencyGoal =
+      goalName.includes("khan cap") ||
+      goalName.includes("emergency") ||
+      goalName.includes("du phong");
+    const isEmergencySaving = saving.type === "emergency_fund";
+    const isNameMatched =
+      goalName.length > 0 &&
+      savingName.length > 0 &&
+      (goalName.includes(savingName) || savingName.includes(goalName));
+
+    if ((isEmergencyGoal && isEmergencySaving) || isNameMatched) {
+      return sum + saving.balance;
+    }
+
+    return sum;
+  }, 0);
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [savings, setSavings] = useState<SavingAccount[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -131,15 +210,30 @@ export default function GoalsPage() {
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
-    const [nextGoals, nextCategories, nextTransactions] = await Promise.all([
-      getGoals(),
-      getCategories(),
-      getTransactions(),
-    ]);
+    const [nextGoals, nextCategories, nextTransactions, savingRows] =
+      await Promise.all([
+        getGoals(),
+        getCategories(),
+        getTransactions(),
+        goalsSupabase
+          ? goalsSupabase
+              .from("savings")
+              .select("id,name,type,balance,interest_rate,maturity_date,notes")
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
     setGoals(nextGoals);
     setCategories(nextCategories);
     setTransactions(nextTransactions);
+
+    if (!savingRows.error) {
+      setSavings(
+        ((savingRows.data ?? []) as SavingRow[]).map(
+          mapSavingRowToSavingAccount,
+        ),
+      );
+    }
   }
 
   useEffect(() => {
@@ -151,31 +245,6 @@ export default function GoalsPage() {
   }, []);
   useRealtimeTable(["goals", "transactions", "categories"], reloadData);
 
-  const savingCategories = useMemo(
-    () =>
-      categories.filter(
-        (category) => getCategoryPlanningGroup(category) === "saving",
-      ),
-    [categories],
-  );
-
-  // ── PRESERVED: summary ───────────────────────────────────────────────────
-  const summary = useMemo(() => {
-    const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
-    const totalCurrent = goals.reduce(
-      (s, g) => s + getGoalEffectiveCurrentAmount({ goal: g, transactions }),
-      0,
-    );
-    const percent =
-      totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0;
-    return {
-      totalTarget,
-      totalCurrent,
-      remaining: totalTarget - totalCurrent,
-      percent,
-    };
-  }, [goals, transactions]);
-
   // ── NEW: per-goal analytics ───────────────────────────────────────────────
   const goalMeta = useMemo(
     () =>
@@ -184,10 +253,15 @@ export default function GoalsPage() {
           goal: g,
           transactions,
         });
-        const effectiveCurrentAmount = getGoalEffectiveCurrentAmount({
+        const supabaseSavingAmount = getSupabaseSavingAmountForGoal(g, savings);
+        const baseEffectiveCurrentAmount = getGoalEffectiveCurrentAmount({
           goal: g,
           transactions,
         });
+        const effectiveCurrentAmount = Math.max(
+          baseEffectiveCurrentAmount,
+          g.currentAmount + supabaseSavingAmount,
+        );
         const pct =
           g.targetAmount > 0
             ? Math.round((effectiveCurrentAmount / g.targetAmount) * 100)
@@ -204,12 +278,35 @@ export default function GoalsPage() {
           tier,
           remaining,
           linkedSavingAmount,
+          supabaseSavingAmount,
           effectiveCurrentAmount,
           suggestedMonthly,
           monthsLeft,
         };
       }),
-    [goals, transactions],
+    [goals, transactions, savings],
+  );
+
+  // ── PRESERVED: summary ───────────────────────────────────────────────────
+  const summary = useMemo(() => {
+    const totalTarget = goalMeta.reduce((s, g) => s + g.targetAmount, 0);
+    const totalCurrent = goalMeta.reduce(
+      (s, g) => s + g.effectiveCurrentAmount,
+      0,
+    );
+    const percent =
+      totalTarget > 0 ? Math.round((totalCurrent / totalTarget) * 100) : 0;
+    return {
+      totalTarget,
+      totalCurrent,
+      remaining: Math.max(totalTarget - totalCurrent, 0),
+      percent,
+    };
+  }, [goalMeta]);
+
+  const totalSyncedSavings = useMemo(
+    () => goalMeta.reduce((sum, goal) => sum + goal.supabaseSavingAmount, 0),
+    [goalMeta],
   );
 
   // ── NEW: tier counts ──────────────────────────────────────────────────────
@@ -435,7 +532,13 @@ export default function GoalsPage() {
             <KpiCard
               label="Đã tích lũy"
               value={formatVND(summary.totalCurrent)}
-              sub={summary.percent + "% tổng mục tiêu"}
+              sub={
+                summary.percent +
+                "% tổng mục tiêu" +
+                (totalSyncedSavings > 0
+                  ? " · gồm " + formatVND(totalSyncedSavings) + " từ Savings"
+                  : "")
+              }
               gradient="from-cyan-500 to-cyan-600"
               iconBg="bg-cyan-400/30"
               icon={<TrendingUp size={16} />}
@@ -952,6 +1055,11 @@ export default function GoalsPage() {
                   <p className="mt-0.5 text-xs text-slate-400">
                     / {formatVND(g.targetAmount)}
                   </p>
+                  {g.supabaseSavingAmount > 0 && (
+                    <p className="mt-1 text-[11px] font-semibold text-cyan-600">
+                      Đã đồng bộ {formatVND(g.supabaseSavingAmount)} từ Savings
+                    </p>
+                  )}
                   {g.linkedSavingAmount > 0 && (
                     <p className="mt-1 text-[11px] font-semibold text-emerald-600">
                       Đã tự động cộng {formatVND(g.linkedSavingAmount)} từ danh
@@ -1121,8 +1229,8 @@ export default function GoalsPage() {
                   placeholder="12000000"
                 />
 
-                <SavingCategorySelector
-                  categories={savingCategories}
+                <SavingAccountSelector
+                  savings={savings}
                   value={form.savingCategoryIds}
                   onChange={(next) =>
                     setForm((previous) => ({
@@ -1203,33 +1311,46 @@ function KpiCard({
   );
 }
 
-function SavingCategorySelector({
-  categories,
+function getSavingTypeLabel(type: SavingAccount["type"]) {
+  if (type === "emergency_fund") return "Quỹ khẩn cấp";
+  if (type === "term_deposit") return "Tiền gửi có kỳ hạn";
+  if (type === "certificate") return "Chứng chỉ tiền gửi";
+  return "Tài khoản tiết kiệm";
+}
+
+function SavingAccountSelector({
+  savings,
   value,
   onChange,
 }: {
-  categories: Category[];
+  savings: SavingAccount[];
   value: string[];
   onChange: (next: string[]) => void;
 }) {
-  function toggle(categoryId: string) {
-    if (value.includes(categoryId)) {
-      onChange(value.filter((id) => id !== categoryId));
+  function toggle(savingId: string) {
+    if (value.includes(savingId)) {
+      onChange(value.filter((id) => id !== savingId));
       return;
     }
 
-    onChange([...value, categoryId]);
+    onChange([...value, savingId]);
   }
+
+  const selectedTotal = savings.reduce((sum, saving) => {
+    if (!value.includes(saving.id)) return sum;
+    return sum + saving.balance;
+  }, 0);
 
   return (
     <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-black text-slate-800">
-            Liên kết danh mục tiết kiệm
+            Liên kết sổ tiết kiệm
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Các giao dịch thuộc danh mục này sẽ tự cộng vào tiến độ mục tiêu.
+            Chọn khoản tiết kiệm thật từ Supabase để tự cộng vào tiến độ mục
+            tiêu.
           </p>
         </div>
         <span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-emerald-600 shadow-sm">
@@ -1237,38 +1358,60 @@ function SavingCategorySelector({
         </span>
       </div>
 
-      {categories.length === 0 ? (
+      {selectedTotal > 0 && (
+        <div className="mt-3 rounded-xl border border-emerald-100 bg-white px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+            Đang đồng bộ
+          </p>
+          <p className="mt-0.5 text-sm font-black text-emerald-700">
+            {formatVND(selectedTotal)}
+          </p>
+        </div>
+      )}
+
+      {savings.length === 0 ? (
         <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs text-slate-500">
-          Chưa có danh mục planning_group = saving. Hãy tạo danh mục như Quỹ
-          khẩn cấp hoặc Tiết kiệm hằng tháng.
+          Chưa có sổ tiết kiệm trong Supabase. Hãy tạo ở trang Tiết kiệm trước,
+          sau đó quay lại liên kết với mục tiêu này.
         </p>
       ) : (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {categories.map((category) => {
-            const checked = value.includes(category.id);
+          {savings.map((saving) => {
+            const checked = value.includes(saving.id);
             return (
               <button
-                key={category.id}
+                key={saving.id}
                 type="button"
-                onClick={() => toggle(category.id)}
+                onClick={() => toggle(saving.id)}
                 className={
-                  "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-bold transition " +
+                  "rounded-xl border px-3 py-2 text-left transition " +
                   (checked
                     ? "border-emerald-300 bg-white text-emerald-700 shadow-sm"
                     : "border-white bg-white/70 text-slate-600 hover:border-emerald-200")
                 }
               >
-                <span className="truncate">{category.name}</span>
-                <span
-                  className={
-                    "ml-2 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] " +
-                    (checked
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-slate-200 text-transparent")
-                  }
-                >
-                  ✓
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-xs font-black">
+                    {saving.name}
+                  </span>
+                  <span
+                    className={
+                      "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] " +
+                      (checked
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-slate-200 text-transparent")
+                    }
+                  >
+                    ✓
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-slate-400">
+                  <span>{getSavingTypeLabel(saving.type)}</span>
+                  <span>•</span>
+                  <span className="text-emerald-700">
+                    {formatVND(saving.balance)}
+                  </span>
+                </div>
               </button>
             );
           })}

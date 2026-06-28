@@ -152,44 +152,41 @@ function formatQuarterSubLabel(quarterKey: string) {
 }
 
 function buildMonths12(baseMonth: string): MonthOption[] {
-  const { selectedYear, selectedMonthNumber } = parseMonthKey(baseMonth);
-  const base = new Date(selectedYear, selectedMonthNumber - 1, 1);
+  const { selectedYear } = parseMonthKey(baseMonth);
 
   return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(base.getFullYear(), base.getMonth() - index, 1);
-    const value = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+    const month = index + 1;
+    const value = `${selectedYear}-${pad2(month)}`;
 
     return {
       value,
-      label: formatMonthLabel(value),
+      label: `${pad2(month)}/${selectedYear}`,
     };
   });
 }
 
 function buildQuarters8(baseMonth: string): QuarterOption[] {
-  const baseQuarter = toQuarterKey(baseMonth);
-  const { year, quarter } = parseQuarterKey(baseQuarter);
-  const baseIndex = year * 4 + quarter - 1;
+  const { selectedYear } = parseMonthKey(baseMonth);
+  const years = [selectedYear + 1, selectedYear, selectedYear - 1];
 
-  return Array.from({ length: 8 }, (_, index) => {
-    const absolute = baseIndex - index;
-    const qYear = Math.floor(absolute / 4);
-    const q = (absolute % 4) + 1;
-    const value = `${qYear}-Q${q}`;
+  return years.flatMap((year) =>
+    [1, 2, 3, 4].map((quarter) => {
+      const value = `${year}-Q${quarter}`;
 
-    return {
-      value,
-      label: formatQuarterLabel(value),
-      subLabel: formatQuarterSubLabel(value),
-    };
-  });
+      return {
+        value,
+        label: formatQuarterLabel(value),
+        subLabel: formatQuarterSubLabel(value),
+      };
+    }),
+  );
 }
 
 function buildYears5(baseMonth: string): YearOption[] {
   const { selectedYear } = parseMonthKey(baseMonth);
 
-  return Array.from({ length: 5 }, (_, index) => {
-    const value = String(selectedYear - index);
+  return Array.from({ length: 11 }, (_, index) => {
+    const value = String(selectedYear + 5 - index);
     return {
       value,
       label: `Năm ${value}`,
@@ -247,10 +244,74 @@ function normalizeFilter(raw: Partial<StoredDateFilter>): StoredDateFilter {
   };
 }
 
+function getFilterFromUrl(): Partial<StoredDateFilter> | null {
+  if (typeof window === "undefined") return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const month = params.get("month");
+  const quarter = params.get("quarter");
+  const yearRaw = params.get("year");
+  const customStart = params.get("from");
+  const customEnd = params.get("to");
+
+  if (isValidMonthKey(month)) {
+    const parsed = parseMonthKey(month);
+    return {
+      mode: "month",
+      selectedMonth: month,
+      selectedQuarter: toQuarterKey(month),
+      selectedYear: parsed.selectedYear,
+    };
+  }
+
+  if (isValidQuarterKey(quarter)) {
+    const range = getQuarterRange(quarter);
+    const parsed = parseMonthKey(range.startDate.slice(0, 7));
+    return {
+      mode: "quarter",
+      selectedMonth: range.startDate.slice(0, 7),
+      selectedQuarter: quarter,
+      selectedYear: parsed.selectedYear,
+    };
+  }
+
+  if (yearRaw && /^\d{4}$/.test(yearRaw)) {
+    const year = Number(yearRaw);
+    return {
+      mode: "year",
+      selectedMonth: `${year}-01`,
+      selectedQuarter: `${year}-Q1`,
+      selectedYear: year,
+    };
+  }
+
+  if (isValidDate(customStart) && isValidDate(customEnd)) {
+    const safeStart = customStart <= customEnd ? customStart : customEnd;
+    const safeEnd = customStart <= customEnd ? customEnd : customStart;
+    const parsed = parseMonthKey(safeStart.slice(0, 7));
+
+    return {
+      mode: "custom",
+      selectedMonth: safeStart.slice(0, 7),
+      selectedQuarter: toQuarterKey(safeStart.slice(0, 7)),
+      selectedYear: parsed.selectedYear,
+      customStart: safeStart,
+      customEnd: safeEnd,
+    };
+  }
+
+  return null;
+}
+
 function getInitialFilter(): StoredDateFilter {
   if (typeof window === "undefined") return getDefaultStoredFilter();
 
   try {
+    const urlFilter = getFilterFromUrl();
+    if (urlFilter) {
+      return normalizeFilter(urlFilter);
+    }
+
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved) {
       return normalizeFilter(JSON.parse(saved) as Partial<StoredDateFilter>);
@@ -387,9 +448,9 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
       monthLabel: formatMonthLabel(filter.selectedMonth),
       filterLabel: getFilterLabel(filter),
       dateRange: getFilterRange(filter),
-      months12: buildMonths12(getDefaultMonth()),
-      quarters8: buildQuarters8(getDefaultMonth()),
-      years5: buildYears5(getDefaultMonth()),
+      months12: buildMonths12(filter.selectedMonth),
+      quarters8: buildQuarters8(filter.selectedMonth),
+      years5: buildYears5(filter.selectedMonth),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);

@@ -52,6 +52,7 @@ import {
   getTransactions,
   getWallets,
   updateTransaction,
+  updateWallet,
 } from "@/src/services/finance/financeStorage";
 import {
   formatVND,
@@ -115,6 +116,90 @@ const emptyForm: FormState = {
   recurrence: "monthly",
 };
 
+function getTransactionDateValue(transaction: Transaction) {
+  return String(transaction.date ?? "").trim();
+}
+
+function getTransactionReferenceTimeIso(transaction: Transaction) {
+  const reference = String(
+    (
+      transaction as Transaction & {
+        transferReference?: string;
+        transfer_reference?: string;
+      }
+    ).transferReference ??
+      (transaction as Transaction & { transfer_reference?: string })
+        .transfer_reference ??
+      "",
+  );
+
+  const isoMatch = reference.match(
+    /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)/,
+  );
+  return isoMatch?.[1] ?? "";
+}
+
+function getTransactionCreatedIso(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    createdAt?: string;
+    created_at?: string;
+    createdTime?: string;
+    created_time?: string;
+    insertedAt?: string;
+    inserted_at?: string;
+    timestamp?: string;
+    time?: string;
+    updatedAt?: string;
+    updated_at?: string;
+  };
+
+  const explicitCreated =
+    metadata.createdAt ??
+    metadata.created_at ??
+    metadata.createdTime ??
+    metadata.created_time ??
+    metadata.insertedAt ??
+    metadata.inserted_at ??
+    metadata.timestamp ??
+    metadata.updatedAt ??
+    metadata.updated_at ??
+    "";
+
+  if (explicitCreated) return String(explicitCreated);
+
+  const referenceTime = getTransactionReferenceTimeIso(transaction);
+  if (referenceTime) return referenceTime;
+
+  const dateValue = getTransactionDateValue(transaction);
+  if (dateValue.includes("T")) return dateValue;
+
+  if (dateValue && metadata.time) {
+    return `${dateValue}T${metadata.time}`;
+  }
+
+  return "";
+}
+
+function getTransactionSortTime(transaction: Transaction) {
+  const createdIso = getTransactionCreatedIso(transaction);
+  const createdTime = createdIso ? new Date(createdIso).getTime() : 0;
+  if (Number.isFinite(createdTime) && createdTime > 0) return createdTime;
+
+  const dateValue = getTransactionDateValue(transaction);
+  if (!dateValue) return 0;
+
+  const dateOnly = dateValue.slice(0, 10);
+  const dateTime = new Date(`${dateOnly}T00:00:00`).getTime();
+  return Number.isFinite(dateTime) ? dateTime : 0;
+}
+
+function compareTransactionNewestFirst(a: Transaction, b: Transaction) {
+  const timeCompare = getTransactionSortTime(b) - getTransactionSortTime(a);
+  if (timeCompare !== 0) return timeCompare;
+
+  return String(b.id).localeCompare(String(a.id));
+}
+
 function getCategoryPlanningGroup(category?: Category) {
   return (
     category?.planningGroup ??
@@ -126,9 +211,12 @@ function getTransactionFormMode(
   transaction: Transaction,
   categories: Category[],
 ): TransactionFormMode {
-  if (transaction.type === "income" || transaction.type === "transfer") {
-    return transaction.type;
-  }
+  // Finance Engine v2 rule:
+  // Asset movements (wallet transfer, saving deposit/withdraw/close, investment movement)
+  // must open and save as internal transfer so they never affect Income/Expense.
+  if (isInternalTransferTransaction(transaction)) return "transfer";
+
+  if (transaction.type === "income") return "income";
 
   const category = categories.find(
     (item) => item.id === transaction.categoryId,
@@ -143,8 +231,308 @@ function getTransactionFormMode(
 function getTransactionTypeFromFormMode(
   mode: TransactionFormMode,
 ): TransactionType {
-  if (mode === "income" || mode === "transfer") return mode;
+  if (mode === "income") return "income";
+
+  // Saving / investment are asset movements, not expense.
+  // Store them as transfer to keep reports and dashboard cashflow correct.
+  if (mode === "transfer" || mode === "saving" || mode === "investment") {
+    return "transfer";
+  }
+
   return "expense";
+}
+
+function formatTransactionDayLabel(dateValue: string) {
+  dateValue = String(dateValue ?? "").slice(0, 10);
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayIso = yesterday.toISOString().slice(0, 10);
+
+  if (dateValue === todayIso) return "Hôm nay";
+  if (dateValue === yesterdayIso) return "Hôm qua";
+
+  const [year, month, day] = dateValue.split("-");
+  if (!year || !month || !day) return dateValue;
+
+  return today.getFullYear() === Number(year)
+    ? `${day}/${month}`
+    : `${day}/${month}/${year}`;
+}
+
+function formatTransactionTime(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    time?: string;
+    transactionTime?: string;
+    transaction_time?: string;
+  };
+
+  const explicitTime =
+    metadata.time ??
+    metadata.transactionTime ??
+    metadata.transaction_time ??
+    "";
+
+  if (/^\d{1,2}:\d{2}/.test(String(explicitTime))) {
+    const [hour = "0", minute = "00"] = String(explicitTime).split(":");
+    return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+  }
+
+  const createdIso = getTransactionCreatedIso(transaction);
+  const date = createdIso ? new Date(createdIso) : null;
+
+  if (!date || Number.isNaN(date.getTime())) return "--:--";
+
+  return date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getCompactCategoryName(category?: Category) {
+  if (!category?.name) return { primary: "—", extraCount: 0 };
+
+  const parts = category.name
+    .split(/\s*\+\s*|,|\/|·/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    primary: parts[0] ?? category.name,
+    extraCount: Math.max(parts.length - 1, 0),
+  };
+}
+
+function normalizeTransactionNote(note: string) {
+  return note
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+}
+
+function getTransactionTransferReferenceType(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    transferReferenceType?: string;
+    transfer_reference_type?: string;
+  };
+
+  return String(
+    metadata.transferReferenceType ?? metadata.transfer_reference_type ?? "",
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function getTransactionSourceType(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    sourceType?: string;
+    source_type?: string;
+  };
+
+  return String(metadata.sourceType ?? metadata.source_type ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function getTransactionDestinationType(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    destinationType?: string;
+    destination_type?: string;
+  };
+
+  return String(metadata.destinationType ?? metadata.destination_type ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function getSavingTransferKind(
+  transaction: Transaction,
+): "deposit" | "withdraw" | "close" | null {
+  const referenceType = getTransactionTransferReferenceType(transaction);
+  const sourceType = getTransactionSourceType(transaction);
+  const destinationType = getTransactionDestinationType(transaction);
+
+  if (transaction.type === "transfer" && referenceType === "saving") {
+    if (sourceType === "wallet" && destinationType === "saving")
+      return "deposit";
+    if (sourceType === "saving" && destinationType === "wallet")
+      return "withdraw";
+  }
+
+  const normalizedNote = normalizeTransactionNote(transaction.note);
+
+  if (
+    normalizedNote.includes("tat toan tiet kiem") ||
+    normalizedNote.startsWith("tat toan")
+  ) {
+    return "close";
+  }
+
+  if (
+    normalizedNote.startsWith("rut tu tiet kiem") ||
+    normalizedNote.startsWith("rut tien tu tiet kiem") ||
+    normalizedNote.startsWith("rut tien")
+  ) {
+    return "withdraw";
+  }
+
+  if (
+    normalizedNote.startsWith("nap vao tiet kiem") ||
+    normalizedNote.startsWith("gui vao tiet kiem") ||
+    normalizedNote.startsWith("nap them vao tiet kiem") ||
+    normalizedNote.startsWith("nap them") ||
+    normalizedNote.startsWith("gui tiet kiem")
+  ) {
+    return "deposit";
+  }
+
+  return null;
+}
+
+function isInternalTransferTransaction(transaction: Transaction) {
+  if (transaction.type === "transfer") return true;
+
+  const savingKind = getSavingTransferKind(transaction);
+  if (savingKind) return true;
+
+  const normalizedNote = normalizeTransactionNote(transaction.note);
+
+  return (
+    normalizedNote.startsWith("chuyen tien") ||
+    normalizedNote.includes("chuyen vi") ||
+    normalizedNote.includes("noi bo")
+  );
+}
+
+function getTransactionDisplayType(transaction: Transaction) {
+  return isInternalTransferTransaction(transaction)
+    ? "transfer"
+    : transaction.type;
+}
+
+function getTransactionAccentClass(transaction: Transaction) {
+  const displayType = getTransactionDisplayType(transaction);
+  if (displayType === "income") return "border-l-emerald-400";
+  if (displayType === "transfer") return "border-l-indigo-400";
+  return "border-l-rose-400";
+}
+
+function getTransactionAmountPrefix(transaction: Transaction) {
+  const savingKind = getSavingTransferKind(transaction);
+
+  if (savingKind === "deposit") return "+";
+  if (savingKind === "withdraw" || savingKind === "close") return "−";
+
+  const displayType = getTransactionDisplayType(transaction);
+  if (displayType === "income") return "+";
+  if (displayType === "transfer") return "⇄";
+  return "−";
+}
+
+function getTransactionAmountColorClass(transaction: Transaction) {
+  const savingKind = getSavingTransferKind(transaction);
+
+  if (savingKind === "deposit") return "text-emerald-600";
+  if (savingKind === "withdraw" || savingKind === "close")
+    return "text-rose-500";
+
+  const displayType = getTransactionDisplayType(transaction);
+  if (displayType === "income") return "text-emerald-600";
+  if (displayType === "transfer") return "text-indigo-600";
+  return "text-rose-500";
+}
+
+function getInternalTransferSignedAmount(transaction: Transaction) {
+  const savingKind = getSavingTransferKind(transaction);
+
+  if (savingKind === "deposit") return transaction.amount;
+  if (savingKind === "withdraw" || savingKind === "close")
+    return -transaction.amount;
+
+  return 0;
+}
+
+function getInternalTransferTurnoverAmount(transaction: Transaction) {
+  return isInternalTransferTransaction(transaction)
+    ? Math.abs(transaction.amount)
+    : 0;
+}
+
+function getSignedAmountText(amount: number) {
+  if (amount > 0) return "+" + formatVND(amount);
+  if (amount < 0) return "−" + formatVND(Math.abs(amount));
+  return formatVND(0);
+}
+
+function getSignedAmountClass(amount: number) {
+  if (amount > 0) return "text-emerald-600";
+  if (amount < 0) return "text-rose-600";
+  return "text-indigo-600";
+}
+
+function getTransactionDisplayNote(transaction: Transaction) {
+  const savingKind = getSavingTransferKind(transaction);
+  const note = transaction.note.trim();
+  const normalizedNote = normalizeTransactionNote(note);
+
+  if (savingKind === "deposit") {
+    return normalizedNote.includes("tiet kiem")
+      ? note
+      : "Nạp vào tiết kiệm" + (note ? ": " + note : "");
+  }
+
+  if (savingKind === "withdraw") {
+    return normalizedNote.includes("tiet kiem")
+      ? note
+      : "Rút từ tiết kiệm" + (note ? ": " + note : "");
+  }
+
+  if (savingKind === "close") {
+    return normalizedNote.includes("tiet kiem")
+      ? note
+      : "Tất toán tiết kiệm" + (note ? ": " + note : "");
+  }
+
+  return (
+    note ||
+    (getTransactionDisplayType(transaction) === "transfer"
+      ? "Chuyển tiền"
+      : "Giao dịch")
+  );
+}
+
+function getTransferWalletLabel(
+  transaction: Transaction,
+  sourceWalletName?: string,
+  destinationWalletName?: string,
+) {
+  const savingKind = getSavingTransferKind(transaction);
+
+  if (savingKind === "deposit") {
+    return {
+      from: sourceWalletName ?? "—",
+      to: "Tiết kiệm",
+      title: (sourceWalletName ?? "—") + " → Tiết kiệm",
+    };
+  }
+
+  if (savingKind === "withdraw" || savingKind === "close") {
+    return {
+      from: "Tiết kiệm",
+      to: sourceWalletName ?? destinationWalletName ?? "—",
+      title:
+        "Tiết kiệm → " + (sourceWalletName ?? destinationWalletName ?? "—"),
+    };
+  }
+
+  return {
+    from: sourceWalletName ?? "—",
+    to: destinationWalletName ?? "—",
+    title: (sourceWalletName ?? "—") + " → " + (destinationWalletName ?? "—"),
+  };
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -237,16 +625,21 @@ export default function TransactionsPage() {
       if (!t.date.startsWith(selectedMonth)) return false;
       const cat = categories.find((c) => c.id === t.categoryId);
       const wal = wallets.find((w) => w.id === t.walletId);
+      const dstWal = t.transferToWalletId
+        ? wallets.find((w) => w.id === t.transferToWalletId)
+        : undefined;
+      const displayType = getTransactionDisplayType(t);
       const typeLabel =
-        t.type === "income"
+        displayType === "income"
           ? "thu nhập income thu"
-          : t.type === "expense"
+          : displayType === "expense"
             ? "chi tiêu expense chi"
-            : "chuyển khoản transfer";
+            : "chuyển khoản chuyển tiền nội bộ transfer";
       const searchText = [
         t.note,
         cat?.name,
         wal?.name,
+        dstWal?.name,
         t.date,
         typeLabel,
         String(t.amount),
@@ -254,11 +647,18 @@ export default function TransactionsPage() {
       ]
         .join(" ")
         .toLowerCase();
-      if (typeFilter !== "all" && t.type !== typeFilter) return false;
+      if (typeFilter !== "all" && displayType !== typeFilter) return false;
       if (keyword && !searchText.includes(keyword.toLowerCase())) return false;
-      if (dateFrom && t.date < dateFrom) return false;
-      if (dateTo && t.date > dateTo) return false;
-      if (walletFilter && t.walletId !== walletFilter) return false;
+      const transactionDate = String(t.date ?? "").slice(0, 10);
+      if (dateFrom && transactionDate < dateFrom) return false;
+      if (dateTo && transactionDate > dateTo) return false;
+      if (
+        walletFilter &&
+        t.walletId !== walletFilter &&
+        t.transferToWalletId !== walletFilter
+      ) {
+        return false;
+      }
       if (categoryFilter && t.categoryId !== categoryFilter) return false;
       if (amountMin && t.amount < Number(amountMin)) return false;
       if (amountMax && t.amount > Number(amountMax)) return false;
@@ -282,9 +682,15 @@ export default function TransactionsPage() {
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "date") cmp = a.date.localeCompare(b.date);
-      else if (sortKey === "amount") cmp = a.amount - b.amount;
-      else if (sortKey === "category") {
+
+      if (sortKey === "date") {
+        cmp = compareTransactionNewestFirst(a, b);
+        return sortDir === "desc" ? cmp : -cmp;
+      }
+
+      if (sortKey === "amount") {
+        cmp = a.amount - b.amount;
+      } else if (sortKey === "category") {
         const ca = categories.find((c) => c.id === a.categoryId)?.name ?? "";
         const cb = categories.find((c) => c.id === b.categoryId)?.name ?? "";
         cmp = ca.localeCompare(cb);
@@ -293,16 +699,61 @@ export default function TransactionsPage() {
         const wb = wallets.find((w) => w.id === b.walletId)?.name ?? "";
         cmp = wa.localeCompare(wb);
       }
+
+      if (cmp === 0) return compareTransactionNewestFirst(a, b);
       return sortDir === "asc" ? cmp : -cmp;
     });
   }, [filtered, sortKey, sortDir, categories, wallets]);
 
-  const totalIncome = useMemo(() => getTotalIncome(filtered), [filtered]);
+  const cashFlowTransactions = useMemo(
+    () =>
+      filtered.filter(
+        (transaction) => !isInternalTransferTransaction(transaction),
+      ),
+    [filtered],
+  );
+  const totalIncome = useMemo(
+    () => getTotalIncome(cashFlowTransactions),
+    [cashFlowTransactions],
+  );
   const totalExpense = useMemo(
-    () => getTotalExpense(filtered, categories),
-    [filtered, categories],
+    () => getTotalExpense(cashFlowTransactions, categories),
+    [cashFlowTransactions, categories],
+  );
+  const totalLiquidity = useMemo(
+    () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
+    [wallets],
   );
   const netCashFlow = totalIncome - totalExpense;
+  const internalTransferTurnover = useMemo(
+    () =>
+      filtered
+        .filter((transaction) => isInternalTransferTransaction(transaction))
+        .reduce(
+          (sum, transaction) =>
+            sum + getInternalTransferTurnoverAmount(transaction),
+          0,
+        ),
+    [filtered],
+  );
+  const internalTransferNet = useMemo(
+    () =>
+      filtered
+        .filter((transaction) => isInternalTransferTransaction(transaction))
+        .reduce(
+          (sum, transaction) =>
+            sum + getInternalTransferSignedAmount(transaction),
+          0,
+        ),
+    [filtered],
+  );
+  const transferCount = useMemo(
+    () =>
+      filtered.filter((transaction) =>
+        isInternalTransferTransaction(transaction),
+      ).length,
+    [filtered],
+  );
 
   const currentYear = String(selectedYear);
   const yearTxns = useMemo(
@@ -316,8 +767,11 @@ export default function TransactionsPage() {
         const mx = yearTxns.filter((t) =>
           t.date.startsWith(currentYear + "-" + m),
         );
-        const inc = getTotalIncome(mx);
-        const exp = getTotalExpense(mx, categories);
+        const cashFlowMx = mx.filter(
+          (transaction) => !isInternalTransferTransaction(transaction),
+        );
+        const inc = getTotalIncome(cashFlowMx);
+        const exp = getTotalExpense(cashFlowMx, categories);
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
@@ -398,11 +852,24 @@ export default function TransactionsPage() {
   const timelineGroups = useMemo(() => {
     const groups = new Map<string, Transaction[]>();
     for (const t of sorted) {
-      if (!groups.has(t.date)) groups.set(t.date, []);
-      groups.get(t.date)!.push(t);
+      const dateKey = String(t.date ?? "").slice(0, 10);
+      if (!groups.has(dateKey)) groups.set(dateKey, []);
+      groups.get(dateKey)!.push(t);
     }
-    return Array.from(groups.entries()).map(([date, txns]) => ({ date, txns }));
-  }, [sorted]);
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) =>
+        sortDir === "desc" ? b.localeCompare(a) : a.localeCompare(b),
+      )
+      .map(([date, txns]) => ({
+        date,
+        txns: [...txns].sort((a, b) =>
+          sortDir === "desc"
+            ? compareTransactionNewestFirst(a, b)
+            : -compareTransactionNewestFirst(a, b),
+        ),
+      }));
+  }, [sorted, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -441,8 +908,22 @@ export default function TransactionsPage() {
       confirmText: "Xóa tất cả",
       onConfirm: async () => {
         for (const id of idsToDelete) {
+          const transaction = transactions.find((item) => item.id === id);
+          if (transaction?.type === "transfer") {
+            const balanceResult = await applyTransferWalletBalance(
+              transaction,
+              -1,
+            );
+            if (balanceResult.error) {
+              toast({ variant: "error", message: balanceResult.error });
+              return;
+            }
+          }
           const { error } = await deleteTransaction(id);
           if (error) {
+            if (transaction?.type === "transfer") {
+              await applyTransferWalletBalance(transaction, 1);
+            }
             toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
             return;
           }
@@ -464,6 +945,9 @@ export default function TransactionsPage() {
       ...toExport.map((t) => {
         const cat = categories.find((c) => c.id === t.categoryId)?.name ?? "";
         const wal = wallets.find((w) => w.id === t.walletId)?.name ?? "";
+        const dstWal = t.transferToWalletId
+          ? (wallets.find((w) => w.id === t.transferToWalletId)?.name ?? "")
+          : "";
         return [
           t.date,
           t.type === "income"
@@ -473,7 +957,7 @@ export default function TransactionsPage() {
               : "Chi",
           t.note,
           cat,
-          wal,
+          t.type === "transfer" && dstWal ? wal + " -> " + dstWal : wal,
           String(t.amount),
         ];
       }),
@@ -541,10 +1025,12 @@ export default function TransactionsPage() {
   }
 
   function openEditForm(t: Transaction) {
+    const formMode = getTransactionFormMode(t, categories);
+
     setForm({
       id: t.id,
-      type: t.type,
-      formMode: getTransactionFormMode(t, categories),
+      type: getTransactionTypeFromFormMode(formMode),
+      formMode,
       amount: String(t.amount),
       categoryId: t.categoryId,
       walletId: t.walletId,
@@ -584,6 +1070,28 @@ export default function TransactionsPage() {
     setSaveError(null);
   }
 
+  async function restoreWalletSnapshots(_walletSnapshots?: Wallet[]) {
+    // Finance Engine v2 owns all wallet balance rollback.
+    // Kept as a no-op so older save/delete flows do not double-apply balances.
+  }
+
+  async function applyTransferWalletBalance(
+    _transaction: Transaction,
+    _direction: 1 | -1,
+  ) {
+    // Finance Engine v2 applies transfer effects inside add/update/deleteTransaction.
+    // The UI should never mutate wallet balances before calling storage methods.
+    return { error: null as string | null, previousWallets: [] as Wallet[] };
+  }
+
+  async function replaceTransferWalletBalance(
+    _oldTransaction: Transaction | undefined,
+    _nextTransaction: Transaction,
+  ) {
+    // Finance Engine v2 reverses the old transaction and applies the new one.
+    return { error: null as string | null, previousWallets: [] as Wallet[] };
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const amount = Number(form.amount);
@@ -591,7 +1099,10 @@ export default function TransactionsPage() {
       setSaveError("Vui lòng nhập số tiền hợp lệ");
       return;
     }
-    if (form.type === "transfer") {
+    const transactionType = getTransactionTypeFromFormMode(form.formMode);
+    const isWalletTransferForm = form.formMode === "transfer";
+
+    if (isWalletTransferForm) {
       if (!form.walletId) {
         setSaveError("Vui lòng chọn ví nguồn");
         return;
@@ -604,6 +1115,23 @@ export default function TransactionsPage() {
         setSaveError("Ví nguồn và ví đích phải khác nhau");
         return;
       }
+      const sourceWallet = wallets.find(
+        (wallet) => wallet.id === form.walletId,
+      );
+      const editingTransaction = form.id
+        ? transactions.find((transaction) => transaction.id === form.id)
+        : undefined;
+      const availableBalance =
+        (sourceWallet?.balance ?? 0) +
+        (editingTransaction &&
+        isInternalTransferTransaction(editingTransaction) &&
+        editingTransaction.walletId === form.walletId
+          ? editingTransaction.amount
+          : 0);
+      if (sourceWallet && availableBalance < amount) {
+        setSaveError("Ví nguồn không đủ số dư để chuyển tiền");
+        return;
+      }
     } else {
       if (!form.categoryId) {
         setSaveError("Vui lòng chọn danh mục");
@@ -614,28 +1142,82 @@ export default function TransactionsPage() {
         return;
       }
     }
-    const transactionType = getTransactionTypeFromFormMode(form.formMode);
 
-    const transaction: Transaction = {
+    const transferReferenceType = isWalletTransferForm
+      ? "wallet"
+      : form.formMode === "saving"
+        ? "saving"
+        : form.formMode === "investment"
+          ? "investment"
+          : "";
+    const sourceType =
+      isWalletTransferForm ||
+      form.formMode === "saving" ||
+      form.formMode === "investment"
+        ? "wallet"
+        : "";
+    const destinationType = isWalletTransferForm
+      ? "wallet"
+      : form.formMode === "saving"
+        ? "saving"
+        : form.formMode === "investment"
+          ? "investment"
+          : "";
+
+    const transaction: Transaction & Record<string, unknown> = {
       id: form.id ?? crypto.randomUUID(),
       type: transactionType,
       amount,
-      categoryId: transactionType === "transfer" ? "" : form.categoryId,
+      categoryId: isWalletTransferForm ? "" : form.categoryId,
       walletId: form.walletId,
-      transferToWalletId:
-        transactionType === "transfer" ? form.transferToWalletId : undefined,
+      transferToWalletId: isWalletTransferForm
+        ? form.transferToWalletId
+        : form.transferToWalletId || undefined,
       note:
-        form.note ||
-        (transactionType === "transfer" ? "Chuyển tiền" : "Giao dịch mới"),
+        form.note || (isWalletTransferForm ? "Chuyển tiền" : "Giao dịch mới"),
       date: form.date,
       isRecurring: form.isRecurring || undefined,
       recurrence: form.isRecurring ? form.recurrence : undefined,
+      ...(transferReferenceType
+        ? {
+            transferReferenceType,
+            sourceType,
+            destinationType,
+            // Keep snake_case keys as well because Supabase rows use snake_case
+            // while the app view model mostly uses camelCase.
+            transfer_reference_type: transferReferenceType,
+            source_type: sourceType,
+            destination_type: destinationType,
+          }
+        : {}),
     };
     setSaveError(null);
+    const oldTransaction = form.id
+      ? transactions.find((item) => item.id === form.id)
+      : undefined;
+
+    let balanceResult:
+      | { error: string | null; previousWallets: Wallet[] }
+      | undefined;
+
+    if (isWalletTransferForm) {
+      balanceResult = form.id
+        ? await replaceTransferWalletBalance(oldTransaction, transaction)
+        : await applyTransferWalletBalance(transaction, 1);
+      if (balanceResult.error) {
+        setSaveError(balanceResult.error);
+        toast({ variant: "error", message: balanceResult.error });
+        return;
+      }
+    }
+
     const { error } = form.id
       ? await updateTransaction(transaction)
       : await addTransaction(transaction);
     if (error) {
+      if (isWalletTransferForm) {
+        await restoreWalletSnapshots(balanceResult?.previousWallets);
+      }
       setSaveError(error);
       toast({ variant: "error", message: error });
       return;
@@ -658,8 +1240,23 @@ export default function TransactionsPage() {
         "Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa khỏi tài khoản của bạn.",
       variant: "danger",
       onConfirm: async () => {
+        const transaction = transactions.find((item) => item.id === id);
+        let balanceResult:
+          | { error: string | null; previousWallets: Wallet[] }
+          | undefined;
+        if (transaction?.type === "transfer") {
+          balanceResult = await applyTransferWalletBalance(transaction, -1);
+          if (balanceResult.error) {
+            toast({ variant: "error", message: balanceResult.error });
+            return;
+          }
+        }
+
         const { error } = await deleteTransaction(id);
         if (error) {
+          if (transaction?.type === "transfer") {
+            await restoreWalletSnapshots(balanceResult?.previousWallets);
+          }
           toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
           return;
         }
@@ -707,6 +1304,81 @@ export default function TransactionsPage() {
     totalPot > 0
       ? Math.min(Math.round((totalIncome / totalPot) * 100), 100)
       : 50;
+
+  const modalAmount = Number(form.amount) || 0;
+  const selectedWallet = wallets.find((wallet) => wallet.id === form.walletId);
+  const destinationWallet = wallets.find(
+    (wallet) => wallet.id === form.transferToWalletId,
+  );
+  const walletBefore = selectedWallet?.balance ?? 0;
+  const destinationWalletBefore = destinationWallet?.balance ?? 0;
+  const isWalletDecrease =
+    form.formMode === "expense" ||
+    form.formMode === "saving" ||
+    form.formMode === "investment" ||
+    form.formMode === "transfer";
+  const walletAfter =
+    form.formMode === "income"
+      ? walletBefore + modalAmount
+      : isWalletDecrease
+        ? walletBefore - modalAmount
+        : walletBefore;
+  const destinationWalletAfter =
+    form.formMode === "transfer"
+      ? destinationWalletBefore + modalAmount
+      : destinationWalletBefore;
+  const canShowWalletPreview = !!selectedWallet && modalAmount > 0;
+  const amountQuickActions = [50000, 100000, 200000, 500000, 1000000];
+  const modalAccent =
+    form.formMode === "income"
+      ? {
+          bg: "bg-emerald-500",
+          bgHover: "hover:bg-emerald-600",
+          text: "text-emerald-600",
+          soft: "bg-emerald-50",
+          border: "border-emerald-200",
+          focus: "focus-within:border-emerald-400",
+          shadow: "shadow-emerald-200",
+        }
+      : form.formMode === "transfer"
+        ? {
+            bg: "bg-blue-600",
+            bgHover: "hover:bg-blue-700",
+            text: "text-blue-600",
+            soft: "bg-blue-50",
+            border: "border-blue-200",
+            focus: "focus-within:border-blue-400",
+            shadow: "shadow-blue-200",
+          }
+        : form.formMode === "saving"
+          ? {
+              bg: "bg-cyan-500",
+              bgHover: "hover:bg-cyan-600",
+              text: "text-cyan-600",
+              soft: "bg-cyan-50",
+              border: "border-cyan-200",
+              focus: "focus-within:border-cyan-400",
+              shadow: "shadow-cyan-200",
+            }
+          : form.formMode === "investment"
+            ? {
+                bg: "bg-violet-500",
+                bgHover: "hover:bg-violet-600",
+                text: "text-violet-600",
+                soft: "bg-violet-50",
+                border: "border-violet-200",
+                focus: "focus-within:border-violet-400",
+                shadow: "shadow-violet-200",
+              }
+            : {
+                bg: "bg-rose-500",
+                bgHover: "hover:bg-rose-600",
+                text: "text-rose-600",
+                soft: "bg-rose-50",
+                border: "border-rose-200",
+                focus: "focus-within:border-rose-400",
+                shadow: "shadow-rose-200",
+              };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
@@ -778,16 +1450,10 @@ export default function TransactionsPage() {
           {/* Net cash flow — center focus */}
           <div className="relative mt-7 text-center">
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-              Dòng tiền ròng
+              Thanh khoản
             </p>
-            <p
-              className={
-                "mt-2 text-3xl font-black tracking-tight sm:text-5xl " +
-                (netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500")
-              }
-            >
-              {netCashFlow >= 0 ? "+" : ""}
-              {formatVND(netCashFlow)}
+            <p className="mt-2 text-3xl font-black tracking-tight text-blue-700 sm:text-5xl">
+              {formatVND(totalLiquidity)}
             </p>
             <div className="mt-2 flex items-center justify-center gap-3">
               <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
@@ -796,12 +1462,12 @@ export default function TransactionsPage() {
               {netCashFlow >= 0 ? (
                 <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
                   <TrendingUp size={11} />
-                  Dương
+                  Dòng tiền dương
                 </span>
               ) : (
                 <span className="flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-600">
                   <TrendingDown size={11} />
-                  Âm
+                  Dòng tiền âm
                 </span>
               )}
             </div>
@@ -855,16 +1521,14 @@ export default function TransactionsPage() {
             </div>
             <div className="rounded-2xl border border-cyan-200 bg-linear-to-br from-cyan-50 to-cyan-100/60 px-4 py-3.5">
               <p className="text-[10px] font-black uppercase tracking-wide text-cyan-600">
-                Danh mục
+                Chuyển tiền nội bộ
               </p>
-              <p className="mt-1 text-sm font-black text-cyan-700">
-                {
-                  new Set(
-                    filtered
-                      .filter((t) => t.type === "expense")
-                      .map((t) => t.categoryId),
-                  ).size
-                }
+              <p className="mt-1 truncate text-sm font-black text-cyan-700">
+                {formatVND(internalTransferTurnover)}
+              </p>
+              <p className="mt-0.5 text-[10px] font-bold text-cyan-600">
+                {transferCount} giao dịch · ròng{" "}
+                {getSignedAmountText(internalTransferNet)}
               </p>
             </div>
           </div>
@@ -1412,7 +2076,7 @@ export default function TransactionsPage() {
         {viewMode === "table" ? (
           <>
             {/* Desktop column header */}
-            <div className="hidden grid-cols-[36px_1fr_130px_120px_100px_150px_88px] items-center border-b border-blue-100 bg-blue-50/30 px-6 py-3 text-xs font-black uppercase tracking-wide text-blue-400 lg:grid">
+            <div className="hidden grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] items-center border-b border-blue-100 bg-white px-6 py-3 text-xs font-black uppercase tracking-wide text-blue-400 lg:grid">
               <div>
                 <input
                   type="checkbox"
@@ -1420,217 +2084,338 @@ export default function TransactionsPage() {
                     selectedIds.size === sorted.length && sorted.length > 0
                   }
                   onChange={toggleSelectAll}
-                  className="cursor-pointer rounded"
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300"
                 />
               </div>
-              <div>Ghi chú</div>
+              <div>Giao dịch</div>
               <div>Danh mục</div>
               <div>Ví tiền</div>
-              <div>Ngày</div>
-              <div>Số tiền</div>
+              <div>Thời gian</div>
+              <div className="text-right">Số tiền</div>
               <div className="text-right">Thao tác</div>
             </div>
 
-            <div className="divide-y divide-slate-100/80">
-              {sorted.map((t) => {
-                const cat = categories.find((c) => c.id === t.categoryId);
-                const wal = wallets.find((w) => w.id === t.walletId);
-                const dstWal = t.transferToWalletId
-                  ? wallets.find((w) => w.id === t.transferToWalletId)
-                  : undefined;
-                const isSelected = selectedIds.has(t.id);
-                const isSwiped = swipedId === t.id;
-                const isIncome = t.type === "income";
-                const isTransfer = t.type === "transfer";
-
+            <div>
+              {timelineGroups.map(({ date, txns }) => {
+                const dayIncome = txns
+                  .filter(
+                    (transaction) =>
+                      getTransactionDisplayType(transaction) === "income",
+                  )
+                  .reduce((sum, transaction) => sum + transaction.amount, 0);
+                const dayExpense = txns
+                  .filter(
+                    (transaction) =>
+                      getTransactionDisplayType(transaction) === "expense",
+                  )
+                  .reduce((sum, transaction) => sum + transaction.amount, 0);
+                const dayTransferTurnover = txns
+                  .filter((transaction) =>
+                    isInternalTransferTransaction(transaction),
+                  )
+                  .reduce(
+                    (sum, transaction) =>
+                      sum + getInternalTransferTurnoverAmount(transaction),
+                    0,
+                  );
                 return (
-                  <div key={t.id} className="relative overflow-hidden">
-                    {/* Swipe actions — mobile only */}
-                    <div
-                      className={
-                        "absolute inset-y-0 right-0 z-10 flex items-center gap-2 bg-white px-4 transition-transform duration-200 lg:hidden " +
-                        (isSwiped ? "translate-x-0" : "translate-x-full")
-                      }
-                    >
-                      <button
-                        onClick={() => {
-                          openEditForm(t);
-                          setSwipedId(null);
-                        }}
-                        className="flex size-10 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 transition-all active:scale-90"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleDelete(t.id);
-                          setSwipedId(null);
-                        }}
-                        className="flex size-10 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 transition-all active:scale-90"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                  <div key={date}>
+                    <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-800">
+                          {formatTransactionDayLabel(date)}
+                        </span>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-400 ring-1 ring-slate-200">
+                          {txns.length} giao dịch
+                        </span>
+                      </div>
+                      <div className="hidden items-center gap-2 text-[11px] font-bold sm:flex">
+                        {dayIncome > 0 && (
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
+                            +{formatVND(dayIncome)}
+                          </span>
+                        )}
+                        {dayExpense > 0 && (
+                          <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">
+                            -{formatVND(dayExpense)}
+                          </span>
+                        )}
+                        {dayTransferTurnover > 0 && (
+                          <span
+                            className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-600"
+                            title={
+                              "Luân chuyển nội bộ: " +
+                              formatVND(dayTransferTurnover)
+                            }
+                          >
+                            ⇄ {formatVND(dayTransferTurnover)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div
-                      className={
-                        "grid gap-3 px-4 py-4 transition-all duration-200 hover:bg-blue-50/30 sm:px-6 lg:grid-cols-[36px_1fr_130px_120px_100px_150px_88px] lg:items-center " +
-                        (isSelected ? "bg-blue-50" : "") +
-                        " " +
-                        (isSwiped ? "-translate-x-24 lg:translate-x-0" : "")
-                      }
-                      onTouchStart={(e) => {
-                        touchStartX.current = e.touches[0].clientX;
-                      }}
-                      onTouchEnd={(e) => {
-                        const delta =
-                          touchStartX.current - e.changedTouches[0].clientX;
-                        if (delta > 55) setSwipedId(t.id);
-                        else if (delta < -25) setSwipedId(null);
-                      }}
-                    >
-                      {/* Checkbox (desktop) */}
-                      <div className="hidden items-center lg:flex">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(t.id)}
-                          className="cursor-pointer rounded"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
+                    <div className="divide-y divide-slate-100/80">
+                      {txns.map((t) => {
+                        const cat = categories.find(
+                          (c) => c.id === t.categoryId,
+                        );
+                        const wal = wallets.find((w) => w.id === t.walletId);
+                        const dstWal = t.transferToWalletId
+                          ? wallets.find((w) => w.id === t.transferToWalletId)
+                          : undefined;
+                        const isSelected = selectedIds.has(t.id);
+                        const isSwiped = swipedId === t.id;
+                        const displayType = getTransactionDisplayType(t);
+                        const isIncome = displayType === "income";
+                        const isTransfer = displayType === "transfer";
+                        const categoryLabel = getCompactCategoryName(cat);
 
-                      {/* Note + icon */}
-                      <div className="flex items-center gap-3.5">
-                        <div
-                          className={
-                            "flex size-11 shrink-0 items-center justify-center rounded-2xl " +
-                            (isIncome
-                              ? "bg-emerald-100 text-emerald-600"
-                              : isTransfer
-                                ? "bg-blue-100 text-blue-600"
-                                : "bg-rose-100 text-rose-600")
-                          }
-                        >
-                          {isIncome ? (
-                            <ArrowUpRight size={18} strokeWidth={2.5} />
-                          ) : isTransfer ? (
-                            <ArrowLeftRight size={18} strokeWidth={2.5} />
-                          ) : (
-                            <ArrowDownRight size={18} strokeWidth={2.5} />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="max-w-50 truncate text-sm font-bold text-slate-900">
-                            {t.note}
-                          </p>
-                          <p className="mt-0.5 text-xs text-slate-400 lg:hidden">
-                            {isTransfer
-                              ? (wal?.name ?? "—") +
-                                " → " +
-                                (dstWal?.name ?? "—")
-                              : (cat?.name ?? "—") +
-                                " · " +
-                                (wal?.name ?? "—")}{" "}
-                            · {t.date}
-                          </p>
-                        </div>
-                      </div>
+                        return (
+                          <div key={t.id} className="relative overflow-hidden">
+                            {/* Swipe actions — mobile only */}
+                            <div
+                              className={
+                                "absolute inset-y-0 right-0 z-10 flex items-center gap-2 bg-white px-4 transition-transform duration-200 lg:hidden " +
+                                (isSwiped
+                                  ? "translate-x-0"
+                                  : "translate-x-full")
+                              }
+                            >
+                              <button
+                                onClick={() => {
+                                  openEditForm(t);
+                                  setSwipedId(null);
+                                }}
+                                className="flex size-10 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 transition-all active:scale-90"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDelete(t.id);
+                                  setSwipedId(null);
+                                }}
+                                className="flex size-10 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 transition-all active:scale-90"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
 
-                      {/* Category pill (desktop) */}
-                      <div className="hidden lg:block">
-                        {isTransfer ? (
-                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                            Chuyển khoản
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                            {cat?.name ?? "—"}
-                          </span>
-                        )}
-                      </div>
+                            <div
+                              className={
+                                "grid gap-3 border-l-4 px-4 py-4 transition-all duration-200 hover:bg-blue-50/40 sm:px-6 lg:grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] lg:items-center " +
+                                getTransactionAccentClass(t) +
+                                " " +
+                                (isSelected ? "bg-blue-50" : "bg-white") +
+                                " " +
+                                (isSwiped
+                                  ? "-translate-x-24 lg:translate-x-0"
+                                  : "")
+                              }
+                              onTouchStart={(e) => {
+                                touchStartX.current = e.touches[0].clientX;
+                              }}
+                              onTouchEnd={(e) => {
+                                const delta =
+                                  touchStartX.current -
+                                  e.changedTouches[0].clientX;
+                                if (delta > 55) setSwipedId(t.id);
+                                else if (delta < -25) setSwipedId(null);
+                              }}
+                            >
+                              {/* Checkbox (desktop) */}
+                              <div className="hidden items-center lg:flex">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelect(t.id)}
+                                  className="h-4 w-4 cursor-pointer rounded border-slate-300"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
 
-                      {/* Wallet badge (desktop) */}
-                      <div className="hidden lg:block">
-                        {isTransfer ? (
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                            {wal?.name ?? "—"} → {dstWal?.name ?? "—"}
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-                            {wal?.name ?? "—"}
-                          </span>
-                        )}
-                      </div>
+                              {/* Note + icon */}
+                              <div className="flex min-w-0 items-center gap-3.5">
+                                <div
+                                  className={
+                                    "flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-sm " +
+                                    (isIncome
+                                      ? "bg-emerald-100 text-emerald-600"
+                                      : isTransfer
+                                        ? "bg-indigo-100 text-indigo-600"
+                                        : "bg-rose-100 text-rose-600")
+                                  }
+                                >
+                                  {isIncome ? (
+                                    <ArrowUpRight size={18} strokeWidth={2.5} />
+                                  ) : isTransfer ? (
+                                    <ArrowLeftRight
+                                      size={18}
+                                      strokeWidth={2.5}
+                                    />
+                                  ) : (
+                                    <ArrowDownRight
+                                      size={18}
+                                      strokeWidth={2.5}
+                                    />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="max-w-[260px] truncate text-sm font-black text-slate-900">
+                                    {getTransactionDisplayNote(t)}
+                                  </p>
+                                  <p className="mt-0.5 truncate text-xs font-medium text-slate-400 lg:hidden">
+                                    {isTransfer
+                                      ? getTransferWalletLabel(
+                                          t,
+                                          wal?.name,
+                                          dstWal?.name,
+                                        ).title
+                                      : categoryLabel.primary +
+                                        " · " +
+                                        (wal?.name ?? "—")}{" "}
+                                    · {formatTransactionDayLabel(t.date)}{" "}
+                                    {formatTransactionTime(t)}
+                                  </p>
+                                </div>
+                              </div>
 
-                      {/* Date badge (desktop) */}
-                      <div className="hidden lg:block">
-                        <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs text-slate-400">
-                          {t.date}
-                        </span>
-                      </div>
+                              {/* Category pill (desktop) */}
+                              <div className="hidden lg:block">
+                                {isTransfer ? (
+                                  <span className="inline-flex max-w-full items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                                    Chuyển tiền
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex max-w-full items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700"
+                                    title={cat?.name ?? ""}
+                                  >
+                                    <span className="max-w-[86px] truncate">
+                                      {categoryLabel.primary}
+                                    </span>
+                                    {categoryLabel.extraCount > 0 && (
+                                      <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-blue-600 ring-1 ring-blue-100">
+                                        +{categoryLabel.extraCount}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
 
-                      {/* Amount (desktop) */}
-                      <div
-                        className={
-                          "hidden text-base font-black lg:block " +
-                          (isIncome
-                            ? "text-emerald-600"
-                            : isTransfer
-                              ? "text-blue-600"
-                              : "text-rose-500")
-                        }
-                      >
-                        {isIncome ? "+" : isTransfer ? "⇄" : "−"}
-                        {formatVND(t.amount)}
-                      </div>
+                              {/* Wallet badge (desktop) */}
+                              <div className="hidden min-w-0 lg:block">
+                                {isTransfer ? (
+                                  <span
+                                    className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600"
+                                    title={
+                                      getTransferWalletLabel(
+                                        t,
+                                        wal?.name,
+                                        dstWal?.name,
+                                      ).title
+                                    }
+                                  >
+                                    <span className="max-w-[64px] truncate">
+                                      {
+                                        getTransferWalletLabel(
+                                          t,
+                                          wal?.name,
+                                          dstWal?.name,
+                                        ).from
+                                      }
+                                    </span>
+                                    <span className="px-1 text-slate-300">
+                                      →
+                                    </span>
+                                    <span className="max-w-[64px] truncate">
+                                      {
+                                        getTransferWalletLabel(
+                                          t,
+                                          wal?.name,
+                                          dstWal?.name,
+                                        ).to
+                                      }
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600"
+                                    title={wal?.name ?? ""}
+                                  >
+                                    <span className="max-w-[128px] truncate">
+                                      {wal?.name ?? "—"}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
 
-                      {/* Actions (desktop) */}
-                      <div className="hidden items-center justify-end gap-1.5 lg:flex">
-                        <button
-                          onClick={() => openEditForm(t)}
-                          className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(t.id)}
-                          className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                              {/* Time badge (desktop) */}
+                              <div className="hidden lg:block">
+                                <span className="rounded-full border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-400">
+                                  {formatTransactionTime(t)}
+                                </span>
+                              </div>
 
-                      {/* Mobile: amount + actions row */}
-                      <div className="flex items-center justify-between lg:hidden">
-                        <span
-                          className={
-                            "text-base font-black " +
-                            (isIncome
-                              ? "text-emerald-600"
-                              : isTransfer
-                                ? "text-blue-600"
-                                : "text-rose-500")
-                          }
-                        >
-                          {isIncome ? "+" : isTransfer ? "⇄" : "−"}
-                          {formatVND(t.amount)}
-                        </span>
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => openEditForm(t)}
-                            className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(t.id)}
-                            className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
+                              {/* Amount (desktop) */}
+                              <div
+                                className={
+                                  "hidden text-right text-base font-black lg:block " +
+                                  getTransactionAmountColorClass(t)
+                                }
+                              >
+                                {getTransactionAmountPrefix(t)}
+                                {formatVND(t.amount)}
+                              </div>
+
+                              {/* Actions (desktop) */}
+                              <div className="hidden items-center justify-end gap-1.5 lg:flex">
+                                <button
+                                  onClick={() => openEditForm(t)}
+                                  className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                                  title="Sửa"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(t.id)}
+                                  className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                                  title="Xóa"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+
+                              {/* Mobile: amount + actions row */}
+                              <div className="flex items-center justify-between lg:hidden">
+                                <span
+                                  className={
+                                    "text-base font-black " +
+                                    getTransactionAmountColorClass(t)
+                                  }
+                                >
+                                  {getTransactionAmountPrefix(t)}
+                                  {formatVND(t.amount)}
+                                </span>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => openEditForm(t)}
+                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(t.id)}
+                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -1657,10 +2442,10 @@ export default function TransactionsPage() {
             )}
             {timelineGroups.map(({ date, txns }) => {
               const dayInc = txns
-                .filter((t) => t.type === "income")
+                .filter((t) => getTransactionDisplayType(t) === "income")
                 .reduce((s, t) => s + t.amount, 0);
               const dayExp = txns
-                .filter((t) => t.type === "expense")
+                .filter((t) => getTransactionDisplayType(t) === "expense")
                 .reduce((s, t) => s + t.amount, 0);
               return (
                 <div key={date}>
@@ -1697,8 +2482,9 @@ export default function TransactionsPage() {
                     const tDstWal = t.transferToWalletId
                       ? wallets.find((w) => w.id === t.transferToWalletId)
                       : undefined;
-                    const isIncome = t.type === "income";
-                    const isTransferRow = t.type === "transfer";
+                    const displayType = getTransactionDisplayType(t);
+                    const isIncome = displayType === "income";
+                    const isTransferRow = displayType === "transfer";
                     return (
                       <div
                         key={t.id}
@@ -1724,27 +2510,25 @@ export default function TransactionsPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-bold text-slate-900">
-                            {t.note}
+                            {getTransactionDisplayNote(t)}
                           </p>
                           <p className="mt-0.5 text-xs text-slate-400">
                             {isTransferRow
-                              ? (wal?.name ?? "—") +
-                                " → " +
-                                (tDstWal?.name ?? "—")
+                              ? getTransferWalletLabel(
+                                  t,
+                                  wal?.name,
+                                  tDstWal?.name,
+                                ).title
                               : (cat?.name ?? "—") + " · " + (wal?.name ?? "—")}
                           </p>
                         </div>
                         <span
                           className={
                             "shrink-0 text-base font-black " +
-                            (isIncome
-                              ? "text-emerald-600"
-                              : isTransferRow
-                                ? "text-blue-600"
-                                : "text-rose-500")
+                            getTransactionAmountColorClass(t)
                           }
                         >
-                          {isIncome ? "+" : isTransferRow ? "⇄" : "−"}
+                          {getTransactionAmountPrefix(t)}
                           {formatVND(t.amount)}
                         </span>
                         <div className="flex shrink-0 gap-1">
@@ -1774,118 +2558,113 @@ export default function TransactionsPage() {
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
         <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">
-                  {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
-                </h2>
-                <p className="mt-0.5 text-sm text-slate-400">
-                  Nhập thông tin khoản thu hoặc chi.
-                </p>
+            <div className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                    {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-slate-400">
+                    Nhập nhanh, kiểm tra số dư và lưu giao dịch.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
+                >
+                  <X size={17} />
+                </button>
               </div>
-              <button
-                onClick={() => setIsFormOpen(false)}
-                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
-              >
-                <X size={16} />
-              </button>
             </div>
 
             <form
+              id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-6"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pb-7"
             >
-              {/* Type selector — segmented control */}
+              {/* Type selector — premium segmented control */}
               <div className="mb-5">
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
-                <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 sm:grid-cols-3 lg:grid-cols-5">
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange("income")}
-                    className={
-                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.formMode === "income"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800")
-                    }
-                  >
-                    ↑ Thu
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange("expense")}
-                    className={
-                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.formMode === "expense"
-                        ? "bg-rose-500 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800")
-                    }
-                  >
-                    ↓ Chi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange("saving")}
-                    className={
-                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.formMode === "saving"
-                        ? "bg-cyan-500 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800")
-                    }
-                  >
-                    ◇ Tiết kiệm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange("investment")}
-                    className={
-                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.formMode === "investment"
-                        ? "bg-violet-500 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800")
-                    }
-                  >
-                    ▣ Đầu tư
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTypeChange("transfer")}
-                    className={
-                      "rounded-xl py-2.5 text-sm font-bold transition-all " +
-                      (form.formMode === "transfer"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-500 hover:text-slate-800")
-                    }
-                  >
-                    ⇄ Chuyển
-                  </button>
+                <div className="grid grid-cols-5 gap-1 rounded-[1.35rem] border border-slate-200 bg-slate-50 p-1.5">
+                  {[
+                    {
+                      mode: "income" as TransactionFormMode,
+                      icon: "↑",
+                      label: "Thu",
+                      active: "bg-emerald-500",
+                    },
+                    {
+                      mode: "expense" as TransactionFormMode,
+                      icon: "↓",
+                      label: "Chi",
+                      active: "bg-rose-500",
+                    },
+                    {
+                      mode: "saving" as TransactionFormMode,
+                      icon: "◇",
+                      label: "Tiết kiệm",
+                      active: "bg-cyan-500",
+                    },
+                    {
+                      mode: "investment" as TransactionFormMode,
+                      icon: "▣",
+                      label: "Đầu tư",
+                      active: "bg-violet-500",
+                    },
+                    {
+                      mode: "transfer" as TransactionFormMode,
+                      icon: "⇄",
+                      label: "Chuyển",
+                      active: "bg-blue-600",
+                    },
+                  ].map((item) => {
+                    const active = form.formMode === item.mode;
+                    return (
+                      <button
+                        key={item.mode}
+                        type="button"
+                        onClick={() => handleTypeChange(item.mode)}
+                        className={
+                          "flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 text-center text-xs font-black transition-all active:scale-[.98] " +
+                          (active
+                            ? item.active + " text-white shadow-lg"
+                            : "text-slate-500 hover:bg-white hover:text-slate-800")
+                        }
+                      >
+                        <span className="text-lg leading-none">
+                          {item.icon}
+                        </span>
+                        <span className="leading-tight">{item.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Amount — prominent input */}
+              {/* Amount — hero input */}
               <div className="mb-4">
-                <p className="mb-2 text-sm font-black text-slate-700">
-                  Số tiền
-                </p>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-black text-slate-700">Số tiền</p>
+                  {modalAmount > 0 && (
+                    <p className={"text-xs font-black " + modalAccent.text}>
+                      {formatVND(modalAmount)}
+                    </p>
+                  )}
+                </div>
                 <div
                   className={
-                    "relative rounded-2xl border-2 transition-colors " +
-                    (form.formMode === "income"
-                      ? "border-emerald-200 focus-within:border-emerald-400"
-                      : form.formMode === "transfer"
-                        ? "border-blue-200 focus-within:border-blue-400"
-                        : form.formMode === "saving"
-                          ? "border-cyan-200 focus-within:border-cyan-400"
-                          : form.formMode === "investment"
-                            ? "border-violet-200 focus-within:border-violet-400"
-                            : "border-rose-200 focus-within:border-rose-400")
+                    "relative rounded-[1.35rem] border-2 bg-white transition-colors " +
+                    modalAccent.border +
+                    " " +
+                    modalAccent.focus
                   }
                 >
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg font-black text-slate-400">
+                  <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">
                     ₫
                   </span>
                   <input
@@ -1898,120 +2677,220 @@ export default function TransactionsPage() {
                         amount: parseCurrencyInput(e.target.value),
                       }))
                     }
-                    placeholder="0"
-                    className="w-full rounded-2xl bg-transparent py-4 pl-10 pr-4 text-xl font-black text-slate-900 outline-none placeholder:text-slate-300"
+                    placeholder="Nhập số tiền"
+                    className="w-full rounded-[1.35rem] bg-transparent py-5 pl-12 pr-5 text-3xl font-black tracking-tight text-slate-900 outline-none placeholder:text-lg placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300"
                   />
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {amountQuickActions.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, amount: String(value) }))
+                      }
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                    >
+                      {value >= 1000000
+                        ? value / 1000000 + "tr"
+                        : value / 1000 + "k"}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-[0.8fr_1.2fr]">
                 <FormInput
                   label="Ngày"
                   type="date"
                   value={form.date}
                   onChange={(v) => setForm((p) => ({ ...p, date: v }))}
                 />
+
                 {form.type === "transfer" ? (
-                  <>
-                    <FormSelect
-                      label="Ví nguồn"
-                      value={form.walletId}
-                      onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
-                      options={wallets.map((w) => ({
-                        label: w.name,
-                        value: w.id,
-                      }))}
-                    />
-                    <FormSelect
-                      label="Ví đích"
-                      value={form.transferToWalletId}
-                      onChange={(v) =>
-                        setForm((p) => ({ ...p, transferToWalletId: v }))
-                      }
-                      options={wallets
-                        .filter((w) => w.id !== form.walletId)
-                        .map((w) => ({ label: w.name, value: w.id }))}
-                    />
-                  </>
+                  <FormSelect
+                    label="Ví nguồn"
+                    value={form.walletId}
+                    onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                    options={wallets.map((w) => ({
+                      label: w.name,
+                      value: w.id,
+                    }))}
+                  />
                 ) : (
-                  <>
-                    <FormSelect
-                      label="Danh mục"
-                      value={form.categoryId}
-                      onChange={(v) =>
-                        setForm((p) => ({ ...p, categoryId: v }))
-                      }
-                      options={filteredCategories.map((c) => ({
-                        label: c.name,
-                        value: c.id,
-                      }))}
-                    />
-                    <FormSelect
-                      label="Ví tiền"
-                      value={form.walletId}
-                      onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
-                      options={wallets.map((w) => ({
-                        label: w.name,
-                        value: w.id,
-                      }))}
-                    />
-                  </>
+                  <FormSelect
+                    label="Danh mục"
+                    value={form.categoryId}
+                    onChange={(v) => setForm((p) => ({ ...p, categoryId: v }))}
+                    options={filteredCategories.map((c) => ({
+                      label: c.name,
+                      value: c.id,
+                    }))}
+                  />
                 )}
-                <div className="sm:col-span-2">
+
+                {form.type === "transfer" ? (
+                  <FormSelect
+                    label="Ví đích"
+                    value={form.transferToWalletId}
+                    onChange={(v) =>
+                      setForm((p) => ({ ...p, transferToWalletId: v }))
+                    }
+                    options={wallets
+                      .filter((w) => w.id !== form.walletId)
+                      .map((w) => ({ label: w.name, value: w.id }))}
+                  />
+                ) : (
+                  <FormSelect
+                    label="Ví tiền"
+                    value={form.walletId}
+                    onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                    options={wallets.map((w) => ({
+                      label: w.name,
+                      value: w.id,
+                    }))}
+                  />
+                )}
+
+                <div
+                  className={form.type === "transfer" ? "" : "sm:col-span-1"}
+                >
                   <FormInput
                     label="Ghi chú"
                     value={form.note}
                     onChange={(v) => setForm((p) => ({ ...p, note: v }))}
                     placeholder={
                       form.type === "transfer"
-                        ? "Chuyển tiền..."
-                        : "Ăn trưa, lương tháng..."
+                        ? "Ví dụ: Chuyển qua ví chính"
+                        : "Ví dụ: Ăn trưa, lương tháng..."
                     }
                   />
                 </div>
               </div>
 
-              {/* Recurring toggle */}
-              <div className="mt-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Định kỳ</p>
-                  <p className="text-xs text-slate-400">Lặp lại tự động</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {form.isRecurring && (
-                    <select
-                      value={form.recurrence}
-                      onChange={(e) =>
-                        setForm((p) => ({
-                          ...p,
-                          recurrence: e.target.value as RecurrenceFrequency,
-                        }))
-                      }
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
-                    >
-                      <option value="daily">Hàng ngày</option>
-                      <option value="weekly">Hàng tuần</option>
-                      <option value="monthly">Hàng tháng</option>
-                      <option value="yearly">Hàng năm</option>
-                    </select>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((p) => ({ ...p, isRecurring: !p.isRecurring }))
-                    }
-                    className={
-                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
-                      (form.isRecurring ? "bg-blue-600" : "bg-slate-300")
-                    }
-                  >
+              {/* Wallet preview */}
+              {canShowWalletPreview && (
+                <div
+                  className={
+                    "mt-4 rounded-[1.35rem] border p-4 " +
+                    modalAccent.border +
+                    " " +
+                    modalAccent.soft
+                  }
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                        Wallet Preview
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {selectedWallet?.name}
+                      </p>
+                    </div>
                     <span
                       className={
-                        "inline-block size-4 transform rounded-full bg-white shadow-sm transition-transform " +
-                        (form.isRecurring ? "translate-x-6" : "translate-x-1")
+                        "rounded-full bg-white px-3 py-1 text-xs font-black shadow-sm " +
+                        modalAccent.text
                       }
-                    />
-                  </button>
+                    >
+                      {form.formMode === "income"
+                        ? "+ "
+                        : form.formMode === "transfer"
+                          ? "⇄ "
+                          : "- "}
+                      {formatVND(modalAmount)}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-slate-500">
+                        Số dư hiện tại
+                      </span>
+                      <span className="font-black text-slate-800">
+                        {formatVND(walletBefore)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-slate-500">
+                        Sau giao dịch
+                      </span>
+                      <span className={"font-black " + modalAccent.text}>
+                        {formatVND(walletAfter)}
+                      </span>
+                    </div>
+
+                    {form.formMode === "transfer" && destinationWallet && (
+                      <>
+                        <div className="my-1 border-t border-white/70" />
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-bold text-slate-500">
+                            Ví đích
+                          </span>
+                          <span className="font-black text-slate-800">
+                            {destinationWallet.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-bold text-slate-500">
+                            Sau khi nhận
+                          </span>
+                          <span className="font-black text-blue-600">
+                            {formatVND(destinationWalletAfter)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Recurring toggle */}
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <div className="flex items-center justify-between rounded-[1.35rem] border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-700">Định kỳ</p>
+                    <p className="text-xs font-medium text-slate-400">
+                      Lặp lại tự động
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {form.isRecurring && (
+                      <select
+                        value={form.recurrence}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            recurrence: e.target.value as RecurrenceFrequency,
+                          }))
+                        }
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
+                      >
+                        <option value="daily">Hàng ngày</option>
+                        <option value="weekly">Hàng tuần</option>
+                        <option value="monthly">Hàng tháng</option>
+                        <option value="yearly">Hàng năm</option>
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, isRecurring: !p.isRecurring }))
+                      }
+                      className={
+                        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
+                        (form.isRecurring ? "bg-blue-600" : "bg-slate-300")
+                      }
+                    >
+                      <span
+                        className={
+                          "inline-block size-5 transform rounded-full bg-white shadow-sm transition-transform " +
+                          (form.isRecurring ? "translate-x-6" : "translate-x-1")
+                        }
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2019,23 +2898,27 @@ export default function TransactionsPage() {
                 message={saveError}
                 onDismiss={() => setSaveError(null)}
               />
-              <div className="mt-5 flex gap-3">
+            </form>
+
+            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-18px_40px_rgba(15,23,42,0.06)] backdrop-blur sm:px-7">
+              <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
+                  form="transaction-form"
                   className={
-                    "flex-1 rounded-2xl py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-[.98] " +
-                    (form.type === "income"
-                      ? "bg-emerald-500 shadow-emerald-200 hover:bg-emerald-600"
-                      : form.type === "transfer"
-                        ? "bg-blue-600 shadow-blue-200 hover:bg-blue-700"
-                        : "bg-rose-500 shadow-rose-200 hover:bg-rose-600")
+                    "flex-1 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
+                    modalAccent.bg +
+                    " " +
+                    modalAccent.bgHover +
+                    " " +
+                    modalAccent.shadow
                   }
                 >
                   {form.id
@@ -2045,7 +2928,7 @@ export default function TransactionsPage() {
                       : "Thêm giao dịch"}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
