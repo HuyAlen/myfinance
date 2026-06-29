@@ -107,6 +107,32 @@ const TYPE_COLORS: Record<FinanceWalletType, string> = {
   investment: "#10b981",
 };
 
+type EngineTransferTransaction = Transaction & {
+  transferReferenceType?: string | null;
+  transfer_reference_type?: string | null;
+  sourceType?: string | null;
+  source_type?: string | null;
+  destinationType?: string | null;
+  destination_type?: string | null;
+};
+
+function getTransferReferenceType(transaction: Transaction) {
+  const tx = transaction as EngineTransferTransaction;
+  return tx.transferReferenceType ?? tx.transfer_reference_type ?? null;
+}
+
+function isWalletTransfer(transaction: Transaction) {
+  if (transaction.type !== "transfer") return false;
+
+  const referenceType = getTransferReferenceType(transaction);
+
+  // Old wallet-transfer rows did not have transfer_reference_type yet,
+  // but they always have transferToWalletId. Keep them visible as wallet transfers.
+  if (!referenceType) return Boolean(transaction.transferToWalletId);
+
+  return referenceType === "wallet";
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
@@ -189,7 +215,7 @@ export default function WalletsPage() {
   );
 
   const currentMonthTransfers = useMemo(
-    () => currentMonthTxns.filter((t) => t.type === "transfer"),
+    () => currentMonthTxns.filter(isWalletTransfer),
     [currentMonthTxns],
   );
 
@@ -437,46 +463,34 @@ export default function WalletsPage() {
       return;
     }
 
-    const nextFromWallet: WalletType = {
-      ...fromWallet,
-      balance: fromWallet.balance - amount,
-    };
-    const nextToWallet: WalletType = {
-      ...toWallet,
-      balance: toWallet.balance + amount,
-    };
-
-    const transaction: Transaction = {
+    const transaction = {
       id: crypto.randomUUID(),
       type: "transfer",
       amount,
-      categoryId: "",
+      categoryId: "wallet-transfer",
       walletId: fromWallet.id,
       transferToWalletId: toWallet.id,
       note:
         transferForm.note.trim() ||
         `Chuyển tiền từ ${fromWallet.name} sang ${toWallet.name}`,
       date: transferForm.date,
-    };
+      transferReferenceType: "wallet",
+      transfer_reference_type: "wallet",
+      sourceType: "wallet",
+      source_type: "wallet",
+      destinationType: "wallet",
+      destination_type: "wallet",
+    } as Transaction & EngineTransferTransaction;
 
     setSaveError(null);
 
-    const fromResult = await updateWallet(nextFromWallet);
-    if (fromResult.error) {
-      setSaveError(fromResult.error);
-      return;
-    }
-
-    const toResult = await updateWallet(nextToWallet);
-    if (toResult.error) {
-      await updateWallet(fromWallet);
-      setSaveError(toResult.error);
-      return;
-    }
-
+    // Finance Engine v2 rule:
+    // WalletsPage only creates the transfer transaction.
+    // addTransaction() is the single place that applies wallet balance effects.
+    // Do not call updateWallet() here, otherwise the source/destination balances
+    // are deducted/added twice.
     const transactionResult = await addTransaction(transaction);
     if (transactionResult.error) {
-      await Promise.all([updateWallet(fromWallet), updateWallet(toWallet)]);
       setSaveError(transactionResult.error);
       return;
     }
