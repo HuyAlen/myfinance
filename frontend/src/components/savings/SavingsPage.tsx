@@ -47,6 +47,8 @@ import {
 
 type SavingWithWallet = SavingAccount & {
   walletId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type SavingsPageProps = {
@@ -130,6 +132,8 @@ const mapSavingRowToSaving = (row: SavingRow): SavingWithWallet => ({
   interestRate: row.interest_rate ?? undefined,
   maturityDate: row.maturity_date ?? undefined,
   notes: row.notes ?? undefined,
+  createdAt: row.created_at ?? undefined,
+  updatedAt: row.updated_at ?? undefined,
 });
 
 const mapTransactionRowToTransaction = (
@@ -2003,7 +2007,7 @@ export default function SavingsPage({
           </div>
         ) : (
           <div className="overflow-hidden rounded-3xl border border-slate-100">
-            <div className="sticky top-0 z-10 hidden grid-cols-[40px_1.35fr_1fr_1fr_0.8fr_1fr_1fr_1fr_0.8fr] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500 backdrop-blur lg:grid">
+            <div className="sticky top-0 z-10 hidden grid-cols-[40px_1.25fr_0.85fr_1fr_0.8fr_0.95fr_0.95fr_0.95fr_1fr_0.75fr] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500 backdrop-blur lg:grid">
               <span>
                 <input
                   type="checkbox"
@@ -2017,6 +2021,7 @@ export default function SavingsPage({
               <span>Loại</span>
               <span>Số tiền</span>
               <span>Lãi suất</span>
+              <span>Ngày tạo</span>
               <span>Đáo hạn</span>
               <span>Tiến độ</span>
               <span>Trạng thái</span>
@@ -2031,7 +2036,7 @@ export default function SavingsPage({
                 return (
                   <article
                     key={item.id}
-                    className="grid gap-4 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[40px_1.35fr_1fr_1fr_0.8fr_1fr_1fr_1fr_0.8fr] lg:items-center"
+                    className="grid gap-4 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[40px_1.25fr_0.85fr_1fr_0.8fr_0.95fr_0.95fr_0.95fr_1fr_0.75fr] lg:items-center"
                   >
                     <div className="hidden lg:block">
                       <input
@@ -2072,6 +2077,11 @@ export default function SavingsPage({
                       {isInterestBearingSaving(item.type)
                         ? formatPercent(item.interestRate ?? 0)
                         : "-"}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
+                      <CalendarClock size={16} className="text-blue-400" />
+                      {formatDate(item.createdAt)}
                     </div>
 
                     <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
