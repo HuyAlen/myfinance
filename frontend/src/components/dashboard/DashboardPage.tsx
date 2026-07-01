@@ -29,9 +29,6 @@ import {
   ArrowUpRight,
   Bot,
   Briefcase,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
   CreditCard,
   Landmark,
   PiggyBank,
@@ -297,23 +294,6 @@ const mapSavingTransactionRow = (
   createdAt: row.created_at ?? undefined,
   note: row.note ?? "Giao dịch tiết kiệm",
 });
-
-const getSavingTransactionLabel = (
-  type: DashboardSavingTransaction["type"],
-) => {
-  switch (type) {
-    case "deposit":
-      return "Nạp tiết kiệm";
-    case "withdraw":
-      return "Rút tiết kiệm";
-    case "settlement":
-      return "Tất toán tiết kiệm";
-    case "interest":
-      return "Lãi tiết kiệm";
-    default:
-      return "Giao dịch tiết kiệm";
-  }
-};
 
 function getMonthIndexFromDate(value: string | Date | null | undefined) {
   if (!value) return null;
@@ -654,14 +634,6 @@ function formatOneDecimal(value: number) {
   }).format(Math.round(value * 10) / 10);
 }
 
-function formatMonthValue(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, "0")}`;
-}
-
-function formatMonthLabel(year: number, month: number) {
-  return `${String(month).padStart(2, "0")}/${year}`;
-}
-
 function clampScore(value: number) {
   return Math.max(0, Math.min(Math.round(value), 100));
 }
@@ -982,24 +954,6 @@ export default function DashboardPage() {
     const now = new Date();
     return now.getFullYear() === selectedYear ? now.getMonth() + 1 : 12;
   }, [dateRange.startDate, selectedYear]);
-
-  const selectedMonthLabel = useMemo(
-    () => formatMonthLabel(selectedYear, selectedMonth),
-    [selectedMonth, selectedYear],
-  );
-
-  const navigateDashboardMonth = useCallback(
-    (offset: number) => {
-      const targetDate = new Date(selectedYear, selectedMonth - 1 + offset, 1);
-      const targetMonth = formatMonthValue(
-        targetDate.getFullYear(),
-        targetDate.getMonth() + 1,
-      );
-
-      router.push(`?month=${targetMonth}`);
-    },
-    [router, selectedMonth, selectedYear],
-  );
 
   const firstNetWorthDataMonth = useMemo(() => {
     const transactionMonths = transactions

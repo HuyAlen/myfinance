@@ -432,7 +432,6 @@ export default function Header({
     setSelectedQuarter,
     setSelectedYearFilter,
     setCustomRange,
-    filterLabel,
     dateRange,
   } = useDateFilter();
 

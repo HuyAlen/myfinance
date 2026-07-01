@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   Area,
   AreaChart,
@@ -30,6 +31,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  WalletCards,
   TrendingDown,
   TrendingUp,
   Zap,
@@ -43,6 +45,7 @@ import type {
   Investment,
   Transaction,
   Wallet,
+  SavingAccount,
 } from "@/src/types/finance";
 import {
   getBudgets,
@@ -58,7 +61,6 @@ import {
   formatVND,
   getDebtRatio,
   getGoalEffectiveCurrentAmount,
-  getGoalEffectiveProgress,
   getGoalScore,
   getTotalAssets,
   getTotalDebt,
@@ -94,6 +96,166 @@ const INV_TYPE_LABEL: Record<string, string> = {
   gold: "Vàng",
   other: "Khác",
 };
+
+type SavingRow = {
+  id: string;
+  name: string;
+  type?: SavingAccount["type"] | string | null;
+  balance?: number | string | null;
+  principal?: number | string | null;
+  principal_amount?: number | string | null;
+  initial_amount?: number | string | null;
+  opening_amount?: number | string | null;
+  deposit_amount?: number | string | null;
+  interest_rate?: number | string | null;
+  maturity_date?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+};
+
+type ReportSaving = SavingAccount & {
+  principal?: number;
+  initialAmount?: number;
+  createdAt?: string;
+};
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const financeSupabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
+
+function toNumber(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getSavingPrincipal(row: SavingRow | ReportSaving): number {
+  const source = row as SavingRow & ReportSaving;
+  return toNumber(
+    source.principal ??
+      source.principal_amount ??
+      source.initialAmount ??
+      source.initial_amount ??
+      source.opening_amount ??
+      source.deposit_amount ??
+      source.balance,
+  );
+}
+
+function getSavingBalance(row: ReportSaving): number {
+  return toNumber(row.balance);
+}
+
+function mapSavingRow(row: SavingRow): ReportSaving {
+  const principal = getSavingPrincipal(row);
+  return {
+    id: row.id,
+    name: row.name,
+    type: (row.type ?? "saving") as SavingAccount["type"],
+    balance: toNumber(row.balance),
+    principal,
+    initialAmount: principal,
+    interestRate:
+      row.interest_rate === null || row.interest_rate === undefined
+        ? undefined
+        : toNumber(row.interest_rate),
+    maturityDate: row.maturity_date ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at ?? undefined,
+  };
+}
+
+function formatCompactVND(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000_000_000) {
+    return sign + (abs / 1_000_000_000).toFixed(1).replace(".0", "") + "B đ";
+  }
+  if (abs >= 1_000_000) {
+    return sign + (abs / 1_000_000).toFixed(1).replace(".0", "") + "M đ";
+  }
+  if (abs >= 1_000) {
+    return sign + Math.round(abs / 1_000) + "K đ";
+  }
+  return formatVND(value);
+}
+
+function formatMillionTooltip(value: unknown): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "0 đ";
+  return formatVND(Math.round(n * 1_000_000));
+}
+
+function normalizeReportText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+function getSupabaseSavingAmountForReportGoal(
+  goal: Goal,
+  savingRows: ReportSaving[],
+) {
+  const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
+  const selectedSavingsAmount = savingRows.reduce((sum, saving) => {
+    if (!linkedSavingIds.has(saving.id)) return sum;
+    return sum + getSavingBalance(saving);
+  }, 0);
+
+  if (selectedSavingsAmount > 0) return selectedSavingsAmount;
+
+  const goalName = normalizeReportText(goal.name);
+  return savingRows.reduce((sum, saving) => {
+    const savingName = normalizeReportText(saving.name);
+    const isEmergencyGoal =
+      goalName.includes("khan cap") ||
+      goalName.includes("emergency") ||
+      goalName.includes("du phong");
+    const isEmergencySaving = saving.type === "emergency_fund";
+    const isNameMatched =
+      goalName.length > 0 &&
+      savingName.length > 0 &&
+      (goalName.includes(savingName) || savingName.includes(goalName));
+
+    if ((isEmergencyGoal && isEmergencySaving) || isNameMatched) {
+      return sum + getSavingBalance(saving);
+    }
+    return sum;
+  }, 0);
+}
+
+function isDateInPeriod(
+  dateValue: string | undefined | null,
+  mode: PeriodMode,
+  year: string,
+  month: string,
+  quarter: string,
+  customStart: string,
+  customEnd: string,
+): boolean {
+  if (!dateValue) return false;
+  const date = dateValue.slice(0, 10);
+  switch (mode) {
+    case "month":
+      return date.startsWith(year + "-" + month);
+    case "quarter": {
+      const q = Number(quarter);
+      const months = [0, 1, 2].map((offset) =>
+        String((q - 1) * 3 + 1 + offset).padStart(2, "0"),
+      );
+      return months.some((m) => date.startsWith(year + "-" + m));
+    }
+    case "year":
+      return date.startsWith(year);
+    case "custom":
+      return date >= customStart && date <= customEnd;
+  }
+}
 
 // ─── Period helpers (preserved) ───────────────────────────────────────────────
 type PeriodMode = "month" | "quarter" | "year" | "custom";
@@ -275,16 +437,6 @@ function getInvestmentCapitalTotal(
   );
 }
 
-function getFutureAllocationTotal(
-  transactions: Transaction[],
-  categories: Category[],
-): number {
-  return (
-    getSavingCapitalTotal(transactions, categories) +
-    getInvestmentCapitalTotal(transactions, categories)
-  );
-}
-
 function getRealSpendingByCategory(
   transactions: Transaction[],
   categories: Category[],
@@ -319,6 +471,7 @@ export default function ReportsPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [savings, setSavings] = useState<ReportSaving[]>([]);
 
   // Period filter state (preserved)
   const [periodMode, setPeriodMode] = useState<PeriodMode>("year");
@@ -337,15 +490,23 @@ export default function ReportsPage() {
   useEffect(() => {
     async function load() {
       await initFinanceDemoData();
-      const [w, inv, cat, txn, dbt, gls, bdg] = await Promise.all([
-        getWallets(),
-        getInvestments(),
-        getCategories(),
-        getTransactions(),
-        getDebts(),
-        getGoals(),
-        getBudgets(),
-      ]);
+      const [w, inv, cat, txn, dbt, gls, bdg, savingResult] = await Promise.all(
+        [
+          getWallets(),
+          getInvestments(),
+          getCategories(),
+          getTransactions(),
+          getDebts(),
+          getGoals(),
+          getBudgets(),
+          financeSupabase
+            ? financeSupabase
+                .from("savings")
+                .select("*")
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ],
+      );
       setWallets(w);
       setInvestments(inv);
       setCategories(cat);
@@ -353,6 +514,11 @@ export default function ReportsPage() {
       setDebts(dbt);
       setGoals(gls);
       setBudgets(bdg);
+      if (!savingResult.error) {
+        setSavings(
+          ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
+        );
+      }
     }
     load();
   }, []);
@@ -376,7 +542,27 @@ export default function ReportsPage() {
   const summary = useMemo(() => {
     const income = getTotalIncome(filtered);
     const expense = getRealExpenseTotal(filtered, categories);
-    const savingAllocation = getSavingCapitalTotal(filtered, categories);
+    const savingAllocationFromTransactions = getSavingCapitalTotal(
+      filtered,
+      categories,
+    );
+    const savingAllocationFromSavings = savings
+      .filter((saving) =>
+        isDateInPeriod(
+          saving.createdAt,
+          periodMode,
+          year,
+          month,
+          quarter,
+          customStart,
+          customEnd,
+        ),
+      )
+      .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
+    const savingAllocation =
+      savingAllocationFromSavings > 0
+        ? savingAllocationFromSavings
+        : savingAllocationFromTransactions;
     const investmentAllocation = getInvestmentCapitalTotal(
       filtered,
       categories,
@@ -391,7 +577,11 @@ export default function ReportsPage() {
       0,
     );
     const walletAssets = getTotalAssets(wallets);
-    const totalAssets = walletAssets + investmentAssets;
+    const savingAssets = savings.reduce(
+      (sum, saving) => sum + getSavingBalance(saving),
+      0,
+    );
+    const totalAssets = walletAssets + savingAssets + investmentAssets;
     const totalDebt = getTotalDebt(debts);
     const netWorth = totalAssets - totalDebt;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
@@ -410,10 +600,27 @@ export default function ReportsPage() {
       totalDebt,
       netWorth,
       investmentAssets,
+      savingAssets,
       debtRatio,
       goalScore,
     };
-  }, [filtered, categories, wallets, investments, debts, goals]);
+  }, [
+    filtered,
+    categories,
+    wallets,
+    investments,
+    debts,
+    goals,
+    savings,
+    periodMode,
+    year,
+    month,
+    quarter,
+    customStart,
+    customEnd,
+  ]);
+
+  const incomeExpenseGap = summary.income - summary.expense;
 
   // ── Monthly breakdown (preserved) ────────────────────────────────────────
   const yearTxns = useMemo(
@@ -428,16 +635,29 @@ export default function ReportsPage() {
         const mx = yearTxns.filter((t) => t.date.startsWith(year + "-" + m));
         const inc = getTotalIncome(mx);
         const exp = getRealExpenseTotal(mx, categories);
-        const savingCapital = getSavingCapitalTotal(mx, categories);
+        const savingCapitalFromTransactions = getSavingCapitalTotal(
+          mx,
+          categories,
+        );
+        const savingCapitalFromSavings = savings
+          .filter((saving) =>
+            (saving.createdAt ?? "").startsWith(year + "-" + m),
+          )
+          .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
+        const savingCapital =
+          savingCapitalFromSavings > 0
+            ? savingCapitalFromSavings
+            : savingCapitalFromTransactions;
         const investmentCapital = getInvestmentCapitalTotal(mx, categories);
         const futureAllocation = savingCapital + investmentCapital;
         return {
           month: "T" + (i + 1),
           thu: inc / 1e6,
           chi: exp / 1e6,
-          tietKiem: (inc - exp) / 1e6,
-          tichLuy: futureAllocation / 1e6,
+          tietKiem: savingCapital / 1e6,
           dauTu: investmentCapital / 1e6,
+          tichLuy: futureAllocation / 1e6,
+          dongTienRong: (inc - exp) / 1e6,
           income: inc,
           expense: exp,
           savingAllocation: savingCapital,
@@ -446,7 +666,7 @@ export default function ReportsPage() {
           cashFlow: inc - exp,
         };
       }),
-    [yearTxns, year, categories],
+    [yearTxns, year, categories, savings],
   );
 
   // ── Spending breakdown (preserved) ────────────────────────────────────────
@@ -605,6 +825,105 @@ export default function ReportsPage() {
       .filter((d) => d.value > 0);
   }, [investments]);
 
+  // ── Professional report center data ───────────────────────────────────────
+  const monthlyAverages = useMemo(() => {
+    const monthsWithData = monthly.filter(
+      (m) => m.income > 0 || m.expense > 0 || m.futureAllocation > 0,
+    );
+    const divisor = Math.max(monthsWithData.length, 1);
+    return {
+      income: monthsWithData.reduce((sum, m) => sum + m.income, 0) / divisor,
+      expense: monthsWithData.reduce((sum, m) => sum + m.expense, 0) / divisor,
+      cashFlow:
+        monthsWithData.reduce((sum, m) => sum + m.cashFlow, 0) / divisor,
+      allocation:
+        monthsWithData.reduce((sum, m) => sum + m.futureAllocation, 0) /
+        divisor,
+      months: monthsWithData.length,
+    };
+  }, [monthly]);
+
+  const assetAllocationData = useMemo(() => {
+    const walletAssets = getTotalAssets(wallets);
+    const rows = [
+      { name: "Thanh khoản", value: walletAssets, color: "#2563eb" },
+      { name: "Tiết kiệm", value: summary.savingAssets, color: "#06b6d4" },
+      { name: "Đầu tư", value: summary.investmentAssets, color: "#8b5cf6" },
+      { name: "Nợ", value: summary.totalDebt, color: "#f43f5e" },
+    ];
+    return rows.filter((item) => item.value > 0);
+  }, [
+    wallets,
+    summary.savingAssets,
+    summary.investmentAssets,
+    summary.totalDebt,
+  ]);
+
+  const goalMeta = useMemo(
+    () =>
+      goals.map((goal) => {
+        const supabaseSavingAmount = getSupabaseSavingAmountForReportGoal(
+          goal,
+          savings,
+        );
+        const baseCurrent = getGoalEffectiveCurrentAmount({
+          goal,
+          transactions,
+        });
+        const effectiveCurrentAmount = Math.max(
+          baseCurrent,
+          toNumber(goal.currentAmount) + supabaseSavingAmount,
+        );
+        const remaining = Math.max(
+          goal.targetAmount - effectiveCurrentAmount,
+          0,
+        );
+        const pct =
+          goal.targetAmount > 0
+            ? Math.min(
+                Math.round((effectiveCurrentAmount / goal.targetAmount) * 100),
+                100,
+              )
+            : 0;
+        const suggestedMonthly =
+          remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
+        const monthsLeft =
+          suggestedMonthly > 0 ? Math.ceil(remaining / suggestedMonthly) : 0;
+        const status =
+          pct >= 100
+            ? "Hoàn thành"
+            : pct >= 75
+              ? "Gần hoàn thành"
+              : pct >= 30
+                ? "Đang tiến triển"
+                : "Đang chậm";
+        return {
+          ...goal,
+          effectiveCurrentAmount,
+          remaining,
+          pct,
+          suggestedMonthly,
+          monthsLeft,
+          status,
+        };
+      }),
+    [goals, savings, transactions],
+  );
+
+  const goalReportScore = useMemo(() => {
+    const totalTarget = goalMeta.reduce(
+      (sum, goal) => sum + goal.targetAmount,
+      0,
+    );
+    const totalCurrent = goalMeta.reduce(
+      (sum, goal) => sum + goal.effectiveCurrentAmount,
+      0,
+    );
+    return totalTarget > 0
+      ? Math.min(Math.round((totalCurrent / totalTarget) * 100), 100)
+      : 0;
+  }, [goalMeta]);
+
   // ── Export helpers (preserved) ────────────────────────────────────────────
   function exportCSV() {
     const rows = [
@@ -620,7 +939,7 @@ export default function ReportsPage() {
         String(Math.round(m.thu * 1e6)),
         String(Math.round(m.chi * 1e6)),
         String(Math.round((m.tichLuy ?? 0) * 1e6)),
-        String(Math.round(m.tietKiem * 1e6)),
+        String(Math.round(m.dongTienRong * 1e6)),
       ]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -727,20 +1046,22 @@ export default function ReportsPage() {
               icon={<Landmark size={16} />}
             />
             <KpiCard
-              label="Tổng tài sản"
-              value={formatVND(summary.totalAssets)}
-              sub={"Ví + " + investments.length + " đầu tư"}
+              label="Dòng tiền sau chi phí"
+              value={formatVND(summary.saving)}
+              sub={
+                "TB " + formatCompactVND(monthlyAverages.cashFlow) + "/tháng"
+              }
               gradient="from-indigo-500 to-indigo-600"
               iconBg="bg-indigo-400/30"
-              icon={<BriefcaseBusiness size={16} />}
+              icon={<WalletCards size={16} />}
             />
             <KpiCard
-              label="Tổng nợ"
-              value={formatVND(summary.totalDebt)}
-              sub={debts.length + " khoản nợ"}
-              gradient="from-rose-400 to-rose-500"
+              label="Tiết kiệm"
+              value={formatVND(summary.savingAssets)}
+              sub={"Phân bổ " + formatVND(summary.futureAllocation)}
+              gradient="from-emerald-500 to-teal-500"
               iconBg="bg-white/20"
-              icon={<AlertTriangle size={16} />}
+              icon={<ShieldCheck size={16} />}
             />
             <KpiCard
               label="Danh mục đầu tư"
@@ -881,6 +1202,62 @@ export default function ReportsPage() {
         ))}
       </div>
 
+      <section className="grid gap-3 xl:grid-cols-3">
+        <InsightSummaryCard
+          icon={<WalletCards size={18} />}
+          title="Tài sản & dòng tiền"
+          value={formatVND(summary.netWorth)}
+          note={
+            "Dòng tiền sau chi phí " +
+            formatVND(summary.saving) +
+            ". Đã phân bổ " +
+            formatVND(summary.futureAllocation) +
+            " vào tiết kiệm/đầu tư."
+          }
+          tone={summary.saving >= 0 ? "good" : "danger"}
+        />
+        <InsightSummaryCard
+          icon={<ShieldCheck size={18} />}
+          title="Sức khỏe tài chính"
+          value={healthV2.total + "/100"}
+          note={
+            healthV2.grade +
+            " — " +
+            healthGrade.label +
+            ". Tỷ lệ nợ " +
+            Math.round(summary.debtRatio) +
+            "% và tỷ lệ tích lũy " +
+            summary.savingRate +
+            "% ."
+          }
+          tone={
+            healthV2.total >= 75
+              ? "good"
+              : healthV2.total >= 50
+                ? "warning"
+                : "danger"
+          }
+        />
+        <InsightSummaryCard
+          icon={<Target size={18} />}
+          title="Mục tiêu"
+          value={goalReportScore + "%"}
+          note={
+            goals.length > 0
+              ? goals.length +
+                " mục tiêu đang theo dõi. Tiến độ được lấy từ Goals Page để tránh lệch dữ liệu."
+              : "Chưa có mục tiêu tài chính. Hãy tạo mục tiêu để báo cáo có dự báo rõ hơn."
+          }
+          tone={
+            goalReportScore >= 70
+              ? "good"
+              : goalReportScore >= 30
+                ? "warning"
+                : "danger"
+          }
+        />
+      </section>
+
       {/* ══════════════════════════════════════════════════════════════════
           TAB: Tổng Quan
           ══════════════════════════════════════════════════════════════════ */}
@@ -922,6 +1299,129 @@ export default function ReportsPage() {
               bg="bg-slate-50"
               border="border-slate-200"
             />
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+              <SectionHeader
+                icon={<PieChartIcon size={20} />}
+                title="Cấu trúc tài sản"
+                subtitle="Thanh khoản · Tiết kiệm · Đầu tư · Nợ"
+              />
+              <div className="mt-5 grid gap-5 lg:grid-cols-[240px_1fr]">
+                <div className="relative mx-auto h-56 w-56">
+                  {assetAllocationData.length > 0 ? (
+                    <PieChart width={224} height={224}>
+                      <Pie
+                        data={assetAllocationData}
+                        dataKey="value"
+                        innerRadius={64}
+                        outerRadius={98}
+                        paddingAngle={4}
+                      >
+                        {assetAllocationData.map((item) => (
+                          <Cell key={item.name} fill={item.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v) => [
+                          formatVND(Number(v ?? 0)),
+                          "Giá trị",
+                        ]}
+                      />
+                    </PieChart>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-full bg-slate-50 text-sm text-slate-400">
+                      Chưa có dữ liệu
+                    </div>
+                  )}
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-black text-blue-600">
+                      {formatCompactVND(summary.totalAssets)}
+                    </span>
+                    <span className="text-xs text-slate-500">Tổng tài sản</span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {assetAllocationData.map((item) => {
+                    const pct =
+                      summary.totalAssets > 0
+                        ? Math.round((item.value / summary.totalAssets) * 100)
+                        : 0;
+                    return (
+                      <div key={item.name}>
+                        <div className="mb-1 flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 font-bold text-slate-700">
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ background: item.color }}
+                            />
+                            {item.name}
+                          </span>
+                          <span className="font-black text-slate-900">
+                            {formatVND(item.value)}
+                          </span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-100">
+                          <div
+                            className="h-2.5 rounded-full"
+                            style={{ width: pct + "%", background: item.color }}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {pct}% tổng tài sản
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+              <SectionHeader
+                icon={<Brain size={20} />}
+                title="Executive Summary"
+                subtitle="Điểm chính cần chú ý trong kỳ"
+              />
+              <div className="mt-5 grid gap-3">
+                <ReportSignal
+                  label="Dòng tiền"
+                  value={formatVND(incomeExpenseGap)}
+                  note={
+                    incomeExpenseGap >= 0
+                      ? "Thu nhập đang lớn hơn chi phí thật."
+                      : "Chi phí thật đang vượt thu nhập."
+                  }
+                  tone={incomeExpenseGap >= 0 ? "good" : "danger"}
+                />
+                <ReportSignal
+                  label="Tích lũy tương lai"
+                  value={formatVND(summary.futureAllocation)}
+                  note="Gồm tiền đưa vào tiết kiệm và đầu tư trong kỳ."
+                  tone={summary.futureAllocation > 0 ? "good" : "warning"}
+                />
+                <ReportSignal
+                  label="Mục tiêu ưu tiên"
+                  value={
+                    goalMeta.length
+                      ? (goalMeta.sort((a, b) => a.pct - b.pct)[0]?.name ??
+                        "Không có")
+                      : "Chưa có"
+                  }
+                  note={
+                    goalMeta.length
+                      ? "Mục tiêu có tiến độ thấp nhất cần được ưu tiên."
+                      : "Tạo mục tiêu để báo cáo có kế hoạch rõ hơn."
+                  }
+                  tone={
+                    goalMeta.length && goalMeta.some((goal) => goal.pct < 30)
+                      ? "warning"
+                      : "good"
+                  }
+                />
+              </div>
+            </div>
           </section>
 
           {/* Trend sparklines */}
@@ -970,12 +1470,7 @@ export default function ReportsPage() {
               <TrendCard
                 title="Mục tiêu"
                 color="#6366f1"
-                data={goals.map((g) => ({
-                  v: getGoalEffectiveProgress({
-                    goal: g,
-                    transactions,
-                  }),
-                }))}
+                data={goalMeta.map((g) => ({ v: g.pct }))}
                 unit="%"
                 positive
               />
@@ -1080,11 +1575,11 @@ export default function ReportsPage() {
                     fontSize={11}
                   />
                   <YAxis axisLine={false} tickLine={false} fontSize={11} />
-                  <Tooltip />
+                  <Tooltip formatter={(value) => formatMillionTooltip(value)} />
                   <Area
                     type="monotone"
                     dataKey="thu"
-                    name="Thu nhập (M)"
+                    name="Thu nhập"
                     stroke="#10b981"
                     strokeWidth={2.5}
                     fill="url(#incGrad)"
@@ -1092,10 +1587,18 @@ export default function ReportsPage() {
                   <Area
                     type="monotone"
                     dataKey="chi"
-                    name="Chi tiêu (M)"
+                    name="Chi tiêu"
                     stroke="#f43f5e"
                     strokeWidth={2.5}
                     fill="url(#expGrad)"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="dongTienRong"
+                    name="Dòng tiền ròng"
+                    stroke="#f59e0b"
+                    strokeWidth={2.5}
+                    dot={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -1107,6 +1610,10 @@ export default function ReportsPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-rose-500" />
                   Chi tiêu (M)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-amber-500" />
+                  Dòng tiền ròng (M)
                 </span>
               </div>
             </div>
@@ -1307,8 +1814,16 @@ export default function ReportsPage() {
                     tickLine={false}
                     fontSize={11}
                   />
-                  <YAxis axisLine={false} tickLine={false} fontSize={11} />
-                  <Tooltip />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    fontSize={11}
+                    tickFormatter={(value) => String(value) + "M"}
+                  />
+                  <Tooltip
+                    formatter={(value) => formatMillionTooltip(value)}
+                    labelFormatter={(label) => String(label)}
+                  />
                   <Bar
                     dataKey="thu"
                     name="Thu nhập"
@@ -1403,23 +1918,31 @@ export default function ReportsPage() {
                       tickLine={false}
                       fontSize={11}
                     />
-                    <YAxis axisLine={false} tickLine={false} fontSize={11} />
-                    <Tooltip />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      fontSize={11}
+                      tickFormatter={(value) => String(value) + "M"}
+                    />
+                    <Tooltip
+                      formatter={(value) => formatMillionTooltip(value)}
+                      labelFormatter={(label) => String(label)}
+                    />
                     <Bar
                       dataKey="thu"
-                      name="Thu nhập (M)"
+                      name="Thu nhập"
                       fill="#10b981"
                       radius={[6, 6, 0, 0]}
                     />
                     <Bar
                       dataKey="chi"
-                      name="Chi tiêu (M)"
+                      name="Chi tiêu"
                       fill="#f43f5e"
                       radius={[6, 6, 0, 0]}
                     />
                     <Bar
                       dataKey="tietKiem"
-                      name="Tiết kiệm (M)"
+                      name="Tiết kiệm"
                       fill="#2563eb"
                       radius={[6, 6, 0, 0]}
                     />
@@ -1475,12 +1998,12 @@ export default function ReportsPage() {
                             <td
                               className={
                                 "py-1.5 text-right font-bold " +
-                                (m.tietKiem >= 0
+                                (m.dongTienRong >= 0
                                   ? "text-blue-600"
                                   : "text-rose-500")
                               }
                             >
-                              {m.tietKiem.toFixed(1)}
+                              {m.dongTienRong.toFixed(1)}
                             </td>
                           </tr>
                         ))}
@@ -1848,27 +2371,15 @@ export default function ReportsPage() {
             subtitle="Trạng thái từng mục tiêu tài chính"
           />
           <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {goals.length === 0 ? (
+            {goalMeta.length === 0 ? (
               <p className="col-span-3 py-6 text-center text-sm text-slate-400">
                 Chưa có mục tiêu nào.
               </p>
             ) : (
-              goals.map((g) => {
-                const effectiveCurrentAmount = getGoalEffectiveCurrentAmount({
-                  goal: g,
-                  transactions,
-                });
-                const remainingAmount = Math.max(
-                  g.targetAmount - effectiveCurrentAmount,
-                  0,
-                );
-                const pct = Math.min(
-                  getGoalEffectiveProgress({
-                    goal: g,
-                    transactions,
-                  }),
-                  100,
-                );
+              goalMeta.map((g) => {
+                const effectiveCurrentAmount = g.effectiveCurrentAmount;
+                const remainingAmount = g.remaining;
+                const pct = g.pct;
                 const isComplete = pct >= 100;
                 const isNear = pct >= 75;
                 return (
@@ -1915,11 +2426,22 @@ export default function ReportsPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-2 text-[10px] font-bold text-slate-400">
-                      {isComplete
-                        ? "Đã hoàn thành!"
-                        : "Còn " + formatVND(remainingAmount)}
-                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold">
+                      <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
+                        Còn lại
+                        <p className="mt-0.5 text-slate-900">
+                          {formatVND(remainingAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
+                        Góp đề xuất
+                        <p className="mt-0.5 text-blue-600">
+                          {isComplete
+                            ? "Đã xong"
+                            : formatVND(g.suggestedMonthly) + "/tháng"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 );
               })
@@ -2161,7 +2683,7 @@ export default function ReportsPage() {
                 Export Center
               </h2>
               <p className="text-xs text-slate-500">
-                Xuất báo cáo tài chính cho kỳ {label}
+                Xuất CSV/PDF cho kỳ {label} · gồm KPI, chart và dữ liệu chi tiết
               </p>
             </div>
           </div>
@@ -2281,8 +2803,9 @@ function TrendCard({
   unit: string;
   positive: boolean;
 }) {
-  const last = data.at(-1)?.v ?? 0;
-  const prev = data.at(-2)?.v ?? 0;
+  const meaningfulData = data.filter((item) => item.v !== 0);
+  const last = meaningfulData.at(-1)?.v ?? data.at(-1)?.v ?? 0;
+  const prev = meaningfulData.at(-2)?.v ?? 0;
   const delta =
     prev !== 0 ? Math.round(((last - prev) / prev) * 1000) / 10 : null;
   const up = delta !== null && delta > 0;
@@ -2399,6 +2922,71 @@ function DeltaChip({
         {up ? "+" : ""}
         {delta}%
       </p>
+    </div>
+  );
+}
+
+function ReportSignal({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone: "good" | "warning" | "danger";
+}) {
+  const styles = {
+    good: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    warning: "border-amber-100 bg-amber-50 text-amber-700",
+    danger: "border-rose-100 bg-rose-50 text-rose-700",
+  };
+
+  return (
+    <div className={"rounded-2xl border p-4 " + styles[tone]}>
+      <p className="text-[10px] font-black uppercase tracking-wide opacity-70">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-black">{value}</p>
+      <p className="mt-1 text-xs leading-5 opacity-80">{note}</p>
+    </div>
+  );
+}
+
+function InsightSummaryCard({
+  icon,
+  title,
+  value,
+  note,
+  tone,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  note: string;
+  tone: "good" | "warning" | "danger";
+}) {
+  const styles = {
+    good: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    warning: "border-amber-100 bg-amber-50 text-amber-700",
+    danger: "border-rose-100 bg-rose-50 text-rose-700",
+  };
+
+  return (
+    <div className={"rounded-3xl border p-5 shadow-sm " + styles[tone]}>
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-2xl bg-white/70">
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide opacity-70">
+            {title}
+          </p>
+          <p className="mt-0.5 text-2xl font-black">{value}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{note}</p>
     </div>
   );
 }
