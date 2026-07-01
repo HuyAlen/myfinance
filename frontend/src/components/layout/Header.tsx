@@ -1395,8 +1395,11 @@ export default function Header({
             <ChevronLeft size={18} />
           </button>
 
-          <label className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 shadow-sm">
+          <label className="relative flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 shadow-sm active:scale-[.99]">
             <CalendarDays size={16} className="shrink-0 text-blue-600" />
+            <span className="pointer-events-none min-w-0 flex-1 text-center text-[16px] font-black text-slate-900">
+              {formatCompactMonth(selectedMonth)}
+            </span>
             <input
               type="month"
               value={selectedMonth}
@@ -1404,7 +1407,7 @@ export default function Header({
                 setFilterMode("month");
                 handleSelectMonth(event.target.value);
               }}
-              className="min-w-0 flex-1 bg-transparent text-center text-[16px] font-black text-slate-900 outline-none [color-scheme:light]"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [color-scheme:light]"
               aria-label="Chọn tháng báo cáo"
             />
           </label>

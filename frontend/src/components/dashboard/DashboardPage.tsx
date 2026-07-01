@@ -1980,35 +1980,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
-      <div className="sticky top-0 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:hidden">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigateDashboardMonth(-1)}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs active:scale-95"
-            aria-label="Tháng trước"
-          >
-            <ChevronLeft size={19} />
-          </button>
-          <button
-            type="button"
-            className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-900 shadow-xs"
-            aria-label="Bộ lọc tháng hiện tại"
-          >
-            <Calendar size={17} className="shrink-0 text-blue-600" />
-            <span className="truncate">{selectedMonthLabel}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigateDashboardMonth(1)}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs active:scale-95"
-            aria-label="Tháng sau"
-          >
-            <ChevronRight size={19} />
-          </button>
-        </div>
-      </div>
-
       {/* ── 1. Executive Strip ─────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 xl:grid-cols-[1.4fr_0.8fr]">
