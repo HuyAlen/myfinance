@@ -36,7 +36,6 @@ import {
   Landmark,
   PiggyBank,
   ShieldCheck,
-  Search,
   Target,
   TrendingDown,
   TrendingUp,
@@ -1982,37 +1981,30 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       <div className="sticky top-0 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:hidden">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-400 shadow-xs"
-          >
-            <Search size={16} className="shrink-0 text-slate-400" />
-            <span className="truncate">Tìm giao dịch, ví, mục tiêu...</span>
-          </button>
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigateDashboardMonth(-1)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs active:scale-95"
             aria-label="Tháng trước"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={19} />
           </button>
           <button
             type="button"
-            className="flex h-10 shrink-0 items-center gap-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-xs"
+            className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-900 shadow-xs"
             aria-label="Bộ lọc tháng hiện tại"
           >
-            <Calendar size={15} className="text-blue-600" />
-            {selectedMonthLabel}
+            <Calendar size={17} className="shrink-0 text-blue-600" />
+            <span className="truncate">{selectedMonthLabel}</span>
           </button>
           <button
             type="button"
             onClick={() => navigateDashboardMonth(1)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-xs active:scale-95"
             aria-label="Tháng sau"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={19} />
           </button>
         </div>
       </div>

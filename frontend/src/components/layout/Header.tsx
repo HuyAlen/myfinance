@@ -714,8 +714,8 @@ export default function Header({
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <header className="sticky top-0 z-30 h-[72px] shrink-0 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:px-8">
-      <div className="flex h-full items-center justify-between gap-3 sm:gap-5">
+    <header className="sticky top-0 z-30 h-auto shrink-0 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-[72px] lg:px-8">
+      <div className="flex h-[72px] items-center justify-between gap-3 sm:gap-5 lg:h-full">
         {/* ══ LEFT ══ */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Hamburger mobile */}
@@ -1377,6 +1377,49 @@ export default function Header({
               </>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Mobile/PWA period picker */}
+      <div className="border-t border-slate-100 bg-white/95 pb-3 pt-2 md:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setFilterMode("month");
+              shiftMonth(-1);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition active:scale-[.98]"
+            aria-label="Tháng trước"
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          <label className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 shadow-sm">
+            <CalendarDays size={16} className="shrink-0 text-blue-600" />
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(event) => {
+                setFilterMode("month");
+                handleSelectMonth(event.target.value);
+              }}
+              className="min-w-0 flex-1 bg-transparent text-center text-[16px] font-black text-slate-900 outline-none [color-scheme:light]"
+              aria-label="Chọn tháng báo cáo"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFilterMode("month");
+              shiftMonth(1);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition active:scale-[.98]"
+            aria-label="Tháng sau"
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
     </header>
