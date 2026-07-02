@@ -1570,7 +1570,23 @@ function WalletBrandLogo({
     );
   }
 
-  return <WalletIcon type={type} />;
+  if (type === "investment") {
+    return (
+      <span
+        className={`flex ${dimension} shrink-0 items-center justify-center bg-emerald-50 text-emerald-600 shadow-sm`}
+      >
+        <BriefcaseBusiness size={size === "md" ? 18 : 15} />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`flex ${dimension} shrink-0 items-center justify-center bg-amber-50 text-amber-600 shadow-sm`}
+    >
+      <Banknote size={size === "md" ? 18 : 15} />
+    </span>
+  );
 }
 
 function getWalletTypeLabel(type: FinanceWalletType) {

@@ -263,6 +263,7 @@ export default function BudgetsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isCloningPrevious, setIsCloningPrevious] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
@@ -741,6 +742,14 @@ export default function BudgetsPage() {
     [activeMonth],
   );
 
+  const previousMonthBudgets = useMemo(
+    () => budgets.filter((budget) => budget.month === previousMonth),
+    [budgets, previousMonth],
+  );
+
+  const canClonePreviousBudget =
+    filteredBudgets.length === 0 && previousMonthBudgets.length > 0;
+
   const spendingByCategory = useMemo(() => {
     const current = new Map<string, number>();
     const previous = new Map<string, number>();
@@ -975,7 +984,12 @@ export default function BudgetsPage() {
 
   // ── PRESERVED: CRUD ───────────────────────────────────────────────────────
   function openCreateForm() {
-    setForm({ ...emptyForm, categoryId: expenseCategories[0]?.id ?? "" });
+    setSaveError(null);
+    setForm({
+      ...emptyForm,
+      categoryId: expenseCategories[0]?.id ?? "",
+      month: activeMonth,
+    });
     setIsFormOpen(true);
   }
 
@@ -1004,12 +1018,13 @@ export default function BudgetsPage() {
       setSaveError("Vui lòng nhập ngân sách hợp lệ");
       return;
     }
-    const budget: Budget = {
+    const budget = {
       id: form.id ?? crypto.randomUUID(),
       categoryId: form.categoryId,
       month: form.month,
       limitAmount,
-    };
+      rolloverAmount: 0,
+    } as Budget;
     setSaveError(null);
     const { error } = form.id
       ? await updateBudget(budget)
@@ -1021,6 +1036,60 @@ export default function BudgetsPage() {
     await reloadData();
     setIsFormOpen(false);
     setForm(emptyForm);
+  }
+
+  async function handleClonePreviousBudget() {
+    if (!canClonePreviousBudget || isCloningPrevious) return;
+
+    setIsCloningPrevious(true);
+
+    try {
+      const existingCategoryIds = new Set(
+        budgets
+          .filter((budget) => budget.month === activeMonth)
+          .map((budget) => budget.categoryId),
+      );
+
+      const cloneItems = previousMonthBudgets.filter(
+        (budget) => !existingCategoryIds.has(budget.categoryId),
+      );
+
+      if (cloneItems.length === 0) {
+        toast({
+          variant: "success",
+          message: "Ngân sách tháng này đã có đủ danh mục từ tháng trước.",
+        });
+        return;
+      }
+
+      for (const item of cloneItems) {
+        const clonedBudget = {
+          id: crypto.randomUUID(),
+          categoryId: item.categoryId,
+          month: activeMonth,
+          limitAmount: item.limitAmount,
+          rolloverAmount: 0,
+        } as Budget;
+
+        const { error } = await addBudget(clonedBudget);
+
+        if (error) {
+          toast({
+            variant: "error",
+            message: "Lỗi sao chép ngân sách: " + error,
+          });
+          return;
+        }
+      }
+
+      toast({
+        variant: "success",
+        message: `Đã sao chép ${cloneItems.length} ngân sách từ tháng ${previousMonth}.`,
+      });
+      await reloadData();
+    } finally {
+      setIsCloningPrevious(false);
+    }
   }
 
   function handleDelete(id: string) {
@@ -1872,18 +1941,18 @@ export default function BudgetsPage() {
               <div
                 key={budget.id}
                 className={
-                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group relative rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
                   s.border
                 }
               >
                 {/* Card header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3 pr-20">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                       <ChartPie size={20} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
+                      <h3 className="line-clamp-2 text-base font-black leading-snug text-slate-900">
                         {category?.name ?? "Danh mục"}
                       </h3>
                       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
@@ -1908,7 +1977,7 @@ export default function BudgetsPage() {
                     </div>
                   </div>
                   {/* Hover edit/delete */}
-                  <div className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="absolute right-6 top-6 hidden shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
                     <button
                       onClick={() => openEditForm(budget)}
                       className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
@@ -2084,16 +2153,34 @@ export default function BudgetsPage() {
               </h3>
               <p className="mt-2 text-sm text-slate-400">
                 {budgets.length > 0
-                  ? "Chọn tháng khác hoặc tạo ngân sách mới."
+                  ? canClonePreviousBudget
+                    ? `Sao chép nhanh ngân sách tháng ${previousMonth}, hoặc tạo ngân sách mới.`
+                    : "Chọn tháng khác hoặc tạo ngân sách mới."
                   : "Bắt đầu bằng cách tạo ngân sách đầu tiên."}
               </p>
-              <button
-                onClick={openCreateForm}
-                className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
-              >
-                <Plus size={15} />
-                Tạo ngân sách
-              </button>
+              <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <button
+                  onClick={openCreateForm}
+                  className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
+                >
+                  <Plus size={15} />
+                  Tạo ngân sách
+                </button>
+
+                {canClonePreviousBudget && (
+                  <button
+                    type="button"
+                    onClick={handleClonePreviousBudget}
+                    disabled={isCloningPrevious}
+                    className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ChartPie size={15} />
+                    {isCloningPrevious
+                      ? "Đang sao chép..."
+                      : `Sao chép tháng ${previousMonth}`}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
