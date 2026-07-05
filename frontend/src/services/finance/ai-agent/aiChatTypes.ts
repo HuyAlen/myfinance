@@ -20,6 +20,24 @@ export type AIFinanceChatIntentScore = {
   matchedKeywords: string[];
 };
 
+export type AIFinanceChatResponseSource = "local" | "openai" | "fallback";
+
+export type AIFinanceChatActionType =
+  | "open_transactions"
+  | "open_budgets"
+  | "open_goals"
+  | "clone_budget"
+  | "create_budget"
+  | "create_goal"
+  | "create_bill_reminder"
+  | "none";
+
+export type AIFinanceChatAction = {
+  type: AIFinanceChatActionType | string;
+  label: string;
+  payload?: Record<string, unknown>;
+};
+
 export type AIFinanceChatResponseSection = {
   title: "Tổng quan" | "Phân tích" | "Gợi ý";
   content: string[];
@@ -38,6 +56,10 @@ export type AIFinanceChatResponse = {
   selectedInsights: AIFinanceRuleInsight[];
   generatedAt: string;
   hasEnoughData: boolean;
+  source?: AIFinanceChatResponseSource;
+  confidence?: number;
+  actions?: AIFinanceChatAction[];
+  fallbackReason?: string;
 };
 
 export type BuildAIFinanceChatResponseInput = {

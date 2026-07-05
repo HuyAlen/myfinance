@@ -22,6 +22,8 @@ import {
 } from "@/src/services/finance/ai-agent/aiFinanceContext";
 import { buildAIFinanceRuleInsights } from "@/src/services/finance/ai-agent/aiFinanceRules";
 import { buildAIFinanceChatResponse } from "@/src/services/finance/ai-agent/aiFinanceChatEngine";
+import { getAIFinanceSettings } from "@/src/services/finance/ai-agent/aiSettingsStorage";
+import type { AIFinanceChatApiResponse } from "@/src/services/finance/ai-agent/aiPromptTypes";
 
 type AIAgentDrawerProps = {
   open: boolean;
@@ -200,6 +202,61 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     loadFinanceContext();
   }
 
+  async function runAIChat(question: string) {
+    const localResponse = buildAIFinanceChatResponse({
+      question,
+      context: financeContext,
+      maxInsights: 4,
+    });
+
+    try {
+      const settings = getAIFinanceSettings();
+
+      if (settings.provider === "local" || !settings.apiKey) {
+        return {
+          answer: localResponse.answer,
+          source: "local" as const,
+          confidence: localResponse.hasEnoughData ? 0.78 : 0.45,
+          fallbackUsed: false,
+          generatedAt: new Date().toISOString(),
+          actions: [],
+        } satisfies AIFinanceChatApiResponse;
+      }
+
+      const response = await fetch("/api/ai-finance/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          context: financeContext,
+          settings,
+          maxInsights: 4,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI API lỗi ${response.status}`);
+      }
+
+      return (await response.json()) as AIFinanceChatApiResponse;
+    } catch (error) {
+      return {
+        answer: localResponse.answer,
+        source: "fallback" as const,
+        confidence: localResponse.hasEnoughData ? 0.72 : 0.42,
+        fallbackUsed: true,
+        fallbackReason:
+          error instanceof Error
+            ? error.message
+            : "OpenAI không phản hồi, đã dùng Local AI.",
+        generatedAt: new Date().toISOString(),
+        actions: [],
+      } satisfies AIFinanceChatApiResponse;
+    }
+  }
+
   function handleAsk(value?: string) {
     const question = (value ?? input).trim();
     if (!question || loading) return;
@@ -216,22 +273,23 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     setLoading(true);
 
     window.setTimeout(() => {
-      const response = buildAIFinanceChatResponse({
-        question,
-        context: financeContext,
-        maxInsights: 4,
-      });
+      void runAIChat(question)
+        .then((response) => {
+          const assistantMessage: AIChatMessage = {
+            id: nextMessageId("assistant"),
+            role: "assistant",
+            content: response.answer,
+            createdAt: getTimeLabel(),
+            source: response.source,
+            confidence: response.confidence,
+          };
 
-      const assistantMessage: AIChatMessage = {
-        id: nextMessageId("assistant"),
-        role: "assistant",
-        content: response.answer,
-        createdAt: getTimeLabel(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-      setLoading(false);
-    }, 360);
+          setMessages((prev) => [...prev, assistantMessage]);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }, 260);
   }
 
   function handleClearChat() {
@@ -262,7 +320,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   MyFinance AI
                 </h2>
                 <span className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600 sm:inline-flex">
-                  AI-5.4
+                  AI-6.2
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-400">

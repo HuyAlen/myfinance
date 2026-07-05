@@ -1,19 +1,34 @@
 "use client";
 
-import { Bot, CheckCircle2, Sparkles, User } from "lucide-react";
+import { Bot, CheckCircle2, Copy, Sparkles, User } from "lucide-react";
 
 export type AIChatRole = "assistant" | "user";
+export type AIChatSource = "local" | "openai" | "fallback";
 
 export type AIChatMessage = {
   id: string;
   role: AIChatRole;
   content: string;
   createdAt: string;
+  source?: AIChatSource;
+  confidence?: number;
 };
 
 type AIChatMessageProps = {
   message: AIChatMessage;
 };
+
+function getSourceLabel(source: AIChatSource | undefined) {
+  if (source === "openai") return "OpenAI";
+  if (source === "fallback") return "Fallback";
+  return "Local";
+}
+
+function getSourceClassName(source: AIChatSource | undefined) {
+  if (source === "openai") return "bg-blue-50 text-blue-600";
+  if (source === "fallback") return "bg-amber-50 text-amber-600";
+  return "bg-emerald-50 text-emerald-600";
+}
 
 function renderAssistantContent(content: string) {
   const sections = content
@@ -22,7 +37,7 @@ function renderAssistantContent(content: string) {
     .filter(Boolean);
 
   if (sections.length <= 1) {
-    return <p className="whitespace-pre-line text-sm leading-6">{content}</p>;
+    return <p className="whitespace-pre-line">{content}</p>;
   }
 
   return (
@@ -45,22 +60,26 @@ function renderAssistantContent(content: string) {
 export default function AIChatMessageBubble({ message }: AIChatMessageProps) {
   const isUser = message.role === "user";
 
+  function handleCopy() {
+    if (typeof navigator === "undefined") return;
+    void navigator.clipboard?.writeText(message.content);
+  }
+
   return (
     <div
-      className={[
-        "flex gap-2.5 sm:gap-3",
-        isUser ? "justify-end" : "justify-start",
-      ].join(" ")}
+      className={["flex gap-3", isUser ? "justify-end" : "justify-start"].join(
+        " ",
+      )}
     >
       {!isUser && (
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm sm:size-9">
-          <Bot size={15} />
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm">
+          <Bot size={16} />
         </div>
       )}
 
       <div
         className={[
-          "max-w-[88%] rounded-[1.35rem] px-3.5 py-3 text-sm leading-6 shadow-sm sm:max-w-[86%] sm:px-4",
+          "max-w-[86%] rounded-[1.35rem] px-4 py-3 text-sm leading-6 shadow-sm",
           isUser
             ? "rounded-br-md bg-blue-600 text-white shadow-blue-100"
             : "rounded-bl-md border border-slate-100 bg-white text-slate-700",
@@ -68,13 +87,28 @@ export default function AIChatMessageBubble({ message }: AIChatMessageProps) {
       >
         {!isUser && (
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-blue-600 sm:text-[11px]">
+            <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-blue-600">
               <Sparkles size={13} />
               MyFinance AI
             </div>
-            <div className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-600">
-              <CheckCircle2 size={11} />
-              Local
+            <div className="flex items-center gap-1.5">
+              <div
+                className={[
+                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black",
+                  getSourceClassName(message.source),
+                ].join(" ")}
+              >
+                <CheckCircle2 size={11} />
+                {getSourceLabel(message.source)}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex size-6 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Copy AI answer"
+              >
+                <Copy size={12} />
+              </button>
             </div>
           </div>
         )}
@@ -92,11 +126,14 @@ export default function AIChatMessageBubble({ message }: AIChatMessageProps) {
           ].join(" ")}
         >
           {message.createdAt}
+          {!isUser && typeof message.confidence === "number"
+            ? ` • Confidence ${Math.round(message.confidence * 100)}%`
+            : ""}
         </p>
       </div>
 
       {isUser && (
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 shadow-sm sm:size-9">
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 shadow-sm">
           <User size={15} />
         </div>
       )}

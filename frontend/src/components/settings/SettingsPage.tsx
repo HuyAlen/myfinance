@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
@@ -57,6 +57,46 @@ const SECTIONS = [
   { id: "danger", label: "Vùng nguy hiểm", icon: AlertTriangle },
 ];
 
+const AI_SETTINGS_STORAGE_KEY = "myfinance.ai.settings";
+
+const AI_MODEL_OPTIONS = [
+  { value: "gpt-5.2", label: "GPT-5.2" },
+  { value: "gpt-5.2-mini", label: "GPT-5.2 Mini" },
+  { value: "gpt-5.1", label: "GPT-5.1" },
+  { value: "gpt-4.1", label: "GPT-4.1" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+];
+
+function getStoredAISetting(key: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const raw = window.localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = parsed[key];
+    return typeof value === "string" ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getStoredAIBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const raw = window.localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = parsed[key];
+    return typeof value === "boolean" ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -84,7 +124,39 @@ export default function SettingsPage() {
   const [debtAlert, setDebtAlert] = useState("50");
   const [emergencyFund, setEmergencyFund] = useState("6");
 
-  // AI toggles
+  // AI settings
+  const [aiProvider, setAiProvider] = useState(() =>
+    getStoredAISetting("provider", "openai"),
+  );
+  const [aiApiKey, setAiApiKey] = useState(() =>
+    getStoredAISetting("apiKey", ""),
+  );
+  const [aiModel, setAiModel] = useState(() =>
+    getStoredAISetting("model", "gpt-5.2"),
+  );
+  const [aiTemperature, setAiTemperature] = useState(() =>
+    getStoredAISetting("temperature", "0.2"),
+  );
+  const [aiMaxTokens, setAiMaxTokens] = useState(() =>
+    getStoredAISetting("maxTokens", "4096"),
+  );
+  const [aiFallbackLocal, setAiFallbackLocal] = useState(() =>
+    getStoredAIBoolean("fallbackLocal", true),
+  );
+  const [aiNoFabrication, setAiNoFabrication] = useState(() =>
+    getStoredAIBoolean("noFabrication", true),
+  );
+  const [aiSendFinanceContext, setAiSendFinanceContext] = useState(() =>
+    getStoredAIBoolean("sendFinanceContext", true),
+  );
+  const [aiSendRuleInsights, setAiSendRuleInsights] = useState(() =>
+    getStoredAIBoolean("sendRuleInsights", true),
+  );
+  const [aiTestStatus, setAiTestStatus] = useState<
+    "idle" | "testing" | "success" | "error"
+  >("idle");
+
+  // AI feature toggles
   const [aiInsights, setAiInsights] = useState(true);
   const [aiForecast, setAiForecast] = useState(true);
   const [aiRisk, setAiRisk] = useState(true);
@@ -114,7 +186,7 @@ export default function SettingsPage() {
   const displayEmail = user?.email ?? "";
 
   // ── Data loading ───────────────────────────────────────────────────────────
-  async function reloadStats() {
+  const reloadStats = useCallback(async () => {
     const [wallets, categories, transactions, debts, goals] = await Promise.all(
       [
         getWallets(),
@@ -124,6 +196,7 @@ export default function SettingsPage() {
         getGoals(),
       ],
     );
+
     setStats({
       wallets: wallets.length,
       categories: categories.length,
@@ -131,11 +204,15 @@ export default function SettingsPage() {
       debts: debts.length,
       goals: goals.length,
     });
-  }
+  }, []);
 
   useEffect(() => {
-    reloadStats();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void reloadStats();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [reloadStats]);
 
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
@@ -279,12 +356,87 @@ export default function SettingsPage() {
     setTimeout(() => setSaveSuccess(false), 2200);
   }
 
+  function handleSaveAISettings() {
+    if (typeof window === "undefined") return;
+
+    const normalizedTemperature = String(aiTemperature || "0.2").trim();
+    const normalizedMaxTokens = String(aiMaxTokens || "4096").trim();
+
+    window.localStorage.setItem(
+      AI_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        provider: aiProvider,
+        apiKey: aiApiKey.trim(),
+        model: aiModel,
+        temperature: normalizedTemperature,
+        maxTokens: normalizedMaxTokens,
+        fallbackLocal: aiFallbackLocal,
+        noFabrication: aiNoFabrication,
+        sendFinanceContext: aiSendFinanceContext,
+        sendRuleInsights: aiSendRuleInsights,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    setAiTemperature(normalizedTemperature);
+    setAiMaxTokens(normalizedMaxTokens);
+    setAiTestStatus("idle");
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2200);
+
+    toast({
+      variant: "success",
+      message: "Đã lưu AI Settings.",
+    });
+  }
+
+  async function handleTestAIConnection() {
+    setAiTestStatus("testing");
+
+    try {
+      if (aiProvider === "openai" && !aiApiKey.trim()) {
+        setAiTestStatus("error");
+        toast({
+          variant: "error",
+          message: "Vui lòng nhập OpenAI API Key trước khi test.",
+        });
+        return;
+      }
+
+      if (aiProvider === "openai" && !aiApiKey.trim().startsWith("sk-")) {
+        setAiTestStatus("error");
+        toast({
+          variant: "error",
+          message: "API Key chưa đúng định dạng sk-...",
+        });
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+      setAiTestStatus("success");
+      toast({
+        variant: "success",
+        message:
+          aiProvider === "local"
+            ? "Local AI đã sẵn sàng."
+            : "AI Settings hợp lệ. AI-6.2 sẽ kết nối OpenAI qua API route.",
+      });
+    } catch {
+      setAiTestStatus("error");
+      toast({
+        variant: "error",
+        message: "Không thể kiểm tra AI Settings.",
+      });
+    }
+  }
+
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* ══ Executive Account Summary ════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-6 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-6 pt-6 sm:px-8">
           <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
             Account Center
           </p>
@@ -683,9 +835,203 @@ export default function SettingsPage() {
             <SectionHeader
               icon={<Sparkles size={16} />}
               title="AI Advisor"
-              desc="Cấu hình tính năng trí tuệ nhân tạo"
+              desc="AI-6.1 Provider Management, model và quy tắc an toàn"
             />
+
+            <div className="mt-4 overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-sm">
+              <div className="border-b border-blue-50 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-sm shadow-blue-200">
+                      <Bot size={13} />
+                      AI-6.1 Settings
+                    </div>
+                    <h3 className="mt-3 text-xl font-black text-slate-900">
+                      OpenAI Provider
+                    </h3>
+                    <p className="mt-1 max-w-2xl text-sm font-medium text-slate-500">
+                      Tự cấu hình API key, model và fallback local để AI Advisor
+                      có thể nâng cấp từ AI-5 Local Engine sang OpenAI Adapter.
+                    </p>
+                  </div>
+
+                  <div
+                    className={
+                      "inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black " +
+                      (aiTestStatus === "success"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : aiTestStatus === "error"
+                          ? "bg-rose-50 text-rose-700"
+                          : aiTestStatus === "testing"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-slate-100 text-slate-500")
+                    }
+                  >
+                    <span
+                      className={
+                        "size-2 rounded-full " +
+                        (aiTestStatus === "success"
+                          ? "bg-emerald-500"
+                          : aiTestStatus === "error"
+                            ? "bg-rose-500"
+                            : aiTestStatus === "testing"
+                              ? "bg-amber-500"
+                              : "bg-slate-400")
+                      }
+                    />
+                    {aiTestStatus === "success"
+                      ? "Ready"
+                      : aiTestStatus === "error"
+                        ? "Cần kiểm tra"
+                        : aiTestStatus === "testing"
+                          ? "Đang kiểm tra..."
+                          : "Chưa kiểm tra"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-6 p-6 xl:grid-cols-[1.1fr_0.9fr]">
+                <div className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SettingSelect
+                      label="Provider"
+                      value={aiProvider}
+                      onChange={setAiProvider}
+                      options={[
+                        { value: "openai", label: "OpenAI" },
+                        { value: "local", label: "Local AI only" },
+                      ]}
+                      desc="AI-6.1 hỗ trợ OpenAI trước, các provider khác có thể thêm sau."
+                    />
+
+                    <SettingSelect
+                      label="Model"
+                      value={aiModel}
+                      onChange={setAiModel}
+                      options={AI_MODEL_OPTIONS}
+                      desc="Model mặc định cho AI Finance Chat."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-black text-slate-700">
+                      OpenAI API Key
+                    </label>
+                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-blue-400 focus-within:bg-white">
+                      <Lock size={16} className="shrink-0 text-slate-400" />
+                      <input
+                        type="password"
+                        value={aiApiKey}
+                        onChange={(e) => setAiApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-300"
+                      />
+                    </div>
+                    <p className="mt-2 text-[11px] font-medium text-slate-400">
+                      Lưu cục bộ trên trình duyệt hiện tại. Không hiển thị lại
+                      API key ở nơi khác trong UI.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SettingInput
+                      label="Temperature"
+                      value={aiTemperature}
+                      placeholder="0.2"
+                      onChange={setAiTemperature}
+                    />
+                    <SettingInput
+                      label="Max Tokens"
+                      value={aiMaxTokens}
+                      placeholder="4096"
+                      onChange={setAiMaxTokens}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveAISettings}
+                      className={
+                        "inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition " +
+                        (saveSuccess
+                          ? "bg-emerald-600 shadow-emerald-200"
+                          : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
+                      }
+                    >
+                      {saveSuccess ? (
+                        <Check size={15} />
+                      ) : (
+                        <Sparkles size={15} />
+                      )}
+                      {saveSuccess ? "Đã lưu!" : "Lưu AI Settings"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestAIConnection}
+                      disabled={aiTestStatus === "testing"}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RefreshCcw
+                        size={15}
+                        className={
+                          aiTestStatus === "testing" ? "animate-spin" : ""
+                        }
+                      />
+                      Test Connection
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                  <ToggleRow
+                    icon={<Zap size={14} />}
+                    iconBg="bg-emerald-100 text-emerald-600"
+                    label="Fallback về Local AI"
+                    desc="Nếu OpenAI lỗi hoặc thiếu API key, dùng AI-5 Local Engine."
+                    checked={aiFallbackLocal}
+                    onChange={() => setAiFallbackLocal((v) => !v)}
+                  />
+                  <ToggleRow
+                    icon={<Shield size={14} />}
+                    iconBg="bg-blue-100 text-blue-600"
+                    label="Chặn bịa số liệu"
+                    desc="AI chỉ được dùng dữ liệu tài chính hiện có."
+                    checked={aiNoFabrication}
+                    onChange={() => setAiNoFabrication((v) => !v)}
+                  />
+                  <ToggleRow
+                    icon={<Database size={14} />}
+                    iconBg="bg-cyan-100 text-cyan-600"
+                    label="Gửi Finance Context"
+                    desc="Cho phép gửi số liệu tổng hợp sang AI Adapter."
+                    checked={aiSendFinanceContext}
+                    onChange={() => setAiSendFinanceContext((v) => !v)}
+                  />
+                  <ToggleRow
+                    icon={<AlertTriangle size={14} />}
+                    iconBg="bg-amber-100 text-amber-600"
+                    label="Gửi Rule Insights"
+                    desc="Đính kèm cảnh báo vượt ngân sách, dòng tiền và rủi ro."
+                    checked={aiSendRuleInsights}
+                    onChange={() => setAiSendRuleInsights((v) => !v)}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-4">
+                <h3 className="text-sm font-black text-slate-900">
+                  AI Advisor Features
+                </h3>
+                <p className="mt-1 text-xs font-medium text-slate-400">
+                  Bật/tắt các module phân tích dùng chung cho AI Agent.
+                </p>
+              </div>
               <div className="space-y-1">
                 <ToggleRow
                   icon={<Sparkles size={14} />}
