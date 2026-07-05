@@ -64,49 +64,51 @@ export default function AIContextCard({ context }: AIContextCardProps) {
   const score = Math.max(0, Math.min(100, context.snapshot.healthScore));
 
   return (
-    <div className="rounded-3xl border border-blue-100 bg-linear-to-br from-white via-blue-50/70 to-cyan-50 p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <div className="rounded-[1.7rem] border border-blue-100 bg-linear-to-br from-white via-blue-50/70 to-cyan-50 p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-blue-600">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600 sm:text-[11px]">
             Financial Health
           </p>
-          <h3 className="mt-1 truncate text-2xl font-black text-slate-950">
+          <h3 className="mt-1 truncate text-[1.65rem] font-black leading-none text-slate-950 sm:text-3xl">
             {context.snapshot.netWorthLabel}
           </h3>
-          <p className="mt-1 text-xs font-bold text-slate-400">
+          <p className="mt-2 text-[11px] font-bold text-slate-400 sm:text-xs">
             Net worth hiện tại • Live context
           </p>
         </div>
 
         <div
           className={[
-            "relative flex size-16 shrink-0 items-center justify-center rounded-3xl border shadow-sm",
+            "relative flex size-16 shrink-0 items-center justify-center rounded-3xl border shadow-sm sm:size-18",
             toneClass(context.snapshot.healthTone),
           ].join(" ")}
           title="Điểm sức khỏe tài chính"
         >
           <div className="text-center">
-            <p className="text-xl font-black leading-none">{score}</p>
-            <p className="mt-1 text-[9px] font-black uppercase">
+            <p className="text-xl font-black leading-none sm:text-2xl">
+              {score}
+            </p>
+            <p className="mt-1 text-[8px] font-black uppercase leading-3 sm:text-[9px]">
               {healthLabel(context.snapshot.healthTone)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/80 shadow-inner">
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/80 shadow-inner sm:h-2">
         <div
           className="h-full rounded-full bg-blue-600 transition-all"
           style={{ width: `${score}%` }}
         />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
         <div className="rounded-2xl border border-white bg-white/85 p-3 shadow-sm">
           <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
             <Wallet size={14} /> Thanh khoản
           </div>
-          <p className="mt-1 truncate text-sm font-black text-slate-900">
+          <p className="mt-1 truncate text-sm font-black text-slate-900 sm:text-base">
             {context.snapshot.liquidBalanceLabel}
           </p>
         </div>
@@ -122,7 +124,7 @@ export default function AIContextCard({ context }: AIContextCardProps) {
           </div>
           <p
             className={[
-              "mt-1 truncate text-sm font-black",
+              "mt-1 truncate text-sm font-black sm:text-base",
               context.cashflow.netCashFlow >= 0
                 ? "text-emerald-600"
                 : "text-rose-600",
@@ -136,7 +138,7 @@ export default function AIContextCard({ context }: AIContextCardProps) {
           <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
             <PiggyBank size={14} /> Tiết kiệm
           </div>
-          <p className="mt-1 truncate text-sm font-black text-slate-900">
+          <p className="mt-1 truncate text-sm font-black text-slate-900 sm:text-base">
             {context.cashflow.savingRateLabel}
           </p>
         </div>
@@ -147,7 +149,7 @@ export default function AIContextCard({ context }: AIContextCardProps) {
           </div>
           <p
             className={[
-              "mt-1 truncate text-sm font-black",
+              "mt-1 truncate text-sm font-black sm:text-base",
               riskyBudgetCount > 0 ? "text-amber-600" : "text-emerald-600",
             ].join(" ")}
           >

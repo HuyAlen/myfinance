@@ -29,13 +29,15 @@ export default function AIQuickStats({ context }: AIQuickStatsProps) {
         return (
           <div
             key={stat.label}
-            className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:py-3"
           >
-            <div className="mx-auto mb-1 flex size-7 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+            <div className="mx-auto mb-1 flex size-7 items-center justify-center rounded-xl bg-slate-50 text-slate-500 sm:size-8">
               <Icon size={14} />
             </div>
-            <p className="text-sm font-black text-slate-900">{stat.value}</p>
-            <p className="mt-0.5 truncate text-[10px] font-bold text-slate-400">
+            <p className="text-sm font-black text-slate-900 sm:text-base">
+              {stat.value}
+            </p>
+            <p className="mt-0.5 truncate text-[10px] font-bold text-slate-400 sm:text-[11px]">
               {stat.label}
             </p>
           </div>

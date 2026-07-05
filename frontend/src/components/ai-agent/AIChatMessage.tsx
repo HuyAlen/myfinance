@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CheckCircle2, Copy, Sparkles, User } from "lucide-react";
+import { Bot, CheckCircle2, Sparkles, User } from "lucide-react";
 
 export type AIChatRole = "assistant" | "user";
 
@@ -13,12 +13,6 @@ export type AIChatMessage = {
 
 type AIChatMessageProps = {
   message: AIChatMessage;
-};
-
-const sectionStyles: Record<string, string> = {
-  "📊 Tổng quan": "border-blue-100 bg-blue-50/70 text-blue-700",
-  "🔍 Phân tích": "border-slate-100 bg-slate-50/90 text-slate-700",
-  "💡 Gợi ý": "border-emerald-100 bg-emerald-50/70 text-emerald-700",
 };
 
 function renderAssistantContent(content: string) {
@@ -35,19 +29,10 @@ function renderAssistantContent(content: string) {
     <div className="space-y-3">
       {sections.map((section) => {
         const [title, ...body] = section.split("\n");
-        const className =
-          sectionStyles[title] ??
-          "border-slate-100 bg-slate-50/90 text-slate-700";
-
         return (
-          <section
-            key={title}
-            className={["rounded-2xl border p-3", className].join(" ")}
-          >
-            <h4 className="text-[11px] font-black uppercase tracking-[0.12em]">
-              {title}
-            </h4>
-            <p className="mt-2 whitespace-pre-line text-[13px] font-semibold leading-6 text-slate-700">
+          <section key={title} className="rounded-2xl bg-slate-50/80 p-3">
+            <h4 className="text-xs font-black text-slate-950">{title}</h4>
+            <p className="mt-1 whitespace-pre-line text-xs font-semibold leading-5 text-slate-600">
               {body.join("\n").trim()}
             </p>
           </section>
@@ -57,37 +42,33 @@ function renderAssistantContent(content: string) {
   );
 }
 
-function copyMessage(content: string) {
-  if (typeof navigator === "undefined" || !navigator.clipboard) return;
-  void navigator.clipboard.writeText(content);
-}
-
 export default function AIChatMessageBubble({ message }: AIChatMessageProps) {
   const isUser = message.role === "user";
 
   return (
     <div
-      className={["flex gap-3", isUser ? "justify-end" : "justify-start"].join(
-        " ",
-      )}
+      className={[
+        "flex gap-2.5 sm:gap-3",
+        isUser ? "justify-end" : "justify-start",
+      ].join(" ")}
     >
       {!isUser && (
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm">
-          <Bot size={16} />
+        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm sm:size-9">
+          <Bot size={15} />
         </div>
       )}
 
       <div
         className={[
-          "max-w-[88%] rounded-[1.35rem] px-4 py-3 text-sm leading-6 shadow-sm",
+          "max-w-[88%] rounded-[1.35rem] px-3.5 py-3 text-sm leading-6 shadow-sm sm:max-w-[86%] sm:px-4",
           isUser
             ? "rounded-br-md bg-blue-600 text-white shadow-blue-100"
             : "rounded-bl-md border border-slate-100 bg-white text-slate-700",
         ].join(" ")}
       >
         {!isUser && (
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-blue-600">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-blue-600 sm:text-[11px]">
               <Sparkles size={13} />
               MyFinance AI
             </div>
@@ -104,29 +85,18 @@ export default function AIChatMessageBubble({ message }: AIChatMessageProps) {
           renderAssistantContent(message.content)
         )}
 
-        <div
+        <p
           className={[
-            "mt-3 flex items-center gap-2 text-[10px] font-bold",
-            isUser ? "justify-end text-blue-100" : "text-slate-300",
+            "mt-2 text-[10px] font-bold",
+            isUser ? "text-blue-100" : "text-slate-300",
           ].join(" ")}
         >
-          <span>{message.createdAt}</span>
-          {!isUser && (
-            <button
-              type="button"
-              onClick={() => copyMessage(message.content)}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
-              aria-label="Sao chép câu trả lời AI"
-            >
-              <Copy size={11} />
-              Copy
-            </button>
-          )}
-        </div>
+          {message.createdAt}
+        </p>
       </div>
 
       {isUser && (
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 shadow-sm">
+        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 shadow-sm sm:size-9">
           <User size={15} />
         </div>
       )}

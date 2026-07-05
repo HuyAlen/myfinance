@@ -18,13 +18,13 @@ type AIInsightPanelProps = {
 function getIcon(severity: AIFinanceRuleInsight["severity"]) {
   switch (severity) {
     case "success":
-      return <CheckCircle2 size={15} />;
+      return <CheckCircle2 size={14} />;
     case "warning":
-      return <AlertTriangle size={15} />;
+      return <AlertTriangle size={14} />;
     case "danger":
-      return <ShieldAlert size={15} />;
+      return <ShieldAlert size={14} />;
     default:
-      return <Info size={15} />;
+      return <Info size={14} />;
   }
 }
 
@@ -65,34 +65,29 @@ export default function AIInsightPanel({ insights }: AIInsightPanelProps) {
             <Sparkles size={16} className="text-blue-600" />
             Priority Insights
           </div>
-          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+          <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500 sm:text-xs">
             {buildAIFinanceRuleSummary(insights)}
           </p>
         </div>
         <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-600">
-          AI-5.3
+          AI-5.4
         </span>
       </div>
 
       <div className="space-y-2">
-        {insights.slice(0, 4).map((insight, index) => (
+        {insights.slice(0, 3).map((insight) => (
           <article
             key={insight.id}
             className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3 transition hover:bg-white hover:shadow-sm"
           >
             <div className="flex items-start gap-3">
-              <div className="flex flex-col items-center gap-1">
-                <div
-                  className={[
-                    "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border",
-                    severityClass(insight.severity),
-                  ].join(" ")}
-                >
-                  {getIcon(insight.severity)}
-                </div>
-                {index < Math.min(insights.length, 4) - 1 && (
-                  <span className="h-5 w-px bg-slate-200" />
-                )}
+              <div
+                className={[
+                  "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border",
+                  severityClass(insight.severity),
+                ].join(" ")}
+              >
+                {getIcon(insight.severity)}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -104,7 +99,7 @@ export default function AIInsightPanel({ insights }: AIInsightPanelProps) {
                 <h4 className="text-xs font-black text-slate-900">
                   {insight.title}
                 </h4>
-                <p className="mt-1 text-[11px] font-medium leading-5 text-slate-500">
+                <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-5 text-slate-500">
                   {insight.description}
                 </p>
                 {insight.actionLabel && (

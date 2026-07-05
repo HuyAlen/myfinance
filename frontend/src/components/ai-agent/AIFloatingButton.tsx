@@ -20,20 +20,20 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getDefaultPosition(): Position {
-  const safeBottom = window.innerWidth >= 1024 ? 24 : 104;
+  const safeBottom = window.innerWidth >= 1024 ? 24 : 112;
 
   return {
-    x: window.innerWidth - BUTTON_SIZE - 24,
+    x: window.innerWidth - BUTTON_SIZE - 20,
     y: window.innerHeight - BUTTON_SIZE - safeBottom,
   };
 }
 
 function getClampedPosition(position: Position): Position {
-  const bottomSafeArea = window.innerWidth >= 1024 ? 16 : 96;
+  const bottomSafeArea = window.innerWidth >= 1024 ? 16 : 104;
 
   return {
     x: clamp(position.x, 12, window.innerWidth - BUTTON_SIZE - 12),
-    y: clamp(position.y, 80, window.innerHeight - BUTTON_SIZE - bottomSafeArea),
+    y: clamp(position.y, 76, window.innerHeight - BUTTON_SIZE - bottomSafeArea),
   };
 }
 

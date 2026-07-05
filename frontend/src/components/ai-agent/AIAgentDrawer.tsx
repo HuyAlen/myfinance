@@ -38,38 +38,38 @@ type QuickQuestion = {
 const quickQuestions: QuickQuestion[] = [
   {
     label: "Tổng quan",
-    title: "Tổng quan tài chính",
-    description: "Xem sức khỏe tài chính.",
+    title: "Tổng quan tháng này",
+    description: "Health score, dòng tiền, ngân sách.",
     question: "Tổng quan tài chính tháng này của tôi thế nào?",
   },
   {
     label: "Chi tiêu",
-    title: "Chi nhiều nhất ở đâu?",
-    description: "Tìm nhóm chi lớn.",
+    title: "Tôi tiêu nhiều nhất ở đâu?",
+    description: "Nhóm chi lớn và bất thường.",
     question: "Tháng này tôi tiêu nhiều nhất ở đâu?",
   },
   {
     label: "Ngân sách",
-    title: "Ngân sách sắp vượt?",
-    description: "Ưu tiên nhóm cần giảm.",
+    title: "Ngân sách nào sắp vượt?",
+    description: "Ưu tiên nhóm cần giảm chi.",
     question: "Ngân sách nào sắp vượt?",
   },
   {
     label: "Dòng tiền",
     title: "Dự báo dòng tiền",
-    description: "Ước lượng cuối tháng.",
+    description: "Ước lượng dư địa chi tiêu.",
     question: "Dự báo dòng tiền tháng này giúp tôi",
   },
   {
     label: "Mục tiêu",
-    title: "Tiến độ mục tiêu",
-    description: "Kiểm tra mục tiêu chậm.",
+    title: "Mục tiêu đang thế nào?",
+    description: "Tiến độ tiết kiệm và mục tiêu chậm.",
     question: "Mục tiêu tài chính của tôi đang thế nào?",
   },
   {
     label: "Cảnh báo",
-    title: "Cảnh báo cần xử lý",
-    description: "Xem rủi ro ưu tiên.",
+    title: "Có cảnh báo nào không?",
+    description: "Vấn đề ưu tiên theo Rule Insights.",
     question: "Tôi có cảnh báo tài chính nào cần xử lý không?",
   },
 ];
@@ -93,7 +93,7 @@ function createWelcomeMessage(id: string): AIChatMessage {
     id,
     role: "assistant",
     content:
-      "📊 Tổng quan\nXin chào, tôi là MyFinance AI — trợ lý tài chính cá nhân của bạn.\n\n🔍 Phân tích\nTôi sẽ đọc Finance Context thật, chạy Rule Insights hiện tại và ưu tiên các cảnh báo quan trọng.\n\n💡 Gợi ý\nBạn có thể hỏi về ngân sách, chi tiêu, dòng tiền, ví tiền hoặc mục tiêu tài chính.",
+      "Xin chào, tôi là AI tài chính của bạn.\n\n📊 Tổng quan\nTôi sẽ đọc Finance Context thật và Rule Insights hiện tại.\n\n🔍 Phân tích\nBạn có thể hỏi về ngân sách, dòng tiền, chi tiêu, ví tiền hoặc mục tiêu.\n\n💡 Gợi ý\nChọn một gợi ý bên dưới để bắt đầu nhanh.",
     createdAt: getTimeLabel(),
   };
 }
@@ -139,11 +139,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
   );
 
   const contextStatusLabel = useMemo(() => {
-    if (contextLoading) return "Updating context";
-    if (contextError) return "Context error";
+    if (contextLoading) return "Đang cập nhật";
+    if (contextError) return "Lỗi dữ liệu";
     if (financeContext)
       return `${financeContext.counts.transactions} giao dịch • ${ruleInsights.length} insight`;
-    return "Waiting for context";
+    return "Đang chờ dữ liệu";
   }, [contextError, contextLoading, financeContext, ruleInsights.length]);
 
   const loadFinanceContext = useCallback(() => {
@@ -243,27 +243,26 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
   return (
     <section
       className={[
-        "fixed z-80 flex flex-col overflow-hidden bg-white shadow-2xl",
-        "inset-x-0 bottom-0 h-[min(94vh,var(--app-height))] rounded-t-4xl",
+        "fixed inset-0 z-80 flex h-dvh flex-col overflow-hidden bg-white shadow-2xl",
         "lg:inset-y-4 lg:right-4 lg:left-auto lg:h-auto lg:w-110 lg:rounded-4xl",
       ].join(" ")}
       role="dialog"
       aria-modal="false"
       aria-label="AI Finance Agent"
     >
-      <header className="border-b border-slate-100 bg-white px-5 py-4">
+      <header className="shrink-0 border-b border-slate-100 bg-white px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200">
-              <Sparkles size={21} />
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200 sm:size-12">
+              <Sparkles size={20} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="truncate text-sm font-black text-slate-900">
+                <h2 className="truncate text-base font-black text-slate-900 sm:text-sm">
                   MyFinance AI
                 </h2>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600">
-                  AI-5.3
+                <span className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600 sm:inline-flex">
+                  AI-5.4
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-400">
@@ -307,11 +306,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-black">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-600">
             <span className="size-2 rounded-full bg-emerald-500" />
-            Live Context
+            Live
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-blue-600">
+          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-blue-600">
             <Activity size={12} />
-            {contextStatusLabel}
+            <span className="truncate">{contextStatusLabel}</span>
           </span>
           {urgentInsightCount > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-amber-600">
@@ -323,7 +322,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
 
       <main
         ref={scrollRef}
-        className="flex-1 overflow-y-auto bg-slate-50/70 px-5 py-5"
+        className="flex-1 overflow-y-auto bg-slate-50/70 px-4 py-4 sm:px-5 sm:py-5"
       >
         <div className="mb-4 space-y-3">
           <AIContextCard context={financeContext} />
@@ -342,11 +341,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
           ))}
 
           {loading && (
-            <div className="flex gap-3">
-              <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm">
+            <div className="flex gap-2.5 sm:gap-3">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 shadow-sm sm:size-9">
                 <Bot size={16} />
               </div>
-              <div className="w-[86%] rounded-[1.35rem] rounded-bl-md border border-slate-100 bg-white px-4 py-3 shadow-sm">
+              <div className="w-[88%] rounded-[1.35rem] rounded-bl-md border border-slate-100 bg-white px-4 py-3 shadow-sm sm:w-[86%]">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-900">
                     <Sparkles size={14} className="text-blue-600" />
@@ -377,7 +376,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         </div>
 
         {!hasUserMessage && (
-          <section className="mt-5 rounded-3xl border border-blue-100 bg-linear-to-br from-blue-50 to-cyan-50 p-3">
+          <section className="mt-5 rounded-3xl border border-blue-100 bg-linear-to-br from-blue-50 to-cyan-50 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -385,11 +384,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   Gợi ý bắt đầu
                 </div>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  Chọn nhanh để test AI-5.3 với dữ liệu thật.
+                  Chọn nhanh để hỏi AI với dữ liệu thật.
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-2">
               {quickQuestions.map((item) => (
                 <button
                   key={item.question}
@@ -400,10 +399,10 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
                     {item.label}
                   </p>
-                  <h3 className="mt-1 text-[13px] font-black leading-5 text-slate-900">
+                  <h3 className="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-900">
                     {item.title}
                   </h3>
-                  <p className="mt-1 line-clamp-1 text-[11px] font-semibold leading-4 text-slate-400">
+                  <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-400">
                     {item.description}
                   </p>
                 </button>
@@ -413,14 +412,14 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         )}
       </main>
 
-      <footer className="border-t border-slate-100 bg-white p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+      <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pt-4 sm:pb-4">
         <AIChatInput
           value={input}
           loading={loading || contextLoading}
           onChange={setInput}
           onSubmit={() => handleAsk()}
         />
-        <p className="mt-2 text-center text-[10px] font-semibold text-slate-400">
+        <p className="mt-2 text-center text-[11px] font-semibold text-slate-400">
           ⚠ AI có thể mắc sai sót. Hãy kiểm tra lại dữ liệu.
         </p>
       </footer>
