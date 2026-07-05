@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
   History,
   Maximize2,
   MessageSquarePlus,
@@ -43,6 +42,10 @@ type AIAgentDrawerProps = {
   open: boolean;
   onClose: () => void;
 };
+
+function getTimestampMs() {
+  return new Date().getTime();
+}
 
 type QuickQuestion = {
   label: string;
@@ -116,6 +119,74 @@ function splitStreamingChunks(answer: string) {
   const normalized = answer.replace(/\r\n/g, "\n");
   const chunks = normalized.match(/.{1,18}(?:\s|$)|\n/g) ?? [normalized];
   return chunks.filter(Boolean);
+}
+
+type AIFinanceStreamEvent =
+  | { type: "delta"; content: string }
+  | { type: "meta"; response: AIFinanceChatApiResponse }
+  | { type: "error"; message: string };
+
+function parseStreamLine(line: string): AIFinanceStreamEvent | null {
+  const trimmed = line.trim();
+  if (!trimmed || !trimmed.startsWith("data:")) return null;
+
+  const payload = trimmed.slice(5).trim();
+  if (!payload || payload === "[DONE]") return null;
+
+  try {
+    return JSON.parse(payload) as AIFinanceStreamEvent;
+  } catch {
+    return null;
+  }
+}
+
+async function readFinanceAIStream(
+  response: Response,
+  onDelta: (value: string) => void,
+) {
+  if (!response.body) {
+    throw new Error("Streaming response is empty.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: AIFinanceChatApiResponse | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const event = parseStreamLine(line);
+      if (!event) continue;
+
+      if (event.type === "delta") {
+        onDelta(event.content);
+      } else if (event.type === "meta") {
+        finalResponse = event.response;
+      } else if (event.type === "error") {
+        throw new Error(event.message);
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = parseStreamLine(buffer);
+    if (event?.type === "delta") onDelta(event.content);
+    if (event?.type === "meta") finalResponse = event.response;
+    if (event?.type === "error") throw new Error(event.message);
+  }
+
+  if (!finalResponse) {
+    throw new Error("AI stream finished without metadata.");
+  }
+
+  return finalResponse;
 }
 
 function formatConversationTime(value: string) {
@@ -346,83 +417,6 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     return created.id;
   }
 
-  async function runAIChat(
-    question: string,
-    signal: AbortSignal,
-  ): Promise<AIFinanceChatApiResponse> {
-    const localResponse = buildAIFinanceChatResponse({
-      question,
-      context: financeContext,
-      maxInsights: 4,
-    });
-
-    try {
-      const { settings } = await getAIFinanceSettingsFromDb(userId);
-
-      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-      if (settings.provider === "local" || !settings.apiKey) {
-        return {
-          answer: localResponse.answer,
-          source: "local" as const,
-          confidence: localResponse.hasEnoughData ? 0.78 : 0.45,
-          fallbackUsed: false,
-          generatedAt: new Date().toISOString(),
-          actions: [],
-          model: "Rule Engine",
-        } satisfies AIFinanceChatApiResponse;
-      }
-
-      const response = await fetch("/api/ai-finance/chat", {
-        method: "POST",
-        signal,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question,
-          context: financeContext,
-          settings,
-          maxInsights: 4,
-          conversation: messages
-            .filter(
-              (message) =>
-                message.role === "user" || message.role === "assistant",
-            )
-            .slice(-12)
-            .map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`AI API lỗi ${response.status}`);
-      }
-
-      return (await response.json()) as AIFinanceChatApiResponse;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
-      }
-
-      return {
-        answer: localResponse.answer,
-        source: "fallback" as const,
-        confidence: localResponse.hasEnoughData ? 0.72 : 0.42,
-        fallbackUsed: true,
-        fallbackReason:
-          error instanceof Error
-            ? error.message
-            : "OpenAI không phản hồi, đã dùng Local AI.",
-        generatedAt: new Date().toISOString(),
-        actions: [],
-        model: "Rule Engine",
-      } satisfies AIFinanceChatApiResponse;
-    }
-  }
-
   function applyResponseMetadata(
     assistantMessageId: string,
     response: AIFinanceChatApiResponse,
@@ -461,6 +455,178 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
       refreshConversations();
     } catch (error) {
       console.error("[AI conversation] Failed to save message", error);
+    }
+  }
+
+  async function streamOpenAIAnswer(
+    question: string,
+    assistantMessageId: string,
+    conversationId: string | null,
+    signal: AbortSignal,
+  ) {
+    const localResponse = buildAIFinanceChatResponse({
+      question,
+      context: financeContext,
+      maxInsights: 4,
+    });
+
+    const { settings } = await getAIFinanceSettingsFromDb(userId);
+
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+    if (settings.provider === "local" || !settings.apiKey) {
+      const response = {
+        answer: localResponse.answer,
+        source: "local" as const,
+        confidence: localResponse.hasEnoughData ? 0.78 : 0.45,
+        fallbackUsed: false,
+        generatedAt: new Date().toISOString(),
+        actions: [],
+        model: "Rule Engine",
+      } satisfies AIFinanceChatApiResponse;
+
+      await streamAssistantAnswer(assistantMessageId, response, conversationId);
+      return;
+    }
+
+    const startedAt = getTimestampMs();
+    streamedContentRef.current = "";
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === assistantMessageId
+          ? {
+              ...message,
+              status: "streaming",
+              source: "openai",
+              model: settings.model,
+              content: "",
+            }
+          : message,
+      ),
+    );
+    setLoading(false);
+    setStreaming(true);
+
+    try {
+      const response = await fetch("/api/ai-finance/chat/stream", {
+        method: "POST",
+        signal,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question,
+          context: financeContext,
+          settings,
+          maxInsights: 4,
+          conversation: messages
+            .filter(
+              (message) =>
+                message.role === "user" || message.role === "assistant",
+            )
+            .slice(-12)
+            .map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(
+          `AI stream lỗi ${response.status}${errorText ? `: ${errorText.slice(0, 220)}` : ""}`,
+        );
+      }
+
+      const finalResponse = await readFinanceAIStream(response, (delta) => {
+        if (!delta || stopRequestedRef.current) return;
+
+        streamedContentRef.current = `${streamedContentRef.current}${delta}`;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: streamedContentRef.current,
+                }
+              : message,
+          ),
+        );
+      });
+
+      if (stopRequestedRef.current) {
+        const stoppedMessage: AIChatMessage = {
+          id: assistantMessageId,
+          role: "assistant",
+          status: "stopped",
+          content: streamedContentRef.current.trim() || "Response stopped.",
+          createdAt: getTimeLabel(),
+          source: "openai",
+          confidence: finalResponse.confidence,
+          model: finalResponse.model ?? settings.model,
+          fallbackUsed: false,
+          latencyMs: getTimestampMs() - startedAt,
+          usage: finalResponse.usage,
+          promptDebug: finalResponse.promptDebug,
+        };
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId ? stoppedMessage : message,
+          ),
+        );
+        await persistMessage(conversationId, stoppedMessage);
+        return;
+      }
+
+      const completedMessage: AIChatMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        status: "completed",
+        content: finalResponse.answer || streamedContentRef.current,
+        createdAt: getTimeLabel(),
+        source: finalResponse.source,
+        confidence: finalResponse.confidence,
+        model: finalResponse.model ?? settings.model,
+        fallbackUsed: finalResponse.fallbackUsed,
+        fallbackReason: finalResponse.fallbackReason,
+        latencyMs: finalResponse.latencyMs ?? getTimestampMs() - startedAt,
+        usage: finalResponse.usage,
+        promptDebug: finalResponse.promptDebug,
+      };
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantMessageId ? completedMessage : message,
+        ),
+      );
+      await persistMessage(conversationId, completedMessage);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+
+      const fallbackResponse = {
+        answer: localResponse.answer,
+        source: "fallback" as const,
+        confidence: localResponse.hasEnoughData ? 0.72 : 0.42,
+        fallbackUsed: true,
+        fallbackReason:
+          error instanceof Error
+            ? error.message
+            : "OpenAI stream không phản hồi, đã dùng Local AI.",
+        generatedAt: new Date().toISOString(),
+        actions: [],
+        model: "Rule Engine",
+      } satisfies AIFinanceChatApiResponse;
+
+      await streamAssistantAnswer(
+        assistantMessageId,
+        fallbackResponse,
+        conversationId,
+      );
     }
   }
 
@@ -616,11 +782,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     void ensureConversation(question)
       .then(async (conversationId) => {
         await persistMessage(conversationId, userMessage);
-        const response = await runAIChat(question, controller.signal);
-        await streamAssistantAnswer(
+        await streamOpenAIAnswer(
+          question,
           assistantMessageId,
-          response,
           conversationId,
+          controller.signal,
         );
       })
       .catch((error: unknown) => {
@@ -662,11 +828,6 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     setMessages([createWelcomeMessage(nextMessageId("welcome-new"))]);
     setInput("");
     setHistoryOpen(false);
-  }
-
-  function handleClearChat() {
-    if (loading || streaming) handleStopGenerating();
-    handleNewChat();
   }
 
   function handleSelectConversation(conversationId: string) {
@@ -769,9 +930,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
       className={[
         "fixed inset-0 z-80 flex h-dvh flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300 ease-out",
         "lg:top-5 lg:right-4 lg:bottom-3 lg:left-auto lg:h-auto lg:rounded-4xl",
-        panelExpanded
-          ? "lg:w-[50rem] xl:w-[56rem]"
-          : "lg:w-[28rem] xl:w-[30rem]",
+        panelExpanded ? "lg:w-200 xl:w-4xl" : "lg:w-md xl:w-120",
       ].join(" ")}
       role="dialog"
       aria-modal="false"
@@ -789,7 +948,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   MyFinance AI
                 </h2>
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600">
-                  AI-8.1
+                  AI-8.2
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
@@ -1199,7 +1358,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             )}
 
             {!hasUserMessage && (
-              <section className="mx-auto flex min-h-[420px] max-w-2xl flex-col justify-center py-8">
+              <section className="mx-auto flex min-h-105 max-w-2xl flex-col justify-center py-8">
                 <div className="text-center">
                   <div className="mx-auto flex size-14 items-center justify-center rounded-4xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-100">
                     <Sparkles size={24} />

@@ -32,6 +32,16 @@ function compactInsights(insights: AIFinanceRuleInsight[]) {
   }));
 }
 
+function compactConversation(input: AIFinanceOpenAIInput) {
+  return (input.conversation ?? []).slice(-8).map((message) => ({
+    role: message.role,
+    content:
+      message.content.length > 900
+        ? `${message.content.slice(0, 900)}...`
+        : message.content,
+  }));
+}
+
 export function buildAIFinanceOpenAISystemPrompt(input: AIFinanceOpenAIInput) {
   return [
     "You are MyFinance AI, a personal finance copilot inside the MyFinance app.",
@@ -62,6 +72,7 @@ export function buildAIFinanceOpenAIUserPrompt(input: AIFinanceOpenAIInput) {
   const insightsPayload = input.settings.sendRuleInsights
     ? compactInsights(input.insights)
     : [];
+  const conversationPayload = compactConversation(input);
 
   return [
     `Câu hỏi của người dùng: ${input.question}`,
@@ -73,6 +84,7 @@ export function buildAIFinanceOpenAIUserPrompt(input: AIFinanceOpenAIInput) {
       {
         financeContext: contextPayload,
         ruleInsights: insightsPayload,
+        recentConversation: conversationPayload,
       },
       null,
       2,
@@ -81,6 +93,7 @@ export function buildAIFinanceOpenAIUserPrompt(input: AIFinanceOpenAIInput) {
     "",
     "Yêu cầu trả lời:",
     "- Trả lời đúng trọng tâm câu hỏi, như một trợ lý ChatGPT đang tư vấn trực tiếp.",
+    "- Nếu recentConversation có dữ liệu, hãy dùng để giữ mạch hội thoại, nhưng ưu tiên câu hỏi mới nhất.",
     "- Mở đầu bằng 1-2 câu nhận định ngắn, không mở đầu bằng danh sách dài.",
     "- Chỉ dùng số liệu có trong dữ liệu trên.",
     "- Nếu có cảnh báo/rule insight liên quan, hãy nhắc rõ nhưng không lặp máy móc.",

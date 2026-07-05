@@ -27,6 +27,10 @@ export type AIFinanceChatApiRequest = {
   context: AIFinanceContext | null;
   settings: AIFinanceAISettings;
   maxInsights?: number;
+  conversation?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
 };
 
 export type AIFinanceOpenAIInput = {
@@ -35,6 +39,10 @@ export type AIFinanceOpenAIInput = {
   insights: AIFinanceRuleInsight[];
   intent: AIFinanceChatIntent;
   settings: AIFinanceAISettings;
+  conversation?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
 };
 
 /**
