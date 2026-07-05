@@ -3,7 +3,9 @@ import type { AIFinanceRuleInsight } from "./aiFinanceRules";
 import type {
   AIFinanceChatAction,
   AIFinanceChatIntent,
+  AIFinanceChatResponseSource,
   AIFinanceChatUsage,
+  AIFinancePromptDebug,
 } from "./aiChatTypes";
 
 export type AIFinanceProvider = "openai" | "local";
@@ -46,7 +48,7 @@ export type AIFinanceOpenAIStructuredResponse = {
 
 export type AIFinanceChatApiResponse = {
   answer: string;
-  source: "openai" | "local" | "fallback";
+  source: AIFinanceChatResponseSource;
   confidence: number;
   fallbackUsed: boolean;
   fallbackReason?: string;
@@ -56,4 +58,5 @@ export type AIFinanceChatApiResponse = {
   latencyMs?: number;
   usage?: AIFinanceChatUsage;
   responseId?: string;
+  promptDebug?: AIFinancePromptDebug;
 };

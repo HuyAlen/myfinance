@@ -244,6 +244,77 @@ export type Database = {
         Relationships: [];
       };
 
+      ai_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          is_pinned: boolean;
+          created_at: string;
+          updated_at: string;
+          last_message_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title?: string;
+          is_pinned?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          last_message_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          is_pinned?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          last_message_at?: string;
+        };
+        Relationships: [];
+      };
+
+      ai_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          role: "user" | "assistant";
+          content: string;
+          provider: "local" | "openai" | "fallback" | null;
+          model: string | null;
+          confidence: number | null;
+          status: "pending" | "streaming" | "completed" | "stopped" | "error";
+          metadata: Record<string, unknown> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          role: "user" | "assistant";
+          content: string;
+          provider?: "local" | "openai" | "fallback" | null;
+          model?: string | null;
+          confidence?: number | null;
+          status?: "pending" | "streaming" | "completed" | "stopped" | "error";
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          role?: "user" | "assistant";
+          content?: string;
+          provider?: "local" | "openai" | "fallback" | null;
+          model?: string | null;
+          confidence?: number | null;
+          status?: "pending" | "streaming" | "completed" | "stopped" | "error";
+          metadata?: Record<string, unknown> | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
       investments: {
         Row: {
           id: string;

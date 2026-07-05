@@ -22,6 +22,13 @@ export type AIFinanceChatIntentScore = {
 
 export type AIFinanceChatResponseSource = "local" | "openai" | "fallback";
 
+export type AIFinanceChatMessageStatus =
+  | "pending"
+  | "streaming"
+  | "completed"
+  | "stopped"
+  | "error";
+
 export type AIFinanceChatActionType =
   | "open_transactions"
   | "open_budgets"
@@ -53,6 +60,18 @@ export type AIFinanceChatUsage = {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+};
+
+export type AIFinanceStreamChunk = {
+  text: string;
+  done?: boolean;
+};
+
+export type AIFinanceStreamHandlers = {
+  onStart?: () => void;
+  onChunk?: (chunk: AIFinanceStreamChunk) => void;
+  onDone?: () => void;
+  onError?: (error: Error) => void;
 };
 
 export type AIFinancePromptDebug = {

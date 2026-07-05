@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import ConfirmDialog, {
@@ -565,7 +565,7 @@ export default function SettingsPage() {
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-5">
             {/* Avatar */}
-            <div className="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-lg shadow-blue-200/60">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-lg shadow-blue-200/60">
               {avatarLetter}
             </div>
             <div className="min-w-0">
@@ -658,7 +658,7 @@ export default function SettingsPage() {
               title="Hồ sơ cá nhân"
               desc="Thông tin tài khoản của bạn"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="grid gap-4 md:grid-cols-2">
                 <SettingInput label="Email" value={displayEmail} readOnly />
                 <SettingInput
@@ -719,7 +719,7 @@ export default function SettingsPage() {
               title="Tùy chỉnh ứng dụng"
               desc="Ngôn ngữ, giao diện và mặc định"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="space-y-5">
                 {/* Language */}
                 <div className="flex items-center justify-between gap-4">
@@ -843,7 +843,7 @@ export default function SettingsPage() {
               title="Thiết lập tài chính"
               desc="Tham số kế hoạch tài chính cá nhân"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="grid gap-4 md:grid-cols-2">
                 <SettingSelect
                   label="Tháng tài chính bắt đầu"
@@ -961,8 +961,8 @@ export default function SettingsPage() {
               desc="AI-6.1 Provider Management, model và quy tắc an toàn"
             />
 
-            <div className="mt-4 overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-sm">
-              <div className="border-b border-blue-50 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-6">
+            <div className="mt-4 overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
+              <div className="border-b border-blue-50 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="max-w-2xl">
                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-sm shadow-blue-200">
@@ -981,7 +981,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
 
-                  <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-[440px]">
+                  <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-110">
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                         Status
@@ -1348,7 +1348,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-4">
                 <h3 className="text-sm font-black text-slate-900">
                   AI Advisor Features
@@ -1411,7 +1411,7 @@ export default function SettingsPage() {
               title="Thông báo"
               desc="Quản lý cảnh báo và thông báo hệ thống"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="space-y-1">
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -1476,9 +1476,9 @@ export default function SettingsPage() {
             />
             <div className="mt-4 space-y-4">
               {/* Storage info */}
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                     <Database size={16} />
                   </div>
                   <div>
@@ -1518,8 +1518,8 @@ export default function SettingsPage() {
               {/* Actions grid */}
               <div className="grid gap-4 md:grid-cols-3">
                 {/* Export */}
-                <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                     <Download size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
@@ -1538,8 +1538,8 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Import */}
-                <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
+                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
                     <Upload size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
@@ -1561,8 +1561,8 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Reset demo */}
-                <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm">
+                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm">
                     <RefreshCcw size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
@@ -1592,7 +1592,7 @@ export default function SettingsPage() {
               title="Bảo mật"
               desc="Quản lý bảo mật tài khoản"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   {
@@ -1663,14 +1663,14 @@ export default function SettingsPage() {
               title="Đồng bộ hóa"
               desc="Trạng thái kết nối và đồng bộ dữ liệu"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-center gap-4">
                 <div
                   className={
                     "flex size-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm " +
                     (connected
-                      ? "bg-gradient-to-br from-emerald-500 to-teal-400"
-                      : "bg-gradient-to-br from-amber-400 to-orange-400")
+                      ? "bg-linear-to-br from-emerald-500 to-teal-400"
+                      : "bg-linear-to-br from-amber-400 to-orange-400")
                   }
                 >
                   <RefreshCcw
@@ -1754,7 +1754,7 @@ export default function SettingsPage() {
               title="Trạng thái hệ thống"
               desc="Thông tin phiên bản và dịch vụ"
             />
-            <div className="mt-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
@@ -1833,7 +1833,7 @@ export default function SettingsPage() {
               desc="Các thao tác không thể hoàn tác"
               danger
             />
-            <div className="mt-4 rounded-[2rem] border border-rose-200 bg-rose-50/50 p-6 shadow-sm">
+            <div className="mt-4 rounded-4xl border border-rose-200 bg-rose-50/50 p-6 shadow-sm">
               <div className="space-y-4">
                 {/* Reset demo */}
                 <div className="flex flex-col justify-between gap-4 rounded-2xl border border-rose-100 bg-white p-5 sm:flex-row sm:items-center">
