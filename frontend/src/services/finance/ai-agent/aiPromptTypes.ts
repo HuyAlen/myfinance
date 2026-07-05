@@ -1,6 +1,10 @@
 import type { AIFinanceContext } from "./aiFinanceContext";
 import type { AIFinanceRuleInsight } from "./aiFinanceRules";
-import type { AIFinanceChatAction, AIFinanceChatIntent } from "./aiChatTypes";
+import type {
+  AIFinanceChatAction,
+  AIFinanceChatIntent,
+  AIFinanceChatUsage,
+} from "./aiChatTypes";
 
 export type AIFinanceProvider = "openai" | "local";
 
@@ -49,4 +53,7 @@ export type AIFinanceChatApiResponse = {
   model?: string;
   generatedAt: string;
   actions: AIFinanceChatAction[];
+  latencyMs?: number;
+  usage?: AIFinanceChatUsage;
+  responseId?: string;
 };

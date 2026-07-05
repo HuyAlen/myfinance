@@ -49,6 +49,29 @@ export type AIFinanceChatResponseParts = {
   suggestions: string[];
 };
 
+export type AIFinanceChatUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
+export type AIFinancePromptDebug = {
+  provider: AIFinanceChatResponseSource;
+  model?: string;
+  intent?: AIFinanceChatIntent;
+  temperature?: number;
+  maxTokens?: number;
+  contextSent?: boolean;
+  ruleInsightsSent?: boolean;
+  insightCount?: number;
+  noFabrication?: boolean;
+  systemPromptPreview?: string;
+  userPromptPreview?: string;
+  systemPromptChars?: number;
+  userPromptChars?: number;
+  responseId?: string;
+};
+
 export type AIFinanceChatResponse = {
   answer: string;
   intent: AIFinanceChatIntent;
@@ -59,7 +82,12 @@ export type AIFinanceChatResponse = {
   source?: AIFinanceChatResponseSource;
   confidence?: number;
   actions?: AIFinanceChatAction[];
+  fallbackUsed?: boolean;
   fallbackReason?: string;
+  model?: string;
+  latencyMs?: number;
+  usage?: AIFinanceChatUsage;
+  promptDebug?: AIFinancePromptDebug;
 };
 
 export type BuildAIFinanceChatResponseInput = {

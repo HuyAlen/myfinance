@@ -195,6 +195,55 @@ export type Database = {
         Relationships: [];
       };
 
+      ai_user_settings: {
+        Row: {
+          id: string;
+          user_id: string;
+          provider: "openai" | "local";
+          api_key: string | null;
+          model: string;
+          temperature: number;
+          max_tokens: number;
+          fallback_local: boolean;
+          no_fabrication: boolean;
+          send_finance_context: boolean;
+          send_rule_insights: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          provider?: "openai" | "local";
+          api_key?: string | null;
+          model?: string;
+          temperature?: number;
+          max_tokens?: number;
+          fallback_local?: boolean;
+          no_fabrication?: boolean;
+          send_finance_context?: boolean;
+          send_rule_insights?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          provider?: "openai" | "local";
+          api_key?: string | null;
+          model?: string;
+          temperature?: number;
+          max_tokens?: number;
+          fallback_local?: boolean;
+          no_fabrication?: boolean;
+          send_finance_context?: boolean;
+          send_rule_insights?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+
       investments: {
         Row: {
           id: string;

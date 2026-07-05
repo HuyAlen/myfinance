@@ -22,7 +22,8 @@ import {
 } from "@/src/services/finance/ai-agent/aiFinanceContext";
 import { buildAIFinanceRuleInsights } from "@/src/services/finance/ai-agent/aiFinanceRules";
 import { buildAIFinanceChatResponse } from "@/src/services/finance/ai-agent/aiFinanceChatEngine";
-import { getAIFinanceSettings } from "@/src/services/finance/ai-agent/aiSettingsStorage";
+import { getAIFinanceSettingsFromDb } from "@/src/services/finance/ai-agent/aiSettingsService";
+import { useAuth } from "@/src/components/auth/AuthProvider";
 import type { AIFinanceChatApiResponse } from "@/src/services/finance/ai-agent/aiPromptTypes";
 
 type AIAgentDrawerProps = {
@@ -101,6 +102,7 @@ function createWelcomeMessage(id: string): AIChatMessage {
 }
 
 export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
+  const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messageIdRef = useRef(0);
   const contextRequestRef = useRef(0);
@@ -210,7 +212,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     });
 
     try {
-      const settings = getAIFinanceSettings();
+      const { settings } = await getAIFinanceSettingsFromDb(user?.id);
 
       if (settings.provider === "local" || !settings.apiKey) {
         return {
@@ -220,6 +222,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
           fallbackUsed: false,
           generatedAt: new Date().toISOString(),
           actions: [],
+          model: "Rule Engine",
         } satisfies AIFinanceChatApiResponse;
       }
 
@@ -253,6 +256,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             : "OpenAI không phản hồi, đã dùng Local AI.",
         generatedAt: new Date().toISOString(),
         actions: [],
+        model: "Rule Engine",
       } satisfies AIFinanceChatApiResponse;
     }
   }
@@ -282,6 +286,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             createdAt: getTimeLabel(),
             source: response.source,
             confidence: response.confidence,
+            model: response.model,
+            fallbackUsed: response.fallbackUsed,
+            fallbackReason: response.fallbackReason,
+            latencyMs: response.latencyMs,
+            usage: response.usage,
           };
 
           setMessages((prev) => [...prev, assistantMessage]);
@@ -320,7 +329,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   MyFinance AI
                 </h2>
                 <span className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600 sm:inline-flex">
-                  AI-6.2
+                  AI-6.3
                 </span>
               </div>
               <p className="truncate text-xs font-semibold text-slate-400">
