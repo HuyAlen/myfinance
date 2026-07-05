@@ -1,10 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
+import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
+import AIAgentDrawer from "@/src/components/ai-agent/AIAgentDrawer";
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import WelcomeWizard from "@/src/components/onboarding/WelcomeWizard";
 import ProductTour from "@/src/components/onboarding/ProductTour";
@@ -19,6 +21,7 @@ type AppShellProps = {
 
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [aiAgentOpen, setAiAgentOpen] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -83,7 +86,7 @@ export default function AppShell({ children }: AppShellProps) {
       <div className="flex min-h-(--app-height) items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <div className="size-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-          <p className="text-sm text-slate-500">Đang tải...</p>
+          <p className="text-sm text-slate-500">Äang táº£i...</p>
         </div>
       </div>
     );
@@ -95,7 +98,7 @@ export default function AppShell({ children }: AppShellProps) {
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/*
-        Overlay backdrop — always mounted so it can fade in/out smoothly.
+        Overlay backdrop â€” always mounted so it can fade in/out smoothly.
         On desktop (lg+) it is permanently invisible and non-interactive.
       */}
         <div
@@ -123,8 +126,12 @@ export default function AppShell({ children }: AppShellProps) {
         </div>
 
         <BottomNav />
+      {!aiAgentOpen && (
+        <AIFloatingButton onClick={() => setAiAgentOpen(true)} />
+      )}
+      <AIAgentDrawer open={aiAgentOpen} onClose={() => setAiAgentOpen(false)} />
 
-        {/* ── Onboarding Layer ─────────────────────────────────────────────── */}
+        {/* â”€â”€ Onboarding Layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <WelcomeWizard />
         <ProductTour />
         <OnboardingChecklist />
@@ -134,3 +141,6 @@ export default function AppShell({ children }: AppShellProps) {
     </DateFilterProvider>
   );
 }
+
+
+

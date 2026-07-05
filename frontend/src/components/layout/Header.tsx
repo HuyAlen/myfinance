@@ -713,8 +713,8 @@ export default function Header({
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <header className="sticky top-0 z-30 h-auto shrink-0 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-[72px] lg:px-8">
-      <div className="flex h-[72px] items-center justify-between gap-3 sm:gap-5 lg:h-full">
+    <header className="sticky top-0 z-30 h-auto shrink-0 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-18 lg:px-8">
+      <div className="flex h-18 items-center justify-between gap-3 sm:gap-5 lg:h-full">
         {/* ══ LEFT ══ */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Hamburger mobile */}
@@ -759,7 +759,7 @@ export default function Header({
         </div>
 
         {/* ══ CENTER: Global Search ══ */}
-        <div className="relative hidden w-full max-w-[460px] flex-1 lg:block">
+        <div className="relative hidden w-full max-w-115 flex-1 lg:block">
           {/* click-outside backdrop */}
           {showDrop && (
             <div
@@ -877,7 +877,7 @@ export default function Header({
                   setDropdownOpen(false);
                   setNotifOpen(false);
                 }}
-                className="flex h-11 min-w-[132px] items-center justify-center gap-2 border-x border-slate-200 px-3 text-sm font-black text-slate-900 transition hover:bg-white"
+                className="flex h-11 min-w-33 items-center justify-center gap-2 border-x border-slate-200 px-3 text-sm font-black text-slate-900 transition hover:bg-white"
                 aria-haspopup="dialog"
                 aria-expanded={monthOpen}
               >
@@ -904,7 +904,7 @@ export default function Header({
                   onClick={() => setMonthOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-full z-50 mt-2 w-[360px] overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
+                  className="absolute right-0 top-full z-50 mt-2 w-90 overflow-hidden rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl shadow-slate-200/70"
                   role="dialog"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3 px-1">
@@ -1406,7 +1406,7 @@ export default function Header({
                 setFilterMode("month");
                 handleSelectMonth(event.target.value);
               }}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [color-scheme:light]"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0 scheme-light"
               aria-label="Chọn tháng báo cáo"
             />
           </label>

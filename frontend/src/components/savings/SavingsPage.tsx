@@ -454,19 +454,6 @@ const getTransactionIcon = (type: SavingTransactionType) => {
   }
 };
 
-const getTransactionTone = (type: SavingTransactionType) => {
-  switch (type) {
-    case "deposit":
-    case "interest":
-      return "bg-emerald-50 text-emerald-600";
-    case "withdraw":
-      return "bg-amber-50 text-amber-600";
-    case "settlement":
-      return "bg-blue-50 text-blue-600";
-    default:
-      return "bg-slate-50 text-slate-600";
-  }
-};
 
 const getSignedTransactionAmount = (transaction: SavingTransaction) => {
   if (transaction.type === "withdraw" || transaction.type === "settlement") {
@@ -520,13 +507,13 @@ export default function SavingsPage({
   const [selectedSavingIds, setSelectedSavingIds] = useState<string[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingSavingId, setEditingSavingId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SavingWithWallet | null>(
+  const [, setDeleteTarget] = useState<SavingWithWallet | null>(
     null,
   );
   const [toast, setToast] = useState<ToastState | null>(null);
   const [form, setForm] = useState<SavingFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState("");
-  const [selectedSavingId, setSelectedSavingId] = useState<string | null>(null);
+  const [, setSelectedSavingId] = useState<string | null>(null);
   const [transactionsBySavingId, setTransactionsBySavingId] = useState<
     Record<string, SavingTransaction[]>
   >({});
@@ -632,9 +619,6 @@ export default function SavingsPage({
     );
   }, [selectedSaving, transactionsBySavingId]);
 
-  const selectedLinkedWallet = selectedSaving?.walletId
-    ? (wallets.find((wallet) => wallet.id === selectedSaving.walletId) ?? null)
-    : null;
 
   const transactionAmountPreview = parseCurrencyValue(transactionForm.amount);
   const transactionWalletBalanceAfter = selectedWallet
@@ -646,15 +630,6 @@ export default function SavingsPage({
           : transactionAmountPreview)
     : null;
 
-  const selectedExpectedInterest = selectedSaving
-    ? estimateAnnualInterest(selectedSaving)
-    : 0;
-  const selectedMaturityValue = selectedSaving
-    ? selectedSaving.balance + selectedExpectedInterest
-    : 0;
-  const selectedDaysUntilMaturity = selectedSaving
-    ? getDaysUntil(selectedSaving.maturityDate)
-    : null;
 
   const formConfig = getSavingFormConfig(form.type);
   const previewPrincipal = parseCurrencyValue(form.balance);
@@ -831,9 +806,6 @@ export default function SavingsPage({
     !isEditing && selectedInitialWallet
       ? selectedWalletBalance - previewPrincipal
       : selectedWalletBalance;
-  const savingBalanceAfterCreate = isEditing
-    ? (selectedSaving?.balance ?? previewPrincipal)
-    : previewPrincipal;
 
   const showToast = useCallback((nextToast: ToastState) => {
     setToast(nextToast);
@@ -1324,45 +1296,6 @@ export default function SavingsPage({
     });
   };
 
-  const handleDeleteSaving = async () => {
-    if (!deleteTarget) return;
-
-    setIsPersisting(true);
-
-    if (supabase) {
-      const { error } = await supabase
-        .from("savings")
-        .delete()
-        .eq("id", deleteTarget.id);
-
-      if (error) {
-        setIsPersisting(false);
-        showToast({
-          type: "error",
-          message: error.message || "Không thể xóa khoản tiết kiệm.",
-        });
-        return;
-      }
-    }
-
-    setLocalSavings((current) =>
-      current.filter((item) => item.id !== deleteTarget.id),
-    );
-    setTransactionsBySavingId((current) => {
-      const next = { ...current };
-      delete next[deleteTarget.id];
-      return next;
-    });
-    if (selectedSavingId === deleteTarget.id) {
-      setSelectedSavingId(null);
-    }
-    setDeleteTarget(null);
-    setIsPersisting(false);
-    showToast({
-      type: "success",
-      message: "Đã xóa khoản tiết kiệm khỏi Supabase.",
-    });
-  };
 
   useEffect(() => {
     if (!isEditing || !transactionForm.walletId) return;
@@ -1383,11 +1316,6 @@ export default function SavingsPage({
     };
   }, [isEditing, transactionForm.walletId]);
 
-  const closeDetailDrawer = () => {
-    setSelectedSavingId(null);
-    setTransactionForm(INITIAL_TRANSACTION_FORM);
-    setTransactionError("");
-  };
 
   const updateTransactionForm = <Key extends keyof TransactionFormState>(
     key: Key,
@@ -1801,7 +1729,7 @@ export default function SavingsPage({
                   </span>
                   <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                      className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
                       style={{
                         width: `${Math.max(
                           4,
