@@ -789,7 +789,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   MyFinance AI
                 </h2>
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600">
-                  AI-7.1
+                  AI-8.1
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
@@ -1191,7 +1191,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             )}
 
             {visibleMessages.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-5">
                 {visibleMessages.map((message) => (
                   <AIChatMessageBubble key={message.id} message={message} />
                 ))}

@@ -56,6 +56,10 @@ function normalizeActions(value: unknown): AIFinanceChatAction[] {
     .slice(0, 4);
 }
 
+/**
+ * AI-7 structured composer kept for local fallback/backward compatibility only.
+ * AI-8 OpenAI mode should render native Markdown directly and must not call this.
+ */
 export function composeOpenAIFinanceAnswer(
   parsed: AIFinanceOpenAIStructuredResponse,
 ) {
@@ -106,6 +110,27 @@ export function parseAIFinanceOpenAIJson(
     dataLimitations: asStringArray(parsed.dataLimitations),
     actions: normalizeActions(parsed.actions),
   };
+}
+
+export function normalizeOpenAIFinanceMarkdownAnswer(rawText: string) {
+  const trimmed = rawText
+    .replace(/^```(?:markdown|md)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  if (!trimmed) return "Tôi chưa nhận được nội dung trả lời từ OpenAI.";
+
+  // Prevent accidental JSON-only answers from appearing as raw JSON in the chat.
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = parseAIFinanceOpenAIJson(trimmed);
+      return composeOpenAIFinanceAnswer(parsed);
+    } catch {
+      return trimmed;
+    }
+  }
+
+  return trimmed;
 }
 
 export function extractResponsesApiText(payload: unknown) {

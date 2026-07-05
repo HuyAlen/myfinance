@@ -3,9 +3,8 @@ import {
   buildAIFinanceOpenAIUserPrompt,
 } from "./aiPromptBuilder";
 import {
-  composeOpenAIFinanceAnswer,
   extractResponsesApiText,
-  parseAIFinanceOpenAIJson,
+  normalizeOpenAIFinanceMarkdownAnswer,
 } from "./aiResponseParser";
 import type {
   AIFinanceChatApiResponse,
@@ -65,38 +64,41 @@ function truncatePromptPreview(value: string) {
   return `${value.slice(0, PROMPT_PREVIEW_LIMIT)}\n... truncated ${value.length - PROMPT_PREVIEW_LIMIT} chars`;
 }
 
-function buildJsonSchema() {
-  return {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      overview: { type: "array", items: { type: "string" } },
-      analysis: { type: "array", items: { type: "string" } },
-      suggestions: { type: "array", items: { type: "string" } },
-      confidence: { type: "number" },
-      dataLimitations: { type: "array", items: { type: "string" } },
-      actions: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            type: { type: "string" },
-            label: { type: "string" },
-          },
-          required: ["type", "label"],
-        },
-      },
-    },
-    required: [
-      "overview",
-      "analysis",
-      "suggestions",
-      "confidence",
-      "dataLimitations",
-      "actions",
-    ],
-  };
+function estimateNativeConfidence(input: AIFinanceOpenAIInput, answer: string) {
+  if (!input.context) return 0.45;
+  if (!answer.trim()) return 0.35;
+
+  const hasFinanceData =
+    input.context.counts.transactions > 0 ||
+    input.context.counts.wallets > 0 ||
+    input.context.counts.budgets > 0 ||
+    input.context.counts.goals > 0 ||
+    input.context.counts.debts > 0 ||
+    input.context.counts.investments > 0;
+
+  if (!hasFinanceData) return 0.55;
+  if (input.insights.length > 0) return 0.9;
+  return 0.82;
+}
+
+function buildNativeActions(input: AIFinanceOpenAIInput) {
+  const actionByIntent = {
+    budget: { type: "open_budgets", label: "Mở ngân sách" },
+    spending: { type: "open_transactions", label: "Xem giao dịch" },
+    cashflow: { type: "open_transactions", label: "Xem dòng tiền" },
+    goal: { type: "open_goals", label: "Mở mục tiêu" },
+  } as const;
+
+  if (input.intent in actionByIntent) {
+    return [actionByIntent[input.intent as keyof typeof actionByIntent]];
+  }
+
+  const firstInsight = input.insights[0];
+  if (firstInsight?.actionLabel) {
+    return [{ type: "none", label: firstInsight.actionLabel }];
+  }
+
+  return [];
 }
 
 export async function askOpenAIFinanceAI(
@@ -123,14 +125,6 @@ export async function askOpenAIFinanceAI(
       },
     ],
     max_output_tokens: input.settings.maxTokens,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "myfinance_ai_chat_response",
-        strict: true,
-        schema: buildJsonSchema(),
-      },
-    },
   };
 
   if (!input.settings.model.toLowerCase().startsWith("gpt-5")) {
@@ -162,18 +156,17 @@ export async function askOpenAIFinanceAI(
     throw new Error("OpenAI response is empty.");
   }
 
-  const parsed = parseAIFinanceOpenAIJson(rawText);
-
+  const answer = normalizeOpenAIFinanceMarkdownAnswer(rawText);
   const responseId = getResponseId(payload);
 
   return {
-    answer: composeOpenAIFinanceAnswer(parsed),
+    answer,
     source: "openai",
-    confidence: parsed.confidence,
+    confidence: estimateNativeConfidence(input, answer),
     fallbackUsed: false,
     model: input.settings.model,
     generatedAt: new Date().toISOString(),
-    actions: parsed.actions,
+    actions: buildNativeActions(input),
     latencyMs,
     usage: getResponsesApiUsage(payload),
     responseId,

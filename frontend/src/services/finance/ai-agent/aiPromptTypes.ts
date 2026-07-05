@@ -37,6 +37,10 @@ export type AIFinanceOpenAIInput = {
   settings: AIFinanceAISettings;
 };
 
+/**
+ * Kept for backward compatibility with older AI-7 parsers.
+ * AI-8 Native ChatGPT mode no longer asks OpenAI to return this schema.
+ */
 export type AIFinanceOpenAIStructuredResponse = {
   overview: string[];
   analysis: string[];

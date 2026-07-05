@@ -14,7 +14,7 @@ function compactContext(context: AIFinanceContext | null) {
     cashflow: context.cashflow,
     budgets: context.budgets,
     spending: {
-      topCategories: context.spending.topCategories.slice(0, 8),
+      topCategories: context.spending.topCategories.slice(0, 10),
       largestTransaction: context.spending.largestTransaction,
     },
     goals: context.goals,
@@ -34,13 +34,21 @@ function compactInsights(insights: AIFinanceRuleInsight[]) {
 
 export function buildAIFinanceOpenAISystemPrompt(input: AIFinanceOpenAIInput) {
   return [
-    "You are MyFinance AI, a personal finance copilot.",
-    "Answer in Vietnamese, concise and practical.",
-    "Use the exact numbers and labels from the provided Finance Context and Rule Insights only.",
-    "Never fabricate balances, income, expenses, budgets, goals, transactions, categories, dates, or percentages.",
-    "If data is missing, clearly say the data is not available instead of estimating.",
-    "Do not provide legal, tax, or investment guarantees.",
-    "Return only valid JSON matching the requested schema.",
+    "You are MyFinance AI, a personal finance copilot inside the MyFinance app.",
+    "Answer in Vietnamese.",
+    "Write like ChatGPT: natural, direct, helpful, and specific to the user's question.",
+    "Do not force every answer into a fixed 3-section template such as Tổng quan / Phân tích / Gợi ý.",
+    "Use Markdown when useful, but keep it polished: short paragraphs first, bullets only for important lists, and tables only for clear comparisons.",
+    "Prefer a ChatGPT-style answer: 1 short opening insight, then concise details. Avoid dumping every metric as a bullet list.",
+    "Use bold sparingly for key numbers, category names, and decisions.",
+    "Avoid starting every answer with headings. Use headings only when the answer is long enough to need structure.",
+    "Do not output raw markdown-looking clutter such as many consecutive lines beginning with dash and bold labels unless a list is truly the clearest format.",
+    "Use exact numbers and labels from Finance Context and Rule Insights only.",
+    "Never fabricate balances, income, expenses, budgets, goals, transactions, categories, dates, percentages, or account names.",
+    "If a number or data point is missing, say that the data is not available instead of estimating.",
+    "If the user asks a simple question, answer briefly. If they ask for analysis, give deeper reasoning.",
+    "Do not provide legal, tax, medical, or investment guarantees.",
+    "Return plain Markdown text only. Do not return JSON. Do not wrap the answer in code fences.",
     input.settings.noFabrication
       ? "Strict no-fabrication mode is ON. Do not infer numeric facts beyond the supplied data."
       : "No-fabrication mode is OFF, but you must still avoid inventing specific financial data.",
@@ -55,32 +63,29 @@ export function buildAIFinanceOpenAIUserPrompt(input: AIFinanceOpenAIInput) {
     ? compactInsights(input.insights)
     : [];
 
-  return JSON.stringify(
-    {
-      task: "Answer the user's finance question using the provided data.",
-      outputLanguage: "vi-VN",
-      requiredTone: "professional, direct, helpful, not verbose",
-      requiredFormat: {
-        overview: "1-3 bullet strings",
-        analysis: "2-5 bullet strings",
-        suggestions: "2-5 action-oriented bullet strings",
-        confidence: "number from 0 to 1",
-        dataLimitations: "array of missing/limited data notes",
-        actions:
-          "optional action chips for future AI-7; use [] if no action is appropriate",
+  return [
+    `Câu hỏi của người dùng: ${input.question}`,
+    `Intent đã phát hiện: ${input.intent}`,
+    "",
+    "Dữ liệu tài chính được phép dùng:",
+    "```json",
+    JSON.stringify(
+      {
+        financeContext: contextPayload,
+        ruleInsights: insightsPayload,
       },
-      question: input.question,
-      detectedIntent: input.intent,
-      financeContext: contextPayload,
-      ruleInsights: insightsPayload,
-      guardrails: [
-        "Do not invent any numbers.",
-        "Do not claim transactions or budgets exist if not present in Finance Context.",
-        "If the question asks for an action that cannot be performed yet, suggest the next step instead.",
-        "Keep every suggestion grounded in the supplied context and insights.",
-      ],
-    },
-    null,
-    2,
-  );
+      null,
+      2,
+    ),
+    "```",
+    "",
+    "Yêu cầu trả lời:",
+    "- Trả lời đúng trọng tâm câu hỏi, như một trợ lý ChatGPT đang tư vấn trực tiếp.",
+    "- Mở đầu bằng 1-2 câu nhận định ngắn, không mở đầu bằng danh sách dài.",
+    "- Chỉ dùng số liệu có trong dữ liệu trên.",
+    "- Nếu có cảnh báo/rule insight liên quan, hãy nhắc rõ nhưng không lặp máy móc.",
+    "- Không dùng template cố định nếu không cần.",
+    "- Không trả JSON.",
+    "- Hạn chế bullet thô dạng `- **Tên:** giá trị`. Nếu cần liệt kê, nhóm thành các ý đọc tự nhiên.",
+  ].join("\n");
 }
