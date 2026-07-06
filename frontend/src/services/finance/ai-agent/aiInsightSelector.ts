@@ -11,6 +11,44 @@ const SEVERITY_WEIGHT: Record<AIFinanceRuleInsight["severity"], number> = {
 const INTENT_TERMS: Record<AIFinanceChatIntent, string[]> = {
   overview: [],
   unknown: [],
+  search: [
+    "search",
+    "find",
+    "lookup",
+    "tìm",
+    "tim",
+    "kiếm",
+    "kiem",
+    "tra cứu",
+    "tra cuu",
+    "khi nào",
+    "khi nao",
+    "lúc nào",
+    "luc nao",
+    "bao nhiêu",
+    "bao nhieu",
+    "ở đâu",
+    "o dau",
+    "giao dịch",
+    "giao dich",
+    "transaction",
+    "transactions",
+    "chi tiêu",
+    "chi tieu",
+    "expense",
+    "spending",
+    "mua",
+    "đã mua",
+    "da mua",
+    "thanh toán",
+    "thanh toan",
+    "chuyển khoản",
+    "chuyen khoan",
+    "grab",
+    "shopee",
+    "momo",
+    "macbook",
+  ],
   budget: ["budget", "ngân sách", "ngan sach", "hạn mức", "han muc", "limit"],
   cashflow: [
     "cashflow",
@@ -118,7 +156,8 @@ export function selectAIFinanceInsights(input: {
   if (
     input.intent === "overview" ||
     input.intent === "unknown" ||
-    input.intent === "alert"
+    input.intent === "alert" ||
+    input.intent === "search"
   ) {
     return ranked.slice(0, limit);
   }

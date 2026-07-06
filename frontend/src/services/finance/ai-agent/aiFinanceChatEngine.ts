@@ -1,3 +1,4 @@
+import { buildSmartFinanceSearch } from "./aiFinanceSearch";
 import { buildAIFinanceRuleInsights } from "./aiFinanceRules";
 import {
   detectAIFinanceChatIntent,
@@ -36,6 +37,13 @@ export function buildAIFinanceChatResponse(
   const allInsights = input.context
     ? buildAIFinanceRuleInsights(input.context)
     : [];
+  const searchResults =
+    input.searchResults ??
+    buildSmartFinanceSearch({
+      question: input.question,
+      context: input.context,
+      limit: 12,
+    });
   const selectedInsights = selectAIFinanceInsights({
     insights: allInsights,
     intent,
@@ -48,10 +56,13 @@ export function buildAIFinanceChatResponse(
   });
 
   return {
-    answer: composeAIFinanceAnswer(parts),
+    answer: searchResults?.contextText
+      ? `${searchResults.contextText}\n\n${composeAIFinanceAnswer(parts)}`
+      : composeAIFinanceAnswer(parts),
     intent,
     intentScores,
     selectedInsights,
+    searchResults,
     generatedAt: new Date().toISOString(),
     hasEnoughData: hasEnoughFinanceData(input.context),
   };

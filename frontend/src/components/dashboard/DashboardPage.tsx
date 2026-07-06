@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 
@@ -245,10 +245,36 @@ const mapWalletTransferRow = (
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const savingsSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
+
+declare global {
+  // Keep Dashboard Supabase client stable across React StrictMode, route
+  // transitions, and Next.js fast refresh. Creating it inline can spawn
+  // multiple GoTrueClient instances with the same auth storage key.
+  // eslint-disable-next-line no-var
+  var __personalFinanceDashboardSupabase: SupabaseClient | null | undefined;
+}
+
+const getDashboardSupabaseClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  if (globalThis.__personalFinanceDashboardSupabase !== undefined) {
+    return globalThis.__personalFinanceDashboardSupabase;
+  }
+
+  globalThis.__personalFinanceDashboardSupabase = createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      auth: {
+        storageKey: "personal-finance-dashboard-auth-token",
+      },
+    },
+  );
+
+  return globalThis.__personalFinanceDashboardSupabase;
+};
+
+const savingsSupabase = getDashboardSupabaseClient();
 
 const mapSavingRowToSavingAccount = (
   row: SavingRow,
@@ -2182,6 +2208,22 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* ── 2. KPI Strip ───────────────────────────────────────────────── */}
+      <section className="-mx-4 sm:mx-0">
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scroll-smooth no-scrollbar md:hidden">
+          {kpiCards.map((item) => (
+            <div key={item.title} className="shrink-0 w-50 snap-start">
+              <KpiCard {...item} />
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:grid md:grid-cols-3 xl:grid-cols-5 gap-4">
+          {kpiCards.map((item) => (
+            <KpiCard key={item.title} {...item} />
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <FormulaCard
           title="Dòng tiền ròng theo kỳ báo cáo"
@@ -2202,22 +2244,6 @@ export default function DashboardPage() {
             thu nhập trừ chi tiêu trong kỳ đang chọn. Giao dịch chuyển ví chỉ
             đổi nơi giữ tiền nên không tính là thu hoặc chi.
           </p>
-        </div>
-      </section>
-
-      {/* ── 2. KPI Strip ───────────────────────────────────────────────── */}
-      <section className="-mx-4 sm:mx-0">
-        <div className="flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scroll-smooth no-scrollbar md:hidden">
-          {kpiCards.map((item) => (
-            <div key={item.title} className="shrink-0 w-50 snap-start">
-              <KpiCard {...item} />
-            </div>
-          ))}
-        </div>
-        <div className="hidden md:grid md:grid-cols-3 xl:grid-cols-5 gap-4">
-          {kpiCards.map((item) => (
-            <KpiCard key={item.title} {...item} />
-          ))}
         </div>
       </section>
 

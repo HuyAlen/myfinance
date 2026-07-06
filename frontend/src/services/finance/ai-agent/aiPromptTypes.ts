@@ -1,5 +1,6 @@
 import type { AIFinanceContext } from "./aiFinanceContext";
 import type { AIFinanceRuleInsight } from "./aiFinanceRules";
+import type { AIFinanceSearchResponse } from "./aiFinanceSearch";
 import type {
   AIFinanceChatAction,
   AIFinanceChatIntent,
@@ -27,10 +28,7 @@ export type AIFinanceChatApiRequest = {
   context: AIFinanceContext | null;
   settings: AIFinanceAISettings;
   maxInsights?: number;
-  conversation?: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+  searchResults?: AIFinanceSearchResponse | null;
 };
 
 export type AIFinanceOpenAIInput = {
@@ -39,16 +37,10 @@ export type AIFinanceOpenAIInput = {
   insights: AIFinanceRuleInsight[];
   intent: AIFinanceChatIntent;
   settings: AIFinanceAISettings;
-  conversation?: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+  searchResults?: AIFinanceSearchResponse | null;
+  conversation?: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
-/**
- * Kept for backward compatibility with older AI-7 parsers.
- * AI-8 Native ChatGPT mode no longer asks OpenAI to return this schema.
- */
 export type AIFinanceOpenAIStructuredResponse = {
   overview: string[];
   analysis: string[];

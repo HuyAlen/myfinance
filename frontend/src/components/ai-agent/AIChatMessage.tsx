@@ -3,13 +3,10 @@
 import { memo, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Bot,
   Check,
   Clipboard,
-  Clock,
   Loader2,
   Sparkles,
-  User,
 } from "lucide-react";
 
 import type {
@@ -456,7 +453,7 @@ function AIChatMessageBubble({ message }: AIChatMessageBubbleProps) {
   if (isUser) {
     return (
       <article className="flex justify-end">
-        <div className="max-w-[86%] rounded-[1.5rem] rounded-br-md bg-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-100">
+        <div className="max-w-[86%] rounded-3xl rounded-br-md bg-blue-600 px-4 py-3 text-white shadow-lg shadow-blue-100">
           <p className="whitespace-pre-wrap text-sm font-bold leading-6">
             {message.content}
           </p>

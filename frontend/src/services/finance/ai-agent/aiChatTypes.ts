@@ -1,5 +1,6 @@
 import type { AIFinanceContext } from "./aiFinanceContext";
 import type { AIFinanceRuleInsight } from "./aiFinanceRules";
+import type { AIFinanceSearchResponse } from "./aiFinanceSearch";
 
 export type AIFinanceChatIntent =
   | "overview"
@@ -12,6 +13,7 @@ export type AIFinanceChatIntent =
   | "investment"
   | "health"
   | "alert"
+  | "search"
   | "unknown";
 
 export type AIFinanceChatIntentScore = {
@@ -83,6 +85,7 @@ export type AIFinancePromptDebug = {
   contextSent?: boolean;
   ruleInsightsSent?: boolean;
   insightCount?: number;
+  searchResultCount?: number;
   noFabrication?: boolean;
   systemPromptPreview?: string;
   userPromptPreview?: string;
@@ -96,6 +99,7 @@ export type AIFinanceChatResponse = {
   intent: AIFinanceChatIntent;
   intentScores: AIFinanceChatIntentScore[];
   selectedInsights: AIFinanceRuleInsight[];
+  searchResults?: AIFinanceSearchResponse | null;
   generatedAt: string;
   hasEnoughData: boolean;
   source?: AIFinanceChatResponseSource;
@@ -113,6 +117,7 @@ export type BuildAIFinanceChatResponseInput = {
   question: string;
   context: AIFinanceContext | null;
   maxInsights?: number;
+  searchResults?: AIFinanceSearchResponse | null;
 };
 
 export type AIFinanceChatEngineInput = BuildAIFinanceChatResponseInput;

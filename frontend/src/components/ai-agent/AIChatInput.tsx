@@ -50,7 +50,7 @@ export default function AIChatInput({
           rows={4}
           maxLength={MAX_LENGTH}
           placeholder={streaming ? "AI đang trả lời..." : "Hỏi MyFinance AI..."}
-          className="max-h-48 min-h-[108px] min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] font-medium leading-6 text-slate-800 outline-none placeholder:font-semibold placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400"
+          className="max-h-48 min-h-27 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] font-medium leading-6 text-slate-800 outline-none placeholder:font-semibold placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400"
         />
 
         {streaming ? (

@@ -181,6 +181,7 @@ export async function askOpenAIFinanceAI(
       contextSent: input.settings.sendFinanceContext,
       ruleInsightsSent: input.settings.sendRuleInsights,
       insightCount: input.insights.length,
+      searchResultCount: input.searchResults?.results.length ?? 0,
       noFabrication: input.settings.noFabrication,
       systemPromptPreview: truncatePromptPreview(systemPrompt),
       userPromptPreview: truncatePromptPreview(userPrompt),

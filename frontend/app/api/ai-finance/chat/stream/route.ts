@@ -5,6 +5,7 @@ import {
   buildAIFinanceOpenAIUserPrompt,
 } from "@/src/services/finance/ai-agent/aiPromptBuilder";
 import { buildAIFinanceRuleInsights } from "@/src/services/finance/ai-agent/aiFinanceRules";
+import { buildSmartFinanceSearch } from "@/src/services/finance/ai-agent/aiFinanceSearch";
 import { detectAIFinanceChatIntent } from "@/src/services/finance/ai-agent/aiIntentDetector";
 import type {
   AIFinanceChatApiRequest,
@@ -296,6 +297,7 @@ async function streamOpenAIToClient(input: AIFinanceOpenAIInput) {
             contextSent: input.settings.sendFinanceContext,
             ruleInsightsSent: input.settings.sendRuleInsights,
             insightCount: input.insights.length,
+            searchResultCount: input.searchResults?.results.length ?? 0,
             noFabrication: input.settings.noFabrication,
             systemPromptPreview: truncatePromptPreview(systemPrompt),
             userPromptPreview: truncatePromptPreview(userPrompt),
@@ -368,6 +370,11 @@ export async function POST(request: Request) {
       payload.maxInsights ?? 4,
     );
     const intent = detectAIFinanceChatIntent(question);
+    const searchResults = buildSmartFinanceSearch({
+      question,
+      context: payload.context,
+      limit: 12,
+    });
 
     const input: AIFinanceOpenAIInput = {
       question,
@@ -375,6 +382,7 @@ export async function POST(request: Request) {
       insights,
       intent,
       settings,
+      searchResults: payload.searchResults ?? searchResults,
       conversation: payload.conversation ?? [],
     };
 
