@@ -43,10 +43,12 @@ import {
   resetFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
-  clearAIFinanceApiKeyInDb,
-  getAIFinanceSettingsFromDb,
-  saveAIFinanceSettingsToDb,
-} from "@/src/services/finance/ai-agent/aiSettingsService";
+  deleteAIFinanceApiKey,
+  getAIFinanceSettings,
+  saveAIFinanceSettings,
+  testAIFinanceConnection,
+  type PublicAIFinanceSettings,
+} from "@/src/services/finance/ai-agent/aiSettingsApi";
 import { DEFAULT_AI_FINANCE_SETTINGS } from "@/src/services/finance/ai-agent/aiSettings";
 
 // ─── Section nav ──────────────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ const AI_MODEL_OPTIONS = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { status, lastSync } = useRealtime();
 
   const [stats, setStats] = useState({
@@ -208,34 +210,56 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [reloadStats]);
 
+  const applyAISettings = useCallback((settings: PublicAIFinanceSettings) => {
+    setAiProvider(settings.provider);
+    setAiModel(settings.model);
+    setAiTemperature(String(settings.temperature));
+    setAiMaxTokens(String(settings.maxTokens));
+    setAiFallbackLocal(settings.fallbackLocal);
+    setAiNoFabrication(settings.noFabrication);
+    setAiSendFinanceContext(settings.sendFinanceContext);
+    setAiSendRuleInsights(settings.sendRuleInsights);
+    setAiApiKey("");
+    setAiHasStoredApiKey(settings.hasStoredApiKey);
+    setAiMaskedApiKey(settings.maskedApiKey);
+    setAiTestStatus(
+      settings.connectionStatus === "connected"
+        ? "success"
+        : settings.connectionStatus === "invalid" ||
+            settings.connectionStatus === "error"
+          ? "error"
+          : "idle",
+    );
+    setAiLastTestedAt(
+      settings.lastTestedAt
+        ? new Date(settings.lastTestedAt).toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "",
+    );
+    setAiTestLatencyMs(settings.lastTestLatencyMs);
+  }, []);
+
   useEffect(() => {
-    if (!user?.id) return;
+    const accessToken = session?.access_token;
+    if (!user?.id || !accessToken) return;
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setAiSettingsLoading(true);
 
-      getAIFinanceSettingsFromDb(user.id)
-        .then(({ settings, hasStoredApiKey, maskedApiKey }) => {
+      getAIFinanceSettings(accessToken)
+        .then((settings) => {
           if (cancelled) return;
-          setAiProvider(settings.provider);
-          setAiModel(settings.model);
-          setAiTemperature(String(settings.temperature));
-          setAiMaxTokens(String(settings.maxTokens));
-          setAiFallbackLocal(settings.fallbackLocal);
-          setAiNoFabrication(settings.noFabrication);
-          setAiSendFinanceContext(settings.sendFinanceContext);
-          setAiSendRuleInsights(settings.sendRuleInsights);
-          setAiApiKey("");
-          setAiHasStoredApiKey(hasStoredApiKey);
-          setAiMaskedApiKey(maskedApiKey);
+          applyAISettings(settings);
         })
         .catch((error: unknown) => {
           if (cancelled) return;
           toast({
             variant: "error",
             message:
-              "Không thể tải AI Settings từ DB: " +
+              "Không thể tải AI Settings: " +
               (error instanceof Error ? error.message : "Lỗi không xác định"),
           });
         })
@@ -248,7 +272,7 @@ export default function SettingsPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [toast, user?.id]);
+  }, [applyAISettings, session?.access_token, toast, user?.id]);
 
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
@@ -392,19 +416,32 @@ export default function SettingsPage() {
     setTimeout(() => setSaveSuccess(false), 2200);
   }
 
+  function getAISettingsPayload() {
+    return {
+      provider:
+        aiProvider === "local" ? ("local" as const) : ("openai" as const),
+      apiKey: aiApiKey.trim() || undefined,
+      model: aiModel,
+      temperature: Number(String(aiTemperature || "0.2").trim()),
+      maxTokens: Number(String(aiMaxTokens || "4096").trim()),
+      fallbackLocal: aiFallbackLocal,
+      noFabrication: aiNoFabrication,
+      sendFinanceContext: aiSendFinanceContext,
+      sendRuleInsights: aiSendRuleInsights,
+    };
+  }
+
   async function handleSaveAISettings() {
-    if (!user?.id) {
+    const accessToken = session?.access_token;
+    if (!accessToken) {
       toast({
         variant: "error",
-        message: "Bạn cần đăng nhập để lưu AI Settings vào DB.",
+        message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
       });
       return;
     }
 
-    const normalizedTemperature = String(aiTemperature || "0.2").trim();
-    const normalizedMaxTokens = String(aiMaxTokens || "4096").trim();
     const nextApiKey = aiApiKey.trim();
-
     if (aiProvider === "openai" && !nextApiKey && !aiHasStoredApiKey) {
       toast({
         variant: "error",
@@ -413,49 +450,46 @@ export default function SettingsPage() {
       return;
     }
 
-    try {
-      const result = await saveAIFinanceSettingsToDb(user.id, {
-        provider: aiProvider === "local" ? "local" : "openai",
-        apiKey: nextApiKey || undefined,
-        model: aiModel,
-        temperature: Number(normalizedTemperature),
-        maxTokens: Number(normalizedMaxTokens),
-        fallbackLocal: aiFallbackLocal,
-        noFabrication: aiNoFabrication,
-        sendFinanceContext: aiSendFinanceContext,
-        sendRuleInsights: aiSendRuleInsights,
+    if (nextApiKey && !nextApiKey.startsWith("sk-")) {
+      toast({
+        variant: "error",
+        message: "API Key chưa đúng định dạng sk-...",
       });
+      return;
+    }
 
-      setAiTemperature(String(result.settings.temperature));
-      setAiMaxTokens(String(result.settings.maxTokens));
-      setAiApiKey("");
-      setAiHasStoredApiKey(result.hasStoredApiKey);
-      setAiMaskedApiKey(result.maskedApiKey);
-      setAiTestStatus("idle");
-      setAiLastTestedAt("");
-      setAiTestLatencyMs(null);
+    try {
+      setAiSettingsLoading(true);
+      const settings = await saveAIFinanceSettings(
+        accessToken,
+        getAISettingsPayload(),
+      );
+      applyAISettings(settings);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2200);
 
       toast({
         variant: "success",
-        message: "Đã lưu AI Settings vào DB.",
+        message: "Đã lưu AI Settings an toàn qua server API.",
       });
     } catch (error) {
       toast({
         variant: "error",
         message:
-          "Không thể lưu AI Settings vào DB: " +
+          "Không thể lưu AI Settings: " +
           (error instanceof Error ? error.message : "Lỗi không xác định"),
       });
+    } finally {
+      setAiSettingsLoading(false);
     }
   }
 
   function handleRemoveAIApiKey() {
-    if (!user?.id) {
+    const accessToken = session?.access_token;
+    if (!accessToken) {
       toast({
         variant: "error",
-        message: "Bạn cần đăng nhập để xóa OpenAI API Key.",
+        message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
       });
       return;
     }
@@ -463,7 +497,7 @@ export default function SettingsPage() {
     if (!aiHasStoredApiKey) {
       toast({
         variant: "error",
-        message: "Chưa có OpenAI API Key nào được lưu trong DB.",
+        message: "Chưa có OpenAI API Key nào được lưu.",
       });
       return;
     }
@@ -471,21 +505,17 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Xóa OpenAI API Key đã lưu?",
       description:
-        "Hành động này sẽ xóa vĩnh viễn API key khỏi tài khoản của bạn. Các cài đặt AI khác như model, temperature và context vẫn được giữ nguyên.",
+        "Hành động này sẽ xóa vĩnh viễn API key đã mã hóa khỏi tài khoản. Các cài đặt AI khác vẫn được giữ nguyên.",
       confirmText: "Xóa API Key",
       variant: "danger",
       onConfirm: async () => {
         try {
-          await clearAIFinanceApiKeyInDb(user.id);
-          setAiApiKey("");
-          setAiHasStoredApiKey(false);
-          setAiMaskedApiKey("");
-          setAiTestStatus("idle");
-          setAiLastTestedAt("");
-          setAiTestLatencyMs(null);
+          setAiSettingsLoading(true);
+          const settings = await deleteAIFinanceApiKey(accessToken);
+          applyAISettings(settings);
           toast({
             variant: "success",
-            message: "Đã xóa OpenAI API Key khỏi DB.",
+            message: "Đã xóa OpenAI API Key.",
           });
         } catch (error) {
           toast({
@@ -494,63 +524,84 @@ export default function SettingsPage() {
               "Không thể xóa OpenAI API Key: " +
               (error instanceof Error ? error.message : "Lỗi không xác định"),
           });
+        } finally {
+          setAiSettingsLoading(false);
         }
       },
     });
   }
 
   async function handleTestAIConnection() {
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      toast({
+        variant: "error",
+        message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+      });
+      return;
+    }
+
+    const nextApiKey = aiApiKey.trim();
+    if (aiProvider === "openai" && !nextApiKey && !aiHasStoredApiKey) {
+      setAiTestStatus("error");
+      toast({
+        variant: "error",
+        message: "Vui lòng nhập OpenAI API Key trước khi test.",
+      });
+      return;
+    }
+
+    if (nextApiKey && !nextApiKey.startsWith("sk-")) {
+      setAiTestStatus("error");
+      toast({
+        variant: "error",
+        message: "API Key chưa đúng định dạng sk-...",
+      });
+      return;
+    }
+
     setAiTestStatus("testing");
     setAiTestLatencyMs(null);
-    const startedAt = performance.now();
 
     try {
-      if (aiProvider === "openai" && !aiApiKey.trim() && !aiHasStoredApiKey) {
-        setAiTestStatus("error");
-        toast({
-          variant: "error",
-          message:
-            "Vui lòng nhập OpenAI API Key hoặc lưu key trong DB trước khi test.",
-        });
-        return;
-      }
+      setAiSettingsLoading(true);
 
-      if (
-        aiProvider === "openai" &&
-        aiApiKey.trim() &&
-        !aiApiKey.trim().startsWith("sk-")
-      ) {
-        setAiTestStatus("error");
-        toast({
-          variant: "error",
-          message: "API Key chưa đúng định dạng sk-...",
-        });
-        return;
-      }
+      // Test luôn cấu hình đang hiển thị. Nếu user vừa nhập key mới,
+      // server sẽ mã hóa và lưu trước khi thực hiện request kiểm tra thật.
+      const savedSettings = await saveAIFinanceSettings(
+        accessToken,
+        getAISettingsPayload(),
+      );
+      applyAISettings(savedSettings);
+      setAiTestStatus("testing");
 
-      await new Promise((resolve) => window.setTimeout(resolve, 650));
-
-      setAiTestLatencyMs(Math.round(performance.now() - startedAt));
+      const result = await testAIFinanceConnection(accessToken);
+      setAiTestStatus("success");
+      setAiTestLatencyMs(result.latencyMs);
       setAiLastTestedAt(
         new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
           minute: "2-digit",
         }),
       );
-      setAiTestStatus("success");
+
       toast({
         variant: "success",
         message:
-          aiProvider === "local"
+          result.provider === "local"
             ? "Local AI đã sẵn sàng."
-            : "AI Settings hợp lệ. AI Agent sẽ đọc OpenAI API Key từ DB.",
+            : `Đã kết nối OpenAI${result.model ? ` bằng ${result.model}` : ""}.`,
       });
-    } catch {
+    } catch (error) {
       setAiTestStatus("error");
       toast({
         variant: "error",
-        message: "Không thể kiểm tra AI Settings.",
+        message:
+          "Không thể kiểm tra kết nối AI: " +
+          (error instanceof Error ? error.message : "Lỗi không xác định"),
       });
+    } finally {
+      setAiSettingsLoading(false);
     }
   }
 

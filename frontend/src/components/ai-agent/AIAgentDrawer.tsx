@@ -2,96 +2,89 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCircle2,
+  ChevronRight,
   History,
-  Maximize2,
+  Info,
+  CircleStop,
+  Copy,
+  Expand,
+  LoaderCircle,
   MessageSquarePlus,
   Minimize2,
-  Pencil,
-  Pin,
-  PinOff,
-  RefreshCw,
+  RotateCcw,
+  Send,
   Sparkles,
-  Trash2,
+  ThumbsDown,
+  ThumbsUp,
   X,
 } from "lucide-react";
 
-import AIChatInput from "./AIChatInput";
-import AIChatMessageBubble, { type AIChatMessage } from "./AIChatMessage";
-import {
-  buildAIFinanceContext,
-  type AIFinanceContext,
-} from "@/src/services/finance/ai-agent/aiFinanceContext";
-import { buildAIFinanceRuleInsights } from "@/src/services/finance/ai-agent/aiFinanceRules";
-import { buildAIFinanceChatResponse } from "@/src/services/finance/ai-agent/aiFinanceChatEngine";
-import { getAIFinanceSettingsFromDb } from "@/src/services/finance/ai-agent/aiSettingsService";
-import {
-  buildConversationTitle,
-  createAIConversation,
-  deleteAIConversation,
-  listAIConversations,
-  loadAIMessages,
-  renameAIConversation,
-  saveAIMessage,
-  togglePinAIConversation,
-  type AIConversation,
-} from "@/src/services/finance/ai-agent/aiConversationService";
 import { useAuth } from "@/src/components/auth/AuthProvider";
-import type { AIFinanceChatApiResponse } from "@/src/services/finance/ai-agent/aiPromptTypes";
+import AIConversationHistory from "./AIConversationHistory";
+import AIPendingActionCard, {
+  type AIPendingActionCardData,
+} from "./AIPendingActionCard";
+import type { SecureAIChatResponse } from "@/src/services/finance/ai-agent/aiChatResponseTypes";
+import {
+  clearPersistedAIChat,
+  readPersistedAIChat,
+  writePersistedAIChat,
+} from "./storage/aiChatPersistence";
+import {
+  getAIConversationMessages,
+  type AIConversationSummary,
+} from "@/src/services/finance/ai-agent/aiConversationApi";
 
 type AIAgentDrawerProps = {
   open: boolean;
   onClose: () => void;
 };
 
-function getTimestampMs() {
-  return new Date().getTime();
-}
+type ChatRole = "user" | "assistant";
+type ChatStatus = "completed" | "streaming" | "error" | "stopped";
+type ChatSource = "openai" | "local" | "fallback";
 
-type QuickQuestion = {
-  label: string;
-  title: string;
-  description: string;
-  question: string;
+type ChatUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 };
 
-const quickQuestions: QuickQuestion[] = [
-  {
-    label: "Tổng quan",
-    title: "Tổng quan tháng này",
-    description: "Health score, dòng tiền, ngân sách.",
-    question: "Tổng quan tài chính tháng này của tôi thế nào?",
-  },
-  {
-    label: "Chi tiêu",
-    title: "Tôi tiêu nhiều nhất ở đâu?",
-    description: "Nhóm chi lớn và bất thường.",
-    question: "Tháng này tôi tiêu nhiều nhất ở đâu?",
-  },
-  {
-    label: "Ngân sách",
-    title: "Ngân sách nào sắp vượt?",
-    description: "Ưu tiên nhóm cần giảm chi.",
-    question: "Ngân sách nào sắp vượt?",
-  },
-  {
-    label: "Dòng tiền",
-    title: "Dự báo dòng tiền",
-    description: "Ước lượng dư địa chi tiêu.",
-    question: "Dự báo dòng tiền tháng này giúp tôi",
-  },
-  {
-    label: "Mục tiêu",
-    title: "Mục tiêu đang thế nào?",
-    description: "Tiến độ tiết kiệm và mục tiêu chậm.",
-    question: "Mục tiêu tài chính của tôi đang thế nào?",
-  },
-  {
-    label: "Cảnh báo",
-    title: "Có cảnh báo nào không?",
-    description: "Vấn đề ưu tiên theo Rule Insights.",
-    question: "Tôi có cảnh báo tài chính nào cần xử lý không?",
-  },
+type ChatMetaResponse = SecureAIChatResponse;
+
+export type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  status: ChatStatus;
+  createdAt: string;
+  source?: ChatSource;
+  model?: string;
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
+  latencyMs?: number;
+  usage?: ChatUsage;
+  pendingActions?: AIPendingActionCardData[];
+};
+
+type StreamEvent =
+  | { type: "delta"; content: string }
+  | { type: "meta"; response: ChatMetaResponse }
+  | { type: "error"; message: string };
+
+const QUICK_QUESTIONS = [
+  "Tổng quan tài chính tháng này của tôi thế nào?",
+  "Tháng này tôi tiêu nhiều nhất ở đâu?",
+  "Ngân sách nào đang sắp vượt?",
+  "Dòng tiền hiện tại của tôi có an toàn không?",
+  "Tôi nên ưu tiên mục tiêu tài chính nào?",
+  "Có cảnh báo tài chính nào cần xử lý ngay không?",
 ];
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function getTimeLabel() {
   return new Date().toLocaleTimeString("vi-VN", {
@@ -100,1317 +93,850 @@ function getTimeLabel() {
   });
 }
 
-function createWelcomeMessage(id: string): AIChatMessage {
-  return {
-    id,
-    role: "assistant",
-    status: "completed",
-    content:
-      "Xin chào, tôi là AI tài chính của bạn.\n\n📊 Tổng quan\nTôi sẽ đọc Finance Context thật và Rule Insights hiện tại.\n\n🔍 Phân tích\nBạn có thể hỏi về ngân sách, dòng tiền, chi tiêu, ví tiền hoặc mục tiêu.\n\n💡 Gợi ý\nChọn một gợi ý bên dưới để bắt đầu nhanh.",
-    createdAt: getTimeLabel(),
-  };
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function splitStreamingChunks(answer: string) {
-  const normalized = answer.replace(/\r\n/g, "\n");
-  const chunks = normalized.match(/.{1,18}(?:\s|$)|\n/g) ?? [normalized];
-  return chunks.filter(Boolean);
-}
-
-type AIFinanceStreamEvent =
-  | { type: "delta"; content: string }
-  | { type: "meta"; response: AIFinanceChatApiResponse }
-  | { type: "error"; message: string };
-
-function parseStreamLine(line: string): AIFinanceStreamEvent | null {
+function parseStreamLine(line: string): StreamEvent | null {
   const trimmed = line.trim();
-  if (!trimmed || !trimmed.startsWith("data:")) return null;
+  if (!trimmed.startsWith("data:")) return null;
 
-  const payload = trimmed.slice(5).trim();
-  if (!payload || payload === "[DONE]") return null;
+  const raw = trimmed.slice(5).trim();
+  if (!raw || raw === "[DONE]") return null;
 
   try {
-    return JSON.parse(payload) as AIFinanceStreamEvent;
+    return JSON.parse(raw) as StreamEvent;
   } catch {
     return null;
   }
 }
 
-async function readFinanceAIStream(
-  response: Response,
-  onDelta: (value: string) => void,
-) {
-  if (!response.body) {
-    throw new Error("Streaming response is empty.");
+async function readErrorMessage(response: Response) {
+  const text = await response.text().catch(() => "");
+  if (!text) return `Request failed (${response.status}).`;
+
+  try {
+    const payload = JSON.parse(text) as { error?: string };
+    return payload.error || text.slice(0, 300);
+  } catch {
+    return text.slice(0, 300);
   }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finalResponse: AIFinanceChatApiResponse | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const event = parseStreamLine(line);
-      if (!event) continue;
-
-      if (event.type === "delta") {
-        onDelta(event.content);
-      } else if (event.type === "meta") {
-        finalResponse = event.response;
-      } else if (event.type === "error") {
-        throw new Error(event.message);
-      }
-    }
-  }
-
-  if (buffer.trim()) {
-    const event = parseStreamLine(buffer);
-    if (event?.type === "delta") onDelta(event.content);
-    if (event?.type === "meta") finalResponse = event.response;
-    if (event?.type === "error") throw new Error(event.message);
-  }
-
-  if (!finalResponse) {
-    throw new Error("AI stream finished without metadata.");
-  }
-
-  return finalResponse;
 }
 
-function formatConversationTime(value: string) {
-  const date = new Date(value);
-  const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
+function sourceLabel(source?: ChatSource) {
+  if (source === "openai") return "OpenAI";
+  if (source === "fallback") return "Local fallback";
+  if (source === "local") return "Local AI";
+  return "MyFinance AI";
+}
 
-  if (sameDay) {
-    return date.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+function WelcomeState({ onAsk }: { onAsk: (question: string) => void }) {
+  return (
+    <section className="mx-auto flex min-h-full max-w-2xl flex-col justify-center px-2 py-10 sm:px-6">
+      <div className="text-center">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-[1.35rem] bg-slate-950 text-white shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
+          <Sparkles size={23} />
+        </div>
+        <h3 className="mt-5 text-2xl font-black tracking-[-0.03em] text-slate-950">
+          Hôm nay bạn muốn phân tích gì?
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-slate-500">
+          Hỏi về chi tiêu, ngân sách, dòng tiền hoặc mục tiêu. MyFinance AI sẽ
+          đọc dữ liệu phù hợp và giải thích theo ngữ cảnh của bạn.
+        </p>
+      </div>
+
+      <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
+        {QUICK_QUESTIONS.slice(0, 4).map((question) => (
+          <button
+            key={question}
+            type="button"
+            onClick={() => onAsk(question)}
+            className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+          >
+            <span className="text-sm font-bold leading-5 text-slate-700">
+              {question}
+            </span>
+            <ChevronRight
+              size={15}
+              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
+            />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MessageBubble({
+  message,
+  accessToken,
+  onRetry,
+  onPendingActionChanged,
+}: {
+  message: ChatMessage;
+  accessToken: string;
+  onRetry?: () => void;
+  onPendingActionChanged?: (
+    messageId: string,
+    action: AIPendingActionCardData,
+  ) => void;
+}) {
+  const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(message.content).catch(() => undefined);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
   }
 
-  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  const latencyLabel =
+    typeof message.latencyMs === "number"
+      ? `${(message.latencyMs / 1000).toFixed(1)}s`
+      : null;
+
+  if (isUser) {
+    return (
+      <article className="flex animate-[fadeIn_.18s_ease-out] justify-end">
+        <div className="max-w-[82%] sm:max-w-[74%]">
+          <div className="rounded-[1.3rem] rounded-br-md bg-slate-900 px-4 py-3 text-[14px] font-semibold leading-6 text-white shadow-sm">
+            <div className="whitespace-pre-wrap wrap-break-word">
+              {message.content}
+            </div>
+          </div>
+          <div className="mt-1.5 pr-1 text-right text-[10px] font-semibold text-slate-400">
+            {message.createdAt}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="group animate-[fadeIn_.18s_ease-out]">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm">
+          <Sparkles size={14} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div
+            className={[
+              "text-[14px] leading-6",
+              message.status === "error"
+                ? "rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 font-medium text-rose-800"
+                : "font-normal text-slate-700",
+            ].join(" ")}
+          >
+            {message.content ? (
+              <div className="whitespace-pre-wrap wrap-break-word">
+                {message.content}
+                {message.status === "streaming" ? (
+                  <span className="ml-0.5 inline-block animate-pulse text-blue-600">
+                    ▋
+                  </span>
+                ) : null}
+              </div>
+            ) : message.status === "streaming" ? (
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <LoaderCircle
+                    size={15}
+                    className="animate-spin text-blue-600"
+                  />
+                  Đang phân tích
+                </div>
+                <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-500">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 size={13} className="text-emerald-500" />
+                    Hiểu yêu cầu và chọn dữ liệu phù hợp
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <LoaderCircle
+                      size={13}
+                      className="animate-spin text-blue-500"
+                    />
+                    Kiểm tra dữ liệu tài chính
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {message.pendingActions?.length ? (
+            <div className="space-y-3">
+              {message.pendingActions.map((action) => (
+                <AIPendingActionCard
+                  key={action.id}
+                  action={action}
+                  accessToken={accessToken}
+                  onChanged={(updated) =>
+                    onPendingActionChanged?.(message.id, updated)
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+            <span>{message.createdAt}</span>
+            {message.source ? (
+              <>
+                <span>·</span>
+                <span>{sourceLabel(message.source)}</span>
+              </>
+            ) : null}
+            {message.model ? (
+              <>
+                <span>·</span>
+                <span>{message.model}</span>
+              </>
+            ) : null}
+            {latencyLabel ? (
+              <>
+                <span>·</span>
+                <span>{latencyLabel}</span>
+              </>
+            ) : null}
+            {message.status === "stopped" ? (
+              <span className="ml-1 text-amber-600">Đã dừng</span>
+            ) : null}
+          </div>
+
+          {message.content ? (
+            <div className="mt-1 flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-bold text-slate-400 transition hover:bg-white hover:text-slate-700"
+                title="Copy"
+              >
+                <Copy size={13} /> {copied ? "Đã copy" : "Copy"}
+              </button>
+              {onRetry &&
+              (message.status === "error" || message.status === "stopped") ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-bold text-blue-600 transition hover:bg-blue-50"
+                >
+                  <RotateCcw size={13} /> Thử lại
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
+                title="Hữu ích"
+              >
+                <ThumbsUp size={13} />
+              </button>
+              <button
+                type="button"
+                className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
+                title="Chưa hữu ích"
+              >
+                <ThumbsDown size={13} />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
-  const { user } = useAuth();
-  const userId = user?.id;
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const messageIdRef = useRef(0);
-  const contextRequestRef = useRef(0);
-  const conversationsRequestRef = useRef(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const activeAssistantMessageIdRef = useRef<string | null>(null);
-  const stopRequestedRef = useRef(false);
-  const streamedContentRef = useRef("");
-
+  const { session, loading: authLoading } = useAuth();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [contextLoading, setContextLoading] = useState(false);
-  const [contextError, setContextError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [panelExpanded, setPanelExpanded] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return (
-      window.localStorage.getItem("myfinance-ai-panel-expanded") === "true"
-    );
-  });
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [lastQuestion, setLastQuestion] = useState("");
+  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
-  const [conversations, setConversations] = useState<AIConversation[]>([]);
-  const [financeContext, setFinanceContext] = useState<AIFinanceContext | null>(
-    null,
-  );
-  const [messages, setMessages] = useState<AIChatMessage[]>(() => [
-    createWelcomeMessage("welcome"),
-  ]);
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const streamedTextRef = useRef("");
+  const userId = session?.user?.id ?? "";
 
-  function nextMessageId(prefix: string) {
-    messageIdRef.current += 1;
-    return `${prefix}-${messageIdRef.current}`;
-  }
-
-  const hasUserMessage = useMemo(
-    () => messages.some((message) => message.role === "user"),
-    [messages],
-  );
-
-  const activeConversation = useMemo(
-    () =>
-      conversations.find((item) => item.id === activeConversationId) ?? null,
-    [activeConversationId, conversations],
-  );
-
-  const ruleInsights = useMemo(
-    () => buildAIFinanceRuleInsights(financeContext),
-    [financeContext],
-  );
-
-  const urgentInsightCount = useMemo(
-    () =>
-      ruleInsights.filter(
-        (insight) =>
-          insight.severity === "danger" || insight.severity === "warning",
-      ).length,
-    [ruleInsights],
-  );
-
-  const contextStatusLabel = useMemo(() => {
-    if (contextLoading) return "Đang cập nhật";
-    if (contextError) return "Lỗi dữ liệu";
-    if (financeContext)
-      return `${financeContext.counts.transactions} giao dịch • ${ruleInsights.length} insight`;
-    return "Đang chờ dữ liệu";
-  }, [contextError, contextLoading, financeContext, ruleInsights.length]);
-
-  const refreshConversations = useCallback(() => {
-    const requestId = conversationsRequestRef.current + 1;
-    conversationsRequestRef.current = requestId;
+  useEffect(() => {
+    if (authLoading) return;
 
     if (!userId) {
-      setConversations([]);
-      setActiveConversationId(null);
+      setHydratedUserId(null);
       return;
     }
 
-    setHistoryLoading(true);
-    setHistoryError(null);
+    const persisted = readPersistedAIChat<ChatMessage>(userId);
 
-    listAIConversations(userId)
-      .then((items) => {
-        if (conversationsRequestRef.current !== requestId) return;
-        setConversations(items);
-      })
-      .catch((error: unknown) => {
-        if (conversationsRequestRef.current !== requestId) return;
-        setHistoryError(
-          error instanceof Error
-            ? error.message
-            : "Không thể tải lịch sử hội thoại.",
-        );
-      })
-      .finally(() => {
-        if (conversationsRequestRef.current !== requestId) return;
-        setHistoryLoading(false);
-      });
-  }, [userId]);
+    if (persisted) {
+      setMessages(
+        persisted.messages.map((message) =>
+          message.status === "streaming"
+            ? {
+                ...message,
+                status: "stopped",
+                content:
+                  message.content.trim() ||
+                  "Phản hồi trước đã bị dừng khi chuyển trang.",
+              }
+            : message,
+        ),
+      );
+      setActiveConversationId(persisted.conversationId);
+      setLastQuestion(persisted.lastQuestion);
+    }
 
-  const loadFinanceContext = useCallback(() => {
-    const requestId = contextRequestRef.current + 1;
-    contextRequestRef.current = requestId;
+    setHydratedUserId(userId);
+  }, [authLoading, userId]);
 
-    setContextLoading(true);
-    setContextError(null);
+  useEffect(() => {
+    if (!userId || hydratedUserId !== userId) return;
 
-    buildAIFinanceContext()
-      .then((context) => {
-        if (contextRequestRef.current !== requestId) return;
-        setFinanceContext(context);
-      })
-      .catch((error: unknown) => {
-        if (contextRequestRef.current !== requestId) return;
-        setFinanceContext(null);
-        setContextError(
-          error instanceof Error
-            ? error.message
-            : "Không thể đọc dữ liệu tài chính.",
-        );
-      })
-      .finally(() => {
-        if (contextRequestRef.current !== requestId) return;
-        setContextLoading(false);
-      });
+    writePersistedAIChat<ChatMessage>(userId, {
+      conversationId: activeConversationId,
+      lastQuestion,
+      messages,
+    });
+  }, [activeConversationId, hydratedUserId, lastQuestion, messages, userId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setExpanded(
+      window.localStorage.getItem("myfinance-ai-expanded") === "true",
+    );
   }, []);
 
   useEffect(() => {
-    if (!open || financeContext || contextLoading) return;
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("myfinance-ai-expanded", String(expanded));
+  }, [expanded]);
 
-    const timer = window.setTimeout(() => {
-      loadFinanceContext();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [open, financeContext, contextLoading, loadFinanceContext]);
+  useEffect(() => {
+    if (!open) {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setStreaming(false);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-
-    const timer = window.setTimeout(() => {
-      refreshConversations();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [open, refreshConversations]);
-
-  useEffect(() => {
-    if (!open) return;
-
     const timer = window.setTimeout(() => {
       scrollRef.current?.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: "smooth",
       });
-    }, 45);
-
+    }, 30);
     return () => window.clearTimeout(timer);
-  }, [open, messages, loading, streaming]);
+  }, [messages, open, streaming]);
 
-  useEffect(() => {
-    if (open) return;
+  const conversationPayload = useMemo(
+    () =>
+      messages
+        .filter(
+          (message) =>
+            message.status === "completed" &&
+            (message.role === "user" || message.role === "assistant"),
+        )
+        .slice(-10)
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+    [messages],
+  );
 
-    const timer = window.setTimeout(() => {
-      abortControllerRef.current?.abort();
-      abortControllerRef.current = null;
-      stopRequestedRef.current = false;
-      streamedContentRef.current = "";
-      activeAssistantMessageIdRef.current = null;
-      setLoading(false);
-      setStreaming(false);
-    }, 0);
+  const stopGenerating = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setStreaming(false);
 
-    return () => window.clearTimeout(timer);
-  }, [open]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      "myfinance-ai-panel-expanded",
-      panelExpanded ? "true" : "false",
-    );
-  }, [panelExpanded]);
-
-  function handleTogglePanelSize() {
-    setPanelExpanded((value) => !value);
-    setHistoryOpen(false);
-  }
-
-  function handleReloadContext() {
-    loadFinanceContext();
-  }
-
-  async function ensureConversation(question: string) {
-    if (!userId) return null;
-    if (activeConversationId) return activeConversationId;
-
-    const created = await createAIConversation({
-      userId: userId,
-      title: buildConversationTitle(question),
-    });
-
-    setActiveConversationId(created.id);
-    setConversations((prev) => [created, ...prev]);
-    return created.id;
-  }
-
-  function applyResponseMetadata(
-    assistantMessageId: string,
-    response: AIFinanceChatApiResponse,
-  ) {
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId
+    setMessages((current) =>
+      current.map((message) =>
+        message.status === "streaming"
           ? {
               ...message,
-              source: response.source,
-              confidence: response.confidence,
-              model: response.model,
-              fallbackUsed: response.fallbackUsed,
-              fallbackReason: response.fallbackReason,
-              latencyMs: response.latencyMs,
-              usage: response.usage,
-              promptDebug: response.promptDebug,
+              status: "stopped",
+              content: message.content.trim() || "Phản hồi đã được dừng.",
             }
           : message,
       ),
     );
-  }
+  }, []);
 
-  async function persistMessage(
-    conversationId: string | null,
-    message: AIChatMessage,
-  ) {
-    if (!userId || !conversationId) return;
+  const askQuestion = useCallback(
+    async (rawQuestion: string) => {
+      const question = rawQuestion.trim();
+      if (!question || streaming) return;
 
-    try {
-      await saveAIMessage({
-        conversationId,
-        userId: userId,
-        message,
-      });
-      refreshConversations();
-    } catch (error) {
-      console.error("[AI conversation] Failed to save message", error);
-    }
-  }
+      const accessToken = session?.access_token;
+      const userMessage: ChatMessage = {
+        id: makeId("user"),
+        role: "user",
+        content: question,
+        status: "completed",
+        createdAt: getTimeLabel(),
+      };
+      const assistantId = makeId("assistant");
+      const assistantMessage: ChatMessage = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        status: "streaming",
+        createdAt: getTimeLabel(),
+      };
 
-  async function streamOpenAIAnswer(
-    question: string,
-    assistantMessageId: string,
-    conversationId: string | null,
-    signal: AbortSignal,
-  ) {
-    const localResponse = buildAIFinanceChatResponse({
-      question,
-      context: financeContext,
-      maxInsights: 4,
-    });
+      setMessages((current) => [...current, userMessage, assistantMessage]);
+      setInput("");
+      setLastQuestion(question);
+      setStreaming(true);
+      streamedTextRef.current = "";
 
-    const { settings } = await getAIFinanceSettingsFromDb(userId);
-
-    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-
-    if (settings.provider === "local" || !settings.apiKey) {
-      const response = {
-        answer: localResponse.answer,
-        source: "local" as const,
-        confidence: localResponse.hasEnoughData ? 0.78 : 0.45,
-        fallbackUsed: false,
-        generatedAt: new Date().toISOString(),
-        actions: [],
-        model: "Rule Engine",
-      } satisfies AIFinanceChatApiResponse;
-
-      await streamAssistantAnswer(assistantMessageId, response, conversationId);
-      return;
-    }
-
-    const startedAt = getTimestampMs();
-    streamedContentRef.current = "";
-
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId
-          ? {
-              ...message,
-              status: "streaming",
-              source: "openai",
-              model: settings.model,
-              content: "",
-            }
-          : message,
-      ),
-    );
-    setLoading(false);
-    setStreaming(true);
-
-    try {
-      const response = await fetch("/api/ai-finance/chat/stream", {
-        method: "POST",
-        signal,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question,
-          context: financeContext,
-          settings,
-          maxInsights: 4,
-          conversation: messages
-            .filter(
-              (message) =>
-                message.role === "user" || message.role === "assistant",
-            )
-            .slice(-12)
-            .map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(
-          `AI stream lỗi ${response.status}${errorText ? `: ${errorText.slice(0, 220)}` : ""}`,
-        );
-      }
-
-      const finalResponse = await readFinanceAIStream(response, (delta) => {
-        if (!delta || stopRequestedRef.current) return;
-
-        streamedContentRef.current = `${streamedContentRef.current}${delta}`;
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
+      if (!accessToken) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
               ? {
                   ...message,
-                  content: streamedContentRef.current,
+                  status: "error",
+                  content:
+                    "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
                 }
               : message,
           ),
         );
-      });
-
-      if (stopRequestedRef.current) {
-        const stoppedMessage: AIChatMessage = {
-          id: assistantMessageId,
-          role: "assistant",
-          status: "stopped",
-          content: streamedContentRef.current.trim() || "Response stopped.",
-          createdAt: getTimeLabel(),
-          source: "openai",
-          confidence: finalResponse.confidence,
-          model: finalResponse.model ?? settings.model,
-          fallbackUsed: false,
-          latencyMs: getTimestampMs() - startedAt,
-          usage: finalResponse.usage,
-          promptDebug: finalResponse.promptDebug,
-        };
-
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId ? stoppedMessage : message,
-          ),
-        );
-        await persistMessage(conversationId, stoppedMessage);
-        return;
-      }
-
-      const completedMessage: AIChatMessage = {
-        id: assistantMessageId,
-        role: "assistant",
-        status: "completed",
-        content: finalResponse.answer || streamedContentRef.current,
-        createdAt: getTimeLabel(),
-        source: finalResponse.source,
-        confidence: finalResponse.confidence,
-        model: finalResponse.model ?? settings.model,
-        fallbackUsed: finalResponse.fallbackUsed,
-        fallbackReason: finalResponse.fallbackReason,
-        latencyMs: finalResponse.latencyMs ?? getTimestampMs() - startedAt,
-        usage: finalResponse.usage,
-        promptDebug: finalResponse.promptDebug,
-      };
-
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === assistantMessageId ? completedMessage : message,
-        ),
-      );
-      await persistMessage(conversationId, completedMessage);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
-      }
-
-      const fallbackResponse = {
-        answer: localResponse.answer,
-        source: "fallback" as const,
-        confidence: localResponse.hasEnoughData ? 0.72 : 0.42,
-        fallbackUsed: true,
-        fallbackReason:
-          error instanceof Error
-            ? error.message
-            : "OpenAI stream không phản hồi, đã dùng Local AI.",
-        generatedAt: new Date().toISOString(),
-        actions: [],
-        model: "Rule Engine",
-      } satisfies AIFinanceChatApiResponse;
-
-      await streamAssistantAnswer(
-        assistantMessageId,
-        fallbackResponse,
-        conversationId,
-      );
-    }
-  }
-
-  async function streamAssistantAnswer(
-    assistantMessageId: string,
-    response: AIFinanceChatApiResponse,
-    conversationId: string | null,
-  ) {
-    applyResponseMetadata(assistantMessageId, response);
-
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId
-          ? {
-              ...message,
-              status: "streaming",
-              content: "",
-            }
-          : message,
-      ),
-    );
-
-    setLoading(false);
-    setStreaming(true);
-
-    streamedContentRef.current = "";
-    const chunks = splitStreamingChunks(response.answer);
-
-    for (const chunk of chunks) {
-      if (stopRequestedRef.current) {
-        const stoppedContent = streamedContentRef.current.trimEnd();
-        const stoppedMessage: AIChatMessage = {
-          id: assistantMessageId,
-          role: "assistant",
-          status: "stopped",
-          content: stoppedContent || response.answer.slice(0, 120),
-          createdAt: getTimeLabel(),
-          source: response.source,
-          confidence: response.confidence,
-          model: response.model,
-          fallbackUsed: response.fallbackUsed,
-          fallbackReason: response.fallbackReason,
-          latencyMs: response.latencyMs,
-          usage: response.usage,
-          promptDebug: response.promptDebug,
-        };
-
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId ? stoppedMessage : message,
-          ),
-        );
-        await persistMessage(conversationId, stoppedMessage);
-        return;
-      }
-
-      streamedContentRef.current = `${streamedContentRef.current}${chunk}`;
-
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === assistantMessageId
-            ? {
-                ...message,
-                content: streamedContentRef.current,
-              }
-            : message,
-        ),
-      );
-
-      await sleep(chunk.includes("\n") ? 34 : 16);
-    }
-
-    const completedMessage: AIChatMessage = {
-      id: assistantMessageId,
-      role: "assistant",
-      status: "completed",
-      content: response.answer,
-      createdAt: getTimeLabel(),
-      source: response.source,
-      confidence: response.confidence,
-      model: response.model,
-      fallbackUsed: response.fallbackUsed,
-      fallbackReason: response.fallbackReason,
-      latencyMs: response.latencyMs,
-      usage: response.usage,
-      promptDebug: response.promptDebug,
-    };
-
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId ? completedMessage : message,
-      ),
-    );
-    await persistMessage(conversationId, completedMessage);
-  }
-
-  function handleStopGenerating() {
-    stopRequestedRef.current = true;
-    abortControllerRef.current?.abort();
-
-    const assistantMessageId = activeAssistantMessageIdRef.current;
-    if (!assistantMessageId) return;
-
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === assistantMessageId &&
-        (message.status === "pending" || message.status === "streaming")
-          ? {
-              ...message,
-              status: "stopped",
-              content: message.content.trim() || "Response stopped.",
-            }
-          : message,
-      ),
-    );
-
-    setLoading(false);
-    setStreaming(false);
-  }
-
-  function handleAsk(value?: string) {
-    const question = (value ?? input).trim();
-    if (!question || loading || streaming) return;
-
-    const userMessage: AIChatMessage = {
-      id: nextMessageId("user"),
-      role: "user",
-      status: "completed",
-      content: question,
-      createdAt: getTimeLabel(),
-    };
-
-    const assistantMessageId = nextMessageId("assistant");
-    const assistantMessage: AIChatMessage = {
-      id: assistantMessageId,
-      role: "assistant",
-      status: "pending",
-      content: "",
-      createdAt: getTimeLabel(),
-      source: "openai",
-    };
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    activeAssistantMessageIdRef.current = assistantMessageId;
-    stopRequestedRef.current = false;
-    streamedContentRef.current = "";
-
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    setInput("");
-    setLoading(true);
-
-    void ensureConversation(question)
-      .then(async (conversationId) => {
-        await persistMessage(conversationId, userMessage);
-        await streamOpenAIAnswer(
-          question,
-          assistantMessageId,
-          conversationId,
-          controller.signal,
-        );
-      })
-      .catch((error: unknown) => {
-        if (stopRequestedRef.current) return;
-
-        const reason =
-          error instanceof Error ? error.message : "Không thể tạo phản hồi AI.";
-
-        const errorMessage: AIChatMessage = {
-          id: assistantMessageId,
-          role: "assistant",
-          status: "error",
-          source: "fallback",
-          fallbackUsed: true,
-          fallbackReason: reason,
-          content: "Không thể hoàn tất phản hồi AI. Vui lòng thử lại.",
-          createdAt: getTimeLabel(),
-        };
-
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId ? errorMessage : message,
-          ),
-        );
-      })
-      .finally(() => {
-        if (activeAssistantMessageIdRef.current === assistantMessageId) {
-          activeAssistantMessageIdRef.current = null;
-          abortControllerRef.current = null;
-        }
-        setLoading(false);
         setStreaming(false);
-      });
+        return;
+      }
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const response = await fetch("/api/ai-finance/chat/stream", {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            question,
+            conversationId: activeConversationId ?? undefined,
+            conversation: conversationPayload,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(await readErrorMessage(response));
+        }
+        if (!response.body) {
+          throw new Error("Server không trả về stream dữ liệu.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let meta: ChatMetaResponse | null = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            const event = parseStreamLine(line);
+            if (!event) continue;
+
+            if (event.type === "delta") {
+              streamedTextRef.current += event.content;
+              const nextContent = streamedTextRef.current;
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, content: nextContent }
+                    : message,
+                ),
+              );
+            } else if (event.type === "meta") {
+              meta = event.response;
+            } else if (event.type === "error") {
+              throw new Error(event.message);
+            }
+          }
+        }
+
+        if (buffer.trim()) {
+          const event = parseStreamLine(buffer);
+          if (event?.type === "delta") {
+            streamedTextRef.current += event.content;
+            const nextContent = streamedTextRef.current;
+
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantId
+                  ? { ...message, content: nextContent }
+                  : message,
+              ),
+            );
+          } else if (event?.type === "meta") {
+            meta = event.response;
+          } else if (event?.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+
+        const finalContent =
+          meta?.answer?.trim() || streamedTextRef.current.trim();
+
+        if (meta?.conversationId) {
+          setActiveConversationId(meta.conversationId);
+        }
+
+        if (!finalContent) {
+          throw new Error("AI không trả về nội dung.");
+        }
+
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? {
+                  ...message,
+                  content: finalContent,
+                  status: "completed",
+                  source: meta?.source,
+                  model: meta?.model,
+                  fallbackUsed: meta?.fallbackUsed,
+                  fallbackReason: meta?.fallbackReason,
+                  latencyMs: meta?.latencyMs,
+                  usage: meta?.usage,
+                  pendingActions: meta?.pendingActions ?? [],
+                }
+              : message,
+          ),
+        );
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? {
+                  ...message,
+                  status: "error",
+                  content:
+                    error instanceof Error
+                      ? `Không thể hoàn tất phản hồi: ${error.message}`
+                      : "Không thể hoàn tất phản hồi AI.",
+                }
+              : message,
+          ),
+        );
+      } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
+        setStreaming(false);
+      }
+    },
+    [
+      activeConversationId,
+      conversationPayload,
+      session?.access_token,
+      streaming,
+    ],
+  );
+
+  const handlePendingActionChanged = useCallback(
+    (messageId: string, updated: AIPendingActionCardData) => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id !== messageId
+            ? message
+            : {
+                ...message,
+                pendingActions: message.pendingActions?.map((candidate) =>
+                  candidate.id === updated.id ? updated : candidate,
+                ),
+              },
+        ),
+      );
+    },
+    [],
+  );
+
+  function handleSubmit() {
+    void askQuestion(input);
   }
 
   function handleNewChat() {
-    if (loading || streaming) handleStopGenerating();
-    setActiveConversationId(null);
-    setMessages([createWelcomeMessage(nextMessageId("welcome-new"))]);
+    if (streaming) stopGenerating();
+    if (userId) clearPersistedAIChat(userId);
+    setMessages([]);
     setInput("");
+    setLastQuestion("");
+    setActiveConversationId(null);
     setHistoryOpen(false);
   }
 
-  function handleSelectConversation(conversationId: string) {
-    if (!userId || loading || streaming) return;
+  function handleRetry() {
+    if (lastQuestion) void askQuestion(lastQuestion);
+  }
 
-    setHistoryLoading(true);
-    setHistoryError(null);
-    loadAIMessages(userId, conversationId)
-      .then((items) => {
-        setActiveConversationId(conversationId);
-        setMessages(
-          items.length > 0
-            ? items
-            : [createWelcomeMessage(nextMessageId("welcome-empty"))],
+  const handleSelectConversation = useCallback(
+    async (conversation: AIConversationSummary) => {
+      const accessToken = session?.access_token;
+      if (!accessToken || historyLoading || streaming) return;
+
+      setHistoryLoading(true);
+
+      try {
+        const records = await getAIConversationMessages(
+          accessToken,
+          conversation.id,
         );
+
+        const restoredMessages: ChatMessage[] = records.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          status: "completed",
+          createdAt: message.createdAt
+            ? new Date(message.createdAt).toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "",
+          source: message.source,
+          model: message.model,
+          latencyMs: message.latencyMs,
+          pendingActions: message.pendingActions,
+        }));
+
+        setMessages(restoredMessages);
+        setActiveConversationId(conversation.id);
+        setLastQuestion(
+          [...restoredMessages]
+            .reverse()
+            .find((message) => message.role === "user")?.content ??
+            conversation.title,
+        );
+        setInput("");
         setHistoryOpen(false);
-      })
-      .catch((error: unknown) => {
-        setHistoryError(
-          error instanceof Error
-            ? error.message
-            : "Không thể mở cuộc trò chuyện.",
-        );
-      })
-      .finally(() => {
+      } catch (reason) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: makeId("assistant-history-error"),
+            role: "assistant",
+            content:
+              reason instanceof Error
+                ? `Không thể mở cuộc trò chuyện: ${reason.message}`
+                : "Không thể mở cuộc trò chuyện đã chọn.",
+            status: "error",
+            createdAt: getTimeLabel(),
+          },
+        ]);
+      } finally {
         setHistoryLoading(false);
-      });
-  }
-
-  function handleRenameConversation(conversation: AIConversation) {
-    if (!userId) return;
-    const title = window.prompt("Tên cuộc trò chuyện", conversation.title);
-    if (title === null) return;
-
-    renameAIConversation(userId, conversation.id, title)
-      .then((updated) => {
-        if (!updated) return;
-        setConversations((prev) =>
-          prev.map((item) => (item.id === updated.id ? updated : item)),
-        );
-      })
-      .catch((error: unknown) => {
-        setHistoryError(
-          error instanceof Error
-            ? error.message
-            : "Không thể đổi tên hội thoại.",
-        );
-      });
-  }
-
-  function handleTogglePin(conversation: AIConversation) {
-    if (!userId) return;
-
-    togglePinAIConversation(userId, conversation.id, !conversation.isPinned)
-      .then((updated) => {
-        if (!updated) return;
-        setConversations((prev) =>
-          prev
-            .map((item) => (item.id === updated.id ? updated : item))
-            .sort((a, b) => {
-              if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-              return b.lastMessageAt.localeCompare(a.lastMessageAt);
-            }),
-        );
-      })
-      .catch((error: unknown) => {
-        setHistoryError(
-          error instanceof Error ? error.message : "Không thể ghim hội thoại.",
-        );
-      });
-  }
-
-  function handleDeleteConversation(conversation: AIConversation) {
-    if (!userId) return;
-    const ok = window.confirm(`Xoá cuộc trò chuyện "${conversation.title}"?`);
-    if (!ok) return;
-
-    deleteAIConversation(userId, conversation.id)
-      .then(() => {
-        setConversations((prev) =>
-          prev.filter((item) => item.id !== conversation.id),
-        );
-        if (activeConversationId === conversation.id) handleNewChat();
-      })
-      .catch((error: unknown) => {
-        setHistoryError(
-          error instanceof Error ? error.message : "Không thể xoá hội thoại.",
-        );
-      });
-  }
-
-  const visibleMessages = hasUserMessage
-    ? messages
-    : messages.filter((message) => !message.id.startsWith("welcome"));
+      }
+    },
+    [historyLoading, session?.access_token, streaming],
+  );
 
   if (!open) return null;
 
   return (
     <section
       className={[
-        "fixed inset-0 z-80 flex h-dvh flex-col overflow-hidden bg-white shadow-2xl transition-all duration-300 ease-out",
-        "lg:top-5 lg:right-4 lg:bottom-3 lg:left-auto lg:h-auto lg:rounded-4xl",
-        panelExpanded ? "lg:w-200 xl:w-4xl" : "lg:w-md xl:w-120",
+        "fixed inset-0 z-80 flex h-dvh overflow-hidden bg-white shadow-[0_28px_90px_rgba(15,23,42,0.24)] transition-all duration-300",
+        "lg:top-4 lg:right-4 lg:bottom-4 lg:left-auto lg:h-auto lg:rounded-[2rem]",
+        expanded ? "lg:w-[860px] xl:w-[980px]" : "lg:w-[560px] xl:w-[620px]",
       ].join(" ")}
       role="dialog"
       aria-modal="false"
-      aria-label="AI Finance Agent"
+      aria-label="MyFinance AI Agent"
     >
-      <header className="shrink-0 border-b border-slate-100 bg-white px-4 py-3 sm:px-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200">
-              <Sparkles size={19} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-base font-black text-slate-900">
-                  MyFinance AI
-                </h2>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600">
-                  AI-8.2
-                </span>
+      {historyOpen ? (
+        <button
+          type="button"
+          aria-label="Đóng lịch sử"
+          onClick={() => setHistoryOpen(false)}
+          className="absolute inset-0 z-20 bg-slate-950/20 backdrop-blur-[1px] lg:hidden"
+        />
+      ) : null}
+
+      <AIConversationHistory
+        open={historyOpen}
+        accessToken={session?.access_token ?? ""}
+        activeConversationId={activeConversationId}
+        onClose={() => setHistoryOpen(false)}
+        onSelect={(conversation) => void handleSelectConversation(conversation)}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="shrink-0 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-200">
+                <Sparkles size={18} />
               </div>
-              <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
-                {activeConversation?.title ?? "Personal CFO Copilot"}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-[15px] font-black text-slate-950">
+                    MyFinance AI
+                  </h2>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-700">
+                    Secure BYOK
+                  </span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+                  <span>Personal CFO Copilot</span>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-600">
+                    {streaming ? (
+                      <LoaderCircle size={10} className="animate-spin" />
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
+                    )}
+                    {streaming ? "Đang phân tích" : "Online"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((value) => !value)}
+                className={[
+                  "flex size-9 items-center justify-center rounded-xl transition",
+                  historyOpen
+                    ? "bg-slate-100 text-slate-900"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                ].join(" ")}
+                aria-label="Lịch sử trò chuyện"
+                title="Lịch sử trò chuyện"
+              >
+                <History size={17} />
+              </button>
+              <button
+                type="button"
+                onClick={handleNewChat}
+                className="flex size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Chat mới"
+                title="Chat mới"
+              >
+                <MessageSquarePlus size={17} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="hidden size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:flex"
+                aria-label={expanded ? "Thu gọn" : "Mở rộng"}
+                title={expanded ? "Thu gọn" : "Mở rộng"}
+              >
+                {expanded ? <Minimize2 size={17} /> : <Expand size={17} />}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Đóng AI"
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
             </div>
           </div>
+        </header>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setHistoryOpen((value) => !value)}
-              className={[
-                "flex size-10 items-center justify-center rounded-2xl transition",
-                historyOpen
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200",
-              ].join(" ")}
-              aria-label="Lịch sử chat"
-            >
-              <History size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={handleNewChat}
-              disabled={loading || streaming}
-              className={[
-                "items-center justify-center rounded-2xl font-black transition disabled:cursor-not-allowed disabled:opacity-60",
-                panelExpanded
-                  ? "hidden gap-2 bg-blue-600 px-3.5 py-2.5 text-xs text-white shadow-lg shadow-blue-100 hover:bg-blue-700 sm:inline-flex"
-                  : "hidden size-10 bg-slate-100 text-slate-500 hover:bg-slate-200 sm:inline-flex",
-              ].join(" ")}
-              aria-label="Chat mới"
-              title="Chat mới"
-            >
-              <MessageSquarePlus size={panelExpanded ? 15 : 16} />
-              {panelExpanded && <span>New Chat</span>}
-            </button>
-            <button
-              type="button"
-              onClick={handleNewChat}
-              disabled={loading || streaming}
-              className="flex size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 sm:hidden"
-              aria-label="Chat mới"
-              title="Chat mới"
-            >
-              <MessageSquarePlus size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={handleReloadContext}
-              disabled={contextLoading || loading || streaming}
-              className="flex size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label="Làm mới dữ liệu AI"
-            >
-              <RefreshCw
-                size={16}
-                className={contextLoading ? "animate-spin" : ""}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={handleTogglePanelSize}
-              className="hidden size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 lg:flex"
-              aria-label={panelExpanded ? "Thu gọn AI" : "Mở rộng AI"}
-              title={panelExpanded ? "Thu gọn" : "Mở rộng"}
-            >
-              {panelExpanded ? (
-                <Minimize2 size={17} />
-              ) : (
-                <Maximize2 size={17} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-              aria-label="Đóng AI"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-black">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-600">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            {streaming ? "Streaming" : "Online"}
-          </span>
-          <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-slate-500">
-            <span className="truncate">{contextStatusLabel}</span>
-          </span>
-          {urgentInsightCount > 0 && (
-            <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1.5 text-amber-600">
-              {urgentInsightCount} cảnh báo
-            </span>
+        <main
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto bg-slate-50/55 px-4 py-6 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] sm:px-6"
+        >
+          {messages.length === 0 ? (
+            <WelcomeState onAsk={(question) => void askQuestion(question)} />
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-7">
+              {messages.map((message, index) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  accessToken={session?.access_token ?? ""}
+                  onPendingActionChanged={handlePendingActionChanged}
+                  onRetry={
+                    index === messages.length - 1 &&
+                    message.role === "assistant"
+                      ? handleRetry
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
           )}
-        </div>
-      </header>
+        </main>
 
-      <div className="relative flex min-h-0 flex-1 bg-slate-50/70">
-        {historyOpen && panelExpanded && (
-          <aside className="hidden w-72 shrink-0 border-r border-slate-100 bg-white p-4 lg:block">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">Lịch sử</h3>
-                <p className="text-[11px] font-semibold text-slate-400">
-                  Đồng bộ theo tài khoản.
-                </p>
+        <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-3">
+          <div className="mx-auto max-w-3xl">
+            <div className="rounded-[1.35rem] border border-slate-200 bg-white p-2 shadow-[0_12px_36px_rgba(15,23,42,0.10)] transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  rows={1}
+                  maxLength={6000}
+                  disabled={streaming || authLoading}
+                  placeholder={
+                    streaming ? "AI đang trả lời..." : "Nhắn MyFinance AI..."
+                  }
+                  className="max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm font-medium leading-6 text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                />
+                {streaming ? (
+                  <button
+                    type="button"
+                    onClick={stopGenerating}
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm transition hover:bg-slate-800"
+                    aria-label="Dừng phản hồi"
+                    title="Dừng phản hồi"
+                  >
+                    <CircleStop size={17} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={!input.trim() || authLoading}
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                    aria-label="Gửi"
+                    title="Gửi"
+                  >
+                    <Send size={17} />
+                  </button>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={handleNewChat}
-                className="flex size-9 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
-                aria-label="Chat mới"
-              >
-                <MessageSquarePlus size={15} />
-              </button>
             </div>
-
-            {historyError && (
-              <div className="mb-3 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700">
-                {historyError}
-              </div>
-            )}
-
-            <div className="h-full space-y-2 overflow-y-auto pr-1">
-              {historyLoading && conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Đang tải lịch sử...
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Chưa có hội thoại nào.
-                </div>
-              ) : (
-                conversations.map((conversation) => {
-                  const active = conversation.id === activeConversationId;
-                  return (
-                    <div
-                      key={conversation.id}
-                      className={[
-                        "group flex items-center gap-2 rounded-2xl border px-3 py-2.5 transition",
-                        active
-                          ? "border-blue-100 bg-blue-50"
-                          : "border-transparent bg-white hover:border-slate-100 hover:bg-slate-50",
-                      ].join(" ")}
-                    >
-                      <button
-                        type="button"
-                        disabled={loading || streaming}
-                        onClick={() =>
-                          handleSelectConversation(conversation.id)
-                        }
-                        className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
-                      >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          {conversation.isPinned && (
-                            <Pin size={11} className="shrink-0 text-blue-600" />
-                          )}
-                          <p className="truncate text-xs font-black text-slate-800">
-                            {conversation.title}
-                          </p>
-                        </div>
-                        <p className="mt-0.5 text-[10px] font-bold text-slate-400">
-                          {formatConversationTime(conversation.lastMessageAt)}
-                        </p>
-                      </button>
-
-                      <div className="flex shrink-0 opacity-0 transition group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePin(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-blue-600"
-                          aria-label="Ghim hội thoại"
-                        >
-                          {conversation.isPinned ? (
-                            <PinOff size={13} />
-                          ) : (
-                            <Pin size={13} />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRenameConversation(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-700"
-                          aria-label="Đổi tên hội thoại"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteConversation(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-rose-600"
-                          aria-label="Xoá hội thoại"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] font-medium text-slate-400">
+              <Info size={11} />
+              <span>
+                AI có thể mắc sai sót. Hãy kiểm tra thông tin quan trọng.
+              </span>
             </div>
-          </aside>
-        )}
-
-        {historyOpen && !panelExpanded && (
-          <aside className="absolute inset-0 z-30 hidden bg-white px-4 py-4 lg:flex lg:flex-col">
-            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">
-                  Lịch sử hội thoại
-                </h3>
-                <p className="text-[11px] font-semibold text-slate-400">
-                  Chọn để tiếp tục chat.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleNewChat}
-                disabled={loading || streaming}
-                className="flex size-9 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Chat mới"
-                title="Chat mới"
-              >
-                <MessageSquarePlus size={15} />
-              </button>
-            </div>
-
-            {historyError && (
-              <div className="mb-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700">
-                {historyError}
-              </div>
-            )}
-
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              {historyLoading && conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Đang tải lịch sử...
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Chưa có hội thoại nào.
-                </div>
-              ) : (
-                conversations.map((conversation) => {
-                  const active = conversation.id === activeConversationId;
-                  return (
-                    <div
-                      key={conversation.id}
-                      className={[
-                        "group flex items-center gap-2 rounded-2xl border px-3 py-2.5 transition",
-                        active
-                          ? "border-blue-100 bg-blue-50"
-                          : "border-slate-100 bg-slate-50/70 hover:bg-white",
-                      ].join(" ")}
-                    >
-                      <button
-                        type="button"
-                        disabled={loading || streaming}
-                        onClick={() =>
-                          handleSelectConversation(conversation.id)
-                        }
-                        className="min-w-0 flex-1 text-left disabled:cursor-not-allowed"
-                      >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          {conversation.isPinned && (
-                            <Pin size={11} className="shrink-0 text-blue-600" />
-                          )}
-                          <p className="truncate text-xs font-black text-slate-800">
-                            {conversation.title}
-                          </p>
-                        </div>
-                        <p className="mt-0.5 text-[10px] font-bold text-slate-400">
-                          {formatConversationTime(conversation.lastMessageAt)}
-                        </p>
-                      </button>
-
-                      <div className="flex shrink-0 opacity-0 transition group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePin(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-blue-600"
-                          aria-label="Ghim hội thoại"
-                        >
-                          {conversation.isPinned ? (
-                            <PinOff size={13} />
-                          ) : (
-                            <Pin size={13} />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRenameConversation(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-700"
-                          aria-label="Đổi tên hội thoại"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteConversation(conversation)}
-                          className="flex size-7 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-rose-600"
-                          aria-label="Xoá hội thoại"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </aside>
-        )}
-
-        {historyOpen && (
-          <aside className="absolute inset-0 z-30 flex flex-col bg-white px-4 py-4 lg:hidden">
-            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-black text-slate-900">
-                  Lịch sử hội thoại
-                </h3>
-                <p className="text-[11px] font-semibold text-slate-400">
-                  Chọn để tiếp tục chat.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleNewChat}
-                className="flex size-9 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
-                aria-label="Chat mới"
-                title="Chat mới"
-              >
-                <MessageSquarePlus size={15} />
-              </button>
-            </div>
-
-            {historyError && (
-              <div className="mb-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700">
-                {historyError}
-              </div>
-            )}
-
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              {historyLoading && conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Đang tải lịch sử...
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-xs font-bold text-slate-400">
-                  Chưa có hội thoại nào.
-                </div>
-              ) : (
-                conversations.map((conversation) => {
-                  const active = conversation.id === activeConversationId;
-                  return (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      disabled={loading || streaming}
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      className={[
-                        "flex w-full items-center justify-between gap-2 rounded-2xl border px-3 py-2.5 text-left transition disabled:cursor-not-allowed",
-                        active
-                          ? "border-blue-100 bg-blue-50"
-                          : "border-slate-100 bg-slate-50/70 hover:bg-white",
-                      ].join(" ")}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-black text-slate-800">
-                          {conversation.title}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] font-bold text-slate-400">
-                          {formatConversationTime(conversation.lastMessageAt)}
-                        </span>
-                      </span>
-                      {conversation.isPinned && (
-                        <Pin size={12} className="shrink-0 text-blue-600" />
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </aside>
-        )}
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto px-4 py-5 sm:px-6"
-          >
-            {contextError && (
-              <div className="mb-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
-                {contextError}
-              </div>
-            )}
-
-            {visibleMessages.length > 0 && (
-              <div className="space-y-5">
-                {visibleMessages.map((message) => (
-                  <AIChatMessageBubble key={message.id} message={message} />
-                ))}
-              </div>
-            )}
-
-            {!hasUserMessage && (
-              <section className="mx-auto flex min-h-105 max-w-2xl flex-col justify-center py-8">
-                <div className="text-center">
-                  <div className="mx-auto flex size-14 items-center justify-center rounded-4xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-100">
-                    <Sparkles size={24} />
-                  </div>
-                  <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">
-                    Xin chào, tôi có thể giúp gì về tài chính?
-                  </h3>
-                  <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-slate-500">
-                    Hỏi về chi tiêu, ngân sách, dòng tiền, ví tiền, mục tiêu
-                    hoặc các cảnh báo trong dữ liệu thật của bạn.
-                  </p>
-                </div>
-
-                <div className="mt-7 grid gap-2 sm:grid-cols-2">
-                  {quickQuestions.slice(0, 4).map((item) => (
-                    <button
-                      key={item.question}
-                      type="button"
-                      disabled={loading || streaming}
-                      onClick={() => handleAsk(item.question)}
-                      className="rounded-3xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
-                        {item.label}
-                      </p>
-                      <h4 className="mt-1 text-sm font-black leading-5 text-slate-900">
-                        {item.title}
-                      </h4>
-                      <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-400">
-                        {item.description}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </main>
-
-          <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pt-4 sm:pb-4">
-            <AIChatInput
-              value={input}
-              loading={loading || contextLoading}
-              streaming={streaming}
-              onChange={setInput}
-              onSubmit={() => handleAsk()}
-              onStop={handleStopGenerating}
-            />
-            <p className="mt-2 text-center text-[11px] font-semibold text-slate-400">
-              ⚠ AI có thể mắc sai sót. Hãy kiểm tra lại dữ liệu.
-            </p>
-          </footer>
-        </div>
+          </div>
+        </footer>
       </div>
     </section>
   );

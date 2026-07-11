@@ -1,337 +1,134 @@
 import { NextResponse } from "next/server";
 
+import { requireAIUser } from "@/src/services/finance/ai-agent/server/aiServerAuth";
 import {
-  buildAIFinanceOpenAISystemPrompt,
-  buildAIFinanceOpenAIUserPrompt,
-} from "@/src/services/finance/ai-agent/aiPromptBuilder";
-import { buildAIFinanceRuleInsights } from "@/src/services/finance/ai-agent/aiFinanceRules";
-import { buildSmartFinanceSearch } from "@/src/services/finance/ai-agent/aiFinanceSearch";
-import { detectAIFinanceChatIntent } from "@/src/services/finance/ai-agent/aiIntentDetector";
-import type {
-  AIFinanceChatApiRequest,
-  AIFinanceChatApiResponse,
-  AIFinanceOpenAIInput,
-} from "@/src/services/finance/ai-agent/aiPromptTypes";
+  getAISettings,
+  resolveStoredAIKey,
+} from "@/src/services/finance/ai-agent/server/aiSettingsRepository";
+import { buildServerFinanceContext } from "@/src/services/finance/ai-agent/server/aiFinanceContext.server";
+import {
+  buildLocalFinanceAnswer,
+  type ConversationMessage,
+} from "@/src/services/finance/ai-agent/server/aiProviderRuntime.server";
+import {
+  buildConversationTitle,
+  createAIConversation,
+  saveAIMessage,
+} from "@/src/services/finance/ai-agent/server/aiConversationRepository";
+import { recordAIUsage } from "@/src/services/finance/ai-agent/server/aiUsageRepository";
+import { runAIFinanceDynamicPlanner } from "@/src/services/finance/ai-agent/planner/aiDynamicPlanner.server";
+import { toAIFinancePlannerResponse } from "@/src/services/finance/ai-agent/planner/aiPlannerResponse.server";
+import { buildAIFinanceRelevantContext } from "@/src/services/finance/ai-agent/context/aiRelevantContext.server";
+import { buildContextAwarePlannerQuestion } from "@/src/services/finance/ai-agent/context/aiContextPrompt.server";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const PROMPT_PREVIEW_LIMIT = 1800;
+export const runtime = "nodejs";
 
-type StreamRequest = AIFinanceChatApiRequest & {
-  conversation?: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+type StreamRequestPayload = {
+  question?: unknown;
+  conversationId?: unknown;
+  conversation?: unknown;
 };
-
-type ResponsesApiUsagePayload = {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-};
-
-type ResponsesApiPayload = {
-  id?: string;
-  usage?: ResponsesApiUsagePayload;
-};
-
-type OpenAIStreamEvent = {
-  type?: string;
-  delta?: string;
-  text?: string;
-  response?: unknown;
-  error?: {
-    message?: string;
-  };
-};
-
-function truncatePromptPreview(value: string) {
-  if (value.length <= PROMPT_PREVIEW_LIMIT) return value;
-  return `${value.slice(0, PROMPT_PREVIEW_LIMIT)}\n... truncated ${value.length - PROMPT_PREVIEW_LIMIT} chars`;
-}
-
-function getResponseId(payload: unknown) {
-  if (!payload || typeof payload !== "object") return undefined;
-  const responseId = (payload as ResponsesApiPayload).id;
-  return typeof responseId === "string" ? responseId : undefined;
-}
-
-function getResponsesApiUsage(payload: unknown) {
-  if (!payload || typeof payload !== "object") return undefined;
-
-  const usage = (payload as ResponsesApiPayload).usage;
-  if (!usage || typeof usage !== "object") return undefined;
-
-  const promptTokens = usage.input_tokens ?? usage.inputTokens;
-  const completionTokens = usage.output_tokens ?? usage.outputTokens;
-  const totalTokens = usage.total_tokens ?? usage.totalTokens;
-
-  if (
-    typeof promptTokens !== "number" &&
-    typeof completionTokens !== "number" &&
-    typeof totalTokens !== "number"
-  ) {
-    return undefined;
-  }
-
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-  };
-}
-
-function estimateNativeConfidence(input: AIFinanceOpenAIInput, answer: string) {
-  if (!input.context) return 0.45;
-  if (!answer.trim()) return 0.35;
-
-  const hasFinanceData =
-    input.context.counts.transactions > 0 ||
-    input.context.counts.wallets > 0 ||
-    input.context.counts.budgets > 0 ||
-    input.context.counts.goals > 0 ||
-    input.context.counts.debts > 0 ||
-    input.context.counts.investments > 0;
-
-  if (!hasFinanceData) return 0.55;
-  if (input.insights.length > 0) return 0.9;
-  return 0.82;
-}
-
-function buildNativeActions(input: AIFinanceOpenAIInput) {
-  const actionByIntent = {
-    budget: { type: "open_budgets", label: "Mở ngân sách" },
-    spending: { type: "open_transactions", label: "Xem giao dịch" },
-    cashflow: { type: "open_transactions", label: "Xem dòng tiền" },
-    goal: { type: "open_goals", label: "Mở mục tiêu" },
-  } as const;
-
-  if (input.intent in actionByIntent) {
-    return [actionByIntent[input.intent as keyof typeof actionByIntent]];
-  }
-
-  const firstInsight = input.insights[0];
-  if (firstInsight?.actionLabel) {
-    return [{ type: "none", label: firstInsight.actionLabel }];
-  }
-
-  return [];
-}
-
-function normalizeAnswer(value: string) {
-  return value
-    .replace(/```json\s*/gi, "")
-    .replace(/```\s*$/g, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{4,}/g, "\n\n\n")
-    .trim();
-}
 
 function encodeSse(payload: unknown) {
   return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
-function parseOpenAIEvent(raw: string): OpenAIStreamEvent | null {
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+function normalizeConversation(value: unknown): ConversationMessage[] {
+  if (!Array.isArray(value)) return [];
 
-  const dataLine = lines.find((line) => line.startsWith("data:"));
-  if (!dataLine) return null;
-
-  const data = dataLine.slice(5).trim();
-  if (!data || data === "[DONE]") return null;
-
-  try {
-    return JSON.parse(data) as OpenAIStreamEvent;
-  } catch {
-    return null;
-  }
+  return value
+    .filter(
+      (item): item is ConversationMessage =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        ((item as ConversationMessage).role === "user" ||
+          (item as ConversationMessage).role === "assistant") &&
+        typeof (item as ConversationMessage).content === "string",
+    )
+    .slice(-10)
+    .map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 3000),
+    }));
 }
 
-function extractDelta(event: OpenAIStreamEvent) {
-  if (event.type === "response.output_text.delta") {
-    return event.delta ?? "";
-  }
+function buildAgentQuestion(
+  question: string,
+  conversation: ConversationMessage[],
+) {
+  if (conversation.length === 0) return question;
 
-  if (event.type === "response.refusal.delta") {
-    return event.delta ?? "";
-  }
+  const history = conversation
+    .map((item) => `${item.role.toUpperCase()}: ${item.content}`)
+    .join("\n");
 
-  if (typeof event.delta === "string") return event.delta;
-  if (typeof event.text === "string") return event.text;
-  return "";
+  return [
+    "RECENT_CONVERSATION:",
+    history,
+    "",
+    "CURRENT_USER_QUESTION:",
+    question,
+  ].join("\n");
 }
 
-async function streamOpenAIToClient(input: AIFinanceOpenAIInput) {
-  const apiKey = input.settings.apiKey.trim();
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY is missing from AI Settings." },
-      { status: 400 },
-    );
-  }
+function splitAnswer(answer: string) {
+  return answer.match(/.{1,12}(?:\s|$)|\n/g) ?? [answer];
+}
 
-  const systemPrompt = buildAIFinanceOpenAISystemPrompt(input);
-  const userPrompt = buildAIFinanceOpenAIUserPrompt(input);
-  const startedAt = Date.now();
-
-  const body: Record<string, unknown> = {
-    model: input.settings.model,
-    input: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      {
-        role: "user",
-        content: userPrompt,
-      },
-    ],
-    max_output_tokens: input.settings.maxTokens,
-    stream: true,
-  };
-
-  if (!input.settings.model.toLowerCase().startsWith("gpt-5")) {
-    body.temperature = input.settings.temperature;
-  }
-
-  const openAIResponse = await fetch(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
   });
+}
 
-  if (!openAIResponse.ok || !openAIResponse.body) {
-    const errorText = await openAIResponse.text().catch(() => "");
-    return NextResponse.json(
-      {
-        error: `OpenAI request failed (${openAIResponse.status}). ${errorText.slice(0, 500)}`,
-      },
-      { status: openAIResponse.status || 500 },
-    );
+async function ensureConversation(input: {
+  supabase: Awaited<ReturnType<typeof requireAIUser>>["supabase"];
+  userId: string;
+  conversationId?: string;
+  question: string;
+}) {
+  if (input.conversationId) {
+    return input.conversationId;
   }
 
+  const created = await createAIConversation(
+    input.supabase,
+    input.userId,
+    buildConversationTitle(input.question),
+  );
+
+  return created.id;
+}
+
+function streamCompletedResult(result: Record<string, unknown>) {
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullAnswer = "";
-  let completedPayload: unknown = null;
+  const answer = typeof result.answer === "string" ? result.answer : "";
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const reader = openAIResponse.body!.getReader();
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const events = buffer.split("\n\n");
-          buffer = events.pop() ?? "";
-
-          for (const rawEvent of events) {
-            const event = parseOpenAIEvent(rawEvent);
-            if (!event) continue;
-
-            if (event.type === "response.error" || event.type === "error") {
-              controller.enqueue(
-                encoder.encode(
-                  encodeSse({
-                    type: "error",
-                    message: event.error?.message ?? "OpenAI stream error.",
-                  }),
-                ),
-              );
-              continue;
-            }
-
-            if (event.type === "response.completed") {
-              completedPayload = event.response;
-              continue;
-            }
-
-            const delta = extractDelta(event);
-            if (!delta) continue;
-
-            fullAnswer += delta;
-            controller.enqueue(
-              encoder.encode(
-                encodeSse({
-                  type: "delta",
-                  content: delta,
-                }),
-              ),
-            );
-          }
-        }
-
-        const answer = normalizeAnswer(fullAnswer);
-        const responseId = getResponseId(completedPayload);
-        const finalResponse: AIFinanceChatApiResponse = {
-          answer,
-          source: "openai",
-          confidence: estimateNativeConfidence(input, answer),
-          fallbackUsed: false,
-          model: input.settings.model,
-          generatedAt: new Date().toISOString(),
-          actions: buildNativeActions(input),
-          latencyMs: Date.now() - startedAt,
-          usage: getResponsesApiUsage(completedPayload),
-          responseId,
-          promptDebug: {
-            provider: "openai",
-            model: input.settings.model,
-            intent: input.intent,
-            temperature: input.settings.model.toLowerCase().startsWith("gpt-5")
-              ? undefined
-              : input.settings.temperature,
-            maxTokens: input.settings.maxTokens,
-            contextSent: input.settings.sendFinanceContext,
-            ruleInsightsSent: input.settings.sendRuleInsights,
-            insightCount: input.insights.length,
-            searchResultCount: input.searchResults?.results.length ?? 0,
-            noFabrication: input.settings.noFabrication,
-            systemPromptPreview: truncatePromptPreview(systemPrompt),
-            userPromptPreview: truncatePromptPreview(userPrompt),
-            systemPromptChars: systemPrompt.length,
-            userPromptChars: userPrompt.length,
-            responseId,
-          },
-        };
-
+      for (const chunk of splitAnswer(answer)) {
         controller.enqueue(
           encoder.encode(
             encodeSse({
-              type: "meta",
-              response: finalResponse,
+              type: "delta",
+              content: chunk,
             }),
           ),
         );
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      } catch (error) {
-        controller.enqueue(
-          encoder.encode(
-            encodeSse({
-              type: "error",
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "Không thể stream phản hồi AI.",
-            }),
-          ),
-        );
-      } finally {
-        controller.close();
-        reader.releaseLock();
+
+        await sleep(32);
       }
+
+      controller.enqueue(
+        encoder.encode(
+          encodeSse({
+            type: "meta",
+            response: result,
+          }),
+        ),
+      );
+
+      controller.close();
     },
   });
 
@@ -346,9 +143,14 @@ async function streamOpenAIToClient(input: AIFinanceOpenAIInput) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+
   try {
-    const payload = (await request.json()) as StreamRequest;
-    const question = payload.question?.trim();
+    const { supabase, user } = await requireAIUser(request);
+    const payload = (await request.json()) as StreamRequestPayload;
+
+    const question =
+      typeof payload.question === "string" ? payload.question.trim() : "";
 
     if (!question) {
       return NextResponse.json(
@@ -357,45 +159,291 @@ export async function POST(request: Request) {
       );
     }
 
-    const settings = payload.settings;
-    if (!settings) {
+    if (question.length > 6000) {
       return NextResponse.json(
-        { error: "AI settings are required." },
+        { error: "Question is too long." },
         { status: 400 },
       );
     }
 
-    const insights = buildAIFinanceRuleInsights(payload.context).slice(
-      0,
-      payload.maxInsights ?? 4,
-    );
-    const intent = detectAIFinanceChatIntent(question);
-    const searchResults = buildSmartFinanceSearch({
+    const conversationId =
+      typeof payload.conversationId === "string" &&
+      payload.conversationId.trim()
+        ? payload.conversationId.trim()
+        : undefined;
+
+    const conversation = normalizeConversation(payload.conversation);
+
+    const { settings } = await getAISettings(supabase, user.id);
+
+    const activeConversationId = await ensureConversation({
+      supabase,
+      userId: user.id,
+      conversationId,
       question,
-      context: payload.context,
-      limit: 12,
     });
 
-    const input: AIFinanceOpenAIInput = {
-      question,
-      context: payload.context,
-      insights,
-      intent,
-      settings,
-      searchResults: payload.searchResults ?? searchResults,
-      conversation: payload.conversation ?? [],
-    };
+    await saveAIMessage({
+      supabase,
+      userId: user.id,
+      conversationId: activeConversationId,
+      role: "user",
+      content: question,
+      status: "completed",
+    });
 
-    return streamOpenAIToClient(input);
+    if (settings.provider === "local") {
+      const context = await buildServerFinanceContext(supabase, user.id);
+      const result = buildLocalFinanceAnswer(question, context);
+
+      await saveAIMessage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: result.answer,
+        provider: "local",
+        model: result.model,
+        status: "completed",
+      });
+
+      await recordAIUsage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        provider: "local",
+        model: result.model,
+        requestType: "dynamic_planner_stream",
+        latencyMs: Date.now() - startedAt,
+        status: "completed",
+      });
+
+      return streamCompletedResult({
+        ...result,
+        conversationId: activeConversationId,
+        agentMode: "local",
+        plan: null,
+        planResults: [],
+        pendingActions: [],
+      });
+    }
+
+    const apiKey = await resolveStoredAIKey(supabase, user.id);
+
+    if (!apiKey) {
+      const context = await buildServerFinanceContext(supabase, user.id);
+      const result = buildLocalFinanceAnswer(
+        question,
+        context,
+        "Chưa cấu hình OpenAI API Key; đã dùng Local AI.",
+      );
+
+      await saveAIMessage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: result.answer,
+        provider: "fallback",
+        model: result.model,
+        status: "completed",
+        metadata: {
+          fallbackReason: result.fallbackReason,
+        },
+      });
+
+      await recordAIUsage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        provider: "fallback",
+        model: result.model,
+        requestType: "dynamic_planner_stream",
+        latencyMs: Date.now() - startedAt,
+        status: "completed",
+        errorCode: "AI_API_KEY_MISSING",
+      });
+
+      return streamCompletedResult({
+        ...result,
+        conversationId: activeConversationId,
+        agentMode: "local",
+        plan: null,
+        planResults: [],
+        pendingActions: [],
+      });
+    }
+
+    try {
+      const relevantContext = await buildAIFinanceRelevantContext({
+        context: {
+          userId: user.id,
+          supabase,
+        },
+        question: buildAgentQuestion(question, conversation),
+      });
+
+      const planningContext = buildContextAwarePlannerQuestion({
+        question: buildAgentQuestion(question, conversation),
+        context: relevantContext,
+      });
+
+      const plannerResult = await runAIFinanceDynamicPlanner({
+        apiKey,
+        model: settings.model,
+        question: buildAgentQuestion(question, conversation),
+        planningContext,
+        context: {
+          userId: user.id,
+          supabase,
+        },
+        conversationId: activeConversationId,
+        temperature: settings.temperature,
+        maxOutputTokens: settings.maxTokens,
+      });
+
+      const plannerResponse = toAIFinancePlannerResponse(plannerResult);
+
+      const plannerInputTokens = plannerResult.plannerUsage?.inputTokens ?? 0;
+      const plannerOutputTokens = plannerResult.plannerUsage?.outputTokens ?? 0;
+      const synthesisInputTokens =
+        plannerResult.synthesisUsage?.inputTokens ?? 0;
+      const synthesisOutputTokens =
+        plannerResult.synthesisUsage?.outputTokens ?? 0;
+
+      const inputTokens = plannerInputTokens + synthesisInputTokens;
+      const outputTokens = plannerOutputTokens + synthesisOutputTokens;
+      const totalTokens = inputTokens + outputTokens;
+
+      const result = {
+        answer: plannerResponse.answer,
+        source: "openai" as const,
+        model: settings.model,
+        fallbackUsed: false,
+        generatedAt: new Date().toISOString(),
+        latencyMs: Date.now() - startedAt,
+        usage: {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens,
+        },
+        conversationId: activeConversationId,
+        agentMode: plannerResponse.agentMode,
+        plan: plannerResponse.plan,
+        planResults: plannerResponse.planResults,
+        pendingActions: plannerResponse.pendingActions,
+        context: {
+          intent: relevantContext.intent,
+          diagnostics: relevantContext.diagnostics,
+        },
+      };
+
+      await saveAIMessage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: result.answer,
+        provider: "openai",
+        model: settings.model,
+        status: "completed",
+        metadata: {
+          agentMode: result.agentMode,
+          plan: result.plan,
+          planResults: result.planResults,
+          pendingActions: result.pendingActions,
+          contextDiagnostics: relevantContext.diagnostics,
+          usage: result.usage,
+        },
+      });
+
+      await recordAIUsage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        provider: "openai",
+        model: settings.model,
+        requestType: "dynamic_planner_stream",
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        latencyMs: result.latencyMs,
+        status: "completed",
+      });
+
+      return streamCompletedResult(result);
+    } catch (error) {
+      if (!settings.fallbackLocal) {
+        await recordAIUsage({
+          supabase,
+          userId: user.id,
+          conversationId: activeConversationId,
+          provider: "openai",
+          model: settings.model,
+          requestType: "dynamic_planner_stream",
+          latencyMs: Date.now() - startedAt,
+          status: "error",
+          errorCode: "AI_AGENT_FAILED",
+        });
+
+        throw error;
+      }
+
+      const reason =
+        error instanceof Error
+          ? error.message
+          : "OpenAI Agent không phản hồi; đã dùng Local AI.";
+
+      const context = await buildServerFinanceContext(supabase, user.id);
+      const result = buildLocalFinanceAnswer(question, context, reason);
+
+      await saveAIMessage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: result.answer,
+        provider: "fallback",
+        model: result.model,
+        status: "completed",
+        metadata: {
+          fallbackReason: reason,
+        },
+      });
+
+      await recordAIUsage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        provider: "fallback",
+        model: result.model,
+        requestType: "dynamic_planner_stream",
+        latencyMs: Date.now() - startedAt,
+        status: "completed",
+        errorCode: "AI_AGENT_FALLBACK",
+      });
+
+      return streamCompletedResult({
+        ...result,
+        conversationId: activeConversationId,
+        agentMode: "local",
+        plan: null,
+        planResults: [],
+        pendingActions: [],
+      });
+    }
   } catch (error) {
+    const status =
+      error instanceof Error && error.message === "UNAUTHORIZED" ? 401 : 500;
+
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Không thể xử lý yêu cầu AI streaming.",
+            : "Không thể xử lý AI Finance stream.",
       },
-      { status: 500 },
+      { status },
     );
   }
 }

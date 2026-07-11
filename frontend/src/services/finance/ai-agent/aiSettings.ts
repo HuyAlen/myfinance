@@ -1,9 +1,19 @@
-import type { AIFinanceAISettings, AIFinanceProvider } from "./aiPromptTypes";
+export type AIFinanceProvider = "openai" | "local";
 
-export const AI_SETTINGS_STORAGE_KEY = "myfinance.ai.settings";
+export type AIFinanceSettings = {
+  provider: AIFinanceProvider;
+  apiKey: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  fallbackLocal: boolean;
+  noFabrication: boolean;
+  sendFinanceContext: boolean;
+  sendRuleInsights: boolean;
+};
 
-export const DEFAULT_AI_FINANCE_SETTINGS: AIFinanceAISettings = {
-  provider: "openai",
+export const DEFAULT_AI_FINANCE_SETTINGS: AIFinanceSettings = {
+  provider: "local",
   apiKey: "",
   model: "gpt-5.2",
   temperature: 0.2,
@@ -14,64 +24,101 @@ export const DEFAULT_AI_FINANCE_SETTINGS: AIFinanceAISettings = {
   sendRuleInsights: true,
 };
 
-function toNumber(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function normalizeProvider(value: unknown): AIFinanceProvider {
+  return value === "openai" ? "openai" : "local";
 }
 
-function toBoolean(value: unknown, fallback: boolean) {
+function normalizeString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function normalizeProvider(value: unknown): AIFinanceProvider {
-  return value === "local" ? "local" : "openai";
+function normalizeNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, parsed));
 }
 
-export function normalizeAIFinanceSettings(
-  value: Partial<AIFinanceAISettings> | null | undefined,
-): AIFinanceAISettings {
+export function normalizeAIFinanceSettings(value: unknown): AIFinanceSettings {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_AI_FINANCE_SETTINGS };
+  }
+
+  const input = value as Partial<AIFinanceSettings>;
+
   return {
-    provider: normalizeProvider(value?.provider),
-    apiKey: String(value?.apiKey ?? DEFAULT_AI_FINANCE_SETTINGS.apiKey).trim(),
-    model:
-      String(value?.model ?? DEFAULT_AI_FINANCE_SETTINGS.model).trim() ||
-      DEFAULT_AI_FINANCE_SETTINGS.model,
-    temperature: Math.min(
+    provider: normalizeProvider(input.provider),
+
+    apiKey:
+      typeof input.apiKey === "string"
+        ? input.apiKey.trim()
+        : DEFAULT_AI_FINANCE_SETTINGS.apiKey,
+
+    model: normalizeString(input.model, DEFAULT_AI_FINANCE_SETTINGS.model),
+
+    temperature: normalizeNumber(
+      input.temperature,
+      DEFAULT_AI_FINANCE_SETTINGS.temperature,
+      0,
       2,
-      Math.max(
-        0,
-        toNumber(value?.temperature, DEFAULT_AI_FINANCE_SETTINGS.temperature),
+    ),
+
+    maxTokens: Math.round(
+      normalizeNumber(
+        input.maxTokens,
+        DEFAULT_AI_FINANCE_SETTINGS.maxTokens,
+        256,
+        32768,
       ),
     ),
-    maxTokens: Math.min(
-      16000,
-      Math.max(
-        512,
-        toNumber(value?.maxTokens, DEFAULT_AI_FINANCE_SETTINGS.maxTokens),
-      ),
-    ),
-    fallbackLocal: toBoolean(
-      value?.fallbackLocal,
+
+    fallbackLocal: normalizeBoolean(
+      input.fallbackLocal,
       DEFAULT_AI_FINANCE_SETTINGS.fallbackLocal,
     ),
-    noFabrication: toBoolean(
-      value?.noFabrication,
+
+    noFabrication: normalizeBoolean(
+      input.noFabrication,
       DEFAULT_AI_FINANCE_SETTINGS.noFabrication,
     ),
-    sendFinanceContext: toBoolean(
-      value?.sendFinanceContext,
+
+    sendFinanceContext: normalizeBoolean(
+      input.sendFinanceContext,
       DEFAULT_AI_FINANCE_SETTINGS.sendFinanceContext,
     ),
-    sendRuleInsights: toBoolean(
-      value?.sendRuleInsights,
+
+    sendRuleInsights: normalizeBoolean(
+      input.sendRuleInsights,
       DEFAULT_AI_FINANCE_SETTINGS.sendRuleInsights,
     ),
   };
 }
 
-export function maskAIFinanceApiKey(apiKey: string) {
-  const trimmed = apiKey.trim();
-  if (!trimmed) return "";
-  if (trimmed.length <= 12) return "••••••••";
-  return `${trimmed.slice(0, 7)}${"•".repeat(12)}${trimmed.slice(-4)}`;
+export function sanitizeAIFinanceSettings(settings: AIFinanceSettings): Omit<
+  AIFinanceSettings,
+  "apiKey"
+> & {
+  apiKey: "";
+} {
+  return {
+    ...settings,
+    apiKey: "",
+  };
 }

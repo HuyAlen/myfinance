@@ -200,7 +200,16 @@ export type Database = {
           id: string;
           user_id: string;
           provider: "openai" | "local";
+
+          // Legacy plaintext column. Kept temporarily during BYOK migration.
+          // Do not write new API keys to this column.
           api_key: string | null;
+
+          encrypted_api_key: string | null;
+          api_key_iv: string | null;
+          api_key_auth_tag: string | null;
+          api_key_hint: string | null;
+
           model: string;
           temperature: number;
           max_tokens: number;
@@ -208,6 +217,12 @@ export type Database = {
           no_fabrication: boolean;
           send_finance_context: boolean;
           send_rule_insights: boolean;
+
+          connection_status: "not_tested" | "connected" | "invalid" | "error";
+          last_tested_at: string | null;
+          last_test_latency_ms: number | null;
+          last_test_error: string | null;
+
           created_at: string;
           updated_at: string;
         };
@@ -215,7 +230,15 @@ export type Database = {
           id?: string;
           user_id: string;
           provider?: "openai" | "local";
+
+          // Legacy plaintext column. Keep null during migration.
           api_key?: string | null;
+
+          encrypted_api_key?: string | null;
+          api_key_iv?: string | null;
+          api_key_auth_tag?: string | null;
+          api_key_hint?: string | null;
+
           model?: string;
           temperature?: number;
           max_tokens?: number;
@@ -223,6 +246,12 @@ export type Database = {
           no_fabrication?: boolean;
           send_finance_context?: boolean;
           send_rule_insights?: boolean;
+
+          connection_status?: "not_tested" | "connected" | "invalid" | "error";
+          last_tested_at?: string | null;
+          last_test_latency_ms?: number | null;
+          last_test_error?: string | null;
+
           created_at?: string;
           updated_at?: string;
         };
@@ -230,7 +259,15 @@ export type Database = {
           id?: string;
           user_id?: string;
           provider?: "openai" | "local";
+
+          // Legacy plaintext column. Keep null during migration.
           api_key?: string | null;
+
+          encrypted_api_key?: string | null;
+          api_key_iv?: string | null;
+          api_key_auth_tag?: string | null;
+          api_key_hint?: string | null;
+
           model?: string;
           temperature?: number;
           max_tokens?: number;
@@ -238,6 +275,12 @@ export type Database = {
           no_fabrication?: boolean;
           send_finance_context?: boolean;
           send_rule_insights?: boolean;
+
+          connection_status?: "not_tested" | "connected" | "invalid" | "error";
+          last_tested_at?: string | null;
+          last_test_latency_ms?: number | null;
+          last_test_error?: string | null;
+
           created_at?: string;
           updated_at?: string;
         };
