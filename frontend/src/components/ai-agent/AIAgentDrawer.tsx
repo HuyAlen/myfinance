@@ -758,7 +758,11 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
       className={[
         "fixed inset-0 z-80 flex h-dvh overflow-hidden bg-white shadow-[0_28px_90px_rgba(37,99,235,0.18)] transition-all duration-300",
         "lg:top-4 lg:right-4 lg:bottom-4 lg:left-auto lg:h-auto lg:rounded-[2rem]",
-        expanded ? "lg:w-[860px] xl:w-[980px]" : "lg:w-[560px] xl:w-[620px]",
+        historyOpen
+          ? "lg:w-[min(920px,calc(100vw-5rem))] xl:w-[min(1040px,calc(100vw-6rem))]"
+          : expanded
+            ? "lg:w-[min(780px,calc(100vw-5rem))] xl:w-[min(880px,calc(100vw-6rem))]"
+            : "lg:w-[560px] xl:w-[620px]",
       ].join(" ")}
       role="dialog"
       aria-modal="false"
@@ -781,14 +785,14 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         onSelect={(conversation) => void handleSelectConversation(conversation)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:min-w-[540px]">
         <header className="shrink-0 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 via-cyan-500 to-emerald-400 text-white shadow-lg shadow-blue-200/70">
                 <Sparkles size={18} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h2 className="truncate text-[15px] font-black text-slate-900">
                     MyFinance AI
@@ -798,9 +802,13 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                  <span>Personal CFO Copilot</span>
-                  <span>·</span>
-                  <span className="inline-flex items-center gap-1 text-emerald-600">
+                  <span className={historyOpen ? "hidden xl:inline" : "inline"}>
+                    Personal CFO Copilot
+                  </span>
+                  <span className={historyOpen ? "hidden xl:inline" : "inline"}>
+                    ·
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-emerald-600">
                     {streaming ? (
                       <LoaderCircle size={10} className="animate-spin" />
                     ) : (
@@ -839,7 +847,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
-                className="hidden size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 lg:flex"
+                className="hidden size-9 items-center justify-center rounded-xl text-slate-500 outline-none transition hover:bg-blue-50 hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-300 lg:flex"
                 aria-label={expanded ? "Thu gọn" : "Mở rộng"}
                 title={expanded ? "Thu gọn" : "Mở rộng"}
               >
@@ -860,12 +868,12 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
 
         <main
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto bg-linear-to-b from-blue-50/35 via-white to-slate-50/60 px-4 py-6 [scrollbar-color:#bfdbfe_transparent] scrollbar-thin sm:px-6"
+          className="min-h-0 flex-1 overflow-y-auto bg-linear-to-b from-blue-50/30 via-white to-slate-50/50 px-4 py-7 [scrollbar-color:#bfdbfe_transparent] scrollbar-thin sm:px-6 lg:px-8"
         >
           {messages.length === 0 ? (
             <WelcomeState onAsk={(question) => void askQuestion(question)} />
           ) : (
-            <div className="mx-auto max-w-3xl space-y-7">
+            <div className="mx-auto w-full max-w-[760px] space-y-6">
               {messages.map((message, index) => (
                 <MessageBubble
                   key={message.id}
@@ -885,7 +893,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         </main>
 
         <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-3">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto w-full max-w-[760px]">
             <div className="rounded-[1.35rem] border border-slate-200 bg-white p-2 shadow-[0_12px_36px_rgba(37,99,235,0.10)] transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50">
               <div className="flex items-end gap-2">
                 <textarea

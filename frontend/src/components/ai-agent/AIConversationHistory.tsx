@@ -145,12 +145,12 @@ export default function AIConversationHistory({
   return (
     <aside
       className={[
-        "absolute inset-y-0 left-0 z-30 flex w-[86%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:relative lg:z-auto lg:w-72 lg:max-w-none lg:shadow-none",
+        "absolute inset-y-0 left-0 z-30 flex w-[86%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:relative lg:z-auto lg:w-[310px] xl:w-[330px] lg:max-w-none lg:shrink-0 lg:shadow-none",
         open ? "translate-x-0" : "-translate-x-full lg:hidden",
       ].join(" ")}
       aria-hidden={!open}
     >
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+      <div className="flex items-center justify-between border-b border-blue-100/70 bg-linear-to-b from-blue-50/70 to-white px-4 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-blue-50 to-cyan-50 text-blue-700 ring-1 ring-blue-100">
             <History size={16} />
