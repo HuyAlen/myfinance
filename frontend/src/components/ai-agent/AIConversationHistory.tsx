@@ -152,11 +152,11 @@ export default function AIConversationHistory({
     >
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
         <div className="flex items-center gap-2.5">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-blue-50 to-cyan-50 text-blue-700 ring-1 ring-blue-100">
             <History size={16} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-950">Lịch sử chat</h3>
+            <h3 className="text-sm font-black text-slate-900">Lịch sử chat</h3>
             <p className="text-[10px] font-semibold text-slate-400">
               Mở lại cuộc trò chuyện trước
             </p>
@@ -166,7 +166,7 @@ export default function AIConversationHistory({
         <button
           type="button"
           onClick={onClose}
-          className="flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-800"
+          className="flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"
           aria-label="Đóng lịch sử"
         >
           <X size={16} />
@@ -174,7 +174,7 @@ export default function AIConversationHistory({
       </div>
 
       <div className="border-b border-slate-100 p-3">
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 focus-within:border-blue-300 focus-within:bg-white">
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-blue-50/50 px-3 focus-within:border-blue-300 focus-within:bg-white">
           <Search size={14} className="text-slate-400" />
           <input
             value={query}
@@ -194,7 +194,7 @@ export default function AIConversationHistory({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-color:#cbd5e1_transparent] scrollbar-thin">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-color:#bfdbfe_transparent] scrollbar-thin">
         {loading && items.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-400">
             <LoaderCircle size={20} className="animate-spin" />
@@ -206,7 +206,7 @@ export default function AIConversationHistory({
           </div>
         ) : groups.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center px-6 text-center">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-400">
               <MessageSquareText size={20} />
             </div>
             <p className="mt-3 text-sm font-black text-slate-700">
@@ -235,7 +235,7 @@ export default function AIConversationHistory({
                           "group flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition",
                           active
                             ? "bg-blue-50 text-blue-900 ring-1 ring-blue-100"
-                            : "text-slate-700 hover:bg-slate-100",
+                            : "text-slate-700 hover:bg-blue-50",
                         ].join(" ")}
                       >
                         <MessageSquareText

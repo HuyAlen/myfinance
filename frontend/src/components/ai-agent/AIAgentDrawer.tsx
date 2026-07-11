@@ -130,10 +130,10 @@ function WelcomeState({ onAsk }: { onAsk: (question: string) => void }) {
   return (
     <section className="mx-auto flex min-h-full max-w-2xl flex-col justify-center px-2 py-10 sm:px-6">
       <div className="text-center">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-[1.35rem] bg-slate-950 text-white shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-[1.35rem] bg-linear-to-br from-blue-600 via-cyan-500 to-emerald-400 text-white shadow-[0_18px_45px_rgba(37,99,235,0.24)]">
           <Sparkles size={23} />
         </div>
-        <h3 className="mt-5 text-2xl font-black tracking-[-0.03em] text-slate-950">
+        <h3 className="mt-5 text-2xl font-black tracking-[-0.03em] text-slate-900">
           Hôm nay bạn muốn phân tích gì?
         </h3>
         <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-slate-500">
@@ -148,14 +148,14 @@ function WelcomeState({ onAsk }: { onAsk: (question: string) => void }) {
             key={question}
             type="button"
             onClick={() => onAsk(question)}
-            className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-md"
           >
             <span className="text-sm font-bold leading-5 text-slate-700">
               {question}
             </span>
             <ChevronRight
               size={15}
-              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
+              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-600"
             />
           </button>
         ))}
@@ -196,7 +196,7 @@ function MessageBubble({
     return (
       <article className="flex animate-[fadeIn_.18s_ease-out] justify-end">
         <div className="max-w-[82%] sm:max-w-[74%]">
-          <div className="rounded-[1.3rem] rounded-br-md bg-slate-900 px-4 py-3 text-[14px] font-semibold leading-6 text-white shadow-sm">
+          <div className="rounded-[1.3rem] rounded-br-md bg-linear-to-br from-blue-600 to-blue-500 px-4 py-3 text-[14px] font-semibold leading-6 text-white shadow-[0_8px_24px_rgba(37,99,235,0.18)]">
             <div className="whitespace-pre-wrap wrap-break-word">
               {message.content}
             </div>
@@ -756,7 +756,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
   return (
     <section
       className={[
-        "fixed inset-0 z-80 flex h-dvh overflow-hidden bg-white shadow-[0_28px_90px_rgba(15,23,42,0.24)] transition-all duration-300",
+        "fixed inset-0 z-80 flex h-dvh overflow-hidden bg-white shadow-[0_28px_90px_rgba(37,99,235,0.18)] transition-all duration-300",
         "lg:top-4 lg:right-4 lg:bottom-4 lg:left-auto lg:h-auto lg:rounded-[2rem]",
         expanded ? "lg:w-[860px] xl:w-[980px]" : "lg:w-[560px] xl:w-[620px]",
       ].join(" ")}
@@ -769,7 +769,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
           type="button"
           aria-label="Đóng lịch sử"
           onClick={() => setHistoryOpen(false)}
-          className="absolute inset-0 z-20 bg-slate-950/20 backdrop-blur-[1px] lg:hidden"
+          className="absolute inset-0 z-20 bg-blue-950/15 backdrop-blur-[1px] lg:hidden"
         />
       ) : null}
 
@@ -785,12 +785,12 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         <header className="shrink-0 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-200">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 via-cyan-500 to-emerald-400 text-white shadow-lg shadow-blue-200/70">
                 <Sparkles size={18} />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h2 className="truncate text-[15px] font-black text-slate-950">
+                  <h2 className="truncate text-[15px] font-black text-slate-900">
                     MyFinance AI
                   </h2>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-700">
@@ -819,8 +819,8 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                 className={[
                   "flex size-9 items-center justify-center rounded-xl transition",
                   historyOpen
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                    ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                    : "text-slate-500 hover:bg-blue-50 hover:text-blue-700",
                 ].join(" ")}
                 aria-label="Lịch sử trò chuyện"
                 title="Lịch sử trò chuyện"
@@ -860,7 +860,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
 
         <main
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto bg-slate-50/55 px-4 py-6 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] sm:px-6"
+          className="min-h-0 flex-1 overflow-y-auto bg-linear-to-b from-blue-50/35 via-white to-slate-50/60 px-4 py-6 [scrollbar-color:#bfdbfe_transparent] scrollbar-thin sm:px-6"
         >
           {messages.length === 0 ? (
             <WelcomeState onAsk={(question) => void askQuestion(question)} />
@@ -886,7 +886,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
 
         <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-3">
           <div className="mx-auto max-w-3xl">
-            <div className="rounded-[1.35rem] border border-slate-200 bg-white p-2 shadow-[0_12px_36px_rgba(15,23,42,0.10)] transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50">
+            <div className="rounded-[1.35rem] border border-slate-200 bg-white p-2 shadow-[0_12px_36px_rgba(37,99,235,0.10)] transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50">
               <div className="flex items-end gap-2">
                 <textarea
                   value={input}
@@ -909,7 +909,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   <button
                     type="button"
                     onClick={stopGenerating}
-                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm transition hover:bg-slate-800"
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-sm transition hover:bg-rose-600"
                     aria-label="Dừng phản hồi"
                     title="Dừng phản hồi"
                   >

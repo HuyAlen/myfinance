@@ -186,8 +186,8 @@ export default function AIPendingActionCard({
     expired && current.status === "pending" ? "expired" : current.status;
 
   return (
-    <section className="mt-3 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
-      <div className="flex items-start justify-between gap-4 border-b border-blue-100 bg-linear-to-r from-blue-50 to-cyan-50/60 px-4 py-3">
+    <section className="mt-3 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_12px_32px_rgba(37,99,235,0.10)]">
+      <div className="flex items-start justify-between gap-4 border-b border-blue-100 bg-linear-to-r from-blue-50 via-cyan-50/70 to-emerald-50/50 px-4 py-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
             <ShieldCheck size={14} />
