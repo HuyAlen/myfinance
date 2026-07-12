@@ -121,6 +121,25 @@ export const createBudgetTool: AIFinanceToolRegistration<CreateBudgetArgs> = {
   mode: "write",
   description:
     "Prepare a new monthly budget. Requires explicit user confirmation before execution.",
+  semantic: {
+    capabilities: ["write_action", "budget_status"],
+    returns: [
+      "confirmation_required",
+      "pendingAction.id",
+      "pendingAction.preview",
+    ],
+    useWhen: [
+      "The user explicitly asks to create or add a monthly budget and supplies or resolves category, month, and amount.",
+    ],
+    doNotUseWhen: [
+      "The user only asks to view, analyze, recommend, or explain a budget.",
+    ],
+    examples: [
+      "Tạo ngân sách ăn uống 5 triệu tháng này",
+      "Thêm budget đi lại 1 triệu",
+    ],
+    priority: 85,
+  },
   definition: {
     type: "function",
     name: "create_budget",
@@ -157,6 +176,25 @@ export const updateBudgetTool: AIFinanceToolRegistration<UpdateBudgetArgs> = {
   mode: "write",
   description:
     "Prepare an update to an existing budget limit. Requires confirmation.",
+  semantic: {
+    capabilities: ["write_action", "budget_status"],
+    returns: [
+      "confirmation_required",
+      "pendingAction.id",
+      "pendingAction.preview",
+    ],
+    useWhen: [
+      "The user explicitly asks to change an existing budget limit and the target budget can be resolved safely.",
+    ],
+    doNotUseWhen: [
+      "The user asks for budget status, advice, or a hypothetical recommendation without requesting a change.",
+    ],
+    examples: [
+      "Tăng ngân sách ăn uống lên 6 triệu",
+      "Đổi budget đi lại thành 2 triệu",
+    ],
+    priority: 90,
+  },
   definition: {
     type: "function",
     name: "update_budget",
@@ -189,6 +227,25 @@ export const createGoalTool: AIFinanceToolRegistration<CreateGoalArgs> = {
   mode: "write",
   description:
     "Prepare a new financial goal. Requires explicit user confirmation.",
+  semantic: {
+    capabilities: ["write_action", "goal_progress"],
+    returns: [
+      "confirmation_required",
+      "pendingAction.id",
+      "pendingAction.preview",
+    ],
+    useWhen: [
+      "The user explicitly asks to create a financial goal and provides a name and target amount.",
+    ],
+    doNotUseWhen: [
+      "The user asks to inspect, forecast, or discuss an existing goal without requesting creation.",
+    ],
+    examples: [
+      "Tạo mục tiêu mua xe 500 triệu",
+      "Thêm goal quỹ khẩn cấp 100 triệu",
+    ],
+    priority: 85,
+  },
   definition: {
     type: "function",
     name: "create_goal",

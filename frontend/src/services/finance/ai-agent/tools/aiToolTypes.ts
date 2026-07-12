@@ -28,10 +28,20 @@ export type AIFinanceToolDefinition = {
   };
 };
 
+export type AIFinanceToolSemanticMetadata = {
+  capabilities: string[];
+  returns: string[];
+  useWhen: string[];
+  doNotUseWhen: string[];
+  examples: string[];
+  priority: number;
+};
+
 export type AIFinanceToolRegistration<TArgs = unknown> = {
   name: string;
   mode: AIFinanceToolMode;
   description: string;
+  semantic: AIFinanceToolSemanticMetadata;
   definition: AIFinanceToolDefinition;
 
   validate: (input: unknown) => TArgs;

@@ -1,3 +1,6 @@
+import type { AIFinanceCapabilityResolution } from "./aiCapabilityResolver.server";
+import type { AIFinanceDataRequirement } from "./aiDataRequirementResolver.server";
+
 export type AIFinanceContextDomain =
   | "overview"
   | "transactions"
@@ -26,6 +29,8 @@ export type AIFinanceRelevantContext = {
   timezone: string;
   currency: string;
   intent: AIFinanceContextIntent;
+  capabilityResolution: AIFinanceCapabilityResolution;
+  dataRequirement: AIFinanceDataRequirement;
   snapshot: Record<string, unknown>;
   limits: {
     maxRowsPerDomain: number;

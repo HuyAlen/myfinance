@@ -1,170 +1,234 @@
 import { getAIFinanceTool } from "../tools/aiToolRegistry.server";
-import type {
-  AIFinanceExecutionPlan,
-  AIFinancePlanStep,
-  AIFinancePlanStepMode,
-} from "./aiPlanTypes";
+import type { AIFinanceExecutionPlan, AIFinancePlanStep } from "./aiPlanTypes";
 
-const MAX_PLAN_STEPS = 8;
+const MAX_PLAN_STEPS = 20;
+const STEP_ID_PATTERN = /^step_[1-9][0-9]*$/;
+const REFERENCE_PATTERN = /\{\{(step_[1-9][0-9]*)\.data(?:\.[^{}\s]+)+\}\}/g;
 
-function asObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Planner output must be an object.");
+export class AIFinancePlanValidationError extends Error {
+  readonly issues: string[];
+
+  constructor(issues: string[]) {
+    super(`Invalid AI finance execution plan: ${issues.join(" | ")}`);
+    this.name = "AIFinancePlanValidationError";
+    this.issues = issues;
   }
-
-  return value as Record<string, unknown>;
 }
 
-function asString(value: unknown, field: string) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${field} must be a non-empty string.`);
-  }
-
-  return value.trim();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function asStringArray(value: unknown) {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function stringsOf(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : null;
 }
 
-function asMode(value: unknown): AIFinancePlanStepMode {
-  if (value === "read" || value === "write") {
-    return value;
-  }
+function normalizeToolArguments(
+  tool: NonNullable<ReturnType<typeof getAIFinanceTool>>,
+  args: Record<string, unknown>,
+) {
+  const required = new Set(tool.definition.parameters.required);
 
-  throw new Error("Plan step mode must be read or write.");
+  return Object.fromEntries(
+    Object.entries(args).filter(
+      ([key, value]) => value !== null || required.has(key),
+    ),
+  );
 }
 
-function normalizeStep(value: unknown, index: number): AIFinancePlanStep {
-  const input = asObject(value);
-  const id = asString(input.id, `steps[${index}].id`);
-  const toolName = asString(input.toolName, `steps[${index}].toolName`);
-  const reason = asString(input.reason, `steps[${index}].reason`);
-  const mode = asMode(input.mode);
-  const argumentsValue = asObject(input.arguments ?? {});
-  const dependsOn = asStringArray(input.dependsOn);
-
-  const registration = getAIFinanceTool(toolName);
-
-  if (!registration) {
-    throw new Error(`Unknown tool in plan: ${toolName}`);
-  }
-
-  if (registration.mode !== mode) {
-    throw new Error(
-      `Tool mode mismatch for ${toolName}: expected ${registration.mode}.`,
-    );
-  }
-
-  return {
-    id,
-    toolName,
-    reason,
-    mode,
-    arguments: argumentsValue,
-    dependsOn,
-  };
-}
-
-function assertUniqueStepIds(steps: AIFinancePlanStep[]) {
-  const ids = new Set<string>();
-
-  for (const step of steps) {
-    if (ids.has(step.id)) {
-      throw new Error(`Duplicate plan step id: ${step.id}`);
+function collectReferences(value: unknown, output = new Set<string>()) {
+  if (typeof value === "string") {
+    for (const match of value.matchAll(REFERENCE_PATTERN)) {
+      output.add(match[1]);
     }
-
-    ids.add(step.id);
+    return output;
   }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectReferences(item, output));
+    return output;
+  }
+
+  if (isRecord(value)) {
+    Object.values(value).forEach((item) => collectReferences(item, output));
+  }
+
+  return output;
 }
 
-function assertDependenciesExist(steps: AIFinancePlanStep[]) {
-  const ids = new Set(steps.map((step) => step.id));
-
-  for (const step of steps) {
-    for (const dependency of step.dependsOn) {
-      if (!ids.has(dependency)) {
-        throw new Error(`Unknown dependency ${dependency} in step ${step.id}.`);
-      }
-    }
-  }
-}
-
-function assertNoCycles(steps: AIFinancePlanStep[]) {
+function detectCycle(steps: AIFinancePlanStep[]) {
   const graph = new Map(steps.map((step) => [step.id, step.dependsOn]));
   const visiting = new Set<string>();
   const visited = new Set<string>();
 
-  function visit(id: string) {
-    if (visited.has(id)) return;
-    if (visiting.has(id)) {
-      throw new Error(`Circular plan dependency detected at ${id}.`);
+  function visit(stepId: string): boolean {
+    if (visiting.has(stepId)) return true;
+    if (visited.has(stepId)) return false;
+
+    visiting.add(stepId);
+    for (const dependency of graph.get(stepId) ?? []) {
+      if (visit(dependency)) return true;
     }
-
-    visiting.add(id);
-
-    for (const dependency of graph.get(id) ?? []) {
-      visit(dependency);
-    }
-
-    visiting.delete(id);
-    visited.add(id);
+    visiting.delete(stepId);
+    visited.add(stepId);
+    return false;
   }
 
-  for (const step of steps) {
-    visit(step.id);
-  }
-}
-
-function assertReadBeforeWrite(steps: AIFinancePlanStep[]) {
-  let writeSeen = false;
-
-  for (const step of steps) {
-    if (step.mode === "write") {
-      writeSeen = true;
-      continue;
-    }
-
-    if (writeSeen) {
-      throw new Error(
-        "Read steps must appear before write steps in the execution plan.",
-      );
-    }
-  }
+  return steps.some((step) => visit(step.id));
 }
 
 export function validateAIFinanceExecutionPlan(
   value: unknown,
 ): AIFinanceExecutionPlan {
-  const input = asObject(value);
-  const objective = asString(input.objective, "objective");
+  const issues: string[] = [];
 
-  if (!Array.isArray(input.steps)) {
-    throw new Error("steps must be an array.");
+  if (!isRecord(value)) {
+    throw new AIFinancePlanValidationError(["Plan must be an object."]);
   }
 
-  if (input.steps.length === 0) {
-    throw new Error("Plan must contain at least one step.");
+  const objective =
+    typeof value.objective === "string" ? value.objective.trim() : "";
+  if (!objective) issues.push("objective is required.");
+  if (objective.length > 500) issues.push("objective is too long.");
+
+  if (!Array.isArray(value.steps)) {
+    throw new AIFinancePlanValidationError([
+      ...issues,
+      "steps must be an array.",
+    ]);
   }
 
-  if (input.steps.length > MAX_PLAN_STEPS) {
-    throw new Error(`Plan cannot exceed ${MAX_PLAN_STEPS} steps.`);
+  if (value.steps.length > MAX_PLAN_STEPS) {
+    issues.push(`steps cannot exceed ${MAX_PLAN_STEPS}.`);
   }
 
-  const steps = input.steps.map(normalizeStep);
+  const parsedSteps: AIFinancePlanStep[] = [];
+  const ids = new Set<string>();
 
-  assertUniqueStepIds(steps);
-  assertDependenciesExist(steps);
-  assertNoCycles(steps);
-  assertReadBeforeWrite(steps);
+  value.steps.forEach((rawStep, index) => {
+    const prefix = `steps[${index}]`;
+    if (!isRecord(rawStep)) {
+      issues.push(`${prefix} must be an object.`);
+      return;
+    }
 
-  return {
-    objective,
-    steps,
-  };
+    const id = typeof rawStep.id === "string" ? rawStep.id.trim() : "";
+    const toolName =
+      typeof rawStep.toolName === "string" ? rawStep.toolName.trim() : "";
+    const reason =
+      typeof rawStep.reason === "string" ? rawStep.reason.trim() : "";
+    const mode = rawStep.mode;
+    const args = rawStep.arguments;
+    const dependsOn = stringsOf(rawStep.dependsOn);
+
+    if (!STEP_ID_PATTERN.test(id)) {
+      issues.push(`${prefix}.id must match step_<number>.`);
+    } else if (ids.has(id)) {
+      issues.push(`${prefix}.id duplicates ${id}.`);
+    } else {
+      ids.add(id);
+    }
+
+    if (!toolName) issues.push(`${prefix}.toolName is required.`);
+    if (!reason) issues.push(`${prefix}.reason is required.`);
+    if (mode !== "read" && mode !== "write") {
+      issues.push(`${prefix}.mode must be read or write.`);
+    }
+    if (!isRecord(args)) issues.push(`${prefix}.arguments must be an object.`);
+    if (!dependsOn) issues.push(`${prefix}.dependsOn must be a string array.`);
+
+    if (
+      id &&
+      toolName &&
+      reason &&
+      (mode === "read" || mode === "write") &&
+      isRecord(args) &&
+      dependsOn
+    ) {
+      parsedSteps.push({
+        id,
+        toolName,
+        reason,
+        mode,
+        arguments: args,
+        dependsOn,
+      });
+    }
+  });
+
+  const stepIndex = new Map(parsedSteps.map((step, index) => [step.id, index]));
+
+  for (const step of parsedSteps) {
+    const tool = getAIFinanceTool(step.toolName);
+    if (!tool) {
+      issues.push(`${step.id} uses unknown tool ${step.toolName}.`);
+      continue;
+    }
+
+    if (tool.mode !== step.mode) {
+      issues.push(
+        `${step.id} mode ${step.mode} does not match ${step.toolName} mode ${tool.mode}.`,
+      );
+    }
+
+    const normalizedArguments = normalizeToolArguments(tool, step.arguments);
+    step.arguments = normalizedArguments;
+
+    try {
+      tool.validate(normalizedArguments);
+    } catch (error) {
+      issues.push(
+        `${step.id} arguments are invalid: ${
+          error instanceof Error ? error.message : "validation failed"
+        }.`,
+      );
+    }
+
+    const currentIndex = stepIndex.get(step.id) ?? -1;
+    for (const dependency of step.dependsOn) {
+      const dependencyIndex = stepIndex.get(dependency);
+      if (dependencyIndex === undefined) {
+        issues.push(`${step.id} depends on missing step ${dependency}.`);
+      } else if (dependencyIndex >= currentIndex) {
+        issues.push(
+          `${step.id} must depend only on an earlier step (${dependency}).`,
+        );
+      }
+    }
+
+    for (const reference of collectReferences(step.arguments)) {
+      const referenceIndex = stepIndex.get(reference);
+      if (referenceIndex === undefined) {
+        issues.push(`${step.id} references missing step ${reference}.`);
+      } else if (!step.dependsOn.includes(reference)) {
+        issues.push(
+          `${step.id} references ${reference} but does not declare it in dependsOn.`,
+        );
+      } else if (referenceIndex >= currentIndex) {
+        issues.push(`${step.id} references non-earlier step ${reference}.`);
+      }
+    }
+  }
+
+  const firstWriteIndex = parsedSteps.findIndex(
+    (step) => step.mode === "write",
+  );
+  if (
+    firstWriteIndex >= 0 &&
+    parsedSteps.slice(firstWriteIndex + 1).some((step) => step.mode === "read")
+  ) {
+    issues.push("All read steps must appear before write steps.");
+  }
+
+  if (detectCycle(parsedSteps)) {
+    issues.push("Plan dependencies contain a cycle.");
+  }
+
+  if (issues.length > 0) {
+    throw new AIFinancePlanValidationError(issues);
+  }
+
+  return { objective, steps: parsedSteps };
 }

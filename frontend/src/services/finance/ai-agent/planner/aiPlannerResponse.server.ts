@@ -20,6 +20,7 @@ export function toAIFinancePlannerResponse(result: AIFinancePlannerResult) {
       mode: step.mode,
       status: step.status,
       reason: step.reason,
+      durationMs: step.durationMs,
       error: step.error,
     })),
     pendingActions: result.pendingActions,
@@ -27,5 +28,7 @@ export function toAIFinancePlannerResponse(result: AIFinancePlannerResult) {
       planner: result.plannerUsage,
       synthesis: result.synthesisUsage,
     },
+    reasoning: result.reasoning,
+    plannerDebug: result.debug,
   };
 }

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bug,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   History,
   Info,
@@ -26,6 +28,7 @@ import AIPendingActionCard, {
   type AIPendingActionCardData,
 } from "./AIPendingActionCard";
 import type { SecureAIChatResponse } from "@/src/services/finance/ai-agent/aiChatResponseTypes";
+import type { AIPlannerDebugMetadata } from "@/src/services/finance/ai-agent/planner/aiPlanTypes";
 import {
   clearPersistedAIChat,
   readPersistedAIChat,
@@ -66,11 +69,13 @@ export type ChatMessage = {
   latencyMs?: number;
   usage?: ChatUsage;
   pendingActions?: AIPendingActionCardData[];
+  plannerDebug?: AIPlannerDebugMetadata;
 };
 
 type StreamEvent =
   | { type: "delta"; content: string }
   | { type: "meta"; response: ChatMetaResponse }
+  | { type: "planner_meta"; debug: AIPlannerDebugMetadata }
   | { type: "error"; message: string };
 
 const QUICK_QUESTIONS = [
@@ -161,6 +166,122 @@ function WelcomeState({ onAsk }: { onAsk: (question: string) => void }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/50">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2 text-[11px] font-black text-blue-800">
+          <Bug size={14} className="shrink-0" />
+          Planner Debug
+          <span className="truncate rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide text-blue-600 ring-1 ring-blue-100">
+            {debug.plannerStatus}
+          </span>
+        </span>
+        <ChevronDown
+          size={14}
+          className={[
+            "shrink-0 text-blue-500 transition",
+            open ? "rotate-180" : "",
+          ].join(" ")}
+        />
+      </button>
+
+      {open ? (
+        <div className="border-t border-blue-100 bg-white/80 px-3.5 py-3 text-[11px] text-slate-600">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div>
+              <div className="font-bold text-slate-400">Attempt</div>
+              <div className="mt-0.5 font-black text-slate-700">
+                {debug.plannerAttempt}
+              </div>
+            </div>
+            <div>
+              <div className="font-bold text-slate-400">Total</div>
+              <div className="mt-0.5 font-black text-slate-700">
+                {debug.timing.totalMs}ms
+              </div>
+            </div>
+            <div>
+              <div className="font-bold text-slate-400">Planning</div>
+              <div className="mt-0.5 font-black text-slate-700">
+                {debug.timing.planningMs ?? 0}ms
+              </div>
+            </div>
+            <div>
+              <div className="font-bold text-slate-400">Execution</div>
+              <div className="mt-0.5 font-black text-slate-700">
+                {debug.timing.executionMs ?? 0}ms
+              </div>
+            </div>
+          </div>
+
+          {debug.intent ? (
+            <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
+              <span className="font-bold text-slate-400">Intent:</span>{" "}
+              <span className="font-black text-slate-700">{debug.intent}</span>
+            </div>
+          ) : null}
+
+          <div className="mt-3 space-y-2">
+            {debug.selectedTools.length ? (
+              debug.selectedTools.map((tool) => (
+                <div
+                  key={tool.stepId}
+                  className="rounded-xl border border-slate-100 bg-white px-3 py-2 shadow-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 font-black text-slate-700">
+                      {tool.stepId} · {tool.toolName}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase text-slate-600">
+                      {tool.status}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    {tool.durationMs ?? 0}ms · keys:{" "}
+                    {tool.argumentKeys.join(", ") || "none"}
+                  </div>
+                  {tool.error ? (
+                    <div className="mt-1 text-[10px] font-semibold text-rose-600">
+                      {tool.error}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl bg-slate-50 px-3 py-2 text-slate-400">
+                Không có tool nào được thực thi.
+              </div>
+            )}
+          </div>
+
+          {debug.retryErrors.length || debug.validationErrors.length ? (
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
+              {[...debug.retryErrors, ...debug.validationErrors].map(
+                (error, index) => (
+                  <div key={`${index}-${error}`}>{error}</div>
+                ),
+              )}
+            </div>
+          ) : null}
+
+          {debug.fallbackReason ? (
+            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[10px] font-semibold text-rose-700">
+              {debug.fallbackReason}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -275,6 +396,10 @@ function MessageBubble({
             </div>
           ) : null}
 
+          {message.plannerDebug ? (
+            <PlannerDebugPanel debug={message.plannerDebug} />
+          ) : null}
+
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-400">
             <span>{message.createdAt}</span>
             {message.source ? (
@@ -350,6 +475,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
   const [expanded, setExpanded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [developerMode, setDeveloperMode] = useState(false);
   const [lastQuestion, setLastQuestion] = useState("");
   const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<
@@ -407,6 +533,21 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
       window.localStorage.getItem("myfinance-ai-expanded") === "true",
     );
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setDeveloperMode(
+      window.localStorage.getItem("myfinance-ai-developer-mode") === "true",
+    );
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "myfinance-ai-developer-mode",
+      String(developerMode),
+    );
+  }, [developerMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -526,6 +667,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             question,
             conversationId: activeConversationId ?? undefined,
             conversation: conversationPayload,
+            debug: developerMode,
           }),
         });
 
@@ -540,6 +682,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         const decoder = new TextDecoder();
         let buffer = "";
         let meta: ChatMetaResponse | null = null;
+        let plannerDebug: AIPlannerDebugMetadata | undefined;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -565,6 +708,8 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
               );
             } else if (event.type === "meta") {
               meta = event.response;
+            } else if (event.type === "planner_meta") {
+              plannerDebug = event.debug;
             } else if (event.type === "error") {
               throw new Error(event.message);
             }
@@ -586,6 +731,8 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             );
           } else if (event?.type === "meta") {
             meta = event.response;
+          } else if (event?.type === "planner_meta") {
+            plannerDebug = event.debug;
           } else if (event?.type === "error") {
             throw new Error(event.message);
           }
@@ -616,6 +763,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   latencyMs: meta?.latencyMs,
                   usage: meta?.usage,
                   pendingActions: meta?.pendingActions ?? [],
+                  plannerDebug: meta?.plannerDebug ?? plannerDebug,
                 }
               : message,
           ),
@@ -649,6 +797,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     [
       activeConversationId,
       conversationPayload,
+      developerMode,
       session?.access_token,
       streaming,
     ],
@@ -757,12 +906,12 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
     <section
       className={[
         "fixed inset-0 z-80 flex h-dvh overflow-hidden bg-white shadow-[0_28px_90px_rgba(37,99,235,0.18)] transition-all duration-300",
-        "lg:top-4 lg:right-4 lg:bottom-4 lg:left-auto lg:h-auto lg:rounded-[2rem]",
+        "lg:top-4 lg:right-4 lg:bottom-4 lg:left-auto lg:h-auto lg:rounded-4xl",
         historyOpen
           ? "lg:w-[min(920px,calc(100vw-5rem))] xl:w-[min(1040px,calc(100vw-6rem))]"
           : expanded
             ? "lg:w-[min(780px,calc(100vw-5rem))] xl:w-[min(880px,calc(100vw-6rem))]"
-            : "lg:w-[560px] xl:w-[620px]",
+            : "lg:w-140 xl:w-155",
       ].join(" ")}
       role="dialog"
       aria-modal="false"
@@ -785,7 +934,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         onSelect={(conversation) => void handleSelectConversation(conversation)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col lg:min-w-[540px]">
+      <div className="flex min-w-0 flex-1 flex-col lg:min-w-135">
         <header className="shrink-0 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -821,6 +970,22 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
             </div>
 
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDeveloperMode((value) => !value)}
+                className={[
+                  "flex size-9 items-center justify-center rounded-xl transition",
+                  developerMode
+                    ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                    : "text-slate-500 hover:bg-blue-50 hover:text-blue-700",
+                ].join(" ")}
+                aria-label="Developer Mode"
+                title={
+                  developerMode ? "Tắt Planner Debug" : "Bật Planner Debug"
+                }
+              >
+                <Bug size={17} />
+              </button>
               <button
                 type="button"
                 onClick={() => setHistoryOpen((value) => !value)}
@@ -873,7 +1038,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
           {messages.length === 0 ? (
             <WelcomeState onAsk={(question) => void askQuestion(question)} />
           ) : (
-            <div className="mx-auto w-full max-w-[760px] space-y-6">
+            <div className="mx-auto w-full max-w-190 space-y-6">
               {messages.map((message, index) => (
                 <MessageBubble
                   key={message.id}
@@ -893,7 +1058,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
         </main>
 
         <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-5 sm:pb-3">
-          <div className="mx-auto w-full max-w-[760px]">
+          <div className="mx-auto w-full max-w-190">
             <div className="rounded-[1.35rem] border border-slate-200 bg-white p-2 shadow-[0_12px_36px_rgba(37,99,235,0.10)] transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50">
               <div className="flex items-end gap-2">
                 <textarea

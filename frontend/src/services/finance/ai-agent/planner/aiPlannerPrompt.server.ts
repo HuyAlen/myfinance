@@ -1,16 +1,31 @@
 import { listAIFinanceTools } from "../tools/aiToolRegistry.server";
+import { buildAIFinancePostToolSynthesisPrompt } from "../reasoning/aiReasoningPrompt.server";
 
 export function buildAIFinancePlannerSystemPrompt() {
   const tools = listAIFinanceTools();
 
   return [
     "You are the planning layer for MyFinance AI.",
-    "Return only valid JSON.",
+    "Return one execution plan that conforms exactly to the supplied JSON Schema.",
+    "Do not add keys outside the schema.",
     "Create the smallest safe execution plan needed to answer the user's request.",
+    "Read planningContext.capabilityResolution and planningContext.dataRequirement before selecting any tool.",
+    "Prefer dataRequirement.preferredTools when they provide the requiredData.",
+    "Match capabilityResolution capabilities against each tool's capabilities metadata.",
+    "Choose tools whose returns cover the requiredData and whose useWhen conditions match the request.",
+    "Avoid a tool when its doNotUseWhen guidance matches the request.",
+    "When multiple tools can answer, select the smallest sufficient tool set; use priority only as a tie-breaker.",
+    "Never choose a broad summary tool when a domain-specific tool returns the exact requested data.",
+    "Examples are semantic hints, not exact phrase rules. Do not require literal wording matches.",
+    "Do not use get_financial_summary for wallet details, wallet balances, wallet ranking, or low-balance wallet questions. Use get_wallets.",
+    "A single general tool may support many analytical questions. Do not invent specialized tools such as get_lowest_wallet.",
+    "Record the intended analysis in the step reason, including sort, rank, min/max, compare, aggregate, forecast, or threshold detection.",
     "Always place read steps before write steps.",
     "Use read tools to discover IDs or current values before write tools whenever needed.",
     "Write tools never execute immediately; they create confirmation-required pending actions.",
-    "Do not include unsupported tools.",
+    "Do not include unsupported tools. toolName and mode must exactly match the registry.",
+    "Every step id must be unique and use step_1, step_2, ... order.",
+    "Every dependency must reference an earlier step and all argument references must also be declared in dependsOn.",
     "Use dependencies when a later step needs an earlier result.",
     "To reference a previous step output, use exactly this string format:",
     "{{stepId.data.path.to.value}}",
@@ -27,8 +42,9 @@ export function buildAIFinancePlannerSystemPrompt() {
     "If semanticResolution.best has categoryId with high or medium confidence, pass that categoryId to search_transactions.",
     "If semanticResolution.best has no categoryId, pass its queryTerms to search_transactions.queryTerms.",
     "Do not invent semantic mappings beyond semanticResolution. Prefer a safe broad search when semanticResolution.ambiguous is true.",
+    "If dataRequirement.requiresClarification is true, create no destructive write step. Use the safest available read plan or return an empty steps array.",
     "",
-    "Available tools:",
+    "Available tools with semantic metadata:",
     JSON.stringify(tools),
     "",
     "Required JSON shape:",
@@ -55,7 +71,11 @@ export function buildAIFinanceSynthesisSystemPrompt() {
     "Use only the supplied step results.",
     "Never claim a pending write action is completed.",
     "When a write step requires confirmation, clearly tell the user to review the confirmation card.",
+    "Apply the analysis requested by the user to tool results: filter, aggregate, sort, rank, select minimum/maximum, compare periods, calculate progress, or detect risk.",
+    "When wallet data exists, never say wallet details were not provided.",
+    "Distinguish an empty result from a failed tool. Say no matching records were found only when the tool succeeded with an empty result.",
     "Format VND amounts clearly.",
+    buildAIFinancePostToolSynthesisPrompt(),
     "Keep the answer concise and actionable.",
   ].join("\n");
 }

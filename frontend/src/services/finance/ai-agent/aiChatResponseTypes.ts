@@ -1,4 +1,5 @@
 import type { AIPendingActionCardData } from "@/src/components/ai-agent/AIPendingActionCard";
+import type { AIPlannerDebugMetadata } from "./planner/aiPlanTypes";
 
 export type AIToolCallMetadata = {
   name: string;
@@ -22,4 +23,5 @@ export type SecureAIChatResponse = {
     completionTokens?: number;
     totalTokens?: number;
   };
+  plannerDebug?: AIPlannerDebugMetadata;
 };

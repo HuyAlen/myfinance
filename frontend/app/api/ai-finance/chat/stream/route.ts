@@ -27,6 +27,7 @@ type StreamRequestPayload = {
   question?: unknown;
   conversationId?: unknown;
   conversation?: unknown;
+  debug?: unknown;
 };
 
 function encodeSse(payload: unknown) {
@@ -106,6 +107,17 @@ function streamCompletedResult(result: Record<string, unknown>) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      if (result.plannerDebug) {
+        controller.enqueue(
+          encoder.encode(
+            encodeSse({
+              type: "planner_meta",
+              debug: result.plannerDebug,
+            }),
+          ),
+        );
+      }
+
       for (const chunk of splitAnswer(answer)) {
         controller.enqueue(
           encoder.encode(
@@ -148,6 +160,8 @@ export async function POST(request: Request) {
   try {
     const { supabase, user } = await requireAIUser(request);
     const payload = (await request.json()) as StreamRequestPayload;
+    const debugEnabled =
+      process.env.NODE_ENV === "development" || payload.debug === true;
 
     const question =
       typeof payload.question === "string" ? payload.question.trim() : "";
@@ -225,6 +239,19 @@ export async function POST(request: Request) {
         plan: null,
         planResults: [],
         pendingActions: [],
+        plannerDebug: debugEnabled
+          ? {
+              enabled: true,
+              plannerStatus: "fallback",
+              model: result.model,
+              plannerAttempt: 0,
+              selectedTools: [],
+              timing: { totalMs: Date.now() - startedAt },
+              validationErrors: [],
+              retryErrors: [],
+              fallbackReason: "Local provider is active.",
+            }
+          : undefined,
       });
     }
 
@@ -271,6 +298,19 @@ export async function POST(request: Request) {
         plan: null,
         planResults: [],
         pendingActions: [],
+        plannerDebug: debugEnabled
+          ? {
+              enabled: true,
+              plannerStatus: "fallback",
+              model: result.model,
+              plannerAttempt: 0,
+              selectedTools: [],
+              timing: { totalMs: Date.now() - startedAt },
+              validationErrors: [],
+              retryErrors: [],
+              fallbackReason: "OpenAI API key is not configured.",
+            }
+          : undefined,
       });
     }
 
@@ -300,6 +340,14 @@ export async function POST(request: Request) {
         conversationId: activeConversationId,
         temperature: settings.temperature,
         maxOutputTokens: settings.maxTokens,
+        debug: debugEnabled,
+        debugIntent: [
+          relevantContext.intent.action,
+          relevantContext.capabilityResolution.primary,
+          ...relevantContext.dataRequirement.capabilities,
+        ].join(":"),
+        reasoningCapabilities: relevantContext.dataRequirement.capabilities,
+        reasoningOperations: relevantContext.dataRequirement.operations,
       });
 
       const plannerResponse = toAIFinancePlannerResponse(plannerResult);
@@ -332,8 +380,12 @@ export async function POST(request: Request) {
         plan: plannerResponse.plan,
         planResults: plannerResponse.planResults,
         pendingActions: plannerResponse.pendingActions,
+        reasoning: plannerResponse.reasoning,
+        plannerDebug: plannerResponse.plannerDebug,
         context: {
           intent: relevantContext.intent,
+          capabilityResolution: relevantContext.capabilityResolution,
+          dataRequirement: relevantContext.dataRequirement,
           diagnostics: relevantContext.diagnostics,
         },
       };
@@ -352,8 +404,12 @@ export async function POST(request: Request) {
           plan: result.plan,
           planResults: result.planResults,
           pendingActions: result.pendingActions,
+          reasoning: result.reasoning,
           contextDiagnostics: relevantContext.diagnostics,
+          capabilityResolution: relevantContext.capabilityResolution,
+          dataRequirement: relevantContext.dataRequirement,
           usage: result.usage,
+          ...(result.plannerDebug ? { plannerDebug: result.plannerDebug } : {}),
         },
       });
 
@@ -430,6 +486,40 @@ export async function POST(request: Request) {
         plan: null,
         planResults: [],
         pendingActions: [],
+        plannerDebug: debugEnabled
+          ? {
+              enabled: true,
+              plannerStatus: "fallback",
+              model: result.model,
+              plannerAttempt:
+                typeof (
+                  error as { plannerDebugFailure?: { plannerAttempt?: number } }
+                ).plannerDebugFailure?.plannerAttempt === "number"
+                  ? (
+                      error as {
+                        plannerDebugFailure: { plannerAttempt: number };
+                      }
+                    ).plannerDebugFailure.plannerAttempt
+                  : 0,
+              selectedTools: [],
+              timing: {
+                totalMs: Date.now() - startedAt,
+                planningMs: (
+                  error as { plannerDebugFailure?: { planningMs?: number } }
+                ).plannerDebugFailure?.planningMs,
+              },
+              validationErrors:
+                (
+                  error as {
+                    plannerDebugFailure?: { validationErrors?: string[] };
+                  }
+                ).plannerDebugFailure?.validationErrors ?? [],
+              retryErrors:
+                (error as { plannerDebugFailure?: { retryErrors?: string[] } })
+                  .plannerDebugFailure?.retryErrors ?? [],
+              fallbackReason: reason.slice(0, 300),
+            }
+          : undefined,
       });
     }
   } catch (error) {

@@ -145,7 +145,7 @@ export default function AIConversationHistory({
   return (
     <aside
       className={[
-        "absolute inset-y-0 left-0 z-30 flex w-[86%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:relative lg:z-auto lg:w-[310px] xl:w-[330px] lg:max-w-none lg:shrink-0 lg:shadow-none",
+        "absolute inset-y-0 left-0 z-30 flex w-[86%] max-w-[320px] flex-col border-r border-slate-200 bg-white shadow-2xl transition-transform duration-200 lg:relative lg:z-auto lg:w-77.5 xl:w-82.5 lg:max-w-none lg:shrink-0 lg:shadow-none",
         open ? "translate-x-0" : "-translate-x-full lg:hidden",
       ].join(" ")}
       aria-hidden={!open}

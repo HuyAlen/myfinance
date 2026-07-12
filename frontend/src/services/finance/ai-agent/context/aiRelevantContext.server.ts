@@ -1,5 +1,7 @@
 import type { AIFinanceToolContext } from "../tools/aiToolTypes";
 import { detectAIFinanceContextIntent } from "./aiContextIntent.server";
+import { resolveAIFinanceCapabilities } from "./aiCapabilityResolver.server";
+import { resolveAIFinanceDataRequirements } from "./aiDataRequirementResolver.server";
 import { resolveAIFinanceEntities } from "./aiEntityResolver.server";
 import { resolveAIFinanceSemanticSearch } from "./aiSemanticFinanceSearch.server";
 import type {
@@ -228,7 +230,22 @@ export async function buildAIFinanceRelevantContext(input: {
   timezone?: string;
   currency?: string;
 }): Promise<AIFinanceRelevantContext> {
-  const intent = detectAIFinanceContextIntent(input.question);
+  const detectedIntent = detectAIFinanceContextIntent(input.question);
+  const capabilityResolution = resolveAIFinanceCapabilities(input.question);
+  const dataRequirement = resolveAIFinanceDataRequirements({
+    question: input.question,
+    capabilityResolution,
+  });
+  const intent = {
+    ...detectedIntent,
+    domains: [
+      ...new Set([...detectedIntent.domains, ...capabilityResolution.domains]),
+    ],
+    needsRecentTransactions:
+      detectedIntent.needsRecentTransactions ||
+      capabilityResolution.domains.includes("transactions") ||
+      capabilityResolution.domains.includes("cashflow"),
+  };
   const snapshot: Record<string, unknown> = {};
   const loadedDomains = new Set<AIFinanceContextDomain>();
 
@@ -393,6 +410,8 @@ export async function buildAIFinanceRelevantContext(input: {
     timezone: input.timezone ?? "Asia/Ho_Chi_Minh",
     currency: input.currency ?? "VND",
     intent,
+    capabilityResolution,
+    dataRequirement,
     snapshot: pruned.snapshot,
     limits: {
       maxRowsPerDomain: MAX_ROWS_PER_DOMAIN,

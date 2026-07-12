@@ -63,6 +63,7 @@ type WalletRow = {
   name: string;
   type: string;
   balance: number;
+  currency?: string;
 };
 
 type BudgetRow = {
@@ -367,6 +368,38 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
   mode: "read",
   description:
     "Get the authenticated user's current assets, debts, net worth, income, expenses, and cash flow.",
+  semantic: {
+    capabilities: [
+      "financial_overview",
+      "cashflow_analysis",
+      "income_analysis",
+      "debt_summary",
+      "investment_summary",
+    ],
+    returns: [
+      "walletAssets",
+      "investmentAssets",
+      "totalAssets",
+      "totalDebt",
+      "netWorth",
+      "income",
+      "expense",
+      "cashFlow",
+      "savingRate",
+    ],
+    useWhen: [
+      "The user asks for an overall financial summary, net worth, total assets, total debt, income, expenses, or cash flow.",
+    ],
+    doNotUseWhen: [
+      "The user asks for individual wallet balances, wallet ranking, or low-balance wallets; use get_wallets instead.",
+    ],
+    examples: [
+      "Tổng quan tài chính của tôi",
+      "Tổng tài sản ròng là bao nhiêu?",
+      "Dòng tiền tháng này thế nào?",
+    ],
+    priority: 60,
+  },
   definition: {
     type: "function",
     name: "get_financial_summary",
@@ -444,6 +477,97 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
   },
 };
 
+export const getWalletsTool: AIFinanceToolRegistration<Record<string, never>> =
+  {
+    name: "get_wallets",
+    mode: "read",
+    description:
+      "Get every active wallet with its name, type, current balance, currency when available, and a server-side balance ranking.",
+    semantic: {
+      capabilities: [
+        "wallet_list",
+        "wallet_balance_lookup",
+        "wallet_ranking",
+        "wallet_low_balance",
+      ],
+      returns: [
+        "wallets[].id",
+        "wallets[].name",
+        "wallets[].type",
+        "wallets[].balance",
+        "wallets[].currency",
+        "totalBalance",
+        "lowestBalanceWallet",
+        "highestBalanceWallet",
+      ],
+      useWhen: [
+        "The user asks for details of each wallet or account.",
+        "The user asks which wallet has the most or least money.",
+        "The user asks which wallet is nearly empty or needs funding.",
+        "The user asks for the balance of a named wallet.",
+      ],
+      doNotUseWhen: [
+        "The user only asks for total net worth or a broad financial overview.",
+        "The user asks for transactions belonging to a wallet; use search_transactions with walletId.",
+      ],
+      examples: [
+        "Chi tiết từng ví",
+        "Ví nào sắp hết tiền?",
+        "VCB còn bao nhiêu?",
+        "Ví nào nhiều tiền nhất?",
+      ],
+      priority: 100,
+    },
+    definition: {
+      type: "function",
+      name: "get_wallets",
+      description:
+        "Return all wallets and current balances. Use this for wallet details, named-wallet balance lookup, wallet ranking, the highest balance, the lowest balance, and wallets that may be nearly empty.",
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+    validate: parseEmptyArgs,
+    async execute(context) {
+      try {
+        const wallets = await getRows<WalletRow>(context, "wallets");
+        const normalized = wallets
+          .map((wallet) => ({
+            id: wallet.id,
+            name: wallet.name,
+            type: wallet.type,
+            balance: Number(wallet.balance || 0),
+            currency:
+              "currency" in wallet && typeof wallet.currency === "string"
+                ? wallet.currency
+                : "VND",
+          }))
+          .sort((a, b) => b.balance - a.balance);
+
+        return {
+          ok: true,
+          data: {
+            wallets: normalized,
+            count: normalized.length,
+            totalBalance: normalized.reduce(
+              (sum, item) => sum + item.balance,
+              0,
+            ),
+            highestBalanceWallet: normalized[0] ?? null,
+            lowestBalanceWallet:
+              normalized.length > 0 ? normalized[normalized.length - 1] : null,
+          },
+        };
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  };
+
 export const getBudgetStatusTool: AIFinanceToolRegistration<{
   month?: string;
 }> = {
@@ -451,6 +575,26 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
   mode: "read",
   description:
     "Get budget limits, actual spending, usage percentage, and over-budget status by category.",
+  semantic: {
+    capabilities: ["budget_status", "budget_risk"],
+    returns: [
+      "budgets[].limit",
+      "budgets[].spent",
+      "budgets[].remaining",
+      "budgets[].usagePercent",
+      "budgets[].status",
+    ],
+    useWhen: [
+      "The user asks about budget status, remaining budget, budgets near the limit, or over-budget categories.",
+    ],
+    doNotUseWhen: ["The user asks only for raw transactions."],
+    examples: [
+      "Ngân sách nào sắp vượt?",
+      "Ngân sách ăn uống còn bao nhiêu?",
+      "Tôi có vượt ngân sách không?",
+    ],
+    priority: 90,
+  },
   definition: {
     type: "function",
     name: "get_budget_status",
@@ -541,6 +685,26 @@ export const getGoalsTool: AIFinanceToolRegistration<Record<string, never>> = {
   name: "get_goals",
   mode: "read",
   description: "Get the user's financial goals and progress toward each goal.",
+  semantic: {
+    capabilities: ["goal_progress", "saving_summary", "scenario_analysis"],
+    returns: [
+      "goal.name",
+      "goal.targetAmount",
+      "goal.currentAmount",
+      "goal.remaining",
+      "goal.progressPercent",
+    ],
+    useWhen: [
+      "The user asks about goal progress, remaining amount, or which goal is behind.",
+    ],
+    doNotUseWhen: ["The user asks only for wallet balances."],
+    examples: [
+      "Mục tiêu nào chậm nhất?",
+      "Tôi còn thiếu bao nhiêu để mua xe?",
+      "Tiến độ mục tiêu mua nhà",
+    ],
+    priority: 85,
+  },
   definition: {
     type: "function",
     name: "get_goals",
@@ -597,6 +761,35 @@ export const searchTransactionsTool: AIFinanceToolRegistration<SearchTransaction
     mode: "read",
     description:
       "Search and aggregate the authenticated user's transactions by date range, type, resolved category, resolved wallet, semantic query terms, merchant or note text, and amount range.",
+    semantic: {
+      capabilities: [
+        "transaction_search",
+        "transaction_ranking",
+        "category_spending",
+        "merchant_spending",
+        "income_analysis",
+        "period_comparison",
+      ],
+      returns: [
+        "transactions",
+        "count",
+        "totalIncome",
+        "totalExpense",
+        "netAmount",
+        "byCategory",
+      ],
+      useWhen: [
+        "The user asks about transactions, spending by category or merchant, transaction ranking, income, or a specific time period.",
+      ],
+      doNotUseWhen: ["The user only asks for current wallet balances."],
+      examples: [
+        "Hôm qua tôi tiêu gì?",
+        "Tháng này tiền ăn bao nhiêu?",
+        "Giao dịch lớn nhất",
+        "Chi tiêu ở Grab",
+      ],
+      priority: 95,
+    },
     definition: {
       type: "function",
       name: "search_transactions",
@@ -822,6 +1015,26 @@ export const getRecentTransactionsTool: AIFinanceToolRegistration<{
   name: "get_recent_transactions",
   mode: "read",
   description: "Get the authenticated user's most recent transactions.",
+  semantic: {
+    capabilities: ["transaction_search"],
+    returns: [
+      "transactions[].id",
+      "transactions[].type",
+      "transactions[].amount",
+      "transactions[].category",
+      "transactions[].wallet",
+      "transactions[].note",
+      "transactions[].date",
+    ],
+    useWhen: [
+      "The user asks for the latest or most recent transactions without a specific date filter.",
+    ],
+    doNotUseWhen: [
+      "The user asks for totals, category analysis, merchant analysis, or a defined date range; use search_transactions instead.",
+    ],
+    examples: ["Giao dịch gần đây", "Cho tôi xem 10 giao dịch mới nhất"],
+    priority: 75,
+  },
   definition: {
     type: "function",
     name: "get_recent_transactions",
@@ -883,6 +1096,27 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
   mode: "read",
   description:
     "Calculate a compact financial health assessment from current balances and recent cash flow.",
+  semantic: {
+    capabilities: ["financial_health"],
+    returns: [
+      "score",
+      "label",
+      "savingRate",
+      "debtRatioPercent",
+      "emergencyMonths",
+      "cashFlow",
+    ],
+    useWhen: [
+      "The user asks about financial health, safety, risk, or the health score.",
+    ],
+    doNotUseWhen: ["The user asks for a detailed wallet list."],
+    examples: [
+      "Sức khỏe tài chính của tôi thế nào?",
+      "Dòng tiền hiện tại có an toàn không?",
+      "Vì sao điểm tài chính thấp?",
+    ],
+    priority: 88,
+  },
   definition: {
     type: "function",
     name: "get_financial_health",
@@ -973,6 +1207,7 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
 
 export const financeReadTools = [
   getFinancialSummaryTool,
+  getWalletsTool,
   getBudgetStatusTool,
   getGoalsTool,
   searchTransactionsTool,
