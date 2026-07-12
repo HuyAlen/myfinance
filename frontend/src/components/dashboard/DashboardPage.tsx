@@ -204,50 +204,21 @@ type DashboardSavingTransaction = {
   note: string;
 };
 
-type WalletTransferRow = {
-  id?: string | number | null;
-  amount?: number | string | null;
-  transfer_date?: string | null;
-  transaction_date?: string | null;
-  date?: string | null;
-  created_at?: string | null;
-  note?: string | null;
-};
-
-type DashboardWalletTransfer = {
-  id: string;
-  amount: number;
-  date: string;
-  note: string;
-};
-
-const WALLET_TRANSFER_TABLES = [
-  "wallet_transfers",
-  "wallet_transfer_transactions",
-  "transfer_transactions",
-] as const;
-
-const mapWalletTransferRow = (
-  row: WalletTransferRow,
-  index: number,
-  tableName: string,
-): DashboardWalletTransfer => ({
-  id: String(row.id ?? `${tableName}-${index}`),
-  amount: Number(row.amount ?? 0),
-  date:
-    row.transfer_date ??
-    row.transaction_date ??
-    row.date ??
-    row.created_at ??
-    new Date().toISOString(),
-  note: row.note ?? "Chuyển ví",
-});
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+type DashboardSupabaseClient = ReturnType<typeof createClient>;
+
+const globalForDashboardSupabase = globalThis as typeof globalThis & {
+  __myFinanceDashboardSupabase?: DashboardSupabaseClient;
+};
+
 const savingsSupabase =
   supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? (globalForDashboardSupabase.__myFinanceDashboardSupabase ??= createClient(
+        supabaseUrl,
+        supabaseAnonKey,
+      ))
     : null;
 
 const mapSavingRowToSavingAccount = (
@@ -646,9 +617,6 @@ export default function DashboardPage() {
   const [savingTransactions, setSavingTransactions] = useState<
     DashboardSavingTransaction[]
   >([]);
-  const [walletTransfers, setWalletTransfers] = useState<
-    DashboardWalletTransfer[]
-  >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -685,90 +653,80 @@ export default function DashboardPage() {
   const snapshotGoals = goals;
 
   const reloadData = useCallback(async () => {
-    const transferHistoryPromise = savingsSupabase
-      ? Promise.all(
-          WALLET_TRANSFER_TABLES.map(async (tableName) => {
-            const result = await savingsSupabase
-              .from(tableName)
-              .select("*")
-              .order("created_at", { ascending: false });
+    try {
+      const [w, inv, cat, txn, dbt, gls, bdg, savingRows, savingTxnRows] =
+        await Promise.all([
+          getWallets(),
+          getInvestments(),
+          getCategories(),
+          getTransactions(),
+          getDebts(),
+          getGoals(),
+          getBudgets(),
+          savingsSupabase
+            ? savingsSupabase
+                .from("savings")
+                .select("*")
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+          savingsSupabase
+            ? savingsSupabase
+                .from("saving_transactions")
+                .select(
+                  "id,saving_id,type,amount,transaction_date,created_at,note",
+                )
+                .order("transaction_date", { ascending: false })
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ]);
 
-            if (result.error) return [];
+      setWallets(w ?? []);
+      setInvestments(inv ?? []);
+      setCategories(cat ?? []);
+      setTransactions(txn ?? []);
+      setDebts(dbt ?? []);
+      setGoals(gls ?? []);
+      setBudgets(bdg ?? []);
 
-            return ((result.data ?? []) as WalletTransferRow[]).map(
-              (row, index) => mapWalletTransferRow(row, index, tableName),
-            );
-          }),
-        ).then((groups) => {
-          const byId = new Map<string, DashboardWalletTransfer>();
+      if (!savingRows.error) {
+        setSavings(
+          ((savingRows.data ?? []) as SavingRow[]).map(
+            mapSavingRowToSavingAccount,
+          ),
+        );
+      } else {
+        console.error(
+          "[DashboardPage] Failed to load savings",
+          savingRows.error,
+        );
+        setSavings([]);
+      }
 
-          groups.flat().forEach((transfer) => {
-            const key = `${transfer.id}-${transfer.date}-${transfer.amount}`;
-            byId.set(key, transfer);
-          });
+      if (!savingTxnRows.error) {
+        setSavingTransactions(
+          ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
+            mapSavingTransactionRow,
+          ),
+        );
+      } else {
+        console.error(
+          "[DashboardPage] Failed to load saving transactions",
+          savingTxnRows.error,
+        );
+        setSavingTransactions([]);
+      }
+    } catch (error) {
+      console.error("[DashboardPage] reloadData failed", error);
 
-          return Array.from(byId.values());
-        })
-      : Promise.resolve([] as DashboardWalletTransfer[]);
-
-    const [
-      w,
-      inv,
-      cat,
-      txn,
-      dbt,
-      gls,
-      bdg,
-      savingRows,
-      savingTxnRows,
-      transferRows,
-    ] = await Promise.all([
-      getWallets(),
-      getInvestments(),
-      getCategories(),
-      getTransactions(),
-      getDebts(),
-      getGoals(),
-      getBudgets(),
-      savingsSupabase
-        ? savingsSupabase
-            .from("savings")
-            .select("*")
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-      savingsSupabase
-        ? savingsSupabase
-            .from("saving_transactions")
-            .select("id,saving_id,type,amount,transaction_date,created_at,note")
-            .order("transaction_date", { ascending: false })
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-      transferHistoryPromise,
-    ]);
-
-    setWallets(w);
-    setInvestments(inv);
-    setCategories(cat);
-    setTransactions(txn);
-    setDebts(dbt);
-    setGoals(gls);
-    setBudgets(bdg);
-    setWalletTransfers(transferRows);
-
-    if (!savingRows.error) {
-      setSavings(
-        ((savingRows.data ?? []) as SavingRow[]).map(
-          mapSavingRowToSavingAccount,
-        ),
-      );
-    }
-
-    if (!savingTxnRows.error) {
-      setSavingTransactions(
-        ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
-          mapSavingTransactionRow,
-        ),
-      );
+      setWallets([]);
+      setInvestments([]);
+      setCategories([]);
+      setTransactions([]);
+      setDebts([]);
+      setGoals([]);
+      setBudgets([]);
+      setSavings([]);
+      setSavingTransactions([]);
     }
   }, []);
 
@@ -1296,28 +1254,16 @@ export default function DashboardPage() {
         )
       : 0;
 
-  const filteredWalletTransfers = useMemo(() => {
-    const start = new Date(`${dateRange.startDate}T00:00:00`).getTime();
-    const end = new Date(`${dateRange.endDate}T23:59:59`).getTime();
-
-    return walletTransfers.filter((transfer) => {
-      const time = new Date(transfer.date).getTime();
-      return Number.isFinite(time) && time >= start && time <= end;
-    });
-  }, [walletTransfers, dateRange.startDate, dateRange.endDate]);
-
-  const transferAmount = useMemo(() => {
-    const transactionTransfers = filteredTransactions
-      .filter((transaction) => transaction.type === "transfer")
-      .reduce((sum, transaction) => sum + Number(transaction.amount ?? 0), 0);
-
-    const transferHistory = filteredWalletTransfers.reduce(
-      (sum, transfer) => sum + transfer.amount,
-      0,
-    );
-
-    return transactionTransfers + transferHistory;
-  }, [filteredTransactions, filteredWalletTransfers]);
+  const transferAmount = useMemo(
+    () =>
+      filteredTransactions
+        .filter((transaction) => transaction.type === "transfer")
+        .reduce(
+          (sum, transaction) => sum + Math.abs(Number(transaction.amount ?? 0)),
+          0,
+        ),
+    [filteredTransactions],
+  );
 
   const cashFlowFormulaRows = useMemo(
     () => [
