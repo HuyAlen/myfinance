@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpRight,
   Check,
   CheckCircle2,
   Clock3,
@@ -30,14 +32,25 @@ type Props = {
   onChanged?: (action: AIPendingActionCardData) => void;
 };
 
+type DisplayField = {
+  key: string;
+  label: string;
+  value: unknown;
+};
+
+type CompletedLink = {
+  href: string;
+  label: string;
+};
+
 const FIELD_LABELS: Record<string, string> = {
-  categoryId: "Danh mục",
-  categoryName: "Tên danh mục",
+  categoryName: "Danh mục",
+  budgetName: "Ngân sách",
+  walletName: "Ví",
   month: "Tháng",
   limitAmount: "Hạn mức",
   oldLimitAmount: "Hạn mức hiện tại",
   newLimitAmount: "Hạn mức mới",
-  budgetId: "Ngân sách",
   name: "Tên mục tiêu",
   targetAmount: "Số tiền mục tiêu",
   currentAmount: "Đã tích lũy",
@@ -51,41 +64,202 @@ const MONEY_FIELDS = new Set([
   "currentAmount",
 ]);
 
+const INTERNAL_FIELDS = new Set([
+  "title",
+  "id",
+  "categoryId",
+  "budgetId",
+  "goalId",
+  "walletId",
+  "transactionId",
+  "userId",
+  "ownerId",
+  "actionId",
+  "pendingActionId",
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isInternalKey(key: string) {
+  return INTERNAL_FIELDS.has(key) || /(^id$|id$)/i.test(key);
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_PATTERN.test(value.trim());
+}
+
+function sanitizeDisplayValue(value: unknown): unknown {
+  if (isUuid(value)) return undefined;
+
+  if (Array.isArray(value)) {
+    const sanitized = value
+      .map(sanitizeDisplayValue)
+      .filter((item) => item !== undefined);
+
+    return sanitized.length > 0 ? sanitized : undefined;
+  }
+
+  if (isRecord(value)) {
+    const sanitized = Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !isInternalKey(key))
+        .map(([key, nestedValue]) => [key, sanitizeDisplayValue(nestedValue)])
+        .filter(([, nestedValue]) => nestedValue !== undefined),
+    );
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+  }
+
+  return value;
+}
+
+function formatMonth(value: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return value;
+
+  return `Tháng ${Number(match[2])}/${match[1]}`;
+}
+
 function formatValue(key: string, value: unknown) {
-  if (typeof value === "number") {
-    const formatted = new Intl.NumberFormat("vi-VN").format(value);
-    return MONEY_FIELDS.has(key) ? `${formatted} đ` : formatted;
-  }
+  const safeValue = sanitizeDisplayValue(value);
 
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (value === null || value === undefined) {
+  if (safeValue === undefined || safeValue === null || safeValue === "") {
     return "—";
   }
 
-  return JSON.stringify(value);
+  if (typeof safeValue === "number") {
+    const formatted = new Intl.NumberFormat("vi-VN").format(safeValue);
+    return MONEY_FIELDS.has(key) ? `${formatted} đ` : formatted;
+  }
+
+  if (typeof safeValue === "string") {
+    return key === "month" ? formatMonth(safeValue) : safeValue;
+  }
+
+  return JSON.stringify(safeValue);
 }
 
-function titleOf(action: AIPendingActionCardData) {
+function pendingTitle(action: AIPendingActionCardData) {
   const title = action.preview.title;
 
   if (typeof title === "string" && title.trim()) {
-    return title;
+    return title.trim();
   }
 
-  return action.toolName;
+  switch (action.toolName) {
+    case "create_budget":
+      return "Tạo ngân sách";
+    case "update_budget":
+      return "Cập nhật ngân sách";
+    case "create_goal":
+      return "Tạo mục tiêu tài chính";
+    default:
+      return "Xác nhận hành động";
+  }
 }
 
-function fieldsOf(action: AIPendingActionCardData) {
-  const fields = action.preview.fields;
+function completedTitle(toolName: string) {
+  switch (toolName) {
+    case "create_budget":
+      return "Đã tạo ngân sách";
+    case "update_budget":
+      return "Đã cập nhật ngân sách";
+    case "create_goal":
+      return "Đã tạo mục tiêu tài chính";
+    default:
+      return "Hành động đã hoàn tất";
+  }
+}
 
-  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
-    return action.preview;
+function titleOf(action: AIPendingActionCardData) {
+  return action.status === "completed"
+    ? completedTitle(action.toolName)
+    : pendingTitle(action);
+}
+
+function rawFieldsOf(action: AIPendingActionCardData) {
+  const fields = action.preview.fields;
+  return isRecord(fields) ? fields : action.preview;
+}
+
+function fieldsOf(action: AIPendingActionCardData): DisplayField[] {
+  const fields = rawFieldsOf(action);
+  const output: DisplayField[] = [];
+  const used = new Set<string>();
+
+  const push = (key: string, label: string, value: unknown) => {
+    if (isInternalKey(key)) return;
+
+    const safeValue = sanitizeDisplayValue(value);
+    if (safeValue === undefined || safeValue === null || safeValue === "") {
+      return;
+    }
+
+    output.push({ key, label, value: safeValue });
+    used.add(key);
+  };
+
+  switch (action.toolName) {
+    case "create_budget":
+      push("categoryName", "Danh mục", fields.categoryName);
+      push("month", "Tháng", fields.month);
+      push("limitAmount", "Hạn mức", fields.limitAmount);
+      break;
+
+    case "update_budget":
+      push("budgetName", "Ngân sách", fields.budgetName ?? fields.categoryName);
+      push("month", "Tháng", fields.month);
+      push("oldLimitAmount", "Hạn mức hiện tại", fields.oldLimitAmount);
+      push("newLimitAmount", "Hạn mức mới", fields.newLimitAmount);
+      break;
+
+    case "create_goal":
+      push("name", "Tên mục tiêu", fields.name);
+      push("targetAmount", "Số tiền mục tiêu", fields.targetAmount);
+      push("currentAmount", "Đã tích lũy", fields.currentAmount);
+      break;
   }
 
-  return fields as Record<string, unknown>;
+  for (const [key, value] of Object.entries(fields)) {
+    if (used.has(key) || isInternalKey(key)) continue;
+    push(key, FIELD_LABELS[key] ?? key, value);
+  }
+
+  return output;
+}
+
+function completedLinkOf(
+  action: AIPendingActionCardData,
+): CompletedLink | null {
+  if (action.status !== "completed") return null;
+
+  switch (action.toolName) {
+    case "create_budget":
+      return {
+        href: "/budgets",
+        label: "Xem ngân sách vừa tạo",
+      };
+
+    case "update_budget":
+      return {
+        href: "/budgets",
+        label: "Xem ngân sách",
+      };
+
+    case "create_goal":
+      return {
+        href: "/goals",
+        label: "Xem mục tiêu vừa tạo",
+      };
+
+    default:
+      return null;
+  }
 }
 
 function statusLabel(status: string) {
@@ -99,9 +273,28 @@ function statusLabel(status: string) {
     case "failed":
       return "Thất bại";
     case "executing":
+    case "confirmed":
       return "Đang thực thi";
     default:
       return "Chờ xác nhận";
+  }
+}
+
+function eyebrowOf(status: string) {
+  switch (status) {
+    case "completed":
+      return "Hành động đã hoàn tất";
+    case "cancelled":
+      return "Hành động đã được hủy";
+    case "expired":
+      return "Yêu cầu đã hết hạn";
+    case "failed":
+      return "Hành động chưa hoàn tất";
+    case "executing":
+    case "confirmed":
+      return "AI đang thực thi";
+    default:
+      return "Xác nhận trước khi thực hiện";
   }
 }
 
@@ -119,24 +312,28 @@ export default function AIPendingActionCard({
   accessToken,
   onChanged,
 }: Props) {
-  const [current, setCurrent] = useState(action);
   const [loading, setLoading] = useState<"confirm" | "cancel" | null>(null);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(() => new Date().getTime());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (current.status !== "pending") return;
+    if (action.status !== "pending") return;
 
     const timer = window.setInterval(() => {
-      setNow(new Date().getTime());
+      setNow(Date.now());
     }, 30_000);
 
     return () => window.clearInterval(timer);
-  }, [current.status, current.expiresAt]);
+  }, [action.status, action.expiresAt]);
 
-  const expiresAtMs = new Date(current.expiresAt).getTime();
+  const expiresAtMs = new Date(action.expiresAt).getTime();
   const expired = expiresAtMs <= now;
-  const pending = current.status === "pending" && !expired;
+  const pending = action.status === "pending" && !expired;
+  const visualStatus =
+    expired && action.status === "pending" ? "expired" : action.status;
+
+  const displayFields = useMemo(() => fieldsOf(action), [action]);
+  const completedLink = useMemo(() => completedLinkOf(action), [action]);
 
   async function run(type: "confirm" | "cancel") {
     if (!accessToken || !pending || loading) return;
@@ -147,8 +344,8 @@ export default function AIPendingActionCard({
     try {
       const updated =
         type === "confirm"
-          ? await confirmAIPendingAction(accessToken, current.id)
-          : await cancelAIPendingAction(accessToken, current.id);
+          ? await confirmAIPendingAction(accessToken, action.id)
+          : await cancelAIPendingAction(accessToken, action.id);
 
       const next: AIPendingActionCardData = {
         id: updated.id,
@@ -158,7 +355,6 @@ export default function AIPendingActionCard({
         expiresAt: updated.expires_at,
       };
 
-      setCurrent(next);
       onChanged?.(next);
 
       if (type === "confirm" && next.status === "completed") {
@@ -182,40 +378,36 @@ export default function AIPendingActionCard({
     }
   }
 
-  const visualStatus =
-    expired && current.status === "pending" ? "expired" : current.status;
-
   return (
     <section className="mt-3 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-[0_12px_32px_rgba(37,99,235,0.10)]">
       <div className="flex items-start justify-between gap-4 border-b border-blue-100 bg-linear-to-r from-blue-50 via-cyan-50/70 to-emerald-50/50 px-4 py-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
             <ShieldCheck size={14} />
-            Yêu cầu phê duyệt từ AI
+            {eyebrowOf(visualStatus)}
           </div>
+
           <h4 className="mt-1.5 text-sm font-black text-slate-900">
-            {titleOf(current)}
+            {titleOf({ ...action, status: visualStatus })}
           </h4>
         </div>
 
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
           <Clock3 size={11} />
           {pending
-            ? remainingLabel(current.expiresAt, now)
+            ? remainingLabel(action.expiresAt, now)
             : statusLabel(visualStatus)}
         </span>
       </div>
 
       <div className="space-y-2 px-4 py-3.5">
-        {Object.entries(fieldsOf(current)).map(([key, value]) => (
+        {displayFields.map(({ key, label, value }) => (
           <div
             key={key}
             className="flex items-start justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
           >
-            <span className="text-xs font-bold text-slate-500">
-              {FIELD_LABELS[key] ?? key}
-            </span>
-            <span className="text-right text-xs font-black text-slate-800">
+            <span className="text-xs font-bold text-slate-500">{label}</span>
+            <span className="max-w-[65%] wrap-break-word text-right text-xs font-black text-slate-800">
               {formatValue(key, value)}
             </span>
           </div>
@@ -228,9 +420,9 @@ export default function AIPendingActionCard({
         </div>
       ) : null}
 
-      <div className="flex gap-2 border-t border-slate-100 px-4 py-3">
+      <div className="border-t border-slate-100 px-4 py-3">
         {pending ? (
-          <>
+          <div className="flex gap-2">
             <button
               type="button"
               disabled={loading !== null}
@@ -242,7 +434,7 @@ export default function AIPendingActionCard({
               ) : (
                 <X size={14} />
               )}
-              Hủy
+              {loading === "cancel" ? "Đang hủy..." : "Hủy"}
             </button>
 
             <button
@@ -256,26 +448,38 @@ export default function AIPendingActionCard({
               ) : (
                 <Check size={14} />
               )}
-              Xác nhận
+              {loading === "confirm" ? "Đang xác nhận..." : "Xác nhận"}
             </button>
-          </>
+          </div>
         ) : (
-          <div
-            className={[
-              "inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black",
-              visualStatus === "completed"
-                ? "bg-emerald-50 text-emerald-700"
-                : visualStatus === "failed"
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-slate-50 text-slate-600",
-            ].join(" ")}
-          >
-            {visualStatus === "completed" ? (
-              <CheckCircle2 size={14} />
-            ) : visualStatus === "failed" ? (
-              <XCircle size={14} />
+          <div className="space-y-2">
+            <div
+              className={[
+                "inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black",
+                visualStatus === "completed"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : visualStatus === "failed"
+                    ? "bg-rose-50 text-rose-700"
+                    : "bg-slate-50 text-slate-600",
+              ].join(" ")}
+            >
+              {visualStatus === "completed" ? (
+                <CheckCircle2 size={14} />
+              ) : visualStatus === "failed" ? (
+                <XCircle size={14} />
+              ) : null}
+              {statusLabel(visualStatus)}
+            </div>
+
+            {completedLink ? (
+              <Link
+                href={completedLink.href}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+              >
+                {completedLink.label}
+                <ArrowUpRight size={14} />
+              </Link>
             ) : null}
-            {statusLabel(visualStatus)}
           </div>
         )}
       </div>
