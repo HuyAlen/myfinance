@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   ChartPie,
   Home,
   MoreHorizontal,
@@ -58,7 +57,7 @@ export default function BottomNav() {
               key={href}
               href={href}
               className={[
-                "flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold transition-all duration-200",
+                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold transition-all duration-200",
                 isActive
                   ? "text-blue-600"
                   : "text-slate-400 active:bg-slate-100",

@@ -32,8 +32,6 @@ export default function AppShell({ children }: AppShellProps) {
   }, [user, loading, router]);
 
   // Keep real viewport height in sync for iPhone Safari/Chrome.
-  // 100vh/100dvh can be unstable when the address bar appears/disappears,
-  // so modal bottom sheets should use --app-height instead.
   useEffect(() => {
     const updateAppHeight = () => {
       const height =
@@ -59,34 +57,36 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
-  // Close sidebar on Escape key
+  // Close sidebar on Escape key.
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setSidebarOpen(false);
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSidebarOpen(false);
+      }
     }
+
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
-  // Lock body scroll while mobile drawer is open
+  // Lock body scroll while mobile drawer is open.
   useEffect(() => {
-    if (sidebarOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.body.style.overflow = sidebarOpen ? "hidden" : "";
+
     return () => {
       document.body.style.overflow = "";
     };
   }, [sidebarOpen]);
 
-  // Show loading spinner while resolving session
   if (loading || !user) {
     return (
       <div className="flex min-h-(--app-height) items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <div className="size-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-          <p className="text-sm text-slate-500">Äang táº£i...</p>
+          <p className="text-sm text-slate-500">Đang tải...</p>
         </div>
       </div>
     );
@@ -97,10 +97,6 @@ export default function AppShell({ children }: AppShellProps) {
       <div className="h-[var(--app-height)] overflow-hidden bg-slate-50 text-slate-950">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        {/*
-        Overlay backdrop â€” always mounted so it can fade in/out smoothly.
-        On desktop (lg+) it is permanently invisible and non-interactive.
-      */}
         <div
           aria-hidden="true"
           onClick={() => setSidebarOpen(false)}
@@ -109,8 +105,8 @@ export default function AppShell({ children }: AppShellProps) {
             "bg-slate-950/40 backdrop-blur-sm",
             "transition-opacity duration-300 ease-in-out",
             sidebarOpen
-              ? "opacity-100 pointer-events-auto"
-              : "opacity-0 pointer-events-none",
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0",
           ].join(" ")}
         />
 
@@ -126,12 +122,16 @@ export default function AppShell({ children }: AppShellProps) {
         </div>
 
         <BottomNav />
-      {!aiAgentOpen && (
-        <AIFloatingButton onClick={() => setAiAgentOpen(true)} />
-      )}
-      <AIAgentDrawer open={aiAgentOpen} onClose={() => setAiAgentOpen(false)} />
 
-        {/* â”€â”€ Onboarding Layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {!aiAgentOpen && (
+          <AIFloatingButton onClick={() => setAiAgentOpen(true)} />
+        )}
+
+        <AIAgentDrawer
+          open={aiAgentOpen}
+          onClose={() => setAiAgentOpen(false)}
+        />
+
         <WelcomeWizard />
         <ProductTour />
         <OnboardingChecklist />
@@ -141,6 +141,3 @@ export default function AppShell({ children }: AppShellProps) {
     </DateFilterProvider>
   );
 }
-
-
-

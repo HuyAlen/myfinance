@@ -9,14 +9,10 @@ import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import {
   Area,
   AreaChart,
-  LabelList,
   Bar,
   Line,
   CartesianGrid,
   ComposedChart,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -68,10 +64,7 @@ import {
   getGoalLinkedSavingAmount,
 } from "@/src/services/finance/financeCalculations";
 
-import type {
-  CategorySpending,
-  DashboardActionIcon,
-} from "@/src/services/finance/financeCalculations";
+import type { DashboardActionIcon } from "@/src/services/finance/financeCalculations";
 
 import type {
   Budget,
@@ -83,6 +76,45 @@ import type {
   Wallet as WalletType,
   SavingAccount,
 } from "@/src/types/finance";
+
+const DASHBOARD_RUNTIME_COMPONENTS = {
+  Area,
+  AreaChart,
+  Bar,
+  Line,
+  CartesianGrid,
+  ComposedChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Bot,
+  Briefcase,
+  CreditCard,
+  Landmark,
+  PiggyBank,
+  ShieldCheck,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  Zap,
+};
+
+const invalidDashboardComponents = Object.entries(DASHBOARD_RUNTIME_COMPONENTS)
+  .filter(([, component]) => component == null)
+  .map(([name]) => name);
+
+if (invalidDashboardComponents.length > 0) {
+  throw new Error(
+    `[DashboardPage] Undefined React components: ${invalidDashboardComponents.join(
+      ", ",
+    )}`,
+  );
+}
 
 const ASSET_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#38bdf8", "#6366f1"];
 const SPEND_COLORS = [
@@ -609,6 +641,27 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(Math.round(value), 100));
 }
 
+function buildConicGradient(items: Array<{ value: number; color: string }>) {
+  const validItems = items.filter(
+    (item) => Number.isFinite(item.value) && item.value > 0,
+  );
+  const total = validItems.reduce((sum, item) => sum + item.value, 0);
+
+  if (total <= 0) {
+    return "conic-gradient(#e2e8f0 0deg 360deg)";
+  }
+
+  let cursor = 0;
+  const stops = validItems.map((item) => {
+    const start = cursor;
+    const sweep = (item.value / total) * 360;
+    cursor += sweep;
+    return `${item.color} ${start}deg ${cursor}deg`;
+  });
+
+  return `conic-gradient(${stops.join(", ")})`;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [wallets, setWallets] = useState<WalletType[]>([]);
@@ -1097,6 +1150,10 @@ export default function DashboardPage() {
       });
     return items;
   }, [snapshotWallets, savingsSnapshot.totalSavings, summary.investmentAssets]);
+  const assetDonutGradient = useMemo(
+    () => buildConicGradient(assetPieData),
+    [assetPieData],
+  );
 
   // ── Spending ──────────────────────────────────────────────────────────────
   const spendingByCategory = useMemo(
@@ -1113,6 +1170,10 @@ export default function DashboardPage() {
         color: SPEND_COLORS[i % SPEND_COLORS.length],
       })),
     [spendingByCategory],
+  );
+  const spendingDonutGradient = useMemo(
+    () => buildConicGradient(spendingPieData),
+    [spendingPieData],
   );
 
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
@@ -1472,6 +1533,10 @@ export default function DashboardPage() {
           INV_TYPE_COLORS[inv.type] ?? ASSET_COLORS[i % ASSET_COLORS.length],
       })),
     [snapshotInvestments],
+  );
+  const investmentDonutGradient = useMemo(
+    () => buildConicGradient(investPieData),
+    [investPieData],
   );
 
   // ── Goal rows: use the same source-of-truth logic as GoalsPage ───────────
@@ -1834,7 +1899,7 @@ export default function DashboardPage() {
       value: formatVND(netCashFlow),
       valueClass: netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500",
       note: `Thu ${formatVND(summary.income)} − Chi ${formatVND(summary.expense)}`,
-      icon: <TrendingUp size={20} />,
+      icon: TrendingUp,
       iconClass: "from-blue-600 to-sky-500",
       barClass: "from-blue-500 to-sky-400",
     },
@@ -1844,7 +1909,7 @@ export default function DashboardPage() {
       valueClass:
         summary.savingRate >= 20 ? "text-emerald-600" : "text-rose-500",
       note: `${formatVND(savingsSnapshot.totalSavings)} / ${formatVND(summary.income)}`,
-      icon: <PiggyBank size={20} />,
+      icon: PiggyBank,
       iconClass: "from-emerald-500 to-teal-400",
       barClass: "from-emerald-500 to-teal-400",
     },
@@ -1853,7 +1918,7 @@ export default function DashboardPage() {
       value: `${summary.debtRatio}%`,
       valueClass: summary.debtRatio <= 40 ? "text-violet-600" : "text-rose-500",
       note: summary.debtRatio <= 40 ? "An toàn" : "Cần giảm",
-      icon: <Landmark size={20} />,
+      icon: Landmark,
       iconClass: "from-violet-500 to-indigo-500",
       barClass: "from-violet-500 to-indigo-400",
     },
@@ -1863,7 +1928,7 @@ export default function DashboardPage() {
       valueClass:
         summary.investmentReturn >= 0 ? "text-emerald-600" : "text-rose-500",
       note: `${investments.length} tài sản`,
-      icon: <Briefcase size={20} />,
+      icon: Briefcase,
       iconClass: "from-emerald-500 to-teal-400",
       barClass: "from-emerald-500 to-teal-400",
     },
@@ -1872,7 +1937,7 @@ export default function DashboardPage() {
       value: `${summary.goalScore}%`,
       valueClass: "text-blue-600",
       note: `${goalSnapshot.trackedCount} mục tiêu đang theo dõi`,
-      icon: <Target size={20} />,
+      icon: Target,
       iconClass: "from-blue-500 to-cyan-400",
       barClass: "from-blue-500 to-sky-400",
     },
@@ -2003,19 +2068,7 @@ export default function DashboardPage() {
                       fill="url(#nwGrad)"
                       dot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }}
                       activeDot={{ r: 6, strokeWidth: 3 }}
-                    >
-                      <LabelList
-                        dataKey="value"
-                        position="top"
-                        offset={10}
-                        className="fill-slate-900 text-[11px] font-black"
-                        formatter={(value: unknown) =>
-                          typeof value === "number"
-                            ? formatCompactVND(value)
-                            : ""
-                        }
-                      />
-                    </Area>
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -2700,34 +2753,13 @@ export default function DashboardPage() {
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-[140px_1fr] sm:items-center">
             <div className="relative mx-auto h-36 w-36">
-              <PieChart width={144} height={144}>
-                <Pie
-                  data={assetPieData}
-                  dataKey="value"
-                  innerRadius={42}
-                  outerRadius={64}
-                  paddingAngle={3}
-                >
-                  {assetPieData.map((e) => (
-                    <Cell key={e.name} fill={e.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "0.75rem",
-                    border: "1px solid #e2e8f0",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
-                    padding: "8px 12px",
-                    fontSize: "12px",
-                  }}
-                  labelStyle={{ fontWeight: 700, color: "#475569" }}
-                  itemStyle={{ color: "#1e293b", fontWeight: 600 }}
-                  formatter={(v, name) => [
-                    formatVND(Number(v ?? 0)),
-                    String(name),
-                  ]}
-                />
-              </PieChart>
+              <div
+                className="h-36 w-36 rounded-full p-4"
+                style={{ background: assetDonutGradient }}
+                aria-label="Biểu đồ phân bổ tài sản"
+              >
+                <div className="h-full w-full rounded-full bg-white" />
+              </div>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-xl font-black text-blue-600">
                   {Math.round(summary.totalAssets / 1_000_000)}M
@@ -2978,22 +3010,13 @@ export default function DashboardPage() {
               <div className="grid gap-5 md:grid-cols-[180px_minmax(0,1fr)] md:items-center">
                 {/* Donut */}
                 <div className="relative mx-auto h-45 w-45 shrink-0 md:mx-0">
-                  <PieChart width={180} height={180}>
-                    <Pie
-                      data={spendingPieData}
-                      dataKey="value"
-                      innerRadius={52}
-                      outerRadius={80}
-                      paddingAngle={3}
-                      startAngle={90}
-                      endAngle={-270}
-                    >
-                      {spendingPieData.map((e) => (
-                        <Cell key={e.id} fill={e.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CategorySpendingTooltip />} />
-                  </PieChart>
+                  <div
+                    className="h-45 w-45 rounded-full p-5"
+                    style={{ background: spendingDonutGradient }}
+                    aria-label="Biểu đồ chi tiêu theo danh mục"
+                  >
+                    <div className="h-full w-full rounded-full bg-white" />
+                  </div>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
                     <span className="max-w-22.5 truncate text-xl font-black text-rose-500">
                       {formatCompactVND(summary.expense)}
@@ -3076,34 +3099,13 @@ export default function DashboardPage() {
             <>
               <div className="mt-5 flex items-center gap-5">
                 <div className="relative shrink-0 h-36 w-36">
-                  <PieChart width={144} height={144}>
-                    <Pie
-                      data={investPieData}
-                      dataKey="value"
-                      innerRadius={42}
-                      outerRadius={64}
-                      paddingAngle={3}
-                    >
-                      {investPieData.map((e) => (
-                        <Cell key={e.name} fill={e.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "0.75rem",
-                        border: "1px solid #e2e8f0",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.08)",
-                        padding: "8px 12px",
-                        fontSize: "12px",
-                      }}
-                      labelStyle={{ fontWeight: 700, color: "#475569" }}
-                      itemStyle={{ color: "#1e293b", fontWeight: 600 }}
-                      formatter={(v, name) => [
-                        formatVND(Number(v ?? 0)),
-                        String(name),
-                      ]}
-                    />
-                  </PieChart>
+                  <div
+                    className="h-36 w-36 rounded-full p-4"
+                    style={{ background: investmentDonutGradient }}
+                    aria-label="Biểu đồ danh mục đầu tư"
+                  >
+                    <div className="h-full w-full rounded-full bg-white" />
+                  </div>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                     <span
                       className={`text-base font-black ${summary.investmentReturn >= 0 ? "text-emerald-600" : "text-rose-500"}`}
@@ -3291,7 +3293,7 @@ export default function DashboardPage() {
                 <ActionCard
                   key={`${action.title}-${i}`}
                   rank={v3AdvisorActions.length + i + 1}
-                  icon={actionIcons[action.icon] ?? <AlertTriangle size={18} />}
+                  icon={actionIcons[action.icon]}
                   title={action.title}
                   body={action.body}
                   tone={action.tone}
@@ -3562,40 +3564,6 @@ function formatCompactVND(value: number) {
   return `${rounded}`;
 }
 
-function CategorySpendingTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    payload?: CategorySpending & { color?: string };
-    value?: number;
-  }>;
-}) {
-  const item = payload?.[0]?.payload;
-  if (!active || !item) return null;
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
-      <div className="flex items-center gap-2">
-        <span
-          className="size-2.5 rounded-full"
-          style={{ background: item.color }}
-        />
-        <span className="max-w-45 truncate font-bold text-slate-700">
-          {item.name}
-        </span>
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-4">
-        <span className="font-black text-slate-900">
-          {formatVND(Number(item.value ?? 0))}
-        </span>
-        <span className="font-bold text-rose-500">{item.percent}%</span>
-      </div>
-    </div>
-  );
-}
-
 type FormulaRow = {
   label: string;
   value: number;
@@ -3693,7 +3661,7 @@ function KpiCard({
   title,
   value,
   note,
-  icon,
+  icon: Icon,
   valueClass,
   iconClass,
   barClass,
@@ -3701,11 +3669,13 @@ function KpiCard({
   title: string;
   value: string;
   note: string;
-  icon: React.ReactNode;
+  icon: React.ElementType | null | undefined;
   valueClass: string;
   iconClass: string;
   barClass: string;
 }) {
+  const SafeIcon = Icon ?? AlertTriangle;
+
   return (
     <div className="rounded-[1.7rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
       <div className="flex items-start justify-between gap-3">
@@ -3716,7 +3686,7 @@ function KpiCard({
         <div
           className={`flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br ${iconClass} text-white shadow-lg`}
         >
-          {icon}
+          <SafeIcon size={20} />
         </div>
       </div>
       <p className={`mt-5 text-2xl font-black ${valueClass}`}>{value}</p>

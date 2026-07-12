@@ -34,9 +34,9 @@ export default function OnboardingChecklist() {
   const pct = Math.round((checklistCount / checklistTotal) * 100);
 
   return (
-    <div className="fixed bottom-24 left-4 z-[100] w-72 overflow-hidden rounded-[1.5rem] border border-emerald-200 bg-white shadow-2xl shadow-emerald-100/60 lg:bottom-6">
+    <div className="fixed bottom-24 left-4 z-100 w-72 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-2xl shadow-emerald-100/60 lg:bottom-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-white px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-linear-to-r from-emerald-50 to-white px-4 py-3">
         <div className="flex items-center gap-2">
           <Rocket size={14} className="text-emerald-600" />
           <p className="text-sm font-black text-slate-800">
@@ -69,7 +69,7 @@ export default function OnboardingChecklist() {
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-700"
+            className="h-full rounded-full bg-linear-to-r from-emerald-500 to-teal-400 transition-all duration-700"
             style={{ width: pct + "%" }}
           />
         </div>
