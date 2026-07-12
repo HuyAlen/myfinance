@@ -3,6 +3,7 @@ import {
   type AIFinanceCapability,
 } from "./aiFinanceCapabilities";
 import type { AIFinanceContextDomain } from "./aiContextTypes";
+import type { AIWriteIntentResolution } from "./aiWriteIntentResolver.server";
 
 export type AIFinanceCapabilityMatch = {
   capability: AIFinanceCapability;
@@ -322,7 +323,35 @@ function confidenceOf(score: number): AIFinanceCapabilityMatch["confidence"] {
 
 export function resolveAIFinanceCapabilities(
   question: string,
+  options?: { writeIntent?: AIWriteIntentResolution },
 ): AIFinanceCapabilityResolution {
+  const writeIntent = options?.writeIntent;
+
+  if (writeIntent?.matched && writeIntent.requiredTool) {
+    return {
+      primary: "write_action",
+      matches: [
+        {
+          capability: "write_action",
+          confidence: writeIntent.confidence,
+          score: 100,
+          reasons: [
+            `write_intent:${writeIntent.operation ?? "unknown"}:${writeIntent.entity ?? "unknown"}`,
+            `required_tool:${writeIntent.requiredTool}`,
+          ],
+        },
+      ],
+      domains:
+        writeIntent.entity === "budget"
+          ? ["budgets"]
+          : writeIntent.entity === "goal"
+            ? ["goals"]
+            : ["overview"],
+      preferredTools: [writeIntent.requiredTool],
+      ambiguous: false,
+    };
+  }
+
   const text = normalize(question);
   const scored = new Map<AIFinanceCapability, AIFinanceCapabilityMatch>();
 

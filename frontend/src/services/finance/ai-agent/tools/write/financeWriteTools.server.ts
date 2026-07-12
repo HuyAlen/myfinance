@@ -268,7 +268,7 @@ export const createGoalTool: AIFinanceToolRegistration<CreateGoalArgs> = {
           description: "Optional current saved amount in VND.",
         },
       },
-      required: ["name", "targetAmount", "currentAmount"],
+      required: ["name", "targetAmount"],
       additionalProperties: false,
     },
   },

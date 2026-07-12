@@ -41,6 +41,11 @@ type PendingActionQuery = PromiseLike<{
   eq: (column: string, value: unknown) => PendingActionQuery;
   single: () => PendingActionQuery;
   maybeSingle: () => PendingActionQuery;
+  order: (
+    column: string,
+    options?: { ascending?: boolean },
+  ) => PendingActionQuery;
+  limit: (count: number) => PendingActionQuery;
 };
 
 type PendingActionClient = {
@@ -171,4 +176,39 @@ export async function updatePendingAction(input: {
   }
 
   return data as PendingActionRecord;
+}
+
+export async function findLatestActivePendingAction(input: {
+  context: AIFinanceToolContext;
+  conversationId: string;
+}) {
+  const client = clientOf(input.context);
+
+  const { data, error } = await client
+    .from("ai_pending_actions")
+    .select("*")
+    .eq("user_id", input.context.userId)
+    .eq("conversation_id", input.conversationId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`ai_pending_actions: ${error.message}`);
+  }
+
+  const action = (data ?? null) as PendingActionRecord | null;
+
+  if (!action) return null;
+
+  if (new Date(action.expires_at).getTime() <= Date.now()) {
+    return updatePendingAction({
+      context: input.context,
+      actionId: action.id,
+      values: { status: "expired" },
+    }).then(() => null);
+  }
+
+  return action;
 }

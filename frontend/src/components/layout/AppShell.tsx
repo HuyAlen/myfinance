@@ -94,7 +94,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <DateFilterProvider>
-      <div className="h-[var(--app-height)] overflow-hidden bg-slate-50 text-slate-950">
+      <div className="h-(--app-height) overflow-hidden bg-slate-50 text-slate-950">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <div

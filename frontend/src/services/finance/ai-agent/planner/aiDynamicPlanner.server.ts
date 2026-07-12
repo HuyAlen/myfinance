@@ -1,5 +1,7 @@
 import { executeAIFinanceToolCall } from "../tools/aiToolExecutor.server";
 import type { AIFinanceToolContext } from "../tools/aiToolTypes";
+import { updatePendingAction } from "../server/aiPendingActionRepository.server";
+import type { AIPendingActionContinuationDirective } from "../pending-action/aiPendingActionContinuationTypes";
 import { extractPendingActions } from "../server/aiPendingActionResponse.server";
 import {
   buildAIFinancePlannerSystemPrompt,
@@ -19,6 +21,8 @@ import type {
   AIFinanceAnalysisOperation,
   AIFinanceCapability,
 } from "../context/aiFinanceCapabilities";
+import type { AIWriteIntentResolution } from "../context/aiWriteIntentResolver.server";
+import { applySafeWriteArgumentPolicy } from "../action-form/aiWriteArgumentPolicy.server";
 import type {
   AIFinanceExecutionPlan,
   AIFinancePlannerResult,
@@ -71,6 +75,7 @@ type RunPlannerInput = {
   debugIntent?: string;
   reasoningCapabilities?: AIFinanceCapability[];
   reasoningOperations?: AIFinanceAnalysisOperation[];
+  continuation?: AIPendingActionContinuationDirective;
 };
 
 type OpenAIResponseFormat = "text" | "json_object" | "json_schema";
@@ -309,10 +314,109 @@ function dependenciesCompleted(
   });
 }
 
+function extractWriteIntentFromPlanningContext(
+  planningContext?: string,
+): AIWriteIntentResolution | undefined {
+  if (!planningContext) return undefined;
+
+  try {
+    const parsed = JSON.parse(planningContext) as {
+      planningContext?: {
+        writeIntent?: AIWriteIntentResolution;
+      };
+    };
+
+    return parsed.planningContext?.writeIntent;
+  } catch {
+    return undefined;
+  }
+}
+
+function validateWriteIntentPlan(
+  plan: AIFinanceExecutionPlan,
+  writeIntent?: AIWriteIntentResolution,
+) {
+  if (!writeIntent?.matched || !writeIntent.requiredTool) return;
+
+  if (plan.steps.length !== 1) {
+    throw new Error(
+      `Deterministic write intent requires exactly one ${writeIntent.requiredTool} step.`,
+    );
+  }
+
+  const [step] = plan.steps;
+
+  if (step.toolName !== writeIntent.requiredTool || step.mode !== "write") {
+    throw new Error(
+      `Deterministic write intent is locked to write tool ${writeIntent.requiredTool}.`,
+    );
+  }
+}
+
+function validateContinuationPlan(
+  plan: AIFinanceExecutionPlan,
+  continuation?: AIPendingActionContinuationDirective,
+) {
+  if (
+    !continuation?.matched ||
+    !continuation.lockTool ||
+    !continuation.toolName
+  ) {
+    return;
+  }
+
+  if (plan.steps.length !== 1) {
+    throw new Error(
+      "Pending-action continuation must contain exactly one locked write-tool step.",
+    );
+  }
+
+  const [step] = plan.steps;
+
+  if (step.toolName !== continuation.toolName || step.mode !== "write") {
+    throw new Error(
+      `Pending-action continuation is locked to write tool ${continuation.toolName}.`,
+    );
+  }
+}
+
 async function createPlan(input: RunPlannerInput) {
   const planningStartedAt = Date.now();
+  const writeIntent = extractWriteIntentFromPlanningContext(
+    input.planningContext,
+  );
   const systemPrompt = buildAIFinancePlannerSystemPrompt();
-  const baseUserPrompt = input.planningContext ?? input.question;
+  const baseUserPrompt = [
+    input.planningContext ?? input.question,
+    writeIntent?.matched && writeIntent.requiredTool
+      ? [
+          "",
+          "WRITE_INTENT_ENFORCEMENT:",
+          `operation=${writeIntent.operation ?? "unknown"}`,
+          `entity=${writeIntent.entity ?? "unknown"}`,
+          `requiredTool=${writeIntent.requiredTool}`,
+          `allowedTools=${writeIntent.allowedTools.join(",")}`,
+          "Return exactly one write step using requiredTool. Omit unknown arguments so the executor can render the action form.",
+        ].join("\n")
+      : "",
+    input.continuation?.matched
+      ? [
+          "",
+          "CONTINUATION_ENFORCEMENT:",
+          `mode=${input.continuation.mode}`,
+          `lockTool=${String(input.continuation.lockTool)}`,
+          input.continuation.toolName
+            ? `toolName=${input.continuation.toolName}`
+            : "toolName=resolve_from_conversation",
+          input.continuation.existingArguments
+            ? `existingArguments=${JSON.stringify(input.continuation.existingArguments)}`
+            : "existingArguments={}",
+          "A compact reply supplies missing or changed fields for the prior write action. Do not select a read tool merely because a category, amount, date, wallet, or entity name appears in the reply.",
+        ].join("\n")
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   const retryErrors: string[] = [];
   const validationErrors: string[] = [];
   let lastError: Error | null = null;
@@ -349,10 +453,21 @@ async function createPlan(input: RunPlannerInput) {
       try {
         const rawText = extractOpenAIOutputText(payload);
         const parsed = parseJsonText(rawText);
-        const plan = validateAIFinanceExecutionPlan(parsed);
+        const validatedPlan = validateAIFinanceExecutionPlan(parsed);
+        validateContinuationPlan(validatedPlan, input.continuation);
+        validateWriteIntentPlan(validatedPlan, writeIntent);
+
+        const writeArgumentPolicy = applySafeWriteArgumentPolicy({
+          question: input.question,
+          planningContext: input.planningContext,
+          plan: validatedPlan,
+          continuation: input.continuation,
+        });
+        const plan = writeArgumentPolicy.plan;
 
         return {
           plan,
+          writeArgumentPolicy: writeArgumentPolicy.decisions,
           usage: usageOf(payload),
           plannerAttempt: attempt,
           plannerStatus: attempt === 1 ? "success" : "retry_success",
@@ -483,6 +598,20 @@ async function executePlan(input: {
   return input.plan.steps.map((step) => resultMap.get(step.id)!);
 }
 
+function extractActionForms(calls: Array<{ result: { data?: unknown } }>) {
+  const forms = [];
+  for (const call of calls) {
+    const data = call.result.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) continue;
+    const record = data as Record<string, unknown>;
+    if (record.kind !== "action_form_required") continue;
+    const form = record.actionForm;
+    if (!form || typeof form !== "object" || Array.isArray(form)) continue;
+    forms.push(form);
+  }
+  return forms as import("../action-form/aiActionFormTypes").AIActionFormMetadata[];
+}
+
 async function synthesizeAnswer(input: {
   apiKey: string;
   model: string;
@@ -518,6 +647,9 @@ export async function runAIFinanceDynamicPlanner(
   input: RunPlannerInput,
 ): Promise<AIFinancePlannerResult> {
   const totalStartedAt = Date.now();
+  const writeIntent = extractWriteIntentFromPlanningContext(
+    input.planningContext,
+  );
   const planning = await createPlan(input);
   const executionStartedAt = Date.now();
   const steps = await executePlan({
@@ -545,7 +677,21 @@ export async function runAIFinanceDynamicPlanner(
           },
   }));
 
+  const actionForms = extractActionForms(executedToolCalls);
   const pendingActions = extractPendingActions(executedToolCalls);
+
+  if (
+    input.continuation?.mode === "active_action" &&
+    input.continuation.actionId &&
+    pendingActions.some((action) => action.id !== input.continuation?.actionId)
+  ) {
+    await updatePendingAction({
+      context: input.context,
+      actionId: input.continuation.actionId,
+      values: { status: "cancelled" },
+    });
+  }
+
   const reasoning = runAIFinancePostToolReasoning({
     steps,
     capabilities: input.reasoningCapabilities,
@@ -590,17 +736,48 @@ export async function runAIFinanceDynamicPlanner(
         },
         validationErrors: planning.validationErrors,
         retryErrors: planning.retryErrors,
+        actionForms: actionForms.map((form) => ({
+          toolName: form.toolName,
+          missingFields: form.missingFields,
+          prefilledFields: Object.keys(form.initialValues),
+        })),
+        writeIntent: writeIntent
+          ? {
+              matched: writeIntent.matched,
+              operation: writeIntent.operation,
+              entity: writeIntent.entity,
+              requiredTool: writeIntent.requiredTool,
+              allowedTools: writeIntent.allowedTools,
+              confidence: writeIntent.confidence,
+              source: writeIntent.source,
+              reason: writeIntent.reason,
+            }
+          : undefined,
+        continuation: input.continuation
+          ? {
+              matched: input.continuation.matched,
+              mode: input.continuation.mode,
+              source: input.continuation.source,
+              actionId: input.continuation.actionId,
+              toolName: input.continuation.toolName,
+              lockTool: input.continuation.lockTool,
+              reason: input.continuation.reason,
+            }
+          : undefined,
       }
     : undefined;
 
   return {
     answer:
       synthesis.answer ||
-      (pendingActions.length > 0
-        ? "Tôi đã chuẩn bị hành động. Vui lòng kiểm tra và xác nhận bên dưới."
-        : "Tôi đã hoàn tất kế hoạch phân tích."),
+      (actionForms.length > 0
+        ? "Vui lòng hoàn tất biểu mẫu hành động bên dưới."
+        : pendingActions.length > 0
+          ? "Tôi đã chuẩn bị hành động. Vui lòng kiểm tra và xác nhận bên dưới."
+          : "Tôi đã hoàn tất kế hoạch phân tích."),
     plan: planning.plan,
     steps,
+    actionForms,
     pendingActions,
     plannerUsage: planning.usage,
     synthesisUsage: synthesis.usage,

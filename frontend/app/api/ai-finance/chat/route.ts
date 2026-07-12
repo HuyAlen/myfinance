@@ -20,6 +20,11 @@ import { runAIFinanceDynamicPlanner } from "@/src/services/finance/ai-agent/plan
 import { toAIFinancePlannerResponse } from "@/src/services/finance/ai-agent/planner/aiPlannerResponse.server";
 import { buildAIFinanceRelevantContext } from "@/src/services/finance/ai-agent/context/aiRelevantContext.server";
 import { buildContextAwarePlannerQuestion } from "@/src/services/finance/ai-agent/context/aiContextPrompt.server";
+import {
+  buildPendingActionContinuationContext,
+  pendingActionContinuationAnswer,
+  resolveAIPendingActionContinuation,
+} from "@/src/services/finance/ai-agent/pending-action";
 
 export const runtime = "nodejs";
 
@@ -102,6 +107,7 @@ export async function POST(request: Request) {
   try {
     const { supabase, user } = await requireAIUser(request);
     const payload = (await request.json()) as ChatRequestPayload;
+    const debugEnabled = process.env.NODE_ENV === "development";
 
     const question =
       typeof payload.question === "string" ? payload.question.trim() : "";
@@ -146,6 +152,96 @@ export async function POST(request: Request) {
       status: "completed",
     });
 
+    const continuation = await resolveAIPendingActionContinuation({
+      context: { userId: user.id, supabase },
+      conversationId: activeConversationId,
+      question,
+      conversation,
+    });
+
+    const continuationAnswer = pendingActionContinuationAnswer(continuation);
+
+    if (continuationAnswer && continuation.activeAction) {
+      const pendingActions = [
+        {
+          id: continuation.activeAction.id,
+          toolName: continuation.activeAction.tool_name,
+          preview: continuation.activeAction.preview,
+          status: continuation.activeAction.status,
+          expiresAt: continuation.activeAction.expires_at,
+        },
+      ];
+
+      const deterministicResult = {
+        answer: continuationAnswer,
+        source: "local" as const,
+        model: "pending-action-policy",
+        fallbackUsed: false,
+        generatedAt: new Date().toISOString(),
+        latencyMs: Date.now() - startedAt,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        conversationId: activeConversationId,
+        agentMode: "dynamic_planner" as const,
+        plan: null,
+        planResults: [],
+        pendingActions,
+        plannerDebug: debugEnabled
+          ? {
+              enabled: true as const,
+              plannerStatus: "recovered" as const,
+              model: "pending-action-policy",
+              plannerAttempt: 0,
+              selectedTools: [],
+              timing: { totalMs: Date.now() - startedAt },
+              validationErrors: [],
+              retryErrors: [],
+              continuation: {
+                matched: continuation.matched,
+                mode: continuation.mode,
+                source: continuation.source,
+                actionId: continuation.actionId,
+                toolName: continuation.toolName,
+                lockTool: continuation.lockTool,
+                reason: continuation.reason,
+              },
+            }
+          : undefined,
+      };
+
+      await saveAIMessage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: continuationAnswer,
+        provider: "local",
+        model: "pending-action-policy",
+        status: "completed",
+        metadata: {
+          pendingActions,
+          continuation: deterministicResult.plannerDebug?.continuation,
+        },
+      });
+
+      await recordAIUsage({
+        supabase,
+        userId: user.id,
+        conversationId: activeConversationId,
+        provider: "local",
+        model: "pending-action-policy",
+        requestType: "pending_action_continuation",
+        latencyMs: deterministicResult.latencyMs,
+        status: "completed",
+      });
+
+      return NextResponse.json(deterministicResult);
+    }
+
+    const continuationQuestion = buildPendingActionContinuationContext({
+      question: buildAgentQuestion(question, conversation),
+      directive: continuation,
+    });
+
     if (settings.provider === "local") {
       const context = await buildServerFinanceContext(supabase, user.id);
       const result = buildLocalFinanceAnswer(question, context);
@@ -178,6 +274,7 @@ export async function POST(request: Request) {
         agentMode: "local",
         plan: null,
         planResults: [],
+        actionForms: [],
         pendingActions: [],
       });
     }
@@ -224,6 +321,7 @@ export async function POST(request: Request) {
         agentMode: "local",
         plan: null,
         planResults: [],
+        actionForms: [],
         pendingActions: [],
       });
     }
@@ -234,18 +332,18 @@ export async function POST(request: Request) {
           userId: user.id,
           supabase,
         },
-        question: buildAgentQuestion(question, conversation),
+        question: continuationQuestion,
       });
 
       const planningContext = buildContextAwarePlannerQuestion({
-        question: buildAgentQuestion(question, conversation),
+        question: continuationQuestion,
         context: relevantContext,
       });
 
       const plannerResult = await runAIFinanceDynamicPlanner({
         apiKey,
         model: settings.model,
-        question: buildAgentQuestion(question, conversation),
+        question: continuationQuestion,
         planningContext,
         context: {
           userId: user.id,
@@ -254,6 +352,7 @@ export async function POST(request: Request) {
         conversationId: activeConversationId,
         temperature: settings.temperature,
         maxOutputTokens: settings.maxTokens,
+        continuation,
       });
 
       const plannerResponse = toAIFinancePlannerResponse(plannerResult);
@@ -285,6 +384,7 @@ export async function POST(request: Request) {
         agentMode: plannerResponse.agentMode,
         plan: plannerResponse.plan,
         planResults: plannerResponse.planResults,
+        actionForms: plannerResponse.actionForms,
         pendingActions: plannerResponse.pendingActions,
         context: {
           intent: relevantContext.intent,
@@ -305,6 +405,7 @@ export async function POST(request: Request) {
           agentMode: result.agentMode,
           plan: result.plan,
           planResults: result.planResults,
+          actionForms: result.actionForms,
           pendingActions: result.pendingActions,
           contextDiagnostics: relevantContext.diagnostics,
           usage: result.usage,
@@ -383,6 +484,7 @@ export async function POST(request: Request) {
         agentMode: "local",
         plan: null,
         planResults: [],
+        actionForms: [],
         pendingActions: [],
       });
     }

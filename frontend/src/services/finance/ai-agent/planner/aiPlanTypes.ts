@@ -85,14 +85,40 @@ export type AIPlannerDebugMetadata = {
   validationErrors: string[];
   retryErrors: string[];
   fallbackReason?: string;
+  actionForms?: Array<{
+    toolName: string;
+    missingFields: string[];
+    prefilledFields: string[];
+  }>;
+  writeIntent?: {
+    matched: boolean;
+    operation?: string;
+    entity?: string;
+    requiredTool?: string;
+    allowedTools: string[];
+    confidence: string;
+    source: string;
+    reason: string;
+  };
+  continuation?: {
+    matched: boolean;
+    mode: string;
+    source: string;
+    actionId?: string;
+    toolName?: string;
+    lockTool: boolean;
+    reason: string;
+  };
 };
 
 import type { AIFinancePostToolReasoning } from "../reasoning/aiReasoningTypes";
+import type { AIActionFormMetadata } from "../action-form/aiActionFormTypes";
 
 export type AIFinancePlannerResult = {
   answer: string;
   plan: AIFinanceExecutionPlan;
   steps: AIFinancePlanStepResult[];
+  actionForms: AIActionFormMetadata[];
   pendingActions: Array<{
     id: string;
     toolName: string;

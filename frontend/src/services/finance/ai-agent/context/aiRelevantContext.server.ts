@@ -4,6 +4,7 @@ import { resolveAIFinanceCapabilities } from "./aiCapabilityResolver.server";
 import { resolveAIFinanceDataRequirements } from "./aiDataRequirementResolver.server";
 import { resolveAIFinanceEntities } from "./aiEntityResolver.server";
 import { resolveAIFinanceSemanticSearch } from "./aiSemanticFinanceSearch.server";
+import { resolveAIWriteIntent } from "./aiWriteIntentResolver.server";
 import type {
   AIFinanceContextDomain,
   AIFinanceRelevantContext,
@@ -231,7 +232,10 @@ export async function buildAIFinanceRelevantContext(input: {
   currency?: string;
 }): Promise<AIFinanceRelevantContext> {
   const detectedIntent = detectAIFinanceContextIntent(input.question);
-  const capabilityResolution = resolveAIFinanceCapabilities(input.question);
+  const writeIntent = resolveAIWriteIntent(input.question);
+  const capabilityResolution = resolveAIFinanceCapabilities(input.question, {
+    writeIntent,
+  });
   const dataRequirement = resolveAIFinanceDataRequirements({
     question: input.question,
     capabilityResolution,
@@ -412,6 +416,7 @@ export async function buildAIFinanceRelevantContext(input: {
     intent,
     capabilityResolution,
     dataRequirement,
+    writeIntent,
     snapshot: pruned.snapshot,
     limits: {
       maxRowsPerDomain: MAX_ROWS_PER_DOMAIN,

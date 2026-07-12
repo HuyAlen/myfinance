@@ -27,6 +27,8 @@ import AIConversationHistory from "./AIConversationHistory";
 import AIPendingActionCard, {
   type AIPendingActionCardData,
 } from "./AIPendingActionCard";
+import AIActionFormCard from "./action-form/AIActionFormCard";
+import type { AIActionFormMetadata } from "@/src/services/finance/ai-agent/action-form/aiActionFormTypes";
 import type { SecureAIChatResponse } from "@/src/services/finance/ai-agent/aiChatResponseTypes";
 import type { AIPlannerDebugMetadata } from "@/src/services/finance/ai-agent/planner/aiPlanTypes";
 import {
@@ -54,7 +56,9 @@ type ChatUsage = {
   totalTokens?: number;
 };
 
-type ChatMetaResponse = SecureAIChatResponse;
+type ChatMetaResponse = SecureAIChatResponse & {
+  actionForms?: AIActionFormMetadata[];
+};
 
 export type ChatMessage = {
   id: string;
@@ -68,6 +72,7 @@ export type ChatMessage = {
   fallbackReason?: string;
   latencyMs?: number;
   usage?: ChatUsage;
+  actionForms?: AIActionFormMetadata[];
   pendingActions?: AIPendingActionCardData[];
   plannerDebug?: AIPlannerDebugMetadata;
 };
@@ -224,6 +229,24 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
             </div>
           </div>
 
+          {debug.continuation?.matched ? (
+            <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2">
+              <div className="font-black text-cyan-800">
+                Pending Action Continuation · {debug.continuation.mode}
+              </div>
+              <div className="mt-1 text-[10px] text-cyan-700">
+                source: {debug.continuation.source} · lock:{" "}
+                {String(debug.continuation.lockTool)}
+                {debug.continuation.toolName
+                  ? ` · tool: ${debug.continuation.toolName}`
+                  : ""}
+              </div>
+              <div className="mt-1 text-[10px] text-cyan-700">
+                {debug.continuation.reason}
+              </div>
+            </div>
+          ) : null}
+
           {debug.intent ? (
             <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
               <span className="font-bold text-slate-400">Intent:</span>{" "}
@@ -290,6 +313,9 @@ function MessageBubble({
   accessToken,
   onRetry,
   onPendingActionChanged,
+  onActionFormPrepared,
+  onActionFormCancelled,
+  conversationId,
 }: {
   message: ChatMessage;
   accessToken: string;
@@ -298,6 +324,13 @@ function MessageBubble({
     messageId: string,
     action: AIPendingActionCardData,
   ) => void;
+  onActionFormPrepared?: (
+    messageId: string,
+    formId: string,
+    action: AIPendingActionCardData,
+  ) => void;
+  onActionFormCancelled?: (messageId: string, formId: string) => void;
+  conversationId?: string | null;
 }) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
@@ -380,6 +413,25 @@ function MessageBubble({
               </div>
             ) : null}
           </div>
+
+          {message.actionForms?.length ? (
+            <div className="space-y-3">
+              {message.actionForms.map((form) => (
+                <AIActionFormCard
+                  key={form.id}
+                  form={form}
+                  accessToken={accessToken}
+                  conversationId={conversationId}
+                  onPrepared={(action) =>
+                    onActionFormPrepared?.(message.id, form.id, action)
+                  }
+                  onCancelled={() =>
+                    onActionFormCancelled?.(message.id, form.id)
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
 
           {message.pendingActions?.length ? (
             <div className="space-y-3">
@@ -762,6 +814,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   fallbackReason: meta?.fallbackReason,
                   latencyMs: meta?.latencyMs,
                   usage: meta?.usage,
+                  actionForms: meta?.actionForms ?? [],
                   pendingActions: meta?.pendingActions ?? [],
                   plannerDebug: meta?.plannerDebug ?? plannerDebug,
                 }
@@ -813,6 +866,43 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                 ...message,
                 pendingActions: message.pendingActions?.map((candidate) =>
                   candidate.id === updated.id ? updated : candidate,
+                ),
+              },
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleActionFormPrepared = useCallback(
+    (messageId: string, formId: string, action: AIPendingActionCardData) => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id !== messageId
+            ? message
+            : {
+                ...message,
+                actionForms: message.actionForms?.filter(
+                  (candidate) => candidate.id !== formId,
+                ),
+                pendingActions: [...(message.pendingActions ?? []), action],
+              },
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleActionFormCancelled = useCallback(
+    (messageId: string, formId: string) => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id !== messageId
+            ? message
+            : {
+                ...message,
+                actionForms: message.actionForms?.filter(
+                  (candidate) => candidate.id !== formId,
                 ),
               },
         ),
@@ -1045,6 +1135,9 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                   message={message}
                   accessToken={session?.access_token ?? ""}
                   onPendingActionChanged={handlePendingActionChanged}
+                  onActionFormPrepared={handleActionFormPrepared}
+                  onActionFormCancelled={handleActionFormCancelled}
+                  conversationId={activeConversationId}
                   onRetry={
                     index === messages.length - 1 &&
                     message.role === "assistant"

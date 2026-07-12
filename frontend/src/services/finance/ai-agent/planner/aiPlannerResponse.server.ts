@@ -23,6 +23,7 @@ export function toAIFinancePlannerResponse(result: AIFinancePlannerResult) {
       durationMs: step.durationMs,
       error: step.error,
     })),
+    actionForms: result.actionForms,
     pendingActions: result.pendingActions,
     usage: {
       planner: result.plannerUsage,

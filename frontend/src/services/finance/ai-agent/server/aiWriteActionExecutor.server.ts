@@ -5,6 +5,7 @@ import { recordAIActionAudit } from "./aiActionAuditRepository.server";
 import {
   getPendingAction,
   updatePendingAction,
+  type PendingActionRecord,
 } from "./aiPendingActionRepository.server";
 
 type FinanceMutationQuery = PromiseLike<{
@@ -22,8 +23,47 @@ type FinanceMutationClient = {
   from: (table: string) => FinanceMutationQuery;
 };
 
+type AuditStatus = "completed" | "failed" | "expired" | "cancelled";
+
 function clientOf(context: AIFinanceToolContext) {
   return context.supabase as unknown as FinanceMutationClient;
+}
+
+function errorMessageOf(error: unknown, fallback = "Write action failed.") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function hasExecutionEvidence(action: PendingActionRecord) {
+  return Boolean(action.executed_at || action.result);
+}
+
+async function recordAuditBestEffort(input: {
+  context: AIFinanceToolContext;
+  action: PendingActionRecord;
+  status: AuditStatus;
+  result?: Record<string, unknown> | null;
+  errorMessage?: string | null;
+}) {
+  try {
+    await recordAIActionAudit({
+      context: input.context,
+      pendingActionId: input.action.id,
+      conversationId: input.action.conversation_id,
+      toolName: input.action.tool_name,
+      status: input.status,
+      oldValue: input.action.old_value,
+      newValue: input.action.new_value,
+      result: input.result ?? null,
+      errorMessage: input.errorMessage ?? null,
+    });
+  } catch (auditError) {
+    console.error("[AI_ACTION_AUDIT_FAILED]", {
+      pendingActionId: input.action.id,
+      toolName: input.action.tool_name,
+      status: input.status,
+      error: errorMessageOf(auditError, "Unknown audit error."),
+    });
+  }
 }
 
 async function executeCreateBudget(
@@ -98,6 +138,36 @@ function asResultRecord(value: unknown): Record<string, unknown> {
   return { value };
 }
 
+async function reconcilePreviouslyExecutedAction(input: {
+  context: AIFinanceToolContext;
+  action: PendingActionRecord;
+}) {
+  if (!hasExecutionEvidence(input.action)) return null;
+
+  if (input.action.status === "completed") {
+    return input.action;
+  }
+
+  const completed = await updatePendingAction({
+    context: input.context,
+    actionId: input.action.id,
+    values: {
+      status: "completed",
+      error_message: null,
+      executed_at: input.action.executed_at ?? new Date().toISOString(),
+    },
+  });
+
+  await recordAuditBestEffort({
+    context: input.context,
+    action: completed,
+    status: "completed",
+    result: completed.result,
+  });
+
+  return completed;
+}
+
 export async function confirmAndExecutePendingAction(input: {
   context: AIFinanceToolContext;
   actionId: string;
@@ -108,8 +178,13 @@ export async function confirmAndExecutePendingAction(input: {
     throw new Error("PENDING_ACTION_NOT_FOUND");
   }
 
-  if (action.status === "completed") {
-    return action;
+  const reconciled = await reconcilePreviouslyExecutedAction({
+    context: input.context,
+    action,
+  });
+
+  if (reconciled) {
+    return reconciled;
   }
 
   if (action.status === "executing" || action.status === "confirmed") {
@@ -129,78 +204,49 @@ export async function confirmAndExecutePendingAction(input: {
       },
     });
 
-    await recordAIActionAudit({
+    await recordAuditBestEffort({
       context: input.context,
-      pendingActionId: action.id,
-      conversationId: action.conversation_id,
-      toolName: action.tool_name,
+      action: expired,
       status: "expired",
-      oldValue: action.old_value,
-      newValue: action.new_value,
     });
 
     throw new Error(`PENDING_ACTION_${expired.status.toUpperCase()}`);
   }
 
-  await updatePendingAction({
+  const executing = await updatePendingAction({
     context: input.context,
     actionId: input.actionId,
     values: {
       status: "executing",
       confirmed_at: new Date().toISOString(),
       confirmed_by: input.context.userId,
+      error_message: null,
     },
   });
 
-  try {
-    let result: unknown;
+  let result: unknown;
 
-    switch (action.tool_name) {
+  try {
+    switch (executing.tool_name) {
       case "create_budget":
-        result = await executeCreateBudget(input.context, action.arguments);
+        result = await executeCreateBudget(input.context, executing.arguments);
         break;
 
       case "update_budget":
-        result = await executeUpdateBudget(input.context, action.arguments);
+        result = await executeUpdateBudget(input.context, executing.arguments);
         break;
 
       case "create_goal":
-        result = await executeCreateGoal(input.context, action.arguments);
+        result = await executeCreateGoal(input.context, executing.arguments);
         break;
 
       default:
-        throw new Error(`Unsupported write tool: ${action.tool_name}`);
+        throw new Error(`Unsupported write tool: ${executing.tool_name}`);
     }
-
-    const resultRecord = asResultRecord(result);
-
-    const completed = await updatePendingAction({
-      context: input.context,
-      actionId: input.actionId,
-      values: {
-        status: "completed",
-        result: resultRecord,
-        executed_at: new Date().toISOString(),
-      },
-    });
-
-    await recordAIActionAudit({
-      context: input.context,
-      pendingActionId: action.id,
-      conversationId: action.conversation_id,
-      toolName: action.tool_name,
-      status: "completed",
-      oldValue: action.old_value,
-      newValue: action.new_value,
-      result: resultRecord,
-    });
-
-    return completed;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Write action failed.";
+    const message = errorMessageOf(error);
 
-    await updatePendingAction({
+    const failed = await updatePendingAction({
       context: input.context,
       actionId: input.actionId,
       values: {
@@ -209,19 +255,37 @@ export async function confirmAndExecutePendingAction(input: {
       },
     });
 
-    await recordAIActionAudit({
+    await recordAuditBestEffort({
       context: input.context,
-      pendingActionId: action.id,
-      conversationId: action.conversation_id,
-      toolName: action.tool_name,
+      action: failed,
       status: "failed",
-      oldValue: action.old_value,
-      newValue: action.new_value,
       errorMessage: message,
     });
 
     throw error;
   }
+
+  const resultRecord = asResultRecord(result);
+
+  const completed = await updatePendingAction({
+    context: input.context,
+    actionId: input.actionId,
+    values: {
+      status: "completed",
+      result: resultRecord,
+      error_message: null,
+      executed_at: new Date().toISOString(),
+    },
+  });
+
+  await recordAuditBestEffort({
+    context: input.context,
+    action: completed,
+    status: "completed",
+    result: resultRecord,
+  });
+
+  return completed;
 }
 
 export async function cancelPendingAction(input: {
@@ -232,6 +296,15 @@ export async function cancelPendingAction(input: {
 
   if (!action) {
     throw new Error("PENDING_ACTION_NOT_FOUND");
+  }
+
+  const reconciled = await reconcilePreviouslyExecutedAction({
+    context: input.context,
+    action,
+  });
+
+  if (reconciled) {
+    return reconciled;
   }
 
   if (action.status === "cancelled") {
@@ -250,14 +323,10 @@ export async function cancelPendingAction(input: {
     },
   });
 
-  await recordAIActionAudit({
+  await recordAuditBestEffort({
     context: input.context,
-    pendingActionId: action.id,
-    conversationId: action.conversation_id,
-    toolName: action.tool_name,
+    action: cancelled,
     status: "cancelled",
-    oldValue: action.old_value,
-    newValue: action.new_value,
   });
 
   return cancelled;

@@ -7,3 +7,5 @@ build
 coverage
 *.tsbuildinfo
 *.zip
+.vercel
+.env*

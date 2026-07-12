@@ -29,32 +29,37 @@ function normalizeToolArguments(
   tool: NonNullable<ReturnType<typeof getAIFinanceTool>>,
   args: Record<string, unknown>,
 ) {
-  const required = new Set(tool.definition.parameters.required);
+  const allowedKeys = new Set(
+    Object.keys(tool.definition.parameters.properties ?? {}),
+  );
 
   return Object.fromEntries(
-    Object.entries(args).filter(
-      ([key, value]) => value !== null || required.has(key),
-    ),
+    Object.entries(args).filter(([key, value]) => {
+      if (!allowedKeys.has(key)) return false;
+
+      // Missing write values must remain missing so the executor can render
+      // the interactive action form. Do not preserve null/undefined/empty
+      // placeholders merely because a field is required by the final tool.
+      if (tool.mode === "write") {
+        return value !== undefined && value !== null && value !== "";
+      }
+
+      return value !== undefined && value !== null;
+    }),
   );
 }
 
 function collectReferences(value: unknown, output = new Set<string>()) {
   if (typeof value === "string") {
-    for (const match of value.matchAll(REFERENCE_PATTERN)) {
-      output.add(match[1]);
-    }
+    for (const match of value.matchAll(REFERENCE_PATTERN)) output.add(match[1]);
     return output;
   }
-
   if (Array.isArray(value)) {
     value.forEach((item) => collectReferences(item, output));
     return output;
   }
-
-  if (isRecord(value)) {
+  if (isRecord(value))
     Object.values(value).forEach((item) => collectReferences(item, output));
-  }
-
   return output;
 }
 
@@ -66,7 +71,6 @@ function detectCycle(steps: AIFinancePlanStep[]) {
   function visit(stepId: string): boolean {
     if (visiting.has(stepId)) return true;
     if (visited.has(stepId)) return false;
-
     visiting.add(stepId);
     for (const dependency of graph.get(stepId) ?? []) {
       if (visit(dependency)) return true;
@@ -99,10 +103,8 @@ export function validateAIFinanceExecutionPlan(
       "steps must be an array.",
     ]);
   }
-
-  if (value.steps.length > MAX_PLAN_STEPS) {
+  if (value.steps.length > MAX_PLAN_STEPS)
     issues.push(`steps cannot exceed ${MAX_PLAN_STEPS}.`);
-  }
 
   const parsedSteps: AIFinancePlanStep[] = [];
   const ids = new Set<string>();
@@ -123,19 +125,15 @@ export function validateAIFinanceExecutionPlan(
     const args = rawStep.arguments;
     const dependsOn = stringsOf(rawStep.dependsOn);
 
-    if (!STEP_ID_PATTERN.test(id)) {
+    if (!STEP_ID_PATTERN.test(id))
       issues.push(`${prefix}.id must match step_<number>.`);
-    } else if (ids.has(id)) {
-      issues.push(`${prefix}.id duplicates ${id}.`);
-    } else {
-      ids.add(id);
-    }
+    else if (ids.has(id)) issues.push(`${prefix}.id duplicates ${id}.`);
+    else ids.add(id);
 
     if (!toolName) issues.push(`${prefix}.toolName is required.`);
     if (!reason) issues.push(`${prefix}.reason is required.`);
-    if (mode !== "read" && mode !== "write") {
+    if (mode !== "read" && mode !== "write")
       issues.push(`${prefix}.mode must be read or write.`);
-    }
     if (!isRecord(args)) issues.push(`${prefix}.arguments must be an object.`);
     if (!dependsOn) issues.push(`${prefix}.dependsOn must be a string array.`);
 
@@ -176,39 +174,45 @@ export function validateAIFinanceExecutionPlan(
     const normalizedArguments = normalizeToolArguments(tool, step.arguments);
     step.arguments = normalizedArguments;
 
-    try {
-      tool.validate(normalizedArguments);
-    } catch (error) {
-      issues.push(
-        `${step.id} arguments are invalid: ${
-          error instanceof Error ? error.message : "validation failed"
-        }.`,
-      );
+    // AI-3.5.5.1B — Deferred Write Validation
+    //
+    // Read tools remain strict because their arguments are immediately used.
+    // Write tools are intentionally NOT business-validated at plan time. A
+    // planner may emit partial values (or placeholders such as 0) solely to
+    // identify the intended action. The executor/action-form pipeline owns
+    // required-field checks and business validation after the user completes
+    // the form and before a Pending Action is created.
+    if (tool.mode === "read") {
+      try {
+        tool.validate(normalizedArguments);
+      } catch (error) {
+        issues.push(
+          `${step.id} arguments are invalid: ${error instanceof Error ? error.message : "validation failed"}.`,
+        );
+      }
     }
 
     const currentIndex = stepIndex.get(step.id) ?? -1;
     for (const dependency of step.dependsOn) {
       const dependencyIndex = stepIndex.get(dependency);
-      if (dependencyIndex === undefined) {
+      if (dependencyIndex === undefined)
         issues.push(`${step.id} depends on missing step ${dependency}.`);
-      } else if (dependencyIndex >= currentIndex) {
+      else if (dependencyIndex >= currentIndex)
         issues.push(
           `${step.id} must depend only on an earlier step (${dependency}).`,
         );
-      }
     }
 
     for (const reference of collectReferences(step.arguments)) {
       const referenceIndex = stepIndex.get(reference);
-      if (referenceIndex === undefined) {
+      if (referenceIndex === undefined)
         issues.push(`${step.id} references missing step ${reference}.`);
-      } else if (!step.dependsOn.includes(reference)) {
+      else if (!step.dependsOn.includes(reference))
         issues.push(
           `${step.id} references ${reference} but does not declare it in dependsOn.`,
         );
-      } else if (referenceIndex >= currentIndex) {
+      else if (referenceIndex >= currentIndex)
         issues.push(`${step.id} references non-earlier step ${reference}.`);
-      }
     }
   }
 
@@ -221,14 +225,9 @@ export function validateAIFinanceExecutionPlan(
   ) {
     issues.push("All read steps must appear before write steps.");
   }
-
-  if (detectCycle(parsedSteps)) {
+  if (detectCycle(parsedSteps))
     issues.push("Plan dependencies contain a cycle.");
-  }
-
-  if (issues.length > 0) {
-    throw new AIFinancePlanValidationError(issues);
-  }
+  if (issues.length > 0) throw new AIFinancePlanValidationError(issues);
 
   return { objective, steps: parsedSteps };
 }
