@@ -1,122 +1,146 @@
-// MyFinance Service Worker — v1
+// MyFinance Service Worker — v2
 // Strategies:
-//   • Navigation:        Network-first → cached fallback → 503 offline
-//   • /_next/static/**:  Cache-first (immutable hashed chunks)
-//   • Images/SVG/fonts:  Cache-first
-//   • Supabase / non-GET: Pass-through (never cached)
+//   • Navigation: network-first, no HTML runtime caching
+//   • /_next/static/**: cache-first
+//   • Images/SVG/fonts: cache-first
+//   • API, Supabase, SSE and non-GET: pass-through
 
-const CACHE = "myfinance-v1";
+const CACHE = "myfinance-v2";
 
-const PRECACHE_URLS = [
-  "/",
-  "/transactions",
-  "/wallets",
-  "/budgets",
-  "/goals",
-  "/ai-insights",
-  "/settings",
-  "/icon-192.svg",
-  "/icon-512.svg",
-];
+const PRECACHE_URLS = ["/icon-192.svg", "/icon-512.svg"];
 
-// ─── Install ─────────────────────────────────────────────────────────────────
+// ─── Install ────────────────────────────────────────────────────────────────
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      // addAll can fail for routes that need auth — ignore individual failures
-      Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url))),
-    ),
+    caches
+      .open(CACHE)
+      .then((cache) =>
+        Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url))),
+      ),
   );
-  // Activate immediately — don't wait for old tabs to close
+
   self.skipWaiting();
 });
 
-// ─── Activate ────────────────────────────────────────────────────────────────
+// ─── Activate ───────────────────────────────────────────────────────────────
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)),
+          keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)),
         ),
       ),
   );
+
   self.clients.claim();
 });
 
-// ─── Fetch ───────────────────────────────────────────────────────────────────
+// ─── Fetch ──────────────────────────────────────────────────────────────────
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip: non-GET, chrome-extension, Supabase API calls
+  // Never intercept unsupported or sensitive requests.
   if (
     request.method !== "GET" ||
     url.protocol === "chrome-extension:" ||
-    url.hostname.includes("supabase.co")
+    url.origin !== self.location.origin ||
+    url.hostname.includes("supabase.co") ||
+    url.pathname.startsWith("/api/")
   ) {
     return;
   }
 
-  // ── Immutable static assets (/_next/static/) — cache-first ──
+  // Next.js immutable hashed assets.
   if (url.pathname.startsWith("/_next/static/")) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ??
-          fetch(request).then((res) => {
-            if (res.ok) {
-              caches.open(CACHE).then((c) => c.put(request, res.clone()));
-            }
-            return res;
-          }),
-      ),
-    );
+    event.respondWith(cacheFirst(request));
     return;
   }
 
-  // ── Images / SVG / fonts / icons — cache-first ──
-  if (url.pathname.match(/\.(svg|png|ico|webp|jpg|jpeg|woff2?|ttf|otf)$/)) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ??
-          fetch(request).then((res) => {
-            if (res.ok) {
-              caches.open(CACHE).then((c) => c.put(request, res.clone()));
-            }
-            return res;
-          }),
-      ),
-    );
+  // Images, icons and fonts.
+  if (/\.(svg|png|ico|webp|jpg|jpeg|woff2?|ttf|otf)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(request));
     return;
   }
 
-  // ── Navigation (HTML pages) — network-first ──
+  // Navigation must always fetch fresh HTML.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            caches.open(CACHE).then((c) => c.put(request, res.clone()));
-          }
-          return res;
-        })
-        .catch(() =>
-          caches
-            .match(request)
-            .then((cached) => cached ?? caches.match("/"))
-            .then(
-              (fallback) =>
-                fallback ??
-                new Response(
-                  "<!DOCTYPE html><html><head><meta charset=utf-8><title>Offline</title></head><body style='font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#0f172a'><div style='text-align:center'><p style='font-size:3rem;margin:0'>📴</p><h1 style='font-size:1.5rem;font-weight:900;margin:.5rem 0'>Không có kết nối</h1><p style='color:#64748b'>Vui lòng kiểm tra mạng và thử lại.</p></div></body></html>",
-                  { headers: { "Content-Type": "text/html" }, status: 503 },
-                ),
-            ),
-        ),
+      fetch(request).catch(
+        () =>
+          new Response(
+            `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Không có kết nối</title>
+</head>
+<body style="
+  font-family:system-ui;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  margin:0;
+  background:#f8fafc;
+  color:#0f172a
+">
+  <div style="text-align:center">
+    <p style="font-size:3rem;margin:0">📴</p>
+    <h1 style="font-size:1.5rem;font-weight:900;margin:.5rem 0">
+      Không có kết nối
+    </h1>
+    <p style="color:#64748b">
+      Vui lòng kiểm tra mạng và thử lại.
+    </p>
+  </div>
+</body>
+</html>`,
+            {
+              status: 503,
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "no-store",
+              },
+            },
+          ),
+      ),
     );
-    return;
   }
 });
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+
+  if (cached) {
+    return cached;
+  }
+
+  const response = await fetch(request);
+
+  if (!response.ok) {
+    return response;
+  }
+
+  // Clone immediately, before returning/consuming the original response.
+  const responseForCache = response.clone();
+
+  eventSafeCachePut(request, responseForCache);
+
+  return response;
+}
+
+function eventSafeCachePut(request, response) {
+  caches
+    .open(CACHE)
+    .then((cache) => cache.put(request, response))
+    .catch((error) => {
+      console.warn("[Service Worker] Cache write failed:", error);
+    });
+}
