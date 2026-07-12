@@ -9,3 +9,5 @@ coverage
 *.zip
 .vercel
 .env*
+
+frontend/tree-src-clean.txt
