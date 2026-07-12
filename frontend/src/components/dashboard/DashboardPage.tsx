@@ -1834,7 +1834,7 @@ export default function DashboardPage() {
       value: formatVND(netCashFlow),
       valueClass: netCashFlow >= 0 ? "text-emerald-600" : "text-rose-500",
       note: `Thu ${formatVND(summary.income)} − Chi ${formatVND(summary.expense)}`,
-      icon: TrendingUp,
+      icon: <TrendingUp size={20} />,
       iconClass: "from-blue-600 to-sky-500",
       barClass: "from-blue-500 to-sky-400",
     },
@@ -1844,7 +1844,7 @@ export default function DashboardPage() {
       valueClass:
         summary.savingRate >= 20 ? "text-emerald-600" : "text-rose-500",
       note: `${formatVND(savingsSnapshot.totalSavings)} / ${formatVND(summary.income)}`,
-      icon: PiggyBank,
+      icon: <PiggyBank size={20} />,
       iconClass: "from-emerald-500 to-teal-400",
       barClass: "from-emerald-500 to-teal-400",
     },
@@ -1853,7 +1853,7 @@ export default function DashboardPage() {
       value: `${summary.debtRatio}%`,
       valueClass: summary.debtRatio <= 40 ? "text-violet-600" : "text-rose-500",
       note: summary.debtRatio <= 40 ? "An toàn" : "Cần giảm",
-      icon: Landmark,
+      icon: <Landmark size={20} />,
       iconClass: "from-violet-500 to-indigo-500",
       barClass: "from-violet-500 to-indigo-400",
     },
@@ -1863,7 +1863,7 @@ export default function DashboardPage() {
       valueClass:
         summary.investmentReturn >= 0 ? "text-emerald-600" : "text-rose-500",
       note: `${investments.length} tài sản`,
-      icon: Briefcase,
+      icon: <Briefcase size={20} />,
       iconClass: "from-emerald-500 to-teal-400",
       barClass: "from-emerald-500 to-teal-400",
     },
@@ -1872,7 +1872,7 @@ export default function DashboardPage() {
       value: `${summary.goalScore}%`,
       valueClass: "text-blue-600",
       note: `${goalSnapshot.trackedCount} mục tiêu đang theo dõi`,
-      icon: Target,
+      icon: <Target size={20} />,
       iconClass: "from-blue-500 to-cyan-400",
       barClass: "from-blue-500 to-sky-400",
     },
@@ -3291,7 +3291,7 @@ export default function DashboardPage() {
                 <ActionCard
                   key={`${action.title}-${i}`}
                   rank={v3AdvisorActions.length + i + 1}
-                  icon={actionIcons[action.icon]}
+                  icon={actionIcons[action.icon] ?? <AlertTriangle size={18} />}
                   title={action.title}
                   body={action.body}
                   tone={action.tone}
@@ -3693,7 +3693,7 @@ function KpiCard({
   title,
   value,
   note,
-  icon: Icon,
+  icon,
   valueClass,
   iconClass,
   barClass,
@@ -3701,7 +3701,7 @@ function KpiCard({
   title: string;
   value: string;
   note: string;
-  icon: React.ElementType;
+  icon: React.ReactNode;
   valueClass: string;
   iconClass: string;
   barClass: string;
@@ -3716,7 +3716,7 @@ function KpiCard({
         <div
           className={`flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br ${iconClass} text-white shadow-lg`}
         >
-          <Icon size={20} />
+          {icon}
         </div>
       </div>
       <p className={`mt-5 text-2xl font-black ${valueClass}`}>{value}</p>
