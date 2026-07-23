@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "MyFinance",
-  description: "Quản lý tài chính cá nhân thông minh với AI",
+  description: "Quáº£n lÃ½ tÃ i chÃ­nh cÃ¡ nhÃ¢n thÃ´ng minh vá»›i AI",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -38,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
+    <html lang="vi" data-scroll-behavior="smooth">
       <body className={beVietnam.variable}>
         <AuthProvider>
           <RealtimeProvider>

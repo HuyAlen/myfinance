@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/src/lib/supabase";
 import {
   Area,
   AreaChart,
@@ -118,13 +118,6 @@ type ReportSaving = SavingAccount & {
   initialAmount?: number;
   createdAt?: string;
 };
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const financeSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
 
 function toNumber(value: unknown): number {
   const n = Number(value ?? 0);
@@ -499,8 +492,8 @@ export default function ReportsPage() {
           getDebts(),
           getGoals(),
           getBudgets(),
-          financeSupabase
-            ? financeSupabase
+          supabase
+            ? supabase
                 .from("savings")
                 .select("*")
                 .order("created_at", { ascending: false })
@@ -611,6 +604,7 @@ export default function ReportsPage() {
     investments,
     debts,
     goals,
+    transactions,
     savings,
     periodMode,
     year,
@@ -2811,7 +2805,7 @@ function TrendCard({
   const up = delta !== null && delta > 0;
   const chartData = data.map((d, i) => ({ i, v: d.v }));
   return (
-    <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-black text-slate-900">{title}</p>
         {delta !== null && (

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/src/lib/supabase";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 
@@ -42,6 +42,8 @@ import {
   getDebts,
   getGoals,
   getInvestments,
+  getForexAccounts,
+  getForexCashTransactions,
   getTransactions,
   getWallets,
 } from "@/src/services/finance/financeStorage";
@@ -72,6 +74,8 @@ import type {
   Debt,
   Goal,
   Investment,
+  ForexAccount,
+  ForexCashTransaction,
   Transaction,
   Wallet as WalletType,
   SavingAccount,
@@ -236,23 +240,6 @@ type DashboardSavingTransaction = {
   note: string;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-type DashboardSupabaseClient = ReturnType<typeof createClient>;
-
-const globalForDashboardSupabase = globalThis as typeof globalThis & {
-  __myFinanceDashboardSupabase?: DashboardSupabaseClient;
-};
-
-const savingsSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? (globalForDashboardSupabase.__myFinanceDashboardSupabase ??= createClient(
-        supabaseUrl,
-        supabaseAnonKey,
-      ))
-    : null;
-
 const mapSavingRowToSavingAccount = (
   row: SavingRow,
 ): DashboardSavingAccount => {
@@ -337,6 +324,7 @@ type RecentActivityKind =
   | "expense"
   | "saving"
   | "investment"
+  | "forex"
   | "transfer";
 
 type RecentActivityItem = {
@@ -509,6 +497,7 @@ function getRecentIconClass(kind: RecentActivityKind) {
   if (kind === "expense") return "bg-rose-50 text-rose-500";
   if (kind === "saving") return "bg-blue-50 text-blue-600";
   if (kind === "investment") return "bg-violet-50 text-violet-600";
+  if (kind === "forex") return "bg-cyan-50 text-cyan-600";
   return "bg-slate-100 text-slate-500";
 }
 
@@ -517,6 +506,7 @@ function getRecentAmountClass(kind: RecentActivityKind) {
   if (kind === "expense") return "text-rose-500";
   if (kind === "saving") return "text-blue-600";
   if (kind === "investment") return "text-violet-600";
+  if (kind === "forex") return "text-cyan-600";
   return "text-slate-500";
 }
 
@@ -666,6 +656,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
+  const [forexCashTransactions, setForexCashTransactions] = useState<
+    ForexCashTransaction[]
+  >([]);
   const [savings, setSavings] = useState<DashboardSavingAccount[]>([]);
   const [savingTransactions, setSavingTransactions] = useState<
     DashboardSavingTransaction[]
@@ -707,34 +701,49 @@ export default function DashboardPage() {
 
   const reloadData = useCallback(async () => {
     try {
-      const [w, inv, cat, txn, dbt, gls, bdg, savingRows, savingTxnRows] =
-        await Promise.all([
-          getWallets(),
-          getInvestments(),
-          getCategories(),
-          getTransactions(),
-          getDebts(),
-          getGoals(),
-          getBudgets(),
-          savingsSupabase
-            ? savingsSupabase
-                .from("savings")
-                .select("*")
-                .order("created_at", { ascending: false })
-            : Promise.resolve({ data: [], error: null }),
-          savingsSupabase
-            ? savingsSupabase
-                .from("saving_transactions")
-                .select(
-                  "id,saving_id,type,amount,transaction_date,created_at,note",
-                )
-                .order("transaction_date", { ascending: false })
-                .order("created_at", { ascending: false })
-            : Promise.resolve({ data: [], error: null }),
-        ]);
+      const [
+        w,
+        inv,
+        forexAcc,
+        forexTxn,
+        cat,
+        txn,
+        dbt,
+        gls,
+        bdg,
+        savingRows,
+        savingTxnRows,
+      ] = await Promise.all([
+        getWallets(),
+        getInvestments(),
+        getForexAccounts(),
+        getForexCashTransactions(),
+        getCategories(),
+        getTransactions(),
+        getDebts(),
+        getGoals(),
+        getBudgets(),
+        supabase
+          ? supabase
+              .from("savings")
+              .select("*")
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          ? supabase
+              .from("saving_transactions")
+              .select(
+                "id,saving_id,type,amount,transaction_date,created_at,note",
+              )
+              .order("transaction_date", { ascending: false })
+              .order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
       setWallets(w ?? []);
       setInvestments(inv ?? []);
+      setForexAccounts(forexAcc ?? []);
+      setForexCashTransactions(forexTxn ?? []);
       setCategories(cat ?? []);
       setTransactions(txn ?? []);
       setDebts(dbt ?? []);
@@ -773,6 +782,8 @@ export default function DashboardPage() {
 
       setWallets([]);
       setInvestments([]);
+      setForexAccounts([]);
+      setForexCashTransactions([]);
       setCategories([]);
       setTransactions([]);
       setDebts([]);
@@ -794,7 +805,16 @@ export default function DashboardPage() {
   }, [reloadData]);
 
   useRealtimeTable(
-    ["wallets", "transactions", "investments", "debts", "goals", "budgets"],
+    [
+      "wallets",
+      "transactions",
+      "investments",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "debts",
+      "goals",
+      "budgets",
+    ],
     reloadData,
   );
 
@@ -833,6 +853,27 @@ export default function DashboardPage() {
 
     return { totalSavings, emergencyFund, expectedInterest };
   }, [savings]);
+
+  const forexSnapshot = useMemo(() => {
+    const totalDeposited = forexCashTransactions
+      .filter((transaction) => transaction.type === "deposit")
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalWithdrawn = forexCashTransactions
+      .filter((transaction) => transaction.type === "withdrawal")
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalFees = forexCashTransactions.reduce(
+      (sum, transaction) => sum + Math.max(0, transaction.fee ?? 0),
+      0,
+    );
+
+    return {
+      balance: totalDeposited - totalWithdrawn,
+      totalDeposited,
+      totalWithdrawn,
+      totalFees,
+      accountCount: forexAccounts.length,
+    };
+  }, [forexAccounts.length, forexCashTransactions]);
 
   const goalMeta = useMemo<DashboardGoalMeta[]>(
     () =>
@@ -922,11 +963,13 @@ export default function DashboardPage() {
     () =>
       walletLiquidity +
       savingsSnapshot.totalSavings +
+      forexSnapshot.balance +
       baseSummary.investmentAssets -
       baseSummary.totalDebt,
     [
       walletLiquidity,
       savingsSnapshot.totalSavings,
+      forexSnapshot.balance,
       baseSummary.investmentAssets,
       baseSummary.totalDebt,
     ],
@@ -936,6 +979,8 @@ export default function DashboardPage() {
     () => ({
       ...baseSummary,
       liquidBalance: walletLiquidity,
+      forexCashBalance: forexSnapshot.balance,
+      forexCashFees: forexSnapshot.totalFees,
       netWorth: netWorthWithSavings,
       saving: savingsSnapshot.totalSavings,
       savingRate: savingsRateFromSavings,
@@ -944,6 +989,8 @@ export default function DashboardPage() {
     [
       baseSummary,
       walletLiquidity,
+      forexSnapshot.balance,
+      forexSnapshot.totalFees,
       netWorthWithSavings,
       savingsSnapshot.totalSavings,
       savingsRateFromSavings,
@@ -1142,6 +1189,12 @@ export default function DashboardPage() {
         value: savingsSnapshot.totalSavings,
         color: "#38bdf8",
       });
+    if (forexSnapshot.balance > 0)
+      items.push({
+        name: "Forex Cash",
+        value: forexSnapshot.balance,
+        color: "#06b6d4",
+      });
     if (summary.investmentAssets > 0)
       items.push({
         name: "Đầu tư",
@@ -1149,7 +1202,12 @@ export default function DashboardPage() {
         color: "#10b981",
       });
     return items;
-  }, [snapshotWallets, savingsSnapshot.totalSavings, summary.investmentAssets]);
+  }, [
+    snapshotWallets,
+    savingsSnapshot.totalSavings,
+    forexSnapshot.balance,
+    summary.investmentAssets,
+  ]);
   const assetDonutGradient = useMemo(
     () => buildConicGradient(assetPieData),
     [assetPieData],
@@ -1600,11 +1658,48 @@ export default function DashboardPage() {
         };
       });
 
-    return [...financeTxns, ...savingTxns]
+    const forexTxns = forexCashTransactions.map((transaction) => {
+      const accountName =
+        forexAccounts.find(
+          (account) => account.id === transaction.forexAccountId,
+        )?.name ?? "Forex";
+      const walletName =
+        wallets.find((wallet) => wallet.id === transaction.walletId)?.name ??
+        "Ví";
+      const displayDateTime = pickRecentDateTime(transaction.transactionDate, {
+        transactionDate: transaction.transactionDate,
+      });
+      const isDeposit = transaction.type === "deposit";
+
+      return {
+        id: `forex-${transaction.id}`,
+        title:
+          transaction.notes?.trim() ||
+          (isDeposit ? "Nạp tiền Forex" : "Rút tiền Forex"),
+        subtitle: isDeposit
+          ? `${walletName} → ${accountName}`
+          : `${accountName} → ${walletName}`,
+        amount: Math.abs(transaction.amount),
+        date: displayDateTime,
+        dayLabel: getRecentDayLabel(displayDateTime),
+        timeLabel: getRecentTimeLabel(displayDateTime),
+        kind: "forex" as const,
+      };
+    });
+
+    return [...financeTxns, ...savingTxns, ...forexTxns]
       .filter((transaction) => transaction.amount > 0)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
-  }, [filteredTransactions, categories, wallets, savingTransactions, savings]);
+  }, [
+    filteredTransactions,
+    categories,
+    wallets,
+    savingTransactions,
+    savings,
+    forexAccounts,
+    forexCashTransactions,
+  ]);
 
   const recentTxnGroups = useMemo(() => {
     return recentTxns.reduce<
@@ -1962,10 +2057,10 @@ export default function DashboardPage() {
                 {formatVND(summary.netWorth)}
               </p>
               <span className="mb-2 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-bold text-emerald-600 ring-1 ring-emerald-100">
-                Thanh khoản + Tiết kiệm + Đầu tư − Nợ
+                Thanh khoản + Tiết kiệm + Forex Cash + Đầu tư − Nợ
               </span>
             </div>
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <HeroMini
                 icon={<Wallet size={16} />}
                 label="Thanh khoản"
@@ -1976,6 +2071,12 @@ export default function DashboardPage() {
                 icon={<PiggyBank size={16} />}
                 label="Tiết kiệm"
                 value={formatVND(savingsSnapshot.totalSavings)}
+                valueClass="text-cyan-600"
+              />
+              <HeroMini
+                icon={<Landmark size={16} />}
+                label="Forex Cash"
+                value={formatVND(forexSnapshot.balance)}
                 valueClass="text-cyan-600"
               />
               <HeroMini

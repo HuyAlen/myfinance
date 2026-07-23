@@ -9,6 +9,8 @@ import type {
   Debt,
   Goal,
   Investment,
+  ForexAccount,
+  ForexCashTransaction,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
@@ -248,6 +250,86 @@ type InvestmentDbRow = {
   averageCost?: number | null;
   currentPrice?: number | null;
 };
+
+type ForexAccountDbRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  broker: string;
+  account_number?: string | null;
+  currency: string;
+  status: ForexAccount["status"];
+  opened_at?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type ForexCashTransactionDbRow = {
+  id: string;
+  user_id: string;
+  forex_account_id: string;
+  wallet_id: string;
+  type: ForexCashTransaction["type"];
+  amount: number;
+  currency: string;
+  fee?: number | null;
+  transaction_date: string;
+  transaction_time?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+function fromForexAccountRow(row: ForexAccountDbRow): ForexAccount {
+  return {
+    id: row.id,
+    name: row.name,
+    broker: row.broker,
+    accountNumber: row.account_number ?? undefined,
+    currency: "VND",
+    status: row.status,
+    openedAt: row.opened_at ?? undefined,
+    notes: row.notes ?? undefined,
+  };
+}
+
+function toForexAccountRow(
+  account: ForexAccount,
+  userId: string,
+): ForexAccountDbRow {
+  return {
+    id: account.id,
+    user_id: userId,
+    name: account.name,
+    broker: account.broker,
+    account_number: account.accountNumber ?? null,
+    currency: account.currency,
+    status: account.status,
+    opened_at: account.openedAt ?? null,
+    notes: account.notes ?? null,
+  };
+}
+
+function fromForexCashTransactionRow(
+  row: ForexCashTransactionDbRow,
+): ForexCashTransaction {
+  return {
+    id: row.id,
+    forexAccountId: row.forex_account_id,
+    walletId: row.wallet_id,
+    type: row.type,
+    amount: Number(row.amount ?? 0),
+    currency: "VND",
+    fee: Number(row.fee ?? 0),
+    transactionDate: row.transaction_date,
+    transactionTime: String(row.transaction_time ?? "00:00").slice(0, 5),
+    transactedAt: `${row.transaction_date}T${String(row.transaction_time ?? "00:00:00").slice(0, 8)}`,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+    notes: row.notes ?? undefined,
+  };
+}
 
 function toWalletRow(wallet: Wallet, userId: string): WalletDbRow {
   return {
@@ -503,6 +585,48 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+export async function getForexAccounts(): Promise<ForexAccount[]> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("forex_accounts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[financeStorage] getForexAccounts:", error.message);
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as ForexAccountDbRow[]).map(fromForexAccountRow);
+}
+
+export async function getForexCashTransactions(): Promise<
+  ForexCashTransaction[]
+> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("forex_cash_transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("transaction_date", { ascending: false })
+    .order("transaction_time", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[financeStorage] getForexCashTransactions:", error.message);
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as ForexCashTransactionDbRow[]).map(
+    fromForexCashTransactionRow,
+  );
+}
+
 // ─── Demo seed guard ──────────────────────────────────────────────────────────
 // Key stored in localStorage per user. When set, initFinanceDemoData() is a
 // no-op — ensures demo data never re-seeds after "Clear All Data".
@@ -608,6 +732,8 @@ export async function resetFinanceDemoData(): Promise<{
   unblockSeed(userId);
 
   const deleteErrors = await Promise.all([
+    supabase.from("forex_cash_transactions").delete().eq("user_id", userId),
+    supabase.from("forex_accounts").delete().eq("user_id", userId),
     supabase.from("transactions").delete().eq("user_id", userId),
     supabase.from("budgets").delete().eq("user_id", userId),
     supabase.from("goals").delete().eq("user_id", userId),
@@ -682,6 +808,15 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
 
   const deleteSteps = [
     {
+      label: "Giao dịch Forex",
+      run: () =>
+        supabase.from("forex_cash_transactions").delete().eq("user_id", userId),
+    },
+    {
+      label: "Tài khoản Forex",
+      run: () => supabase.from("forex_accounts").delete().eq("user_id", userId),
+    },
+    {
       label: "Giao dịch",
       run: () => supabase.from("transactions").delete().eq("user_id", userId),
     },
@@ -739,6 +874,8 @@ export async function importAllData(data: {
   goals?: Goal[];
   budgets?: Budget[];
   investments?: Investment[];
+  forexAccounts?: ForexAccount[];
+  forexCashTransactions?: ForexCashTransaction[];
 }): Promise<{ error: string | null }> {
   const clearResult = await clearAllUserData();
   if (clearResult.error) return clearResult;
@@ -816,6 +953,31 @@ export async function importAllData(data: {
           ),
         ),
     );
+  }
+
+  if (data.forexAccounts?.length) {
+    inserts.push(
+      supabase
+        .from("forex_accounts")
+        .insert(
+          data.forexAccounts.map((account) =>
+            toForexAccountRow({ ...account, currency: "VND" }, userId),
+          ),
+        ),
+    );
+  }
+
+  // Forex cash transactions must be restored through the RPC so wallet and
+  // Forex balances stay atomic and consistent. They are intentionally not
+  // inserted directly into the table here.
+  if (data.forexCashTransactions?.length) {
+    for (const transaction of data.forexCashTransactions) {
+      const result = await addForexCashTransaction({
+        ...transaction,
+        currency: "VND",
+      });
+      if (result.error) return result;
+    }
   }
 
   const results = await Promise.all(inserts);
@@ -1597,4 +1759,158 @@ export async function deleteInvestment(
     return { error: error.message };
   }
   return { error: null };
+}
+
+// ─── Forex Account CRUD ──────────────────────────────────────────────────────
+
+export async function addForexAccount(
+  account: ForexAccount,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase
+    .from("forex_accounts")
+    .insert(toForexAccountRow(account, userId));
+
+  if (error) {
+    console.error("[financeStorage] addForexAccount:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function updateForexAccount(
+  account: ForexAccount,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase
+    .from("forex_accounts")
+    .update(toForexAccountRow(account, userId))
+    .eq("id", account.id)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[financeStorage] updateForexAccount:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function deleteForexAccount(
+  accountId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase
+    .from("forex_accounts")
+    .delete()
+    .eq("id", accountId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[financeStorage] deleteForexAccount:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+// ─── Forex Cash Transaction CRUD ────────────────────────────────────────────
+
+export async function addForexCashTransaction(
+  transaction: ForexCashTransaction,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase.rpc("create_forex_cash_transaction", {
+    p_id: transaction.id,
+    p_forex_account_id: transaction.forexAccountId,
+    p_wallet_id: transaction.walletId,
+    p_type: transaction.type,
+    p_amount: transaction.amount,
+    p_currency: "VND",
+    p_fee: transaction.fee ?? 0,
+    p_transaction_date: transaction.transactionDate,
+    p_transaction_time: transaction.transactionTime,
+    p_notes: transaction.notes ?? null,
+  });
+
+  if (error) {
+    console.error("[financeStorage] addForexCashTransaction:", error.message);
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function updateForexCashTransaction(
+  transaction: ForexCashTransaction,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase.rpc("update_forex_cash_transaction", {
+    p_id: transaction.id,
+    p_forex_account_id: transaction.forexAccountId,
+    p_wallet_id: transaction.walletId,
+    p_type: transaction.type,
+    p_amount: transaction.amount,
+    p_currency: "VND",
+    p_fee: transaction.fee ?? 0,
+    p_transaction_date: transaction.transactionDate,
+    p_transaction_time: transaction.transactionTime,
+    p_notes: transaction.notes ?? null,
+  });
+
+  if (error) {
+    console.error(
+      "[financeStorage] updateForexCashTransaction:",
+      error.message,
+    );
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+export async function deleteForexCashTransaction(
+  transactionId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase.rpc("delete_forex_cash_transaction", {
+    p_id: transactionId,
+  });
+
+  if (error) {
+    console.error(
+      "[financeStorage] deleteForexCashTransaction:",
+      error.message,
+    );
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
+// ─── INV-4.3 Forex read-model helpers ───────────────────────────────────────
+
+export function calculateForexCashBalance(
+  transactions: ForexCashTransaction[],
+): number {
+  return transactions.reduce((total, transaction) => {
+    const amount = Math.max(0, Number(transaction.amount) || 0);
+    return total + (transaction.type === "deposit" ? amount : -amount);
+  }, 0);
+}
+
+export function calculateForexCashFees(
+  transactions: ForexCashTransaction[],
+): number {
+  return transactions.reduce(
+    (total, transaction) => total + Math.max(0, Number(transaction.fee) || 0),
+    0,
+  );
 }

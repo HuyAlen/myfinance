@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import {
@@ -39,6 +39,8 @@ import {
 import type {
   Budget,
   Category,
+  ForexAccount,
+  ForexCashTransaction,
   RecurrenceFrequency,
   Transaction,
   TransactionType,
@@ -47,12 +49,14 @@ import type {
 import {
   addTransaction,
   deleteTransaction,
+  deleteForexCashTransaction,
   getBudgets,
   getCategories,
+  getForexAccounts,
+  getForexCashTransactions,
   getTransactions,
   getWallets,
   updateTransaction,
-  updateWallet,
 } from "@/src/services/finance/financeStorage";
 import {
   formatVND,
@@ -76,6 +80,7 @@ import ConfirmDialog, {
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
+type TransactionDisplayFilter = "all" | TransactionType | "forex";
 
 type ToastPayload = {
   variant?: "success" | "error" | "info" | "warning";
@@ -115,6 +120,73 @@ const emptyForm: FormState = {
   isRecurring: false,
   recurrence: "monthly",
 };
+
+type ForexUnifiedTransaction = Transaction & {
+  unifiedSource: "forex_cash";
+  sourceId: string;
+  forexAccountId: string;
+  forexAccountName: string;
+  forexType: "deposit" | "withdrawal";
+  forexFee: number;
+  sourceLabel: string;
+  destinationLabel: string;
+};
+
+function isForexUnifiedTransaction(
+  transaction: Transaction,
+): transaction is ForexUnifiedTransaction {
+  return (
+    (transaction as Partial<ForexUnifiedTransaction>).unifiedSource ===
+    "forex_cash"
+  );
+}
+
+function mapForexCashTransactionToUnified(
+  transaction: ForexCashTransaction,
+  account: ForexAccount | undefined,
+  wallet: Wallet | undefined,
+): ForexUnifiedTransaction {
+  const accountName = account?.name ?? "Tài khoản Forex";
+  const walletName = wallet?.name ?? "Ví";
+  const isDeposit = transaction.type === "deposit";
+  const metadata = transaction as ForexCashTransaction & {
+    createdAt?: string;
+    created_at?: string;
+    updatedAt?: string;
+    updated_at?: string;
+  };
+  const sourceTimestamp =
+    metadata.createdAt ??
+    metadata.created_at ??
+    metadata.updatedAt ??
+    metadata.updated_at ??
+    "";
+
+  return {
+    id: `forex:${transaction.id}`,
+    sourceId: transaction.id,
+    unifiedSource: "forex_cash",
+    forexAccountId: transaction.forexAccountId,
+    forexAccountName: accountName,
+    forexType: transaction.type,
+    forexFee: Math.max(0, transaction.fee ?? 0),
+    sourceLabel: isDeposit ? walletName : accountName,
+    destinationLabel: isDeposit ? accountName : walletName,
+    type: "transfer",
+    amount: transaction.amount,
+    categoryId: "",
+    walletId: transaction.walletId,
+    note:
+      transaction.notes?.trim() ||
+      (isDeposit ? "Nạp tiền vào Forex" : "Rút tiền từ Forex"),
+    date: transaction.transactionDate,
+    ...(sourceTimestamp ? { createdAt: sourceTimestamp } : {}),
+    transferReference: `forex_cash:${transaction.id}`,
+    transferReferenceType: "forex",
+    sourceType: isDeposit ? "wallet" : "forex",
+    destinationType: isDeposit ? "forex" : "wallet",
+  } as ForexUnifiedTransaction;
+}
 
 function getTransactionDateValue(transaction: Transaction) {
   return String(transaction.date ?? "").trim();
@@ -189,7 +261,10 @@ function getTransactionSortTime(transaction: Transaction) {
   if (!dateValue) return 0;
 
   const dateOnly = dateValue.slice(0, 10);
-  const dateTime = new Date(`${dateOnly}T00:00:00`).getTime();
+  const fallbackTime = isForexUnifiedTransaction(transaction)
+    ? "23:59:59.999"
+    : "00:00:00.000";
+  const dateTime = new Date(`${dateOnly}T${fallbackTime}`).getTime();
   return Number.isFinite(dateTime) ? dateTime : 0;
 }
 
@@ -408,6 +483,7 @@ function isInternalTransferTransaction(transaction: Transaction) {
 }
 
 function getTransactionDisplayType(transaction: Transaction) {
+  if (isForexUnifiedTransaction(transaction)) return "forex";
   return isInternalTransferTransaction(transaction)
     ? "transfer"
     : transaction.type;
@@ -416,11 +492,13 @@ function getTransactionDisplayType(transaction: Transaction) {
 function getTransactionAccentClass(transaction: Transaction) {
   const displayType = getTransactionDisplayType(transaction);
   if (displayType === "income") return "border-l-emerald-400";
+  if (displayType === "forex") return "border-l-cyan-400";
   if (displayType === "transfer") return "border-l-indigo-400";
   return "border-l-rose-400";
 }
 
 function getTransactionAmountPrefix(transaction: Transaction) {
+  if (isForexUnifiedTransaction(transaction)) return "⇄";
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") return "+";
@@ -433,6 +511,7 @@ function getTransactionAmountPrefix(transaction: Transaction) {
 }
 
 function getTransactionAmountColorClass(transaction: Transaction) {
+  if (isForexUnifiedTransaction(transaction)) return "text-cyan-600";
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") return "text-emerald-600";
@@ -456,7 +535,8 @@ function getInternalTransferSignedAmount(transaction: Transaction) {
 }
 
 function getInternalTransferTurnoverAmount(transaction: Transaction) {
-  return isInternalTransferTransaction(transaction)
+  return isInternalTransferTransaction(transaction) ||
+    isForexUnifiedTransaction(transaction)
     ? Math.abs(transaction.amount)
     : 0;
 }
@@ -467,13 +547,11 @@ function getSignedAmountText(amount: number) {
   return formatVND(0);
 }
 
-function getSignedAmountClass(amount: number) {
-  if (amount > 0) return "text-emerald-600";
-  if (amount < 0) return "text-rose-600";
-  return "text-indigo-600";
-}
-
 function getTransactionDisplayNote(transaction: Transaction) {
+  if (isForexUnifiedTransaction(transaction)) {
+    return transaction.note;
+  }
+
   const savingKind = getSavingTransferKind(transaction);
   const note = transaction.note.trim();
   const normalizedNote = normalizeTransactionNote(note);
@@ -509,6 +587,14 @@ function getTransferWalletLabel(
   sourceWalletName?: string,
   destinationWalletName?: string,
 ) {
+  if (isForexUnifiedTransaction(transaction)) {
+    return {
+      from: transaction.sourceLabel,
+      to: transaction.destinationLabel,
+      title: `${transaction.sourceLabel} → ${transaction.destinationLabel}`,
+    };
+  }
+
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") {
@@ -539,12 +625,16 @@ function getTransferWalletLabel(
 export default function TransactionsPage() {
   const { selectedMonth, selectedYear } = useDateFilter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
+  const [forexCashTransactions, setForexCashTransactions] = useState<
+    ForexCashTransaction[]
+  >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
 
   const [keyword, setKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | TransactionType>("all");
+  const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [walletFilter, setWalletFilter] = useState("");
@@ -570,7 +660,7 @@ export default function TransactionsPage() {
   const [toastState, setToastState] = useState<ToastPayload | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  function toast({ variant = "info", message }: ToastPayload) {
+  const toast = useCallback(({ variant = "info", message }: ToastPayload) => {
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
     }
@@ -586,20 +676,68 @@ export default function TransactionsPage() {
       return;
     }
     console.info(message);
-  }
+  }, []);
 
-  async function reloadData() {
-    const [txns, cats, wlts, bdgs] = await Promise.all([
+  const reloadData = useCallback(async () => {
+    const [
+      txnsResult,
+      forexAccountsResult,
+      forexTxnsResult,
+      catsResult,
+      walletsResult,
+      budgetsResult,
+    ] = await Promise.allSettled([
       getTransactions(),
+      getForexAccounts(),
+      getForexCashTransactions(),
       getCategories(),
       getWallets(),
       getBudgets(),
     ]);
+
+    const txns = txnsResult.status === "fulfilled" ? txnsResult.value : [];
+    const forexAcc =
+      forexAccountsResult.status === "fulfilled"
+        ? forexAccountsResult.value
+        : [];
+    const forexTxns =
+      forexTxnsResult.status === "fulfilled" ? forexTxnsResult.value : [];
+    const cats = catsResult.status === "fulfilled" ? catsResult.value : [];
+    const wlts =
+      walletsResult.status === "fulfilled" ? walletsResult.value : [];
+    const bdgs =
+      budgetsResult.status === "fulfilled" ? budgetsResult.value : [];
+
+    if (txnsResult.status === "rejected") {
+      console.error(
+        "[TransactionsPage] Failed to load transactions",
+        txnsResult.reason,
+      );
+    }
+    if (forexAccountsResult.status === "rejected") {
+      console.error(
+        "[TransactionsPage] Failed to load Forex accounts",
+        forexAccountsResult.reason,
+      );
+    }
+    if (forexTxnsResult.status === "rejected") {
+      console.error(
+        "[TransactionsPage] Failed to load Forex cash transactions",
+        forexTxnsResult.reason,
+      );
+      toast({
+        variant: "error",
+        message: "Không thể tải lịch sử Forex Cash. Vui lòng tải lại trang.",
+      });
+    }
+
     setTransactions(txns);
+    setForexAccounts(forexAcc);
+    setForexCashTransactions(forexTxns);
     setCategories(cats);
     setWallets(wlts);
     setBudgets(bdgs);
-  }
+  }, [toast]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -609,7 +747,7 @@ export default function TransactionsPage() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [reloadData]);
 
   useEffect(() => {
     return () => {
@@ -618,10 +756,33 @@ export default function TransactionsPage() {
       }
     };
   }, []);
-  useRealtimeTable(["transactions", "wallets", "categories"], reloadData);
+  useRealtimeTable(
+    [
+      "transactions",
+      "wallets",
+      "categories",
+      "forex_accounts",
+      "forex_cash_transactions",
+    ],
+    reloadData,
+  );
+
+  const unifiedTransactions = useMemo(() => {
+    const forexItems = forexCashTransactions.map((transaction) =>
+      mapForexCashTransactionToUnified(
+        transaction,
+        forexAccounts.find(
+          (account) => account.id === transaction.forexAccountId,
+        ),
+        wallets.find((wallet) => wallet.id === transaction.walletId),
+      ),
+    );
+
+    return [...transactions, ...forexItems];
+  }, [transactions, forexCashTransactions, forexAccounts, wallets]);
 
   const filtered = useMemo(() => {
-    return transactions.filter((t) => {
+    return unifiedTransactions.filter((t) => {
       if (!t.date.startsWith(selectedMonth)) return false;
       const cat = categories.find((c) => c.id === t.categoryId);
       const wal = wallets.find((w) => w.id === t.walletId);
@@ -634,12 +795,17 @@ export default function TransactionsPage() {
           ? "thu nhập income thu"
           : displayType === "expense"
             ? "chi tiêu expense chi"
-            : "chuyển khoản chuyển tiền nội bộ transfer";
+            : displayType === "forex"
+              ? "forex cash nạp rút tài khoản forex"
+              : "chuyển khoản chuyển tiền nội bộ transfer";
       const searchText = [
         t.note,
         cat?.name,
         wal?.name,
         dstWal?.name,
+        isForexUnifiedTransaction(t) ? t.forexAccountName : "",
+        isForexUnifiedTransaction(t) ? t.sourceLabel : "",
+        isForexUnifiedTransaction(t) ? t.destinationLabel : "",
         t.date,
         typeLabel,
         String(t.amount),
@@ -665,7 +831,7 @@ export default function TransactionsPage() {
       return true;
     });
   }, [
-    transactions,
+    unifiedTransactions,
     selectedMonth,
     categories,
     wallets,
@@ -728,7 +894,11 @@ export default function TransactionsPage() {
   const internalTransferTurnover = useMemo(
     () =>
       filtered
-        .filter((transaction) => isInternalTransferTransaction(transaction))
+        .filter(
+          (transaction) =>
+            isInternalTransferTransaction(transaction) ||
+            isForexUnifiedTransaction(transaction),
+        )
         .reduce(
           (sum, transaction) =>
             sum + getInternalTransferTurnoverAmount(transaction),
@@ -739,7 +909,11 @@ export default function TransactionsPage() {
   const internalTransferNet = useMemo(
     () =>
       filtered
-        .filter((transaction) => isInternalTransferTransaction(transaction))
+        .filter(
+          (transaction) =>
+            isInternalTransferTransaction(transaction) ||
+            isForexUnifiedTransaction(transaction),
+        )
         .reduce(
           (sum, transaction) =>
             sum + getInternalTransferSignedAmount(transaction),
@@ -749,8 +923,10 @@ export default function TransactionsPage() {
   );
   const transferCount = useMemo(
     () =>
-      filtered.filter((transaction) =>
-        isInternalTransferTransaction(transaction),
+      filtered.filter(
+        (transaction) =>
+          isInternalTransferTransaction(transaction) ||
+          isForexUnifiedTransaction(transaction),
       ).length,
     [filtered],
   );
@@ -908,6 +1084,26 @@ export default function TransactionsPage() {
       confirmText: "Xóa tất cả",
       onConfirm: async () => {
         for (const id of idsToDelete) {
+          const unifiedTransaction = unifiedTransactions.find(
+            (item) => item.id === id,
+          );
+          if (
+            unifiedTransaction &&
+            isForexUnifiedTransaction(unifiedTransaction)
+          ) {
+            const { error } = await deleteForexCashTransaction(
+              unifiedTransaction.sourceId,
+            );
+            if (error) {
+              toast({
+                variant: "error",
+                message: "Lỗi xóa giao dịch Forex: " + error,
+              });
+              return;
+            }
+            continue;
+          }
+
           const transaction = transactions.find((item) => item.id === id);
           if (transaction?.type === "transfer") {
             const balanceResult = await applyTransferWalletBalance(
@@ -950,14 +1146,22 @@ export default function TransactionsPage() {
           : "";
         return [
           t.date,
-          t.type === "income"
-            ? "Thu"
-            : t.type === "transfer"
-              ? "Chuyển"
-              : "Chi",
+          isForexUnifiedTransaction(t)
+            ? t.forexType === "deposit"
+              ? "Nạp Forex"
+              : "Rút Forex"
+            : t.type === "income"
+              ? "Thu"
+              : t.type === "transfer"
+                ? "Chuyển"
+                : "Chi",
           t.note,
           cat,
-          t.type === "transfer" && dstWal ? wal + " -> " + dstWal : wal,
+          isForexUnifiedTransaction(t)
+            ? `${t.sourceLabel} -> ${t.destinationLabel}`
+            : t.type === "transfer" && dstWal
+              ? wal + " -> " + dstWal
+              : wal,
           String(t.amount),
         ];
       }),
@@ -1025,6 +1229,14 @@ export default function TransactionsPage() {
   }
 
   function openEditForm(t: Transaction) {
+    if (isForexUnifiedTransaction(t)) {
+      toast({
+        variant: "info",
+        message: "Hãy chỉnh sửa giao dịch Forex tại trang Đầu tư.",
+      });
+      return;
+    }
+
     const formMode = getTransactionFormMode(t, categories);
 
     setForm({
@@ -1071,6 +1283,7 @@ export default function TransactionsPage() {
   }
 
   async function restoreWalletSnapshots(_walletSnapshots?: Wallet[]) {
+    void _walletSnapshots;
     // Finance Engine v2 owns all wallet balance rollback.
     // Kept as a no-op so older save/delete flows do not double-apply balances.
   }
@@ -1079,6 +1292,8 @@ export default function TransactionsPage() {
     _transaction: Transaction,
     _direction: 1 | -1,
   ) {
+    void _transaction;
+    void _direction;
     // Finance Engine v2 applies transfer effects inside add/update/deleteTransaction.
     // The UI should never mutate wallet balances before calling storage methods.
     return { error: null as string | null, previousWallets: [] as Wallet[] };
@@ -1088,6 +1303,8 @@ export default function TransactionsPage() {
     _oldTransaction: Transaction | undefined,
     _nextTransaction: Transaction,
   ) {
+    void _oldTransaction;
+    void _nextTransaction;
     // Finance Engine v2 reverses the old transaction and applies the new one.
     return { error: null as string | null, previousWallets: [] as Wallet[] };
   }
@@ -1240,6 +1457,28 @@ export default function TransactionsPage() {
         "Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa khỏi tài khoản của bạn.",
       variant: "danger",
       onConfirm: async () => {
+        const unifiedTransaction = unifiedTransactions.find(
+          (item) => item.id === id,
+        );
+        if (
+          unifiedTransaction &&
+          isForexUnifiedTransaction(unifiedTransaction)
+        ) {
+          const { error } = await deleteForexCashTransaction(
+            unifiedTransaction.sourceId,
+          );
+          if (error) {
+            toast({
+              variant: "error",
+              message: "Lỗi xóa giao dịch Forex: " + error,
+            });
+            return;
+          }
+          toast({ variant: "success", message: "Đã xóa giao dịch Forex." });
+          await reloadData();
+          return;
+        }
+
         const transaction = transactions.find((item) => item.id === id);
         let balanceResult:
           | { error: string | null; previousWallets: Wallet[] }
@@ -1432,9 +1671,12 @@ export default function TransactionsPage() {
                 Giao dịch
               </h1>
               <p className="mt-0.5 text-sm text-slate-500">
-                {sorted.length !== transactions.length
-                  ? sorted.length + " / " + transactions.length + " giao dịch"
-                  : transactions.length + " giao dịch"}
+                {sorted.length !== unifiedTransactions.length
+                  ? sorted.length +
+                    " / " +
+                    unifiedTransactions.length +
+                    " giao dịch"
+                  : unifiedTransactions.length + " giao dịch"}
               </p>
             </div>
             <button
@@ -1568,30 +1810,36 @@ export default function TransactionsPage() {
 
             {/* Type filter pills — color-coded */}
             <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
-              {(["all", "income", "expense", "transfer"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTypeFilter(t)}
-                  className={
-                    "rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all duration-150 " +
-                    (typeFilter === t
-                      ? t === "income"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : t === "expense"
-                          ? "bg-rose-500 text-white shadow-sm"
-                          : "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-800")
-                  }
-                >
-                  {t === "all"
-                    ? "Tất cả"
-                    : t === "income"
-                      ? "Thu"
-                      : t === "transfer"
-                        ? "Chuyển"
-                        : "Chi"}
-                </button>
-              ))}
+              {(["all", "income", "expense", "transfer", "forex"] as const).map(
+                (t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(t)}
+                    className={
+                      "rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all duration-150 " +
+                      (typeFilter === t
+                        ? t === "income"
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : t === "expense"
+                            ? "bg-rose-500 text-white shadow-sm"
+                            : t === "forex"
+                              ? "bg-cyan-600 text-white shadow-sm"
+                              : "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-500 hover:text-slate-800")
+                    }
+                  >
+                    {t === "all"
+                      ? "Tất cả"
+                      : t === "income"
+                        ? "Thu"
+                        : t === "transfer"
+                          ? "Chuyển"
+                          : t === "forex"
+                            ? "Forex"
+                            : "Chi"}
+                  </button>
+                ),
+              )}
             </div>
 
             {/* Right controls */}
@@ -1664,7 +1912,9 @@ export default function TransactionsPage() {
                       ? "Thu nhập"
                       : typeFilter === "transfer"
                         ? "Chuyển tiền"
-                        : "Chi tiêu"
+                        : typeFilter === "forex"
+                          ? "Forex Cash"
+                          : "Chi tiêu"
                   }
                   onRemove={() => setTypeFilter("all")}
                   color={
@@ -1672,7 +1922,9 @@ export default function TransactionsPage() {
                       ? "emerald"
                       : typeFilter === "transfer"
                         ? "slate"
-                        : "rose"
+                        : typeFilter === "forex"
+                          ? "blue"
+                          : "rose"
                   }
                 />
               )}
@@ -2110,8 +2362,10 @@ export default function TransactionsPage() {
                   )
                   .reduce((sum, transaction) => sum + transaction.amount, 0);
                 const dayTransferTurnover = txns
-                  .filter((transaction) =>
-                    isInternalTransferTransaction(transaction),
+                  .filter(
+                    (transaction) =>
+                      isInternalTransferTransaction(transaction) ||
+                      isForexUnifiedTransaction(transaction),
                   )
                   .reduce(
                     (sum, transaction) =>
@@ -2120,7 +2374,7 @@ export default function TransactionsPage() {
                   );
                 return (
                   <div key={date}>
-                    <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
+                    <div className="sticky top-0 z-1 flex items-center justify-between border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-black text-slate-800">
                           {formatTransactionDayLabel(date)}
@@ -2167,7 +2421,9 @@ export default function TransactionsPage() {
                         const isSwiped = swipedId === t.id;
                         const displayType = getTransactionDisplayType(t);
                         const isIncome = displayType === "income";
-                        const isTransfer = displayType === "transfer";
+                        const isForex = displayType === "forex";
+                        const isTransfer =
+                          displayType === "transfer" || isForex;
                         const categoryLabel = getCompactCategoryName(cat);
 
                         return (
@@ -2241,9 +2497,11 @@ export default function TransactionsPage() {
                                     "flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-sm " +
                                     (isIncome
                                       ? "bg-emerald-100 text-emerald-600"
-                                      : isTransfer
-                                        ? "bg-indigo-100 text-indigo-600"
-                                        : "bg-rose-100 text-rose-600")
+                                      : isForex
+                                        ? "bg-cyan-100 text-cyan-700"
+                                        : isTransfer
+                                          ? "bg-indigo-100 text-indigo-600"
+                                          : "bg-rose-100 text-rose-600")
                                   }
                                 >
                                   {isIncome ? (
@@ -2261,7 +2519,7 @@ export default function TransactionsPage() {
                                   )}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="max-w-[260px] truncate text-sm font-black text-slate-900">
+                                  <p className="max-w-65 truncate text-sm font-black text-slate-900">
                                     {getTransactionDisplayNote(t)}
                                   </p>
                                   <p className="mt-0.5 truncate text-xs font-medium text-slate-400 lg:hidden">
@@ -2284,14 +2542,14 @@ export default function TransactionsPage() {
                               <div className="hidden lg:block">
                                 {isTransfer ? (
                                   <span className="inline-flex max-w-full items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
-                                    Chuyển tiền
+                                    {isForex ? "Forex Cash" : "Chuyển tiền"}
                                   </span>
                                 ) : (
                                   <span
                                     className="inline-flex max-w-full items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700"
                                     title={cat?.name ?? ""}
                                   >
-                                    <span className="max-w-[86px] truncate">
+                                    <span className="max-w-21.5 truncate">
                                       {categoryLabel.primary}
                                     </span>
                                     {categoryLabel.extraCount > 0 && (
@@ -2316,7 +2574,7 @@ export default function TransactionsPage() {
                                       ).title
                                     }
                                   >
-                                    <span className="max-w-[64px] truncate">
+                                    <span className="max-w-16 truncate">
                                       {
                                         getTransferWalletLabel(
                                           t,
@@ -2328,7 +2586,7 @@ export default function TransactionsPage() {
                                     <span className="px-1 text-slate-300">
                                       →
                                     </span>
-                                    <span className="max-w-[64px] truncate">
+                                    <span className="max-w-16 truncate">
                                       {
                                         getTransferWalletLabel(
                                           t,
@@ -2343,7 +2601,7 @@ export default function TransactionsPage() {
                                     className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600"
                                     title={wal?.name ?? ""}
                                   >
-                                    <span className="max-w-[128px] truncate">
+                                    <span className="max-w-32 truncate">
                                       {wal?.name ?? "—"}
                                     </span>
                                   </span>
@@ -2484,7 +2742,9 @@ export default function TransactionsPage() {
                       : undefined;
                     const displayType = getTransactionDisplayType(t);
                     const isIncome = displayType === "income";
-                    const isTransferRow = displayType === "transfer";
+                    const isForexRow = displayType === "forex";
+                    const isTransferRow =
+                      displayType === "transfer" || isForexRow;
                     return (
                       <div
                         key={t.id}
@@ -2495,9 +2755,11 @@ export default function TransactionsPage() {
                             "flex size-10 shrink-0 items-center justify-center rounded-2xl " +
                             (isIncome
                               ? "bg-emerald-100 text-emerald-600"
-                              : isTransferRow
-                                ? "bg-blue-100 text-blue-600"
-                                : "bg-rose-100 text-rose-600")
+                              : isForexRow
+                                ? "bg-cyan-100 text-cyan-700"
+                                : isTransferRow
+                                  ? "bg-blue-100 text-blue-600"
+                                  : "bg-rose-100 text-rose-600")
                           }
                         >
                           {isIncome ? (
@@ -2630,7 +2892,7 @@ export default function TransactionsPage() {
                         type="button"
                         onClick={() => handleTypeChange(item.mode)}
                         className={
-                          "flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 text-center text-xs font-black transition-all active:scale-[.98] " +
+                          "flex min-h-17 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 text-center text-xs font-black transition-all active:scale-[.98] " +
                           (active
                             ? item.active + " text-white shadow-lg"
                             : "text-slate-500 hover:bg-white hover:text-slate-800")
@@ -2950,10 +3212,11 @@ function FilterChip({
 }: {
   label: string;
   onRemove: () => void;
-  color?: "slate" | "emerald" | "rose";
+  color?: "slate" | "blue" | "emerald" | "rose";
 }) {
   const styles = {
     slate: "border-slate-200 bg-slate-100 text-slate-700",
+    blue: "border-blue-200 bg-blue-50 text-blue-700",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
     rose: "border-rose-200 bg-rose-50 text-rose-700",
   };

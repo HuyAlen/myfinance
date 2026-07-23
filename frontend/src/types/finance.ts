@@ -130,3 +130,69 @@ export type Investment = {
   averageCost?: number;
   currentPrice?: number;
 };
+
+export type ForexAccountStatus = "active" | "inactive" | "archived";
+
+export type ForexCashTransactionType = "deposit" | "withdrawal";
+
+export type ForexAccount = {
+  id: string;
+  name: string;
+  broker: string;
+  accountNumber?: string;
+  currency: string;
+  status: ForexAccountStatus;
+  openedAt?: string;
+  notes?: string;
+};
+
+export type ForexCashTransaction = {
+  id: string;
+  forexAccountId: string;
+  walletId: string;
+  type: ForexCashTransactionType;
+  /** VND amount moved between the wallet and Forex cash account. */
+  amount: number;
+  /** Always VND in INV-4.2. */
+  currency: "VND";
+  /** Fee charged in VND. */
+  fee?: number;
+  transactionDate: string;
+  /** Local transaction time in HH:mm format. */
+  transactionTime: string;
+  /** Combined timestamp returned by the read model when available. */
+  transactedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  notes?: string;
+};
+
+export type UnifiedTransactionSource = "transaction" | "forex_cash";
+
+export type UnifiedTransactionKind =
+  | "income"
+  | "expense"
+  | "transfer"
+  | "forex_deposit"
+  | "forex_withdrawal";
+
+export type UnifiedTransaction = {
+  id: string;
+  source: UnifiedTransactionSource;
+  sourceId: string;
+  kind: UnifiedTransactionKind;
+  amount: number;
+  fee: number;
+  date: string;
+  note: string;
+  walletId?: string;
+  walletName?: string;
+  destinationWalletId?: string;
+  destinationWalletName?: string;
+  forexAccountId?: string;
+  forexAccountName?: string;
+  categoryId?: string;
+  categoryName?: string;
+  editable: boolean;
+  deletable: boolean;
+};

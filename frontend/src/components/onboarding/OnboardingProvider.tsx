@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -167,20 +166,24 @@ function load(): OnboardingState {
 }
 
 function persist(s: OnboardingState) {
+  if (typeof window === "undefined") return;
+
   try {
-    const { pendingAchievement: _, ...toSave } = s;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    const toSave = {
+      wizardDone: s.wizardDone,
+      tourDone: s.tourDone,
+      checklist: s.checklist,
+      earnedAchievements: s.earnedAchievements,
+    };
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch {
     /* noop */
   }
 }
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<OnboardingState>(defaultState);
-
-  useEffect(() => {
-    setState(load());
-  }, []);
+  const [state, setState] = useState<OnboardingState>(() => load());
 
   const update = useCallback(
     (updater: (s: OnboardingState) => OnboardingState) => {

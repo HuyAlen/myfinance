@@ -11,6 +11,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  ForexCashTransaction,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
@@ -70,6 +71,7 @@ export function computeHealthScoreV2(
   budgets: Budget[],
   categories: Category[],
   lookbackMonths = 3,
+  forexCashTransactions: ForexCashTransaction[] = [],
 ): HealthScoreV2 {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
@@ -82,9 +84,14 @@ export function computeHealthScoreV2(
   const avgExpense = mean(monthlyExpense);
   const avgSaving = avgIncome - avgExpense;
 
-  const totalAssets = wallets.reduce((s, w) => s + w.balance, 0);
+  const walletAssets = wallets.reduce((s, w) => s + w.balance, 0);
+  const forexCashBalance = forexCashTransactions.reduce((sum, transaction) => {
+    const amount = Math.max(0, Number(transaction.amount) || 0);
+    return sum + (transaction.type === "deposit" ? amount : -amount);
+  }, 0);
   const totalDebt = debts.reduce((s, d) => s + d.remainingAmount, 0);
   const investmentValue = investments.reduce((s, i) => s + i.currentValue, 0);
+  const totalAssets = walletAssets + investmentValue + forexCashBalance;
   const liquidCash = wallets
     .filter((w) => w.type === "cash" || w.type === "bank")
     .reduce((s, w) => s + w.balance, 0);

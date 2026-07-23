@@ -454,7 +454,6 @@ const getTransactionIcon = (type: SavingTransactionType) => {
   }
 };
 
-
 const getSignedTransactionAmount = (transaction: SavingTransaction) => {
   if (transaction.type === "withdraw" || transaction.type === "settlement") {
     return -transaction.amount;
@@ -507,13 +506,10 @@ export default function SavingsPage({
   const [selectedSavingIds, setSelectedSavingIds] = useState<string[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingSavingId, setEditingSavingId] = useState<string | null>(null);
-  const [, setDeleteTarget] = useState<SavingWithWallet | null>(
-    null,
-  );
+  const [, setDeleteTarget] = useState<SavingWithWallet | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [form, setForm] = useState<SavingFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState("");
-  const [, setSelectedSavingId] = useState<string | null>(null);
   const [transactionsBySavingId, setTransactionsBySavingId] = useState<
     Record<string, SavingTransaction[]>
   >({});
@@ -619,7 +615,6 @@ export default function SavingsPage({
     );
   }, [selectedSaving, transactionsBySavingId]);
 
-
   const transactionAmountPreview = parseCurrencyValue(transactionForm.amount);
   const transactionWalletBalanceAfter = selectedWallet
     ? transactionForm.type === "deposit"
@@ -629,7 +624,6 @@ export default function SavingsPage({
           ? (selectedSaving?.balance ?? 0)
           : transactionAmountPreview)
     : null;
-
 
   const formConfig = getSavingFormConfig(form.type);
   const previewPrincipal = parseCurrencyValue(form.balance);
@@ -1296,7 +1290,6 @@ export default function SavingsPage({
     });
   };
 
-
   useEffect(() => {
     if (!isEditing || !transactionForm.walletId) return;
 
@@ -1315,7 +1308,6 @@ export default function SavingsPage({
       isMounted = false;
     };
   }, [isEditing, transactionForm.walletId]);
-
 
   const updateTransactionForm = <Key extends keyof TransactionFormState>(
     key: Key,
@@ -1782,7 +1774,7 @@ export default function SavingsPage({
                     className="flex flex-1 flex-col items-center gap-2"
                   >
                     <div
-                      className="w-full rounded-t-2xl bg-gradient-to-t from-emerald-500 to-teal-300"
+                      className="w-full rounded-t-2xl bg-linear-to-t from-emerald-500 to-teal-300"
                       style={{
                         height: `${Math.max(
                           10,
@@ -2026,7 +2018,7 @@ export default function SavingsPage({
                           </div>
                           <div className="h-2 rounded-full bg-slate-100">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-400"
+                              className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-400"
                               style={{ width: `${getSavingProgress(item)}%` }}
                             />
                           </div>
@@ -2097,7 +2089,7 @@ export default function SavingsPage({
 
           <form
             onSubmit={handleSubmitSaving}
-            className="relative z-10 my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-[880px] flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-slate-950/20"
+            className="relative z-10 my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-220 flex-col overflow-hidden rounded-4xl bg-white shadow-2xl shadow-slate-950/20"
           >
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white p-6 lg:p-8">
               <div className="flex items-start gap-4">

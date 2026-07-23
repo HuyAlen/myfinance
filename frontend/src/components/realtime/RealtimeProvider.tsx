@@ -22,7 +22,9 @@ type RealtimeTable =
   | "budgets"
   | "goals"
   | "debts"
-  | "investments";
+  | "investments"
+  | "forex_accounts"
+  | "forex_cash_transactions";
 
 type ReloadCallback = () => void | Promise<void>;
 
@@ -76,11 +78,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!user?.id) {
-      setStatus("INITIAL");
-      setLastSync(null);
-      return;
-    }
+    if (!user?.id) return;
 
     const tables: RealtimeTable[] = [
       "wallets",
@@ -90,9 +88,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       "goals",
       "debts",
       "investments",
+      "forex_accounts",
+      "forex_cash_transactions",
     ];
 
-    const channel = supabase.channel("myfinance-global");
+    const channel = supabase.channel(`myfinance-global-${user.id}`);
 
     for (const table of tables) {
       channel.on(
@@ -105,7 +105,6 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         },
         () => {
           setLastSync(new Date());
-          // Fire all callbacks registered for this table
           listenersRef.current.get(table)?.forEach((cb) => {
             void cb();
           });
@@ -122,8 +121,17 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id]);
 
+  const effectiveStatus = user?.id ? status : "INITIAL";
+  const effectiveLastSync = user?.id ? lastSync : null;
+
   return (
-    <RealtimeContext.Provider value={{ status, lastSync, _register: register }}>
+    <RealtimeContext.Provider
+      value={{
+        status: effectiveStatus,
+        lastSync: effectiveLastSync,
+        _register: register,
+      }}
+    >
       {children}
     </RealtimeContext.Provider>
   );
@@ -140,14 +148,11 @@ export function useRealtime() {
 /**
  * Register a reload callback that fires whenever any of the given tables
  * receive a Supabase Realtime event.
- *
- * @example
- * useRealtimeTable(["transactions", "wallets"], reloadData);
  */
 export function useRealtimeTable(tables: RealtimeTable[], cb: ReloadCallback) {
   const { _register } = useContext(RealtimeContext);
-  // Stable ref so the effect doesn't re-run when the inline function re-creates
   const cbRef = useRef(cb);
+
   useEffect(() => {
     cbRef.current = cb;
   });

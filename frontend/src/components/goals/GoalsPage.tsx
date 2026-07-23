@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/src/lib/supabase";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -20,17 +20,11 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 
-import type {
-  Category,
-  Goal,
-  SavingAccount,
-  Transaction,
-} from "@/src/types/finance";
+import type { Goal, SavingAccount, Transaction } from "@/src/types/finance";
 
 import {
   addGoal,
   deleteGoal,
-  getCategories,
   getGoals,
   getTransactions,
   updateGoal,
@@ -130,13 +124,6 @@ type SavingRow = {
   notes: string | null;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const goalsSupabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
-
 const mapSavingRowToSavingAccount = (row: SavingRow): SavingAccount => ({
   id: row.id,
   name: row.name,
@@ -198,7 +185,6 @@ const getSupabaseSavingAmountForGoal = (
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [savings, setSavings] = useState<SavingAccount[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -210,21 +196,16 @@ export default function GoalsPage() {
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   async function reloadData() {
-    const [nextGoals, nextCategories, nextTransactions, savingRows] =
-      await Promise.all([
-        getGoals(),
-        getCategories(),
-        getTransactions(),
-        goalsSupabase
-          ? goalsSupabase
-              .from("savings")
-              .select("id,name,type,balance,interest_rate,maturity_date,notes")
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+    const [nextGoals, nextTransactions, savingRows] = await Promise.all([
+      getGoals(),
+      getTransactions(),
+      supabase
+        .from("savings")
+        .select("id,name,type,balance,interest_rate,maturity_date,notes")
+        .order("created_at", { ascending: false }),
+    ]);
 
     setGoals(nextGoals);
-    setCategories(nextCategories);
     setTransactions(nextTransactions);
 
     if (!savingRows.error) {
@@ -243,7 +224,7 @@ export default function GoalsPage() {
 
     return () => window.clearTimeout(timer);
   }, []);
-  useRealtimeTable(["goals", "transactions", "categories"], reloadData);
+  useRealtimeTable(["goals", "transactions"], reloadData);
 
   // ── NEW: per-goal analytics ───────────────────────────────────────────────
   const goalMeta = useMemo(
@@ -483,8 +464,8 @@ export default function GoalsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
@@ -564,7 +545,7 @@ export default function GoalsPage() {
             {/* Achievement score */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
                 achievementGrade.gradient
               }
             >
@@ -595,9 +576,9 @@ export default function GoalsPage() {
       {goals.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
           {/* LEFT: Overall progress + tier bars */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                 <Target size={17} />
               </div>
               <div>
@@ -706,7 +687,7 @@ export default function GoalsPage() {
           {/* RIGHT: Pie + per-goal contribution */}
           <div className="flex flex-col gap-5">
             {/* Pie */}
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-base font-black text-slate-900">
                 Phân bổ trạng thái
               </h2>
@@ -769,7 +750,7 @@ export default function GoalsPage() {
               </p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                  className="h-2 rounded-full bg-linear-to-r from-emerald-500 to-blue-500"
                   style={{ width: Math.min(summary.percent, 100) + "%" }}
                 />
               </div>
@@ -845,9 +826,9 @@ export default function GoalsPage() {
           SECTION 4 · Goal Timeline (nearest to completion first)
           ══════════════════════════════════════════════════════════════════ */}
       {goalMeta.length > 0 && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
               <Zap size={17} />
             </div>
             <div>
@@ -953,7 +934,7 @@ export default function GoalsPage() {
               <div
                 key={g.id}
                 className={
-                  "group rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
                   s.border
                 }
               >
@@ -962,7 +943,7 @@ export default function GoalsPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={
-                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm " +
+                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
                         s.iconGrad
                       }
                     >
@@ -1157,7 +1138,7 @@ export default function GoalsPage() {
 
           {/* Empty state */}
           {goals.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Target size={24} className="text-blue-400" />
               </div>
@@ -1183,8 +1164,8 @@ export default function GoalsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(var(--app-height,100dvh)-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(var(--app-height,100dvh)-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Header */}
             <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
               <div>
@@ -1291,7 +1272,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
