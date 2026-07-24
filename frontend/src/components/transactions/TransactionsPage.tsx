@@ -1427,7 +1427,7 @@ export default function TransactionsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-5 md:pb-0">
+    <div className="space-y-3 overflow-x-hidden pb-28 md:space-y-5 md:pb-0">
       {toastState && (
         <div
           className={[
@@ -1462,7 +1462,7 @@ export default function TransactionsPage() {
         </div>
       )}
       {/* SECTION 1 · Transaction Summary */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
@@ -1518,9 +1518,9 @@ export default function TransactionsPage() {
           SECTION 2 · Smart Filter Command Bar (sticky)
           ════════════════════════════════════════════════════════════════════ */}
       <div className="sticky top-0 z-20">
-        <div className="rounded-4xl border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md">
+        <div className="rounded-3xl border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md sm:rounded-4xl">
           {/* Main bar */}
-          <div className="flex flex-wrap items-center gap-2 px-5 py-3.5">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-5 sm:py-3.5">
             {/* Search */}
             <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 transition-all focus-within:border-blue-400 focus-within:bg-white focus-within:shadow-sm">
               <Search size={14} className="shrink-0 text-slate-400" />
@@ -1546,14 +1546,14 @@ export default function TransactionsPage() {
             </div>
 
             {/* Type filter pills — color-coded */}
-            <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {(["all", "income", "expense", "transfer", "forex"] as const).map(
                 (t) => (
                   <button
                     key={t}
                     onClick={() => setTypeFilter(t)}
                     className={
-                      "rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all duration-150 " +
+                      "shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-all duration-150 " +
                       (typeFilter === t
                         ? t === "income"
                           ? "bg-emerald-500 text-white shadow-sm"
@@ -1848,7 +1848,7 @@ export default function TransactionsPage() {
           ════════════════════════════════════════════════════════════════════ */}
       <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         {/* Feed header */}
-        <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/40 px-6 py-3.5">
+        <div className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
           <div className="flex items-center gap-2">
             <p className="text-sm font-black text-blue-700">
               {sorted.length} giao dịch
@@ -1859,7 +1859,7 @@ export default function TransactionsPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-slate-400">
+          <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 text-xs text-slate-400 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <span>Sắp xếp:</span>
             {(["date", "amount", "category", "wallet"] as SortKey[]).map(
               (k) => (
@@ -2026,7 +2026,7 @@ export default function TransactionsPage() {
 
                             <div
                               className={
-                                "grid gap-3 border-l-4 px-4 py-4 transition-all duration-200 hover:bg-blue-50/40 sm:px-6 lg:grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] lg:items-center " +
+                                "grid gap-2 border-l-4 px-3 py-3 transition-all duration-200 hover:bg-blue-50/40 sm:px-6 sm:py-4 lg:grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] lg:items-center " +
                                 getTransactionAccentClass(t) +
                                 " " +
                                 (isSelected ? "bg-blue-50" : "bg-white") +
@@ -2061,7 +2061,7 @@ export default function TransactionsPage() {
                               <div className="flex min-w-0 items-center gap-3.5">
                                 <div
                                   className={
-                                    "flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-sm " +
+                                    "flex size-10 shrink-0 items-center justify-center rounded-2xl shadow-sm sm:size-11 " +
                                     (isIncome
                                       ? "bg-emerald-100 text-emerald-600"
                                       : isForex
@@ -2086,10 +2086,10 @@ export default function TransactionsPage() {
                                   )}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="max-w-65 truncate text-sm font-black text-slate-900">
+                                  <p className="max-w-[11.5rem] truncate text-[15px] font-black leading-5 text-slate-900 sm:max-w-65 sm:text-sm">
                                     {getTransactionDisplayNote(t)}
                                   </p>
-                                  <p className="mt-0.5 truncate text-xs font-medium text-slate-400 lg:hidden">
+                                  <p className="mt-0.5 max-w-[13rem] truncate text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs lg:hidden">
                                     {isTransfer
                                       ? getTransferWalletLabel(
                                           t,
@@ -2211,27 +2211,29 @@ export default function TransactionsPage() {
                                 </button>
                               </div>
 
-                              {/* Mobile: amount + actions row */}
-                              <div className="flex items-center justify-between lg:hidden">
+                              {/* Mobile: compact amount + actions */}
+                              <div className="flex items-center justify-between gap-3 pl-13 lg:hidden">
                                 <span
                                   className={
-                                    "text-base font-black " +
+                                    "truncate text-[17px] font-black leading-none " +
                                     getTransactionAmountColorClass(t)
                                   }
                                 >
                                   {getTransactionAmountPrefix(t)}
                                   {formatVND(t.amount)}
                                 </span>
-                                <div className="flex gap-1.5">
+                                <div className="flex shrink-0 gap-1">
                                   <button
                                     onClick={() => openEditForm(t)}
-                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
+                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400"
+                                    aria-label="Sửa giao dịch"
                                   >
                                     <Edit3 size={13} />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(t.id)}
-                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
+                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400"
+                                    aria-label="Xóa giao dịch"
                                   >
                                     <Trash2 size={13} />
                                   </button>
@@ -2387,15 +2389,15 @@ export default function TransactionsPage() {
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
         <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[min(92dvh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+          <div className="flex h-[min(88dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
+            <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-4 sm:px-6 sm:py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-[1.35rem] font-black tracking-tight text-slate-900 sm:text-xl">
+                  <h2 className="text-[1.25rem] font-black tracking-tight text-slate-900 sm:text-xl">
                     {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
                   </h2>
-                  <p className="mt-0.5 text-[12px] font-medium leading-4 text-slate-400 sm:text-xs">
+                  <p className="mt-0.5 max-w-[16rem] text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
                     Ghi nhận khoản thu, chi hoặc chuyển tiền giữa các ví.
                   </p>
                 </div>
@@ -2412,10 +2414,10 @@ export default function TransactionsPage() {
             <form
               id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-5 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5"
+              className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-4 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5"
             >
               {/* Type selector — premium segmented control */}
-              <div className="mb-3">
+              <div className="mb-2.5">
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
@@ -2447,7 +2449,7 @@ export default function TransactionsPage() {
                         type="button"
                         onClick={() => handleTypeChange(item.mode)}
                         className={
-                          "flex min-h-13 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[12px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
+                          "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[12px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
                           (active
                             ? item.active + " text-white shadow-lg"
                             : "text-slate-500 hover:bg-white hover:text-slate-800")
@@ -2464,7 +2466,7 @@ export default function TransactionsPage() {
               </div>
 
               {/* Amount — hero input */}
-              <div className="mb-4">
+              <div className="mb-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="text-sm font-black text-slate-700">Số tiền</p>
                   {modalAmount > 0 && (
@@ -2495,7 +2497,7 @@ export default function TransactionsPage() {
                       }))
                     }
                     placeholder="Nhập số tiền"
-                    className="w-full rounded-2xl bg-transparent py-3.5 pl-11 pr-4 text-[1.7rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-base placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 sm:py-4 sm:text-2xl"
+                    className="w-full rounded-2xl bg-transparent py-3 pl-11 pr-4 text-[1.45rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-[15px] placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 sm:py-4 sm:text-2xl"
                   />
                 </div>
 
@@ -2507,7 +2509,7 @@ export default function TransactionsPage() {
                       onClick={() =>
                         setForm((p) => ({ ...p, amount: String(value) }))
                       }
-                      className="min-h-9 shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-[12px] font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
+                      className="min-h-8 shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
                     >
                       {value >= 1000000
                         ? value / 1000000 + "tr"
@@ -2517,7 +2519,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-2.5 md:grid-cols-2">
                 <FormInput
                   label="Ngày"
                   type="date"
@@ -2664,8 +2666,8 @@ export default function TransactionsPage() {
               )}
 
               {/* Recurring toggle */}
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <div className="flex min-h-14 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5">
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="flex min-h-12 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2">
                   <div>
                     <p className="text-sm font-black text-slate-700">Định kỳ</p>
                     <p className="text-xs font-medium text-slate-400">
@@ -2717,12 +2719,12 @@ export default function TransactionsPage() {
               />
             </form>
 
-            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
+            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="min-h-12 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
                 >
                   Hủy
                 </button>
@@ -2893,7 +2895,7 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm sm:text-sm"
+        className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-base outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
       />
     </label>
   );
@@ -2918,7 +2920,7 @@ function FormSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition-all focus:border-blue-400 focus:bg-white sm:text-sm"
+        className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-base outline-none transition-all focus:border-blue-400 focus:bg-white sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
       >
         <option value="">Chọn</option>
         {options.map((o) => (
