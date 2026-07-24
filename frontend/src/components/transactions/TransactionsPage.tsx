@@ -4,11 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import {
-  AlertTriangle,
   ArrowDownRight,
   ArrowLeftRight,
   ArrowUpRight,
-  Bot,
   ChevronDown,
   ChevronUp,
   Download,
@@ -16,28 +14,13 @@ import {
   LayoutList,
   List,
   Plus,
-  RefreshCw,
   Search,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
-  TrendingDown,
-  TrendingUp,
   X,
-  Zap,
 } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-} from "recharts";
 
 import type {
-  Budget,
   Category,
   ForexAccount,
   ForexCashTransaction,
@@ -50,7 +33,6 @@ import {
   addTransaction,
   deleteTransaction,
   deleteForexCashTransaction,
-  getBudgets,
   getCategories,
   getForexAccounts,
   getForexCashTransactions,
@@ -63,9 +45,6 @@ import {
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
-import { detectSpendingAnomalies } from "@/src/services/finance/analytics/spendingAnalytics";
-import { computeMonthlyForecast } from "@/src/services/finance/analytics/forecastAnalytics";
-import { computeSmartBudget } from "@/src/services/finance/analytics/smartBudget";
 import {
   CurrencyInput,
   formatCurrencyInput,
@@ -87,12 +66,7 @@ type ToastPayload = {
   message: string;
 };
 
-type TransactionFormMode =
-  | "income"
-  | "expense"
-  | "saving"
-  | "investment"
-  | "transfer";
+type TransactionFormMode = "income" | "expense" | "transfer";
 
 type FormState = {
   id?: string;
@@ -284,36 +258,17 @@ function getCategoryPlanningGroup(category?: Category) {
 
 function getTransactionFormMode(
   transaction: Transaction,
-  categories: Category[],
+  _categories: Category[],
 ): TransactionFormMode {
-  // Finance Engine v2 rule:
-  // Asset movements (wallet transfer, saving deposit/withdraw/close, investment movement)
-  // must open and save as internal transfer so they never affect Income/Expense.
   if (isInternalTransferTransaction(transaction)) return "transfer";
-
-  if (transaction.type === "income") return "income";
-
-  const category = categories.find(
-    (item) => item.id === transaction.categoryId,
-  );
-  const group = getCategoryPlanningGroup(category);
-
-  if (group === "saving") return "saving";
-  if (group === "investment") return "investment";
-  return "expense";
+  return transaction.type === "income" ? "income" : "expense";
 }
 
 function getTransactionTypeFromFormMode(
   mode: TransactionFormMode,
 ): TransactionType {
   if (mode === "income") return "income";
-
-  // Saving / investment are asset movements, not expense.
-  // Store them as transfer to keep reports and dashboard cashflow correct.
-  if (mode === "transfer" || mode === "saving" || mode === "investment") {
-    return "transfer";
-  }
-
+  if (mode === "transfer") return "transfer";
   return "expense";
 }
 
@@ -623,7 +578,7 @@ function getTransferWalletLabel(
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
-  const { selectedMonth, selectedYear } = useDateFilter();
+  const { selectedMonth } = useDateFilter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
   const [forexCashTransactions, setForexCashTransactions] = useState<
@@ -631,7 +586,6 @@ export default function TransactionsPage() {
   >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
 
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>("all");
@@ -685,14 +639,12 @@ export default function TransactionsPage() {
       forexTxnsResult,
       catsResult,
       walletsResult,
-      budgetsResult,
     ] = await Promise.allSettled([
       getTransactions(),
       getForexAccounts(),
       getForexCashTransactions(),
       getCategories(),
       getWallets(),
-      getBudgets(),
     ]);
 
     const txns = txnsResult.status === "fulfilled" ? txnsResult.value : [];
@@ -705,8 +657,6 @@ export default function TransactionsPage() {
     const cats = catsResult.status === "fulfilled" ? catsResult.value : [];
     const wlts =
       walletsResult.status === "fulfilled" ? walletsResult.value : [];
-    const bdgs =
-      budgetsResult.status === "fulfilled" ? budgetsResult.value : [];
 
     if (txnsResult.status === "rejected") {
       console.error(
@@ -736,7 +686,6 @@ export default function TransactionsPage() {
     setForexCashTransactions(forexTxns);
     setCategories(cats);
     setWallets(wlts);
-    setBudgets(bdgs);
   }, [toast]);
 
   useEffect(() => {
@@ -931,100 +880,6 @@ export default function TransactionsPage() {
     [filtered],
   );
 
-  const currentYear = String(selectedYear);
-  const yearTxns = useMemo(
-    () => transactions.filter((t) => t.date.startsWith(currentYear)),
-    [transactions, currentYear],
-  );
-  const monthlyTrend = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const m = String(i + 1).padStart(2, "0");
-        const mx = yearTxns.filter((t) =>
-          t.date.startsWith(currentYear + "-" + m),
-        );
-        const cashFlowMx = mx.filter(
-          (transaction) => !isInternalTransferTransaction(transaction),
-        );
-        const inc = getTotalIncome(cashFlowMx);
-        const exp = getTotalExpense(cashFlowMx, categories);
-        return {
-          month: "T" + (i + 1),
-          thu: inc / 1e6,
-          chi: exp / 1e6,
-          net: (inc - exp) / 1e6,
-        };
-      }),
-    [yearTxns, currentYear, categories],
-  );
-
-  const monthlyTrendDisplay = useMemo(() => {
-    let lastActiveIndex = -1;
-
-    for (let i = monthlyTrend.length - 1; i >= 0; i -= 1) {
-      const m = monthlyTrend[i];
-      if (m.thu !== 0 || m.chi !== 0 || m.net !== 0) {
-        lastActiveIndex = i;
-        break;
-      }
-    }
-
-    if (lastActiveIndex < 0) return monthlyTrend.slice(0, 6);
-
-    return monthlyTrend.slice(0, lastActiveIndex + 1);
-  }, [monthlyTrend]);
-
-  const monthlyTrendLabel = useMemo(() => {
-    const lastPoint = monthlyTrendDisplay.at(-1);
-    const hasData = monthlyTrendDisplay.some(
-      (m) => m.thu !== 0 || m.chi !== 0 || m.net !== 0,
-    );
-
-    if (!hasData || !lastPoint) return "Chưa có dữ liệu trong " + currentYear;
-
-    return "Dữ liệu đến " + lastPoint.month + " " + currentYear;
-  }, [monthlyTrendDisplay, currentYear]);
-
-  const anomalies = useMemo(
-    () => detectSpendingAnomalies(transactions, categories, 6),
-    [transactions, categories],
-  );
-  const smartBudget = useMemo(
-    () => computeSmartBudget(transactions, categories, budgets, 3),
-    [transactions, categories, budgets],
-  );
-  const forecast = useMemo(
-    () => computeMonthlyForecast(transactions, 6),
-    [transactions],
-  );
-
-  const recurringGroups = useMemo(() => {
-    const groups = new Map<
-      string,
-      { note: string; amount: number; count: number; months: string[] }
-    >();
-    for (const t of transactions.filter((tx) => tx.type === "expense")) {
-      const key = t.categoryId + "::" + t.note.toLowerCase().trim();
-      const month = t.date.slice(0, 7);
-      if (!groups.has(key))
-        groups.set(key, {
-          note: t.note,
-          amount: t.amount,
-          count: 0,
-          months: [],
-        });
-      const g = groups.get(key)!;
-      if (!g.months.includes(month)) {
-        g.months.push(month);
-        g.count = g.months.length;
-      }
-    }
-    return Array.from(groups.values())
-      .filter((g) => g.count >= 2)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4);
-  }, [transactions]);
-
   const timelineGroups = useMemo(() => {
     const groups = new Map<string, Transaction[]>();
     for (const t of sorted) {
@@ -1180,22 +1035,10 @@ export default function TransactionsPage() {
 
   const filteredCategories = useMemo(() => {
     if (form.formMode === "income") {
-      return categories.filter((category) => category.type === "income");
-    }
-
-    if (form.formMode === "saving") {
       return categories.filter(
         (category) =>
-          category.type === "expense" &&
-          getCategoryPlanningGroup(category) === "saving",
-      );
-    }
-
-    if (form.formMode === "investment") {
-      return categories.filter(
-        (category) =>
-          category.type === "expense" &&
-          getCategoryPlanningGroup(category) === "investment",
+          category.type === "income" &&
+          getCategoryPlanningGroup(category) === "income",
       );
     }
 
@@ -1203,7 +1046,7 @@ export default function TransactionsPage() {
       return categories.filter((category) => {
         if (category.type !== "expense") return false;
         const group = getCategoryPlanningGroup(category);
-        return group !== "saving" && group !== "investment";
+        return group === "fixed" || group === "variable";
       });
     }
 
@@ -1220,7 +1063,7 @@ export default function TransactionsPage() {
         categories.find((category) => {
           if (category.type !== "expense") return false;
           const group = getCategoryPlanningGroup(category);
-          return group !== "saving" && group !== "investment";
+          return group === "fixed" || group === "variable";
         })?.id ?? "",
       walletId: wallets[0]?.id ?? "",
     });
@@ -1263,13 +1106,16 @@ export default function TransactionsPage() {
       mode === "transfer"
         ? ""
         : (categories.find((category) => {
-            if (mode === "income") return category.type === "income";
-            if (category.type !== "expense") return false;
+            if (mode === "income") {
+              return (
+                category.type === "income" &&
+                getCategoryPlanningGroup(category) === "income"
+              );
+            }
 
+            if (category.type !== "expense") return false;
             const group = getCategoryPlanningGroup(category);
-            if (mode === "saving") return group === "saving";
-            if (mode === "investment") return group === "investment";
-            return group !== "saving" && group !== "investment";
+            return group === "fixed" || group === "variable";
           })?.id ?? "");
 
     setForm((prev) => ({
@@ -1360,26 +1206,9 @@ export default function TransactionsPage() {
       }
     }
 
-    const transferReferenceType = isWalletTransferForm
-      ? "wallet"
-      : form.formMode === "saving"
-        ? "saving"
-        : form.formMode === "investment"
-          ? "investment"
-          : "";
-    const sourceType =
-      isWalletTransferForm ||
-      form.formMode === "saving" ||
-      form.formMode === "investment"
-        ? "wallet"
-        : "";
-    const destinationType = isWalletTransferForm
-      ? "wallet"
-      : form.formMode === "saving"
-        ? "saving"
-        : form.formMode === "investment"
-          ? "investment"
-          : "";
+    const transferReferenceType = isWalletTransferForm ? "wallet" : "";
+    const sourceType = isWalletTransferForm ? "wallet" : "";
+    const destinationType = isWalletTransferForm ? "wallet" : "";
 
     const transaction: Transaction & Record<string, unknown> = {
       id: form.id ?? crypto.randomUUID(),
@@ -1552,10 +1381,7 @@ export default function TransactionsPage() {
   const walletBefore = selectedWallet?.balance ?? 0;
   const destinationWalletBefore = destinationWallet?.balance ?? 0;
   const isWalletDecrease =
-    form.formMode === "expense" ||
-    form.formMode === "saving" ||
-    form.formMode === "investment" ||
-    form.formMode === "transfer";
+    form.formMode === "expense" || form.formMode === "transfer";
   const walletAfter =
     form.formMode === "income"
       ? walletBefore + modalAmount
@@ -1589,35 +1415,15 @@ export default function TransactionsPage() {
             focus: "focus-within:border-blue-400",
             shadow: "shadow-blue-200",
           }
-        : form.formMode === "saving"
-          ? {
-              bg: "bg-cyan-500",
-              bgHover: "hover:bg-cyan-600",
-              text: "text-cyan-600",
-              soft: "bg-cyan-50",
-              border: "border-cyan-200",
-              focus: "focus-within:border-cyan-400",
-              shadow: "shadow-cyan-200",
-            }
-          : form.formMode === "investment"
-            ? {
-                bg: "bg-violet-500",
-                bgHover: "hover:bg-violet-600",
-                text: "text-violet-600",
-                soft: "bg-violet-50",
-                border: "border-violet-200",
-                focus: "focus-within:border-violet-400",
-                shadow: "shadow-violet-200",
-              }
-            : {
-                bg: "bg-rose-500",
-                bgHover: "hover:bg-rose-600",
-                text: "text-rose-600",
-                soft: "bg-rose-50",
-                border: "border-rose-200",
-                focus: "focus-within:border-rose-400",
-                shadow: "shadow-rose-200",
-              };
+        : {
+            bg: "bg-rose-500",
+            bgHover: "hover:bg-rose-600",
+            text: "text-rose-600",
+            soft: "bg-rose-50",
+            border: "border-rose-200",
+            focus: "focus-within:border-rose-400",
+            shadow: "shadow-rose-200",
+          };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
@@ -1655,125 +1461,56 @@ export default function TransactionsPage() {
           </button>
         </div>
       )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 1 · Executive KPI Header
-          ════════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="relative bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
-          {/* Top row */}
-          <div className="relative flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
-                Money Command Center
-              </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-                Giao dịch
-              </h1>
-              <p className="mt-0.5 text-sm text-slate-500">
-                {sorted.length !== unifiedTransactions.length
-                  ? sorted.length +
-                    " / " +
-                    unifiedTransactions.length +
-                    " giao dịch"
-                  : unifiedTransactions.length + " giao dịch"}
-              </p>
-            </div>
-            <button
-              onClick={openCreateForm}
-              className="flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95"
-            >
-              <Plus size={16} />
-              <span className="hidden sm:inline">Thêm giao dịch</span>
-              <span className="sm:hidden">Thêm</span>
-            </button>
-          </div>
-
-          {/* Net cash flow — center focus */}
-          <div className="relative mt-7 text-center">
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-              Thanh khoản
+      {/* SECTION 1 · Transaction Summary */}
+      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+              Transaction Center
             </p>
-            <p className="mt-2 text-3xl font-black tracking-tight text-blue-700 sm:text-5xl">
-              {formatVND(totalLiquidity)}
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+              Giao dịch
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Theo dõi các khoản thu, chi và chuyển tiền trong tháng{" "}
+              {selectedMonth}.
             </p>
-            <div className="mt-2 flex items-center justify-center gap-3">
-              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-                {savingRate}% tiết kiệm
-              </span>
-              {netCashFlow >= 0 ? (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                  <TrendingUp size={11} />
-                  Dòng tiền dương
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-600">
-                  <TrendingDown size={11} />
-                  Dòng tiền âm
-                </span>
-              )}
-            </div>
           </div>
 
-          {/* Income vs Expense visual bar */}
-          <div className="relative mt-6">
-            <div className="mb-2 flex justify-between text-xs font-bold">
-              <span className="flex items-center gap-1.5 font-bold text-emerald-600">
-                <ArrowUpRight size={12} />
-                Thu {Math.round(totalIncome / 1e6)}M
-              </span>
-              <span className="flex items-center gap-1.5 font-bold text-rose-500">
-                Chi {Math.round(totalExpense / 1e6)}M
-                <ArrowDownRight size={12} />
-              </span>
-            </div>
-            <div className="relative h-2.5 overflow-hidden rounded-full bg-blue-100">
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-linear-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
-                style={{ width: incomePct + "%" }}
-              />
-            </div>
-          </div>
+          <button
+            onClick={openCreateForm}
+            className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700 active:scale-[.98]"
+          >
+            <Plus size={16} />
+            Thêm giao dịch
+          </button>
+        </div>
 
-          {/* KPI chips strip — horizontal scroll */}
-          <div className="relative mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-emerald-100/60 px-4 py-3.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-emerald-600">
-                Thu nhập
-              </p>
-              <p className="mt-1 truncate text-sm font-black text-emerald-700">
-                {formatVND(totalIncome)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-rose-200 bg-linear-to-br from-rose-50 to-rose-100/60 px-4 py-3.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-rose-500">
-                Chi tiêu
-              </p>
-              <p className="mt-1 truncate text-sm font-black text-rose-600">
-                {formatVND(totalExpense)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-blue-200 bg-linear-to-br from-blue-50 to-blue-100/60 px-4 py-3.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-blue-600">
-                Giao dịch
-              </p>
-              <p className="mt-1 text-sm font-black text-blue-700">
-                {sorted.length}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-cyan-200 bg-linear-to-br from-cyan-50 to-cyan-100/60 px-4 py-3.5">
-              <p className="text-[10px] font-black uppercase tracking-wide text-cyan-600">
-                Chuyển tiền nội bộ
-              </p>
-              <p className="mt-1 truncate text-sm font-black text-cyan-700">
-                {formatVND(internalTransferTurnover)}
-              </p>
-              <p className="mt-0.5 text-[10px] font-bold text-cyan-600">
-                {transferCount} giao dịch · ròng{" "}
-                {getSignedAmountText(internalTransferNet)}
-              </p>
-            </div>
-          </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard
+            label="Thu nhập"
+            value={formatVND(totalIncome)}
+            note={`${cashFlowTransactions.filter((item) => item.type === "income").length} giao dịch`}
+            tone="income"
+          />
+          <SummaryCard
+            label="Chi tiêu"
+            value={formatVND(totalExpense)}
+            note={`${cashFlowTransactions.filter((item) => item.type === "expense").length} giao dịch`}
+            tone="expense"
+          />
+          <SummaryCard
+            label="Dòng tiền ròng"
+            value={getSignedAmountText(netCashFlow)}
+            note={netCashFlow >= 0 ? "Thu lớn hơn chi" : "Chi lớn hơn thu"}
+            tone={netCashFlow >= 0 ? "positive" : "negative"}
+          />
+          <SummaryCard
+            label="Chuyển nội bộ"
+            value={formatVND(internalTransferTurnover)}
+            note={`${transferCount} giao dịch`}
+            tone="transfer"
+          />
         </div>
       </section>
 
@@ -2067,176 +1804,6 @@ export default function TransactionsPage() {
           )}
         </div>
       </div>
-
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 3 · Cash Flow Analytics
-          ════════════════════════════════════════════════════════════════════ */}
-      <section>
-        <div className="mb-3 flex items-center gap-2 px-1">
-          <div className="size-1.5 rounded-full bg-blue-600" />
-          <p className="text-sm font-black text-slate-600">
-            Phân tích dòng tiền
-          </p>
-          <span className="ml-auto text-xs text-slate-400">
-            {monthlyTrendLabel}
-          </span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <TrendPanel
-            title="Thu nhập"
-            color="#10b981"
-            dataKey="thu"
-            data={monthlyTrendDisplay}
-            chartType="area"
-          />
-          <TrendPanel
-            title="Chi tiêu"
-            color="#f43f5e"
-            dataKey="chi"
-            data={monthlyTrendDisplay}
-            chartType="line"
-          />
-          <TrendPanel
-            title="Dòng tiền"
-            color="#2563eb"
-            dataKey="net"
-            data={monthlyTrendDisplay}
-            chartType="bar"
-          />
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 5 · AI Transaction Insights (shown before feed for context)
-          ════════════════════════════════════════════════════════════════════ */}
-      <section>
-        <div className="mb-3 flex items-center gap-2 px-1">
-          <Bot size={14} className="text-violet-600" />
-          <p className="text-sm font-black text-slate-600">
-            Phân tích thông minh
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-          {/* Spending */}
-          <IntelCard
-            icon={<Sparkles size={14} />}
-            title="Chi tiêu"
-            accent="blue"
-            body={
-              smartBudget.violations.length > 0
-                ? smartBudget.violations.length +
-                  " danh mục vượt ngân sách. Điểm: " +
-                  smartBudget.adherenceScore +
-                  "/100."
-                : "Ngân sách ổn định. Điểm tuân thủ: " +
-                  smartBudget.adherenceScore +
-                  "/100."
-            }
-            tone={
-              smartBudget.adherenceScore >= 80
-                ? "good"
-                : smartBudget.adherenceScore >= 60
-                  ? "warning"
-                  : "danger"
-            }
-          />
-          {/* Saving */}
-          <IntelCard
-            icon={<Zap size={14} />}
-            title="Tiết kiệm"
-            accent="emerald"
-            body={
-              recurringGroups.length > 0
-                ? "Phát hiện " +
-                  recurringGroups.length +
-                  " khoản định kỳ, tổng ~" +
-                  formatVND(recurringGroups.reduce((s, g) => s + g.amount, 0)) +
-                  "/tháng."
-                : "Dự báo tháng tới: tiết kiệm " +
-                  formatVND(forecast.projectedSaving) +
-                  "."
-            }
-            tone={netCashFlow >= 0 ? "good" : "danger"}
-          />
-          {/* Alerts */}
-          <IntelCard
-            icon={<AlertTriangle size={14} />}
-            title="Cảnh báo"
-            accent="amber"
-            body={
-              anomalies.length > 0
-                ? anomalies[0].categoryName +
-                  " tháng " +
-                  anomalies[0].month +
-                  " cao hơn TB " +
-                  anomalies[0].deviationPercent +
-                  "%."
-                : "Không phát hiện bất thường 6 tháng qua."
-            }
-            tone={
-              anomalies.filter((a) => a.severity === "high").length > 0
-                ? "danger"
-                : anomalies.length > 0
-                  ? "warning"
-                  : "good"
-            }
-          />
-          {/* Anomaly cards */}
-          {anomalies.slice(0, 2).map((a) => (
-            <IntelCard
-              key={a.categoryId + "-" + a.month}
-              icon={<AlertTriangle size={14} />}
-              title={a.categoryName}
-              accent={a.severity === "high" ? "rose" : "amber"}
-              body={
-                "Tháng " +
-                a.month +
-                ": " +
-                formatVND(a.amount) +
-                " (+" +
-                a.deviationPercent +
-                "% so với TB)"
-              }
-              tone={a.severity === "high" ? "danger" : "warning"}
-            />
-          ))}
-          {/* Recurring */}
-          {recurringGroups.slice(0, 2).map((g, i) => (
-            <IntelCard
-              key={i}
-              icon={<RefreshCw size={14} />}
-              title="Định kỳ"
-              accent="blue"
-              body={
-                g.note +
-                " — " +
-                g.count +
-                " tháng · " +
-                formatVND(g.amount) +
-                "/lần"
-              }
-              tone="good"
-            />
-          ))}
-          {/* Budget violations */}
-          {smartBudget.violations.slice(0, 2).map((v) => (
-            <IntelCard
-              key={v.categoryId}
-              icon={<AlertTriangle size={14} />}
-              title={v.categoryName}
-              accent="rose"
-              body={
-                "Chi " +
-                formatVND(v.actualSpend) +
-                ", vượt " +
-                v.overagePercent +
-                "% ngân sách"
-              }
-              tone="danger"
-            />
-          ))}
-        </div>
-      </section>
 
       {/* ════════════════════════════════════════════════════════════════════
           Bulk Action Bar (sticky, only when rows selected)
@@ -2819,23 +2386,23 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-[min(92dvh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="shrink-0 border-b border-slate-100 px-5 py-4 sm:px-7 sm:py-5">
+            <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                  <h2 className="text-[1.35rem] font-black tracking-tight text-slate-900 sm:text-xl">
                     {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
                   </h2>
-                  <p className="mt-1 text-sm font-medium text-slate-400">
-                    Nhập nhanh, kiểm tra số dư và lưu giao dịch.
+                  <p className="mt-0.5 text-[12px] font-medium leading-4 text-slate-400 sm:text-xs">
+                    Ghi nhận khoản thu, chi hoặc chuyển tiền giữa các ví.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95 sm:size-9"
                 >
                   <X size={17} />
                 </button>
@@ -2845,14 +2412,14 @@ export default function TransactionsPage() {
             <form
               id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pb-7"
+              className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-5 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5"
             >
               {/* Type selector — premium segmented control */}
-              <div className="mb-5">
+              <div className="mb-3">
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
-                <div className="grid grid-cols-5 gap-1 rounded-[1.35rem] border border-slate-200 bg-slate-50 p-1.5">
+                <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
                   {[
                     {
                       mode: "income" as TransactionFormMode,
@@ -2865,18 +2432,6 @@ export default function TransactionsPage() {
                       icon: "↓",
                       label: "Chi",
                       active: "bg-rose-500",
-                    },
-                    {
-                      mode: "saving" as TransactionFormMode,
-                      icon: "◇",
-                      label: "Tiết kiệm",
-                      active: "bg-cyan-500",
-                    },
-                    {
-                      mode: "investment" as TransactionFormMode,
-                      icon: "▣",
-                      label: "Đầu tư",
-                      active: "bg-violet-500",
                     },
                     {
                       mode: "transfer" as TransactionFormMode,
@@ -2892,13 +2447,13 @@ export default function TransactionsPage() {
                         type="button"
                         onClick={() => handleTypeChange(item.mode)}
                         className={
-                          "flex min-h-17 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 text-center text-xs font-black transition-all active:scale-[.98] " +
+                          "flex min-h-13 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[12px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
                           (active
                             ? item.active + " text-white shadow-lg"
                             : "text-slate-500 hover:bg-white hover:text-slate-800")
                         }
                       >
-                        <span className="text-lg leading-none">
+                        <span className="text-base leading-none">
                           {item.icon}
                         </span>
                         <span className="leading-tight">{item.label}</span>
@@ -2920,13 +2475,13 @@ export default function TransactionsPage() {
                 </div>
                 <div
                   className={
-                    "relative rounded-[1.35rem] border-2 bg-white transition-colors " +
+                    "relative rounded-2xl border-2 bg-white transition-colors " +
                     modalAccent.border +
                     " " +
                     modalAccent.focus
                   }
                 >
-                  <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">
                     ₫
                   </span>
                   <input
@@ -2940,11 +2495,11 @@ export default function TransactionsPage() {
                       }))
                     }
                     placeholder="Nhập số tiền"
-                    className="w-full rounded-[1.35rem] bg-transparent py-5 pl-12 pr-5 text-3xl font-black tracking-tight text-slate-900 outline-none placeholder:text-lg placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300"
+                    className="w-full rounded-2xl bg-transparent py-3.5 pl-11 pr-4 text-[1.7rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-base placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 sm:py-4 sm:text-2xl"
                   />
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {amountQuickActions.map((value) => (
                     <button
                       key={value}
@@ -2952,7 +2507,7 @@ export default function TransactionsPage() {
                       onClick={() =>
                         setForm((p) => ({ ...p, amount: String(value) }))
                       }
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800"
+                      className="min-h-9 shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-[12px] font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
                     >
                       {value >= 1000000
                         ? value / 1000000 + "tr"
@@ -2962,7 +2517,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-[0.8fr_1.2fr]">
+              <div className="grid gap-3 md:grid-cols-2">
                 <FormInput
                   label="Ngày"
                   type="date"
@@ -3016,7 +2571,7 @@ export default function TransactionsPage() {
                 )}
 
                 <div
-                  className={form.type === "transfer" ? "" : "sm:col-span-1"}
+                  className={form.type === "transfer" ? "" : "md:col-span-1"}
                 >
                   <FormInput
                     label="Ghi chú"
@@ -3035,7 +2590,7 @@ export default function TransactionsPage() {
               {canShowWalletPreview && (
                 <div
                   className={
-                    "mt-4 rounded-[1.35rem] border p-4 " +
+                    "mt-3 rounded-2xl border p-3 " +
                     modalAccent.border +
                     " " +
                     modalAccent.soft
@@ -3109,8 +2664,8 @@ export default function TransactionsPage() {
               )}
 
               {/* Recurring toggle */}
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <div className="flex items-center justify-between rounded-[1.35rem] border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <div className="flex min-h-14 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5">
                   <div>
                     <p className="text-sm font-black text-slate-700">Định kỳ</p>
                     <p className="text-xs font-medium text-slate-400">
@@ -3141,13 +2696,13 @@ export default function TransactionsPage() {
                         setForm((p) => ({ ...p, isRecurring: !p.isRecurring }))
                       }
                       className={
-                        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
+                        "relative inline-flex h-8 w-13 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
                         (form.isRecurring ? "bg-blue-600" : "bg-slate-300")
                       }
                     >
                       <span
                         className={
-                          "inline-block size-5 transform rounded-full bg-white shadow-sm transition-transform " +
+                          "inline-block size-6 transform rounded-full bg-white shadow-sm transition-transform " +
                           (form.isRecurring ? "translate-x-6" : "translate-x-1")
                         }
                       />
@@ -3162,12 +2717,12 @@ export default function TransactionsPage() {
               />
             </form>
 
-            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-5 py-4 shadow-[0_-18px_40px_rgba(15,23,42,0.06)] backdrop-blur sm:px-7">
+            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
+                  className="min-h-12 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
                 >
                   Hủy
                 </button>
@@ -3175,7 +2730,7 @@ export default function TransactionsPage() {
                   type="submit"
                   form="transaction-form"
                   className={
-                    "flex-1 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
+                    "min-h-12 flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
                     modalAccent.bg +
                     " " +
                     modalAccent.bgHover +
@@ -3238,173 +2793,32 @@ function FilterChip({
   );
 }
 
-type TrendDataPoint = { month: string; thu: number; chi: number; net: number };
-
-function TrendPanel({
-  title,
-  color,
-  dataKey,
-  data,
-  chartType,
+function SummaryCard({
+  label,
+  value,
+  note,
+  tone,
 }: {
-  title: string;
-  color: string;
-  dataKey: "thu" | "chi" | "net";
-  data: TrendDataPoint[];
-  chartType: "area" | "line" | "bar";
+  label: string;
+  value: string;
+  note: string;
+  tone: "income" | "expense" | "positive" | "negative" | "transfer";
 }) {
-  const activeData =
-    data.length > 0 ? data : [{ month: "T1", thu: 0, chi: 0, net: 0 }];
-
-  const last = activeData.at(-1)?.[dataKey] ?? 0;
-  const prev = activeData.at(-2)?.[dataKey] ?? 0;
-  const delta =
-    prev !== 0 ? Math.round(((last - prev) / Math.abs(prev)) * 100) : 0;
-  const isUp = delta > 0;
-  const isGood = dataKey !== "chi" ? isUp : !isUp;
-  const displayValue = Math.abs(last) >= 10 ? last.toFixed(1) : last.toFixed(2);
-
-  const cardBg =
-    dataKey === "thu"
-      ? "border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white"
-      : dataKey === "chi"
-        ? "border-rose-200 bg-gradient-to-br from-rose-50/60 to-white"
-        : "border-blue-200 bg-gradient-to-br from-blue-50/60 to-white";
+  const styles = {
+    income: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    expense: "border-rose-200 bg-rose-50 text-rose-700",
+    positive: "border-blue-200 bg-blue-50 text-blue-700",
+    negative: "border-amber-200 bg-amber-50 text-amber-700",
+    transfer: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  };
 
   return (
-    <div
-      className={
-        "rounded-4xl border p-5 shadow-sm transition-shadow hover:shadow-md " +
-        cardBg
-      }
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-black text-slate-900">{title}</p>
-        {prev !== 0 && (
-          <span
-            className={
-              "flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-bold " +
-              (isGood
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-rose-50 text-rose-500")
-            }
-          >
-            {isUp ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-            {Math.abs(delta)}%
-          </span>
-        )}
-      </div>
-      <p className="mt-2.5 text-2xl font-black" style={{ color }}>
-        {displayValue}M
+    <div className={"rounded-3xl border p-4 " + styles[tone]}>
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+        {label}
       </p>
-      <div className="mt-3.5 h-24">
-        <ResponsiveContainer width="100%" height={96} minWidth={0}>
-          {chartType === "area" ? (
-            <AreaChart
-              data={activeData}
-              margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
-            >
-              <defs>
-                <linearGradient
-                  id={"grad-" + dataKey}
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="5%" stopColor={color} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0.03} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                strokeWidth={2.5}
-                fill={"url(#grad-" + dataKey + ")"}
-                dot={false}
-              />
-            </AreaChart>
-          ) : chartType === "line" ? (
-            <LineChart
-              data={activeData}
-              margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
-            >
-              <Line
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                strokeWidth={2.5}
-                dot={false}
-              />
-            </LineChart>
-          ) : (
-            <BarChart
-              data={activeData}
-              margin={{ top: 3, right: 3, bottom: 0, left: 0 }}
-              barCategoryGap={5}
-            >
-              <Bar
-                dataKey={dataKey}
-                fill={color}
-                radius={[4, 4, 0, 0]}
-                fillOpacity={0.85}
-              />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function IntelCard({
-  icon,
-  title,
-  accent,
-  body,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  accent: "blue" | "emerald" | "rose" | "amber";
-  body: string;
-  tone?: "good" | "warning" | "danger";
-}) {
-  const accentMap = {
-    blue: "border-l-blue-500 bg-blue-50/60",
-    emerald: "border-l-emerald-500 bg-emerald-50/60",
-    rose: "border-l-rose-500 bg-rose-50/60",
-    amber: "border-l-amber-500 bg-amber-50/60",
-  };
-  const iconMap = {
-    blue: "bg-blue-100 text-blue-600",
-    emerald: "bg-emerald-100 text-emerald-600",
-    rose: "bg-rose-100 text-rose-600",
-    amber: "bg-amber-100 text-amber-600",
-  };
-  return (
-    <div
-      className={
-        "flex h-full min-h-30 min-w-0 flex-col gap-2 overflow-hidden rounded-2xl border-l-[3px] border-r border-t border-b border-slate-200 p-4 shadow-sm " +
-        accentMap[accent]
-      }
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <div
-          className={
-            "flex size-7 shrink-0 items-center justify-center rounded-xl " +
-            iconMap[accent]
-          }
-        >
-          {icon}
-        </div>
-        <p className="min-w-0 truncate text-xs font-black text-slate-800">
-          {title}
-        </p>
-      </div>
-      <p className="min-w-0 wrap-break-word text-xs leading-5 text-slate-500">
-        {body}
-      </p>
+      <p className="mt-2 truncate text-xl font-black">{value}</p>
+      <p className="mt-1 text-xs font-bold opacity-70">{note}</p>
     </div>
   );
 }
@@ -3471,7 +2885,7 @@ function FormInput({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-black text-slate-700">
+      <span className="mb-1.5 block text-[13px] font-black text-slate-700 sm:text-sm">
         {label}
       </span>
       <input
@@ -3479,7 +2893,7 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm"
+        className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm sm:text-sm"
       />
     </label>
   );
@@ -3498,13 +2912,13 @@ function FormSelect({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-black text-slate-700">
+      <span className="mb-1.5 block text-[13px] font-black text-slate-700 sm:text-sm">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-400 focus:bg-white"
+        className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition-all focus:border-blue-400 focus:bg-white sm:text-sm"
       >
         <option value="">Chọn</option>
         {options.map((o) => (

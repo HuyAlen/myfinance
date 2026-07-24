@@ -1,17 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "../layout/DateFilterProvider";
 import {
-  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
-  Bot,
   ChartPie,
   Edit3,
-  Lightbulb,
   Plus,
   ShieldCheck,
   Target,
@@ -19,7 +15,6 @@ import {
   TrendingUp,
   Trash2,
   X,
-  Zap,
 } from "lucide-react";
 import { Cell, Pie, PieChart } from "recharts";
 
@@ -43,7 +38,6 @@ import {
   calculateRule503020,
   formatVND,
   getCategoryPlanningGroup,
-  getPlanningGroupLabel,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
@@ -181,23 +175,6 @@ function getPreviousMonthKey(month: string) {
   );
 }
 
-function formatDeltaPercent(current: number, previous: number) {
-  if (previous <= 0 && current > 0) return "+100%";
-  if (previous <= 0) return "0%";
-  const delta = Math.round(((current - previous) / previous) * 100);
-  return (delta >= 0 ? "+" : "") + delta + "%";
-}
-
-function getTrendDeltaText(current: number, previous: number) {
-  const delta = current - previous;
-  if (delta === 0) {
-    return `Giữ nguyên ở ${formatVND(current)} so với tháng trước.`;
-  }
-
-  const direction = delta > 0 ? "tăng" : "giảm";
-  return `${formatVND(previous)} → ${formatVND(current)} · ${direction} ${formatVND(Math.abs(delta))} (${formatDeltaPercent(current, previous)}).`;
-}
-
 function getFixedCostStatus(ratio: number) {
   if (ratio <= 40) {
     return {
@@ -268,9 +245,7 @@ export default function BudgetsPage() {
     null,
   );
   const { toast } = useToast();
-  const router = useRouter();
-  const { selectedMonth: activeMonth, setSelectedMonth: setActiveMonth } =
-    useDateFilter();
+  const { selectedMonth: activeMonth } = useDateFilter();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
@@ -370,20 +345,6 @@ export default function BudgetsPage() {
         isRealExpenseGroup(item.categoryId),
       ),
     [isRealExpenseGroup, smartBudget.overspendingTrend],
-  );
-
-  const realExpenseRecommendations = useMemo(
-    () =>
-      smartBudget.recommendedBudgets.filter((item) =>
-        isRealExpenseGroup(item.categoryId),
-      ),
-    [isRealExpenseGroup, smartBudget.recommendedBudgets],
-  );
-
-  // ── NEW: Month filter ─────────────────────────────────────────────────────
-  const allMonths = useMemo(
-    () => [...new Set(budgets.map((b) => b.month))].sort().reverse(),
-    [budgets],
   );
 
   const filteredBudgets = useMemo(
@@ -690,47 +651,6 @@ export default function BudgetsPage() {
     realExpenseViolations.length,
   ]);
 
-  const budgetForecastInsights = useMemo(() => {
-    const insights: string[] = [];
-
-    if (budgetForecast.confidenceLevel === "low") {
-      insights.push(
-        `${budgetForecast.confidenceLabel}: ${budgetForecast.confidenceNote}`,
-      );
-    }
-
-    if (budgetForecast.projectedOverage > 0) {
-      insights.push(
-        `Nếu giữ tốc độ chi hiện tại, ngân sách có thể vượt ${formatVND(budgetForecast.projectedOverage)} vào cuối tháng.`,
-      );
-    } else if (filteredSummary.totalLimit > 0) {
-      insights.push(
-        `Nếu giữ tốc độ chi hiện tại, bạn còn dư khoảng ${formatVND(Math.max(0, budgetForecast.projectedRemaining))} cuối tháng.`,
-      );
-    }
-
-    const fastestTrend = realExpenseTrends[0];
-    if (fastestTrend) {
-      insights.push(
-        `${fastestTrend.categoryName} có biến động đáng chú ý. Xem chi tiết delta trong Smart Budget AI bên dưới.`,
-      );
-    }
-
-    const topViolation = realExpenseViolations[0];
-    if (topViolation) {
-      insights.push(
-        `${topViolation.categoryName} đã vượt ${formatVND(topViolation.overage)}, nên ưu tiên chỉnh hạn mức hoặc giảm chi.`,
-      );
-    }
-
-    return insights.slice(0, 3);
-  }, [
-    budgetForecast,
-    filteredSummary.totalLimit,
-    realExpenseTrends,
-    realExpenseViolations,
-  ]);
-
   // ── NEW: Category analysis lookup map ─────────────────────────────────────
   const categoryAnalysisMap = useMemo(
     () => new Map(smartBudget.categoryAnalysis.map((a) => [a.categoryId, a])),
@@ -749,28 +669,6 @@ export default function BudgetsPage() {
 
   const canClonePreviousBudget =
     filteredBudgets.length === 0 && previousMonthBudgets.length > 0;
-
-  const spendingByCategory = useMemo(() => {
-    const current = new Map<string, number>();
-    const previous = new Map<string, number>();
-
-    transactions.forEach((transaction) => {
-      if (transaction.type !== "expense") return;
-      if (!isRealExpenseGroup(transaction.categoryId)) return;
-      const map = transaction.date.startsWith(activeMonth)
-        ? current
-        : transaction.date.startsWith(previousMonth)
-          ? previous
-          : null;
-      if (!map) return;
-      map.set(
-        transaction.categoryId,
-        (map.get(transaction.categoryId) ?? 0) + transaction.amount,
-      );
-    });
-
-    return { current, previous };
-  }, [activeMonth, isRealExpenseGroup, previousMonth, transactions]);
 
   const v7Allocation = useMemo(() => {
     const allocation = calculateRule503020({
@@ -842,123 +740,6 @@ export default function BudgetsPage() {
     categories,
     financialPlanning.effectiveIncome,
     transactions,
-  ]);
-
-  const topRiskCategories = useMemo(() => {
-    const byCategory = new Map<
-      string,
-      {
-        categoryId: string;
-        categoryName: string;
-        spent: number;
-        limit: number;
-        projectedSpend: number;
-        riskScore: number;
-        reason: string;
-        tone: "danger" | "warning" | "good";
-      }
-    >();
-
-    filteredBudgets.forEach((budget) => {
-      const category = categoryById.get(budget.categoryId);
-      const categoryName = category?.name ?? "Danh mục";
-      const group = getCategoryPlanningGroup(category);
-      if (group === "saving" || group === "investment" || group === "income") {
-        return;
-      }
-      const isFixedCost = group === "fixed";
-      const spent = getSpent(budget.categoryId, budget.month);
-      const forecast = getBudgetForecast(
-        budget.limitAmount,
-        spent,
-        budget.month,
-      );
-      const usage =
-        budget.limitAmount > 0 ? (spent / budget.limitAmount) * 100 : 0;
-      const forecastUsage =
-        budget.limitAmount > 0
-          ? (forecast.projectedSpend / budget.limitAmount) * 100
-          : 0;
-      const riskScore = Math.round(Math.max(usage, forecastUsage));
-      const projectedOverage = Math.max(
-        0,
-        forecast.projectedSpend - budget.limitAmount,
-      );
-      const overage = Math.max(0, spent - budget.limitAmount);
-      const tone =
-        overage > 0 || projectedOverage > 0
-          ? "danger"
-          : riskScore >= 85
-            ? "warning"
-            : "good";
-      const reason =
-        overage > 0
-          ? `Đã vượt ${formatVND(overage)}.`
-          : projectedOverage > 0
-            ? `Dự kiến vượt ${formatVND(projectedOverage)} cuối tháng.`
-            : riskScore >= 85
-              ? `Đã dùng ${Math.round(usage)}% hạn mức.`
-              : `Đang trong hạn mức.`;
-
-      if (isFixedCost && overage <= 0) {
-        return;
-      }
-
-      byCategory.set(budget.categoryId, {
-        categoryId: budget.categoryId,
-        categoryName,
-        spent,
-        limit: budget.limitAmount,
-        projectedSpend: forecast.projectedSpend,
-        riskScore: isFixedCost ? Math.max(0, riskScore - 35) : riskScore,
-        reason: isFixedCost
-          ? `${reason} Đây là ${getPlanningGroupLabel(group).toLowerCase()}, chỉ cảnh báo khi đã vượt hạn mức.`
-          : `${reason} Đây là ${getPlanningGroupLabel(group).toLowerCase()}, có thể tối ưu trong tháng.`,
-        tone,
-      });
-    });
-
-    return [...byCategory.values()]
-      .sort((a, b) => b.riskScore - a.riskScore)
-      .slice(0, 3);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryById, filteredBudgets, transactions]);
-
-  const budgetIntelligenceScore = useMemo(() => {
-    if (filteredSummary.totalLimit <= 0) return 0;
-    const riskPenalty = topRiskCategories.reduce((sum, item) => {
-      if (item.tone === "danger") return sum + 8;
-      if (item.tone === "warning") return sum + 4;
-      return sum;
-    }, 0);
-    const allocationPenalty = v7Allocation.reduce((sum, item) => {
-      if (item.percentOfTarget > 120) return sum + 8;
-      if (item.percentOfTarget > 100) return sum + 4;
-      return sum;
-    }, 0);
-    const stabilityAdjustment =
-      financialPlanning.stabilityScore >= 80
-        ? 8
-        : financialPlanning.stabilityScore >= 65
-          ? 2
-          : -(65 - financialPlanning.stabilityScore) * 0.35;
-
-    return Math.round(
-      clampNumber(
-        budgetHealthScore -
-          riskPenalty -
-          allocationPenalty +
-          stabilityAdjustment,
-        0,
-        100,
-      ),
-    );
-  }, [
-    budgetHealthScore,
-    filteredSummary.totalLimit,
-    financialPlanning.stabilityScore,
-    topRiskCategories,
-    v7Allocation,
   ]);
 
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
@@ -1156,8 +937,8 @@ export default function BudgetsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 py-6 sm:px-8 sm:py-7">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -1180,34 +961,38 @@ export default function BudgetsPage() {
             </button>
           </div>
 
-          {/* 5 KPI cards */}
+          {/* Executive KPI cards */}
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
               sub={filteredBudgets.length + " danh mục · tháng " + activeMonth}
               gradient="from-blue-500 to-blue-600"
-              iconBg="bg-blue-400/30"
+              iconBg="bg-white/20"
               icon={<Target size={16} />}
             />
             <KpiCard
               label="Đã sử dụng"
               value={formatVND(filteredSummary.totalSpent)}
               sub={filteredSummary.percent + "% hạn mức"}
-              gradient="from-rose-400 to-rose-500"
+              gradient="from-indigo-500 to-violet-500"
               iconBg="bg-white/20"
               icon={<ArrowDownRight size={16} />}
             />
             <KpiCard
-              label="Còn lại"
+              label={
+                filteredSummary.remaining < 0 ? "Vượt ngân sách" : "Còn lại"
+              }
               value={formatVND(Math.abs(filteredSummary.remaining))}
               sub={
-                filteredSummary.remaining < 0 ? "Vượt ngân sách" : "Khả dụng"
+                filteredSummary.remaining < 0
+                  ? `Vượt ${Math.max(0, filteredSummary.percent - 100)}% hạn mức`
+                  : "Có thể tiếp tục chi"
               }
               gradient={
                 filteredSummary.remaining < 0
                   ? "from-rose-500 to-red-500"
-                  : "from-emerald-500 to-emerald-600"
+                  : "from-emerald-500 to-teal-500"
               }
               iconBg="bg-white/20"
               icon={
@@ -1223,45 +1008,47 @@ export default function BudgetsPage() {
               value={filteredSummary.percent + "%"}
               sub={
                 filteredSummary.percent >= 100
-                  ? "Vượt ngân sách"
+                  ? "Cần điều chỉnh ngay"
                   : filteredSummary.percent >= 80
                     ? "Sắp đạt giới hạn"
-                    : "An toàn"
+                    : "Trong vùng an toàn"
               }
               gradient={
                 filteredSummary.percent >= 100
-                  ? "from-rose-500 to-red-500"
+                  ? "from-orange-500 to-rose-500"
                   : filteredSummary.percent >= 80
                     ? "from-amber-400 to-orange-500"
-                    : "from-emerald-500 to-teal-500"
+                    : "from-cyan-500 to-blue-500"
               }
               iconBg="bg-white/20"
               icon={<ChartPie size={16} />}
             />
-            {/* Health Score card */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
+                "col-span-2 rounded-2xl bg-linear-to-br p-4 shadow-sm sm:col-span-1 " +
                 healthGrade.gradient
               }
             >
-              <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-                Budget Health
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
+                  Budget Health
+                </p>
+                <ShieldCheck size={16} className="text-white/90" />
+              </div>
               <p className="mt-1 text-3xl font-black text-white">
                 {budgetHealthScore}
-                <span className="text-lg opacity-70">%</span>
+                <span className="text-base opacity-70">/100</span>
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
                 <div
                   className="h-1.5 rounded-full bg-white"
-                  style={{
-                    width: Math.min(budgetHealthScore, 100) + "%",
-                  }}
+                  style={{ width: Math.min(budgetHealthScore, 100) + "%" }}
                 />
               </div>
-              <p className="mt-1.5 text-[10px] text-white/80">
-                {healthGrade.label}
+              <p className="mt-1.5 truncate text-[10px] text-white/85">
+                {filteredSummary.remaining < 0
+                  ? `${realExpenseViolations.length} danh mục cần rà soát · ${healthGrade.label}`
+                  : `${healthGrade.label} · ngân sách đang được kiểm soát`}
               </p>
             </div>
           </div>
@@ -1269,93 +1056,7 @@ export default function BudgetsPage() {
       </section>
 
       {filteredSummary.totalLimit > 0 && (
-        <>
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <ForecastCard
-              label="Dự kiến chi tiêu cuối tháng"
-              value={formatVND(budgetForecast.projectedSpend)}
-              sub={budgetForecast.confidenceLabel}
-              tone={
-                budgetForecast.confidenceLevel === "low"
-                  ? "warning"
-                  : budgetForecast.isProjectedOver
-                    ? "danger"
-                    : "good"
-              }
-            />
-            <ForecastCard
-              label="Còn lại dự kiến"
-              value={formatVND(Math.abs(budgetForecast.projectedRemaining))}
-              sub={
-                budgetForecast.projectedRemaining < 0
-                  ? "Vượt dự kiến"
-                  : "Còn dư cuối tháng"
-              }
-              tone={budgetForecast.projectedRemaining < 0 ? "danger" : "good"}
-            />
-            <ForecastCard
-              label="Vượt dự kiến"
-              value={
-                budgetForecast.projectedOverage > 0
-                  ? "+" + formatVND(budgetForecast.projectedOverage)
-                  : "0 đ"
-              }
-              sub={budgetForecast.confidenceNote}
-              tone={
-                budgetForecast.projectedOverage > 0
-                  ? "danger"
-                  : budgetForecast.projectedPercent >= 85
-                    ? "warning"
-                    : "good"
-              }
-            />
-            <ForecastCard
-              label="Mức chi/ngày còn lại"
-              value={formatVND(Math.round(budgetForecast.safeDailyBudget))}
-              sub={
-                budgetForecast.remainingDays > 0
-                  ? budgetForecast.remainingDays + " ngày còn lại"
-                  : "Đã hết kỳ ngân sách"
-              }
-              tone="neutral"
-            />
-          </section>
-
-          {budgetForecastInsights.length > 0 && (
-            <section className="rounded-[1.75rem] border border-amber-100 bg-linear-to-br from-amber-50 to-white p-5 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex size-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
-                  <Lightbulb size={16} />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    AI Forecast Insight
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Giải thích dự báo ngân sách cuối tháng
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {budgetForecastInsights.map((item, index) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-white bg-white/80 p-3 text-xs leading-5 text-slate-600 shadow-sm"
-                  >
-                    <span className="mr-2 inline-flex size-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-black text-amber-700">
-                      {index + 1}
-                    </span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-
-      {filteredSummary.totalLimit > 0 && (
-        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div
             className={
               "rounded-4xl border p-5 shadow-sm " +
@@ -1393,44 +1094,28 @@ export default function BudgetsPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-white/80 p-3">
-                <p className="text-[10px] font-black uppercase text-slate-400">
-                  Đã chi cố định
-                </p>
-                <p className="mt-1 text-lg font-black text-slate-900">
-                  {formatVND(financialPlanning.fixedSpent)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  / {formatVND(financialPlanning.effectiveIncome)} thu nhập
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 p-3">
-                <p className="text-[10px] font-black uppercase text-slate-400">
-                  Chi biến đổi
-                </p>
-                <p className="mt-1 text-lg font-black text-slate-900">
-                  {financialPlanning.variableRatio}%
-                </p>
-                <p className="text-xs text-slate-500">
-                  {formatVND(financialPlanning.variableSpent)}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 p-3">
-                <p className="text-[10px] font-black uppercase text-slate-400">
-                  Ổn định tài chính
-                </p>
-                <p className="mt-1 text-lg font-black text-slate-900">
-                  {financialPlanning.stabilityScore}/100
-                </p>
-                <p className="text-xs text-slate-500">Planning score</p>
-              </div>
+              <MetricTile
+                label="Đã chi cố định"
+                value={formatVND(financialPlanning.fixedSpent)}
+                sub={`/ ${formatVND(financialPlanning.effectiveIncome)} thu nhập`}
+              />
+              <MetricTile
+                label="Chi biến đổi"
+                value={`${financialPlanning.variableRatio}%`}
+                sub={formatVND(financialPlanning.variableSpent)}
+              />
+              <MetricTile
+                label="Ổn định tài chính"
+                value={`${financialPlanning.stabilityScore}/100`}
+                sub="Planning score"
+              />
             </div>
 
             <div className="mt-4 space-y-2">
               {financialPlanning.fixedItems.slice(0, 3).map((item) => (
                 <div
                   key={item.categoryId}
-                  className="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2 text-xs"
+                  className="flex items-center justify-between rounded-2xl bg-white/75 px-3 py-2.5 text-xs"
                 >
                   <span className="font-bold text-slate-700">
                     {item.categoryName}
@@ -1441,151 +1126,15 @@ export default function BudgetsPage() {
                 </div>
               ))}
               {financialPlanning.fixedItems.length === 0 && (
-                <p className="rounded-2xl bg-white/70 px-3 py-3 text-xs text-slate-500">
-                  Chưa phát hiện danh mục chi phí cố định. Bạn có thể thêm Nhà
-                  ở, Điện, Internet, Bảo hiểm...
+                <p className="rounded-2xl bg-white/75 px-3 py-3 text-xs leading-5 text-slate-500">
+                  Chưa phát hiện danh mục chi phí cố định. Hãy phân loại Nhà ở,
+                  Điện, Internet hoặc Bảo hiểm để theo dõi chính xác hơn.
                 </p>
               )}
             </div>
           </div>
 
-          <div className="rounded-4xl border border-blue-100 bg-linear-to-br from-blue-50 to-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm">
-                <Bot size={17} />
-              </div>
-              <div>
-                <h2 className="text-base font-black text-slate-900">
-                  Financial Planning AI
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Phân tách chi phí cố định và chi phí có thể kiểm soát
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-white bg-white/80 p-4">
-                <p className="text-xs font-black text-slate-900">Nhận định</p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Chi phí cố định đang chiếm{" "}
-                  <b>{financialPlanning.fixedRatio}%</b> thu nhập.
-                  {financialPlanning.fixedRatio <= 40
-                    ? " Đây là mức ổn định, còn dư địa cho tiết kiệm và chi biến đổi."
-                    : financialPlanning.fixedRatio <= 60
-                      ? " Mức này cần theo dõi để tránh làm giảm khả năng tiết kiệm."
-                      : " Mức này khá cao, nên rà soát các khoản định kỳ lớn."}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white bg-white/80 p-4">
-                <p className="text-xs font-black text-slate-900">
-                  Ưu tiên kiểm soát
-                </p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  AI sẽ ưu tiên cảnh báo các khoản biến đổi như ăn uống, mua
-                  sắm, giải trí trước. Chi phí cố định chỉ cảnh báo mạnh khi đã
-                  vượt hạn mức.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════
-          SECTION 2 · Budget Overview + Analytics
-          ══════════════════════════════════════════════════════════════════ */}
-      {budgets.length > 0 && (
-        <section className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
-          {/* LEFT: Category allocation */}
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
-                <ChartPie size={17} />
-              </div>
-              <div>
-                <h2 className="text-base font-black text-slate-900">
-                  Phân bổ ngân sách
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Tháng {activeMonth} · theo danh mục
-                </p>
-              </div>
-            </div>
-
-            {pieData.length > 0 ? (
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-                {/* Pie chart */}
-                <div className="shrink-0">
-                  <PieChart width={160} height={160}>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      innerRadius={48}
-                      outerRadius={72}
-                      paddingAngle={3}
-                      startAngle={90}
-                      endAngle={-270}
-                    >
-                      {pieData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </div>
-                {/* Legend bars */}
-                <div className="flex-1 space-y-3">
-                  {pieData.map((d) => {
-                    const pct =
-                      filteredSummary.totalLimit > 0
-                        ? Math.round(
-                            (d.value / filteredSummary.totalLimit) * 100,
-                          )
-                        : 0;
-                    return (
-                      <div
-                        key={d.name}
-                        title={`${d.name}: ${formatVND(d.value)} (${pct}%)`}
-                      >
-                        <div className="mb-1 flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className="size-2 shrink-0 rounded-full"
-                              style={{ background: d.color }}
-                            />
-                            <span className="font-bold text-slate-700">
-                              {d.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-slate-900">
-                              {pct}%
-                            </span>
-                            <span className="text-slate-400">
-                              {formatVND(d.value)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-2 rounded-full transition-all duration-500"
-                            style={{ width: pct + "%", background: d.color }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="py-6 text-center text-sm text-slate-400">
-                Chọn tháng có ngân sách để xem phân bổ.
-              </p>
-            )}
-          </div>
-
-          {/* RIGHT: 50/30/20 framework */}
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-violet-100 bg-linear-to-br from-violet-50/80 via-white to-indigo-50/70 p-5 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
                 <ShieldCheck size={17} />
@@ -1595,317 +1144,163 @@ export default function BudgetsPage() {
                   Khung 50/30/20
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Nhu cầu · Mong muốn · Tiết kiệm
+                  Nhu cầu · Mong muốn · Tiết kiệm & đầu tư
                 </p>
               </div>
             </div>
 
-            {v7Allocation.map((bucket) => {
-              const actualColor =
-                bucket.status === "over"
-                  ? "text-rose-600"
-                  : bucket.status === "near"
-                    ? "text-amber-600"
-                    : bucket.textColor;
-              const diffText =
-                bucket.difference > 0
-                  ? `Vượt ${formatVND(bucket.difference)}`
-                  : `Còn ${formatVND(Math.abs(bucket.difference))}`;
-              return (
-                <div key={bucket.label} className="mb-5 last:mb-0">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black text-slate-700">
-                        {bucket.label}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-500">
-                        Mục tiêu {bucket.targetPercent}%
+            <div className="space-y-5">
+              {v7Allocation.map((bucket) => {
+                const actualColor =
+                  bucket.status === "over"
+                    ? "text-rose-600"
+                    : bucket.status === "near"
+                      ? "text-amber-600"
+                      : bucket.textColor;
+                const diffText =
+                  bucket.difference > 0
+                    ? `Vượt ${formatVND(bucket.difference)}`
+                    : `Còn ${formatVND(Math.abs(bucket.difference))}`;
+                return (
+                  <div key={bucket.label}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-xs font-black text-slate-700">
+                          {bucket.label}
+                        </span>
+                        <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-slate-500 shadow-sm">
+                          Mục tiêu {bucket.targetPercent}%
+                        </span>
+                      </div>
+                      <span className={"text-sm font-black " + actualColor}>
+                        {bucket.percentOfTarget}%
                       </span>
                     </div>
-                    <span className={"text-sm font-black " + actualColor}>
-                      {bucket.percentOfTarget}%
-                    </span>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-white shadow-inner">
+                      <div
+                        className="h-2.5 rounded-full transition-all duration-500"
+                        style={{
+                          width: Math.min(bucket.percentOfTarget, 100) + "%",
+                          background: bucket.color,
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px]">
+                      <span className="text-slate-400">
+                        {formatVND(bucket.actualAmount)} /{" "}
+                        {formatVND(bucket.targetAmount)}
+                      </span>
+                      <span
+                        className={
+                          bucket.difference > 0
+                            ? "font-bold text-rose-500"
+                            : "font-bold text-emerald-600"
+                        }
+                      >
+                        {diffText}
+                      </span>
+                    </div>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-2.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: Math.min(bucket.percentOfTarget, 100) + "%",
-                        background: bucket.color,
-                      }}
-                    />
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-[10px]">
-                    <span className="text-slate-400">
-                      {formatVND(bucket.actualAmount)} /{" "}
-                      {formatVND(bucket.targetAmount)}
-                    </span>
-                    <span
-                      className={
-                        bucket.difference > 0
-                          ? "font-bold text-rose-500"
-                          : "font-bold text-emerald-600"
-                      }
-                    >
-                      {diffText}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
       )}
 
-      {topRiskCategories.length > 0 && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-rose-500 to-orange-500 text-white shadow-sm">
-                <AlertTriangle size={17} />
-              </div>
-              <div>
-                <h2 className="text-base font-black text-slate-900">
-                  Top 3 danh mục rủi ro
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Ưu tiên khoản có thể kiểm soát; chi phí cố định chỉ cảnh báo
-                  khi vượt hạn mức
-                </p>
-              </div>
+      {budgets.length > 0 && (
+        <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <ChartPie size={17} />
             </div>
-            <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
-              <p className="text-[10px] font-bold uppercase text-slate-400">
-                Budget Intelligence
-              </p>
-              <p className="text-lg font-black text-slate-900">
-                {budgetIntelligenceScore}/100
+            <div>
+              <h2 className="text-base font-black text-slate-900">
+                Phân bổ ngân sách
+              </h2>
+              <p className="text-xs text-slate-500">
+                Tháng {activeMonth} · cơ cấu hạn mức theo danh mục
               </p>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {topRiskCategories.map((item, index) => {
-              const toneClass =
-                item.tone === "danger"
-                  ? "border-rose-100 bg-rose-50 text-rose-700"
-                  : item.tone === "warning"
-                    ? "border-amber-100 bg-amber-50 text-amber-700"
-                    : "border-emerald-100 bg-emerald-50 text-emerald-700";
-              return (
-                <button
-                  key={item.categoryId}
-                  type="button"
-                  onClick={() =>
-                    router.push(
-                      `/transactions?category=${encodeURIComponent(item.categoryId)}`,
-                    )
-                  }
-                  className={
-                    "rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md " +
-                    toneClass
-                  }
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="inline-flex size-7 items-center justify-center rounded-xl bg-white/70 text-xs font-black">
-                      {index + 1}
-                    </span>
-                    <span className="text-xs font-black">
-                      {item.riskScore}%
-                    </span>
-                  </div>
-                  <p className="font-black text-slate-900">
-                    {item.categoryName}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 opacity-80">
-                    {item.reason}
-                  </p>
-                  <p className="mt-2 text-[10px] font-bold opacity-70">
-                    Đã chi {formatVND(item.spent)} · Dự kiến{" "}
-                    {formatVND(item.projectedSpend)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════
-          SECTION 3 · Smart Budget AI Insights
-          ══════════════════════════════════════════════════════════════════ */}
-      {(realExpenseViolations.length > 0 ||
-        realExpenseTrends.length > 0 ||
-        realExpenseRecommendations.length > 0) && (
-        <section>
-          <div className="mb-3 flex items-center gap-2 px-1">
-            <Bot size={14} className="text-blue-600" />
-            <p className="text-sm font-black text-slate-700">Smart Budget AI</p>
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
-              {realExpenseViolations.length +
-                Math.min(realExpenseTrends.length, 2) +
-                Math.min(realExpenseRecommendations.length, 2)}
-            </span>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {/* Violations → rose */}
-            {realExpenseViolations.slice(0, 3).map((v) => (
-              <div
-                key={v.categoryId}
-                className="rounded-2xl border border-rose-200 bg-rose-50 p-4"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
-                    <AlertTriangle size={13} />
-                  </div>
-                  <p className="text-xs font-black text-rose-800">
-                    Vượt ngân sách · {v.categoryName}
-                  </p>
-                </div>
-                <p className="text-xs leading-5 text-rose-700">
-                  Đã chi{" "}
-                  <span className="font-bold">{formatVND(v.actualSpend)}</span>,
-                  vượt <span className="font-bold">{formatVND(v.overage)}</span>{" "}
-                  (+{Math.round(v.overagePercent)}%) so với hạn mức{" "}
-                  {formatVND(v.budgetLimit)}.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const targetBudget = filteredBudgets.find(
-                      (b) => b.categoryId === v.categoryId,
-                    );
-                    if (targetBudget) openEditForm(targetBudget);
-                  }}
-                  className="mt-3 rounded-xl bg-rose-600 px-3 py-2 text-[11px] font-black text-white transition hover:bg-rose-700"
-                >
-                  Chỉnh ngân sách
-                </button>
+          {pieData.length > 0 ? (
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+              <div className="flex shrink-0 justify-center">
+                <PieChart width={180} height={180}>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    innerRadius={54}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={entry.name + index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
               </div>
-            ))}
-
-            {/* Overspending trend → amber */}
-            {realExpenseTrends.slice(0, 2).map((a) => (
-              <div
-                key={a.categoryId}
-                className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-                    <TrendingUp size={13} />
-                  </div>
-                  <p className="text-xs font-black text-amber-800">
-                    Xu hướng tăng · {a.categoryName}
-                  </p>
-                </div>
-                {(() => {
-                  const currentSpend =
-                    spendingByCategory.current.get(a.categoryId) ?? 0;
-                  const previousSpend =
-                    spendingByCategory.previous.get(a.categoryId) ?? 0;
-                  const trendDelta = currentSpend - previousSpend;
-                  const directionText =
-                    trendDelta >= 0 ? "Chi tiêu tăng" : "Chi tiêu giảm";
+              <div className="grid flex-1 gap-x-8 gap-y-3 md:grid-cols-2">
+                {pieData.map((item) => {
+                  const percent =
+                    filteredSummary.totalLimit > 0
+                      ? Math.round(
+                          (item.value / filteredSummary.totalLimit) * 100,
+                        )
+                      : 0;
                   return (
-                    <div className="text-xs leading-5 text-amber-700">
-                      <p>
-                        {directionText}:{" "}
-                        {getTrendDeltaText(currentSpend, previousSpend)}
-                      </p>
-                      <p className="mt-1 font-bold">
-                        Tháng này: {formatVND(currentSpend)} · Tháng trước:{" "}
-                        {formatVND(previousSpend)}
-                      </p>
+                    <div
+                      key={item.name}
+                      title={`${item.name}: ${formatVND(item.value)} (${percent}%)`}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ background: item.color }}
+                          />
+                          <span className="truncate font-bold text-slate-700">
+                            {item.name}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="font-black text-slate-900">
+                            {percent}%
+                          </span>
+                          <span className="text-slate-400">
+                            {formatVND(item.value)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-2 rounded-full"
+                          style={{
+                            width: percent + "%",
+                            background: item.color,
+                          }}
+                        />
+                      </div>
                     </div>
                   );
-                })()}
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push(
-                      `/transactions?category=${encodeURIComponent(a.categoryId)}`,
-                    )
-                  }
-                  className="mt-3 rounded-xl bg-amber-500 px-3 py-2 text-[11px] font-black text-white transition hover:bg-amber-600"
-                >
-                  Xem giao dịch
-                </button>
+                })}
               </div>
-            ))}
-
-            {/* Recommendations → blue */}
-            {realExpenseRecommendations.slice(0, 2).map((r) => (
-              <div
-                key={r.categoryId}
-                className="rounded-2xl border border-blue-200 bg-blue-50 p-4"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
-                    <Lightbulb size={13} />
-                  </div>
-                  <p className="text-xs font-black text-blue-800">
-                    Đề xuất · {r.categoryName}
-                  </p>
-                </div>
-                <p className="text-xs leading-5 text-blue-700">{r.reasoning}</p>
-                {r.recommended > 0 && (
-                  <p className="mt-2 text-[10px] font-black text-blue-600">
-                    Đề xuất: {formatVND(r.recommended)}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const targetBudget = filteredBudgets.find(
-                      (b) => b.categoryId === r.categoryId,
-                    );
-                    if (targetBudget) {
-                      openEditForm(targetBudget);
-                    } else {
-                      setForm({
-                        ...emptyForm,
-                        categoryId: r.categoryId,
-                        month: activeMonth,
-                        limitAmount: String(Math.round(r.recommended || 0)),
-                      });
-                      setIsFormOpen(true);
-                    }
-                  }}
-                  className="mt-3 rounded-xl bg-blue-600 px-3 py-2 text-[11px] font-black text-white transition hover:bg-blue-700"
-                >
-                  Áp dụng đề xuất
-                </button>
-              </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-slate-400">
+              Chưa có dữ liệu phân bổ cho tháng này.
+            </p>
+          )}
         </section>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 4 · Month Filter + Budget Cards
+          SECTION 4 · Budget Cards
           ══════════════════════════════════════════════════════════════════ */}
       <section>
-        {/* Month filter */}
-        {allMonths.length > 1 && (
-          <div className="no-scrollbar mb-5 flex gap-2 overflow-x-auto pb-1">
-            {allMonths.map((m) => (
-              <button
-                key={m}
-                onClick={() => setActiveMonth(m)}
-                className={
-                  "shrink-0 rounded-2xl border px-4 py-2 text-sm font-bold transition-all " +
-                  (activeMonth === m
-                    ? "border-blue-300 bg-blue-600 text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50")
-                }
-              >
-                Tháng {m}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Section label */}
         <div className="mb-4 flex items-center gap-2 px-1">
           <div className="size-1.5 rounded-full bg-blue-600" />
@@ -1941,21 +1336,20 @@ export default function BudgetsPage() {
               <div
                 key={budget.id}
                 className={
-                  "group relative rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group relative rounded-3xl border bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md " +
                   s.border
                 }
               >
-                {/* Card header */}
-                <div className="flex items-start gap-3 pr-20">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
-                      <ChartPie size={20} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+                      <ChartPie size={18} />
                     </div>
                     <div className="min-w-0">
                       <h3 className="line-clamp-2 text-base font-black leading-snug text-slate-900">
                         {category?.name ?? "Danh mục"}
                       </h3>
-                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <span
                           className={
                             "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold " +
@@ -1976,16 +1370,17 @@ export default function BudgetsPage() {
                       </div>
                     </div>
                   </div>
-                  {/* Hover edit/delete */}
-                  <div className="absolute right-6 top-6 hidden shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
+                  <div className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
                     <button
                       onClick={() => openEditForm(budget)}
+                      aria-label="Sửa ngân sách"
                       className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                     >
                       <Edit3 size={13} />
                     </button>
                     <button
                       onClick={() => handleDelete(budget.id)}
+                      aria-label="Xóa ngân sách"
                       className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
                     >
                       <Trash2 size={13} />
@@ -1993,84 +1388,59 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
-                {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
-                      Hạn mức
-                    </p>
-                    <p className="mt-0.5 text-xs font-black text-blue-700">
-                      {budget.limitAmount >= 1_000_000
-                        ? Math.round(budget.limitAmount / 1_000_000) + "M"
-                        : Math.round(budget.limitAmount / 1_000) + "K"}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                       Đã chi
                     </p>
                     <p
                       className={
-                        "mt-0.5 text-xs font-black " +
-                        (status === "over" ? "text-rose-600" : "text-slate-700")
+                        "mt-1 text-xl font-black " +
+                        (status === "over" ? "text-rose-600" : "text-slate-900")
                       }
                     >
-                      {spent >= 1_000_000
-                        ? Math.round(spent / 1_000_000) + "M"
-                        : Math.round(spent / 1_000) + "K"}
+                      {formatVND(spent)}
                     </p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
-                      Còn lại
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Hạn mức
                     </p>
-                    <p
-                      className={
-                        "mt-0.5 text-xs font-black " +
-                        (remaining < 0 ? "text-rose-600" : "text-emerald-600")
-                      }
-                    >
-                      {Math.abs(remaining) >= 1_000_000
-                        ? Math.round(Math.abs(remaining) / 1_000_000) + "M"
-                        : Math.round(Math.abs(remaining) / 1_000) + "K"}
+                    <p className="mt-1 text-base font-black text-slate-700">
+                      {formatVND(budget.limitAmount)}
                     </p>
                   </div>
                 </div>
 
-                {/* Large spent figure */}
-                <div className="mt-4">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    Đã sử dụng
-                  </p>
-                  <p
-                    className={
-                      "mt-1 text-2xl font-black " +
-                      (status === "over" ? "text-rose-600" : "text-slate-900")
-                    }
-                  >
-                    {formatVND(spent)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    / {formatVND(budget.limitAmount)}
-                  </p>
-                </div>
-
-                {/* Progress bar */}
                 <div className="mt-4">
                   <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Tiến độ</span>
+                    <span
+                      className={
+                        remaining < 0
+                          ? "font-bold text-rose-600"
+                          : "font-bold text-emerald-600"
+                      }
+                    >
+                      {remaining < 0
+                        ? `Vượt ${formatVND(Math.abs(remaining))}`
+                        : `Còn ${formatVND(remaining)}`}
+                    </span>
                     <span
                       className={
                         "font-black " +
-                        (status === "over" ? "text-rose-600" : "text-slate-700")
+                        (status === "over"
+                          ? "text-rose-600"
+                          : status === "near"
+                            ? "text-amber-600"
+                            : "text-slate-700")
                       }
                     >
                       {pct}%
                     </span>
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-3 rounded-full transition-all duration-500"
+                      className="h-2.5 rounded-full transition-all duration-500"
                       style={{
                         width: Math.min(pct, 100) + "%",
                         background: s.bar,
@@ -2078,46 +1448,6 @@ export default function BudgetsPage() {
                     />
                   </div>
                 </div>
-
-                {(() => {
-                  const itemForecast = getBudgetForecast(
-                    budget.limitAmount,
-                    spent,
-                    budget.month,
-                  );
-                  return (
-                    <div
-                      className={
-                        "mt-3 rounded-2xl border px-3 py-2 text-xs " +
-                        (itemForecast.isProjectedOver
-                          ? "border-rose-100 bg-rose-50 text-rose-700"
-                          : itemForecast.projectedPercent >= 85
-                            ? "border-amber-100 bg-amber-50 text-amber-700"
-                            : "border-emerald-100 bg-emerald-50 text-emerald-700")
-                      }
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-bold">
-                          Dự kiến chi cuối tháng
-                        </span>
-                        <span className="font-black">
-                          {formatVND(itemForecast.projectedSpend)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[10px] opacity-80">
-                        {itemForecast.isProjectedOver
-                          ? `Có thể vượt ${formatVND(Math.abs(itemForecast.projectedRemaining))} (${itemForecast.projectedPercent}% hạn mức).`
-                          : `Dự kiến còn ${formatVND(itemForecast.projectedRemaining)} (${itemForecast.projectedPercent}% hạn mức).`}
-                      </p>
-                      {itemForecast.confidenceLevel === "low" && (
-                        <p className="mt-1 text-[10px] font-bold opacity-80">
-                          {itemForecast.confidenceLabel}: mới{" "}
-                          {itemForecast.elapsedDays} ngày dữ liệu.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
 
                 {/* Mobile edit row */}
                 <div className="mt-4 flex gap-2 lg:hidden">
@@ -2187,97 +1517,13 @@ export default function BudgetsPage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 5 · Monthly Planning (Recommended Budgets)
-          ══════════════════════════════════════════════════════════════════ */}
-      {smartBudget.recommendedBudgets.length > 0 && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-500 text-white shadow-sm shadow-emerald-100">
-              <Zap size={17} />
-            </div>
-            <div>
-              <h2 className="text-base font-black text-slate-900">
-                Kế hoạch ngân sách đề xuất
-              </h2>
-              <p className="text-xs text-slate-500">
-                Dựa trên phân tích chi tiêu thực tế nhiều tháng
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-120 text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="pb-3 text-left text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    Danh mục
-                  </th>
-                  <th className="pb-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    Hiện tại
-                  </th>
-                  <th className="pb-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    AI đề xuất
-                  </th>
-                  <th className="pb-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    Chênh lệch
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {smartBudget.recommendedBudgets.map((r) => {
-                  const diff = r.recommended - r.currentLimit;
-                  return (
-                    <tr
-                      key={r.categoryId}
-                      className="transition-colors hover:bg-blue-50/30"
-                    >
-                      <td className="py-3 font-bold text-slate-700">
-                        {r.categoryName}
-                      </td>
-                      <td className="py-3 text-right font-bold text-slate-500">
-                        {r.currentLimit > 0 ? formatVND(r.currentLimit) : "—"}
-                      </td>
-                      <td className="py-3 text-right font-black text-blue-700">
-                        {formatVND(r.recommended)}
-                      </td>
-                      <td className="py-3 text-right">
-                        <span
-                          className={
-                            "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-black " +
-                            (diff > 0
-                              ? "bg-rose-100 text-rose-600"
-                              : diff < 0
-                                ? "bg-emerald-100 text-emerald-600"
-                                : "bg-slate-100 text-slate-500")
-                          }
-                        >
-                          {diff > 0 ? (
-                            <ArrowUpRight size={9} />
-                          ) : diff < 0 ? (
-                            <ArrowDownRight size={9} />
-                          ) : null}
-                          {diff === 0
-                            ? "Giữ nguyên"
-                            : formatVND(Math.abs(diff))}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
         <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(var(--app-height,100dvh)-0.75rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
+          <div className="flex max-h-[calc(var(--app-height,100dvh)-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
-            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ngân sách" : "Tạo ngân sách"}
@@ -2296,7 +1542,7 @@ export default function BudgetsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-[calc(8rem+env(safe-area-inset-bottom))]"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:p-6"
             >
               <div className="space-y-4">
                 {/* Category select */}
@@ -2376,33 +1622,20 @@ export default function BudgetsPage() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ForecastCard({
+function MetricTile({
   label,
   value,
   sub,
-  tone,
 }: {
   label: string;
   value: string;
   sub: string;
-  tone: "good" | "warning" | "danger" | "neutral";
 }) {
-  const toneClass =
-    tone === "danger"
-      ? "border-rose-100 bg-rose-50 text-rose-700"
-      : tone === "warning"
-        ? "border-amber-100 bg-amber-50 text-amber-700"
-        : tone === "good"
-          ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-          : "border-slate-100 bg-white text-slate-700";
-
   return (
-    <div className={"rounded-3xl border p-4 shadow-sm " + toneClass}>
-      <p className="text-[10px] font-black uppercase tracking-wide opacity-70">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-xl font-black">{value}</p>
-      <p className="mt-1 text-xs opacity-75">{sub}</p>
+    <div className="rounded-2xl bg-white/80 p-3 shadow-sm shadow-slate-100/40">
+      <p className="text-[10px] font-black uppercase text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
+      <p className="text-xs text-slate-500">{sub}</p>
     </div>
   );
 }

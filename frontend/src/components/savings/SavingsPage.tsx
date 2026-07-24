@@ -9,9 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createClient } from "@supabase/supabase-js";
 import {
-  AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
   Banknote,
@@ -21,7 +19,6 @@ import {
   MessageSquareText,
   Clock3,
   Landmark,
-  MoreHorizontal,
   PiggyBank,
   Pencil,
   Plus,
@@ -42,6 +39,7 @@ import {
   getWallets,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
+import { supabase } from "@/src/lib/supabase";
 
 type SavingWithWallet = SavingAccount & {
   walletId?: string;
@@ -114,12 +112,10 @@ type SavingTransactionRow = {
   created_at?: string;
 };
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+const isSupabaseConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+);
 
 const mapSavingRowToSaving = (row: SavingRow): SavingWithWallet => ({
   id: row.id,
@@ -259,28 +255,6 @@ const getSavingStatus = (saving: SavingWithWallet) => {
 const estimateAnnualInterest = (saving: SavingAccount) => {
   const rate = saving.interestRate ?? 0;
   return calculateProjectedInterest(saving.balance, rate, saving.maturityDate);
-};
-
-const getHealthScore = (savings: SavingAccount[]) => {
-  if (savings.length === 0) return 0;
-
-  const emergencyFund = savings
-    .filter((item) => item.type === "emergency_fund")
-    .reduce((sum, item) => sum + item.balance, 0);
-  const totalSavings = savings.reduce((sum, item) => sum + item.balance, 0);
-  const emergencyRatio = totalSavings > 0 ? emergencyFund / totalSavings : 0;
-  const hasMaturityDates = savings.some((item) => item.maturityDate);
-  const hasInterestRates = savings.some((item) => (item.interestRate ?? 0) > 0);
-
-  return Math.min(
-    100,
-    Math.round(
-      40 +
-        emergencyRatio * 30 +
-        (hasMaturityDates ? 15 : 0) +
-        (hasInterestRates ? 15 : 0),
-    ),
-  );
 };
 
 const parseNumberInput = (value: string) => {
@@ -487,14 +461,6 @@ const getProgressLabel = (saving: SavingWithWallet) => {
   return `Còn ${days} ngày`;
 };
 
-const getMonthKey = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-
-const getMonthLabel = (date: Date) =>
-  new Intl.DateTimeFormat("vi-VN", {
-    month: "short",
-  }).format(date);
-
 export default function SavingsPage({
   savings = EMPTY_SAVINGS,
 }: SavingsPageProps) {
@@ -540,7 +506,6 @@ export default function SavingsPage({
       const days = getDaysUntil(item.maturityDate);
       return days !== null && days >= 0 && days <= 30;
     }).length;
-    const healthScore = getHealthScore(localSavings);
 
     return {
       totalSavings,
@@ -548,7 +513,6 @@ export default function SavingsPage({
       expectedInterest,
       emergencyFund,
       maturingSoon,
-      healthScore,
     };
   }, [localSavings]);
 
@@ -650,33 +614,12 @@ export default function SavingsPage({
       { key: "completed", label: "Đã tất toán" },
     ];
 
-  const visibleSavingIds = useMemo(
-    () => filteredSavings.map((item) => item.id),
-    [filteredSavings],
-  );
-  const selectedVisibleCount = selectedSavingIds.filter((id) =>
-    visibleSavingIds.includes(id),
-  ).length;
-  const isAllVisibleSelected =
-    visibleSavingIds.length > 0 &&
-    selectedVisibleCount === visibleSavingIds.length;
-
   const toggleSavingSelection = (savingId: string) => {
     setSelectedSavingIds((current) =>
       current.includes(savingId)
         ? current.filter((id) => id !== savingId)
         : [...current, savingId],
     );
-  };
-
-  const toggleAllVisibleSavings = () => {
-    setSelectedSavingIds((current) => {
-      if (isAllVisibleSelected) {
-        return current.filter((id) => !visibleSavingIds.includes(id));
-      }
-
-      return Array.from(new Set([...current, ...visibleSavingIds]));
-    });
   };
 
   const savingsExperience = useMemo(() => {
@@ -706,56 +649,6 @@ export default function SavingsPage({
     const emergencyGap = Math.max(0, emergencyTarget - metrics.emergencyFund);
     const emergencyMonthlyTopUp = Math.ceil(emergencyGap / 6);
 
-    const now = new Date();
-    const maturityTimeline = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() + index, 1);
-      const monthKey = getMonthKey(date);
-      const amount = localSavings
-        .filter((saving) => {
-          if (!saving.maturityDate) return false;
-          const maturityDate = new Date(saving.maturityDate);
-          return (
-            !Number.isNaN(maturityDate.getTime()) &&
-            getMonthKey(maturityDate) === monthKey
-          );
-        })
-        .reduce(
-          (sum, item) => sum + item.balance + estimateAnnualInterest(item),
-          0,
-        );
-
-      return {
-        key: monthKey,
-        label: getMonthLabel(date),
-        amount,
-      };
-    });
-
-    const maxMaturityAmount = Math.max(
-      1,
-      ...maturityTimeline.map((item) => item.amount),
-    );
-
-    const interestForecast = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() + index, 1);
-      const monthlyInterest = localSavings.reduce((sum, saving) => {
-        if (!isInterestBearingSaving(saving.type)) return sum;
-        const rate = saving.interestRate ?? 0;
-        return sum + Math.round((saving.balance * rate) / 100 / 12);
-      }, 0);
-
-      return {
-        key: `${getMonthKey(date)}-interest`,
-        label: getMonthLabel(date),
-        amount: monthlyInterest,
-      };
-    });
-
-    const maxInterestAmount = Math.max(
-      1,
-      ...interestForecast.map((item) => item.amount),
-    );
-
     const nextMaturity = [...localSavings]
       .filter((saving) => {
         const days = getDaysUntil(saving.maturityDate);
@@ -774,20 +667,9 @@ export default function SavingsPage({
       emergencyProgress,
       emergencyGap,
       emergencyMonthlyTopUp,
-      maturityTimeline,
-      maxMaturityAmount,
-      interestForecast,
-      maxInterestAmount,
       nextMaturity,
     };
   }, [localSavings, metrics.emergencyFund]);
-
-  const hasInterestForecast = savingsExperience.interestForecast.some(
-    (item) => item.amount > 0,
-  );
-  const hasMaturityTimeline = savingsExperience.maturityTimeline.some(
-    (item) => item.amount > 0,
-  );
 
   const isEditing = editingSavingId !== null;
   const selectedWalletBalance = selectedInitialWallet?.balance ?? 0;
@@ -916,11 +798,11 @@ export default function SavingsPage({
         return;
       }
 
-      const nextSavings = (savingRows ?? []).map((row) =>
-        mapSavingRowToSaving(row as SavingRow),
+      const nextSavings = (savingRows ?? []).map((row: SavingRow) =>
+        mapSavingRowToSaving(row),
       );
-      const nextTransactions = (transactionRows ?? []).map((row) =>
-        mapTransactionRowToTransaction(row as SavingTransactionRow),
+      const nextTransactions = (transactionRows ?? []).map(
+        (row: SavingTransactionRow) => mapTransactionRowToTransaction(row),
       );
 
       setLocalSavings(nextSavings);
@@ -1598,223 +1480,91 @@ export default function SavingsPage({
           Đang tải dữ liệu tiết kiệm từ Supabase...
         </div>
       ) : null}
-      <div className="rounded-4xl border border-slate-100 bg-white p-4 shadow-sm shadow-slate-200/70 lg:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-600">
-                  Savings
-                </p>
-                <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 lg:text-[34px]">
-                  Danh mục tiết kiệm
-                </h1>
-                <p className="mt-1 text-sm font-medium text-slate-500">
-                  Theo dõi tài khoản tiết kiệm, lãi dự kiến và lịch đáo hạn.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={openAddModal}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 sm:self-start"
-              >
-                <Plus size={17} />
-                Thêm khoản
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <SavingsMetricCard
-                title="Tổng tiết kiệm"
-                value={formatCurrency(metrics.totalSavings)}
-                description={`${localSavings.length} khoản đang theo dõi`}
-                tone="blue"
-                icon={<PiggyBank size={18} />}
-              />
-              <SavingsMetricCard
-                title="Lãi dự kiến"
-                value={`+${formatCurrency(metrics.expectedInterest)}`}
-                description={`Lãi suất TB ${formatPercent(savingsExperience.averageRate)}`}
-                tone="emerald"
-                icon={<TrendingUp size={18} />}
-              />
-              <SavingsMetricCard
-                title="Sắp đáo hạn"
-                value={`${metrics.maturingSoon} khoản`}
-                description={
-                  savingsExperience.nextMaturity
-                    ? getProgressLabel(savingsExperience.nextMaturity)
-                    : "Chưa có lịch đáo hạn"
-                }
-                tone="amber"
-                icon={<CalendarClock size={18} />}
-              />
-              <SavingsMetricCard
-                title="Quỹ khẩn cấp"
-                value={`${savingsExperience.emergencyMonths.toFixed(1)} tháng`}
-                description={`${savingsExperience.emergencyProgress}% mục tiêu`}
-                tone="indigo"
-                icon={<ShieldCheck size={18} />}
-              />
-            </div>
+      <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+              Savings Center
+            </p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+              Tiết kiệm
+            </h1>
+            <p className="mt-0.5 text-xs font-medium leading-5 text-slate-500 sm:text-sm">
+              Quản lý quỹ khẩn cấp, tài khoản tiết kiệm và tiền gửi có kỳ hạn.
+            </p>
           </div>
 
-          <aside className="w-full rounded-3xl border border-slate-100 bg-slate-50/70 p-4 xl:max-w-xs">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  Emergency Fund
-                </p>
-                <h2 className="mt-1 text-lg font-black text-slate-950">
-                  {formatCurrency(metrics.emergencyFund)}
-                </h2>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  Còn thiếu {formatCurrency(savingsExperience.emergencyGap)} để
-                  đạt {EMERGENCY_MONTH_TARGET} tháng.
-                </p>
-              </div>
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-                <ShieldCheck size={18} />
-              </span>
-            </div>
-
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between text-xs font-black text-slate-400">
-                <span>Tiến độ</span>
-                <span>{savingsExperience.emergencyProgress}%</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-blue-600"
-                  style={{ width: `${savingsExperience.emergencyProgress}%` }}
-                />
-              </div>
-            </div>
-          </aside>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
+          >
+            <Plus size={17} />
+            Thêm khoản tiết kiệm
+          </button>
         </div>
-      </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-4xl border border-slate-100 bg-white p-4 shadow-sm shadow-slate-200/70">
-          <div className="flex items-start justify-between gap-4">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SavingsMetricCard
+            title="Tổng tiết kiệm"
+            value={formatCurrency(metrics.totalSavings)}
+            description={`${localSavings.length} khoản đang theo dõi`}
+            tone="blue"
+            icon={<PiggyBank size={18} />}
+          />
+          <SavingsMetricCard
+            title="Lãi dự kiến"
+            value={`+${formatCurrency(metrics.expectedInterest)}`}
+            description={`Lãi suất TB ${formatPercent(savingsExperience.averageRate)}`}
+            tone="emerald"
+            icon={<TrendingUp size={18} />}
+          />
+          <SavingsMetricCard
+            title="Sắp đáo hạn"
+            value={`${metrics.maturingSoon} khoản`}
+            description={
+              savingsExperience.nextMaturity
+                ? getProgressLabel(savingsExperience.nextMaturity)
+                : "Chưa có lịch đáo hạn"
+            }
+            tone="amber"
+            icon={<CalendarClock size={18} />}
+          />
+          <SavingsMetricCard
+            title="Quỹ khẩn cấp"
+            value={formatCurrency(metrics.emergencyFund)}
+            description={`${savingsExperience.emergencyMonths.toFixed(1)} / ${EMERGENCY_MONTH_TARGET} tháng`}
+            tone="indigo"
+            icon={<ShieldCheck size={18} />}
+          />
+        </div>
+
+        <div className="mt-4 rounded-3xl border border-blue-100 bg-blue-50/50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
-                Maturity Timeline
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-500">
+                Mục tiêu quỹ khẩn cấp
               </p>
-              <h2 className="mt-1 text-lg font-black text-slate-950">
-                Lịch đáo hạn 6 tháng tới
-              </h2>
+              <p className="mt-1 text-sm font-bold text-slate-700">
+                {formatCurrency(metrics.emergencyFund)} /{" "}
+                {formatCurrency(savingsExperience.emergencyTarget)}
+              </p>
             </div>
-            <CalendarClock size={20} className="text-blue-500" />
+            <p className="text-xs font-black text-blue-600">
+              {savingsExperience.emergencyProgress}%
+            </p>
           </div>
-
-          {hasMaturityTimeline ? (
-            <div className="mt-4 space-y-2">
-              {savingsExperience.maturityTimeline.map((item) => (
-                <div
-                  key={item.key}
-                  className="grid grid-cols-[56px_1fr_92px] items-center gap-3"
-                >
-                  <span className="text-sm font-black text-slate-500">
-                    {item.label.replace("Tháng ", "T")}
-                  </span>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
-                      style={{
-                        width: `${Math.max(
-                          4,
-                          Math.round(
-                            (item.amount /
-                              savingsExperience.maxMaturityAmount) *
-                              100,
-                          ),
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-right text-sm font-black text-slate-700">
-                    {formatCurrency(item.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
-              <p className="text-sm font-black text-slate-700">
-                Chưa có khoản đáo hạn trong 6 tháng tới.
-              </p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">
-                Thêm ngày đáo hạn để theo dõi lịch tiền về.
-              </p>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-4xl border border-slate-100 bg-white p-4 shadow-sm shadow-slate-200/70">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
-                Interest Forecast
-              </p>
-              <h2 className="mt-1 text-lg font-black text-slate-950">
-                Ước tính lãi nhận theo tháng
-              </h2>
-            </div>
-            <TrendingUp size={20} className="text-emerald-500" />
+          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-blue-100">
+            <div
+              className="h-full rounded-full bg-blue-600 transition-all"
+              style={{ width: `${savingsExperience.emergencyProgress}%` }}
+            />
           </div>
-
-          {hasInterestForecast ? (
-            <>
-              <div className="mt-4 flex h-32 items-end gap-3">
-                {savingsExperience.interestForecast.map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex flex-1 flex-col items-center gap-2"
-                  >
-                    <div
-                      className="w-full rounded-t-2xl bg-linear-to-t from-emerald-500 to-teal-300"
-                      style={{
-                        height: `${Math.max(
-                          10,
-                          Math.round(
-                            (item.amount /
-                              savingsExperience.maxInterestAmount) *
-                              92,
-                          ),
-                        )}px`,
-                      }}
-                      title={formatCurrency(item.amount)}
-                    />
-                    <span className="text-xs font-black text-slate-400">
-                      {item.label.replace("Tháng ", "T")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-sm font-semibold text-slate-500">
-                Lãi tháng hiện tại ước tính khoảng{" "}
-                <span className="font-black text-emerald-600">
-                  {formatCurrency(
-                    savingsExperience.interestForecast[0]?.amount ?? 0,
-                  )}
-                </span>
-                .
-              </p>
-            </>
-          ) : (
-            <div className="mt-4 flex h-32 flex-col items-center justify-center rounded-3xl border border-dashed border-emerald-200 bg-emerald-50/40 px-4 text-center">
-              <TrendingUp size={24} className="text-emerald-500" />
-              <p className="mt-2 text-sm font-black text-slate-700">
-                Chưa có dữ liệu lãi.
-              </p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">
-                Thêm lãi suất cho tài khoản tiết kiệm để xem dự báo.
-              </p>
-            </div>
-          )}
-        </section>
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            Còn thiếu {formatCurrency(savingsExperience.emergencyGap)} để đạt
+            mục tiêu {EMERGENCY_MONTH_TARGET} tháng.
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1863,223 +1613,170 @@ export default function SavingsPage({
         </div>
       </div>
 
-      <div className="rounded-4xl border border-slate-100 bg-white p-5 shadow-sm shadow-slate-200/70 lg:p-6">
+      <div className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         {selectedSavingIds.length > 0 ? (
-          <div className="mb-4 flex flex-col gap-3 rounded-3xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm font-black text-blue-700 sm:flex-row sm:items-center sm:justify-between">
-            <span>Đã chọn {selectedSavingIds.length} khoản tiết kiệm</span>
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700">
+            <span>Đã chọn {selectedSavingIds.length} khoản</span>
             <button
               type="button"
               onClick={() => setSelectedSavingIds([])}
-              className="rounded-2xl bg-white px-4 py-2 text-slate-500 shadow-sm"
+              className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500 shadow-sm"
             >
               Bỏ chọn
             </button>
           </div>
         ) : null}
 
-        <div className="mb-4 flex items-center justify-end">
-          <details className="group relative">
-            <summary
-              className="flex size-10 cursor-pointer list-none items-center justify-center rounded-2xl bg-slate-50 text-slate-500 ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900 [&::-webkit-details-marker]:hidden"
-              aria-label="Tùy chọn bảng tiết kiệm"
-            >
-              <MoreHorizontal size={18} />
-            </summary>
-            <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-white p-1.5 text-sm font-bold text-slate-600 shadow-xl shadow-slate-200/80">
-              <button
-                type="button"
-                className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-slate-50 hover:text-slate-950"
-              >
-                Export CSV
-              </button>
-              <button
-                type="button"
-                className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-slate-50 hover:text-slate-950"
-              >
-                Export Excel
-              </button>
-            </div>
-          </details>
-        </div>
-
         {filteredSavings.length === 0 ? (
-          <div className="flex min-h-80 flex-col items-center justify-center rounded-3xl border border-dashed border-blue-200 bg-blue-50/40 px-6 text-center">
+          <div className="flex min-h-72 flex-col items-center justify-center rounded-3xl border border-dashed border-blue-200 bg-blue-50/30 px-6 text-center">
             <span className="flex size-16 items-center justify-center rounded-3xl bg-blue-100 text-blue-600">
               <PiggyBank size={30} />
             </span>
-            <h2 className="mt-5 text-xl font-black text-slate-950">
+            <h2 className="mt-4 text-xl font-black text-slate-950">
               Chưa có khoản tiết kiệm
             </h2>
             <p className="mt-2 max-w-md text-sm font-medium leading-6 text-slate-500">
-              Thêm sổ tiết kiệm đầu tiên để theo dõi lãi suất, ngày đáo hạn, quỹ
-              khẩn cấp và giá trị tài sản ròng.
+              Tạo khoản tiết kiệm đầu tiên để theo dõi số dư, lãi suất và ngày
+              đáo hạn.
             </p>
             <button
               type="button"
               onClick={openAddModal}
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700"
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-100"
             >
-              <Plus size={18} />
+              <Plus size={17} />
               Thêm khoản tiết kiệm
             </button>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-3xl border border-slate-100">
-            <div className="sticky top-0 z-10 hidden grid-cols-[40px_1.25fr_0.85fr_1fr_0.8fr_0.95fr_0.95fr_0.95fr_1fr_0.75fr] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500 backdrop-blur lg:grid">
-              <span>
-                <input
-                  type="checkbox"
-                  checked={isAllVisibleSelected}
-                  onChange={toggleAllVisibleSavings}
-                  className="size-4 rounded border-slate-300"
-                  aria-label="Chọn tất cả khoản tiết kiệm"
-                />
-              </span>
-              <span>Tên khoản</span>
-              <span>Loại</span>
-              <span>Số tiền</span>
-              <span>Lãi suất</span>
-              <span>Ngày tạo</span>
-              <span>Đáo hạn</span>
-              <span>Tiến độ</span>
-              <span>Trạng thái</span>
-              <span className="text-right">Hành động</span>
-            </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredSavings.map((item) => {
+              const status = getSavingStatus(item);
+              const expectedInterest = estimateAnnualInterest(item);
+              const progress = getSavingProgress(item);
 
-            <div className="divide-y divide-slate-100">
-              {filteredSavings.map((item) => {
-                const status = getSavingStatus(item);
-                const expectedInterest = estimateAnnualInterest(item);
-
-                return (
-                  <article
-                    key={item.id}
-                    className="grid gap-4 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[40px_1.25fr_0.85fr_1fr_0.8fr_0.95fr_0.95fr_0.95fr_1fr_0.75fr] lg:items-center"
-                  >
-                    <div className="hidden lg:block">
-                      <input
-                        type="checkbox"
-                        checked={selectedSavingIds.includes(item.id)}
-                        className="size-4 rounded border-slate-300"
-                        aria-label={`Chọn ${item.name}`}
-                        onChange={() => toggleSavingSelection(item.id)}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                        {item.type === "emergency_fund" ? (
-                          <ShieldCheck size={20} />
-                        ) : (
-                          <Landmark size={20} />
-                        )}
-                      </span>
-                      <div>
-                        <p className="font-black text-slate-950">{item.name}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-400">
-                          {item.notes || "Chưa có ghi chú"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-sm font-bold text-slate-600">
-                      {getSavingTypeLabel(item.type)}
-                    </div>
-
-                    <div className="text-base font-black text-blue-600">
-                      {formatCurrency(item.balance)}
-                    </div>
-
-                    <div className="text-sm font-black text-emerald-600">
-                      {isInterestBearingSaving(item.type)
-                        ? formatPercent(item.interestRate ?? 0)
-                        : "-"}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
-                      <CalendarClock size={16} className="text-blue-400" />
-                      {formatDate(item.createdAt)}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
-                      <CalendarClock size={16} className="text-slate-400" />
-                      {item.maturityDate
-                        ? formatDate(item.maturityDate)
-                        : "Linh hoạt"}
-                    </div>
-
-                    <div>
-                      {isInterestBearingSaving(item.type) ? (
-                        <>
-                          <div className="mb-1 flex items-center justify-between gap-2 text-xs font-black text-slate-400">
-                            <span>{getProgressLabel(item)}</span>
-                            <span>{getSavingProgress(item)}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-400"
-                              style={{ width: `${getSavingProgress(item)}%` }}
-                            />
-                          </div>
-                          <p className="mt-1 text-xs font-bold text-emerald-600">
-                            Lãi: +{formatCurrency(expectedInterest)}
-                          </p>
-                        </>
+              return (
+                <article
+                  key={item.id}
+                  className="group relative rounded-3xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50"
+                >
+                  <div className="flex items-start gap-3 pr-20">
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                      {item.type === "emergency_fund" ? (
+                        <ShieldCheck size={20} />
                       ) : (
-                        <div className="inline-flex w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
-                          Linh hoạt · Không kỳ hạn
-                        </div>
+                        <Landmark size={20} />
                       )}
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="wrap-anywhere text-base font-black text-slate-950">
+                        {item.name}
+                      </h3>
+                      <p className="mt-1 text-xs font-bold text-slate-400">
+                        {getSavingTypeLabel(item.type)}
+                      </p>
                     </div>
+                  </div>
 
-                    <span
-                      className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-black ${status.className}`}
+                  <div className="absolute right-5 top-5 flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(item)}
+                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      aria-label={`Chỉnh sửa ${item.name}`}
                     >
-                      {status.label === "Sắp đáo hạn" ? (
-                        <AlertTriangle size={12} />
-                      ) : (
-                        <CheckCircle2 size={12} />
-                      )}
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(item)}
+                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                      aria-label={`Xóa ${item.name}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      Số dư hiện tại
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-blue-700">
+                      {formatCurrency(item.balance)}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <p className="text-[10px] font-black uppercase text-slate-400">
+                        Lãi suất
+                      </p>
+                      <p className="mt-1 text-sm font-black text-emerald-600">
+                        {isInterestBearingSaving(item.type)
+                          ? formatPercent(item.interestRate ?? 0)
+                          : "Linh hoạt"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <p className="text-[10px] font-black uppercase text-slate-400">
+                        Đáo hạn
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-700">
+                        {item.maturityDate
+                          ? formatDate(item.maturityDate)
+                          : "Không kỳ hạn"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {isInterestBearingSaving(item.type) ? (
+                    <div className="mt-4">
+                      <div className="mb-1.5 flex items-center justify-between text-xs font-black">
+                        <span className="text-slate-400">
+                          {getProgressLabel(item)}
+                        </span>
+                        <span className="text-slate-700">{progress}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-400"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs font-bold text-emerald-600">
+                        Lãi dự kiến: +{formatCurrency(expectedInterest)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <span
+                      className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${status.className}`}
+                    >
+                      <CheckCircle2 size={12} />
                       {status.label}
                     </span>
-
-                    <div className="flex items-center gap-2 lg:justify-end">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditModal(item);
-                        }}
-                        className="inline-flex size-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition hover:bg-blue-100"
-                        aria-label={`Chỉnh sửa ${item.name}`}
-                        title="Chỉnh sửa"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDeleteTarget(item);
-                        }}
-                        className="inline-flex size-9 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 transition hover:bg-rose-100"
-                        aria-label={`Xóa ${item.name}`}
-                        title="Xóa"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSavingSelection(item.id)}
+                      className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                        selectedSavingIds.includes(item.id)
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-500"
+                      }`}
+                    >
+                      {selectedSavingIds.includes(item.id) ? "Đã chọn" : "Chọn"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
 
       {isAddOpen ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/40 p-4 py-6 backdrop-blur-sm sm:py-8">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng form khoản tiết kiệm"
@@ -2089,26 +1786,26 @@ export default function SavingsPage({
 
           <form
             onSubmit={handleSubmitSaving}
-            className="relative z-10 my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-220 flex-col overflow-hidden rounded-4xl bg-white shadow-2xl shadow-slate-950/20"
+            className="relative z-10 flex h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl shadow-slate-950/20 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"
           >
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white p-6 lg:p-8">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="flex items-start gap-4">
-                <span className="hidden size-14 shrink-0 items-center justify-center rounded-3xl bg-blue-50 text-blue-600 sm:flex">
-                  <PiggyBank size={26} />
+                <span className="hidden size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 sm:flex">
+                  <PiggyBank size={20} />
                 </span>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">
                     {isEditing ? "EDIT SAVING" : "NEW SAVING"}
                   </p>
-                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                  <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
                     {isEditing
                       ? "Chỉnh sửa khoản tiết kiệm"
                       : "Tạo khoản tiết kiệm mới"}
                   </h2>
                   <p className="mt-1 text-sm font-medium text-slate-500">
                     {isEditing
-                      ? "Chỉ giữ các trường cần sửa: thông tin, số tiền, lãi suất, kỳ hạn và preview."
-                      : "Chọn nguồn vốn và thông tin khoản tiết kiệm để bắt đầu."}
+                      ? "Cập nhật thông tin khoản tiết kiệm và thực hiện nạp, rút hoặc tất toán."
+                      : "Chọn ví nguồn và nhập thông tin khoản tiết kiệm."}
                   </p>
                 </div>
               </div>
@@ -2116,15 +1813,15 @@ export default function SavingsPage({
               <button
                 type="button"
                 onClick={closeAddModal}
-                className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+                className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900 sm:size-9"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 lg:px-8 lg:py-6">
-              <div className="grid gap-5">
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-4 lg:p-5">
+            <div className="flex-1 touch-pan-y overflow-y-auto px-4 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4">
+              <div className="grid gap-4">
+                <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
@@ -2146,12 +1843,12 @@ export default function SavingsPage({
                     ) : null}
                   </div>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <label>
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Tên khoản
                       </span>
-                      <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
+                      <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
                         <PiggyBank
                           size={18}
                           className="shrink-0 text-blue-500"
@@ -2162,7 +1859,7 @@ export default function SavingsPage({
                             updateForm("name", event.target.value)
                           }
                           placeholder={formConfig.namePlaceholder}
-                          className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                          className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                         />
                       </div>
                     </label>
@@ -2176,7 +1873,7 @@ export default function SavingsPage({
                         onChange={(event) =>
                           updateForm("type", event.target.value as SavingType)
                         }
-                        className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                        className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:text-sm"
                       >
                         <option value="savings_account">
                           Tài khoản tiết kiệm
@@ -2196,7 +1893,7 @@ export default function SavingsPage({
                         onChange={(event) =>
                           updateForm("walletId", event.target.value)
                         }
-                        className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                        className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:text-sm"
                       >
                         <option value="">
                           {isEditing ? "Chọn ví liên kết" : "Chọn ví nguồn"}
@@ -2213,7 +1910,7 @@ export default function SavingsPage({
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Ghi chú
                       </span>
-                      <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
+                      <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
                         <MessageSquareText
                           size={18}
                           className="shrink-0 text-blue-500"
@@ -2224,14 +1921,14 @@ export default function SavingsPage({
                             updateForm("notes", event.target.value)
                           }
                           placeholder={formConfig.notesPlaceholder}
-                          className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                          className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                         />
                       </div>
                     </label>
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm lg:p-5">
+                <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
                       Tài chính
@@ -2241,12 +1938,12 @@ export default function SavingsPage({
                     </h3>
                   </div>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <label>
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Số tiền hiện tại
                       </span>
-                      <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
+                      <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
                         <Banknote
                           size={18}
                           className="shrink-0 text-blue-500"
@@ -2263,7 +1960,7 @@ export default function SavingsPage({
                             );
                           }}
                           placeholder={formConfig.amountPlaceholder}
-                          className={`h-full min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400 ${isEditing ? "cursor-not-allowed text-slate-500" : "text-slate-700"}`}
+                          className={`h-full min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-slate-400 sm:text-sm ${isEditing ? "cursor-not-allowed text-slate-500" : "text-slate-700"}`}
                         />
                       </div>
                       {isEditing ? (
@@ -2279,7 +1976,7 @@ export default function SavingsPage({
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                           Lãi suất / năm
                         </span>
-                        <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
+                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
                           <Percent
                             size={18}
                             className="shrink-0 text-blue-500"
@@ -2291,7 +1988,7 @@ export default function SavingsPage({
                               updateForm("interestRate", event.target.value)
                             }
                             placeholder={formConfig.interestPlaceholder}
-                            className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                           />
                         </div>
                       </label>
@@ -2302,7 +1999,7 @@ export default function SavingsPage({
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                           {formConfig.maturityLabel}
                         </span>
-                        <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
+                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
                           <Clock3
                             size={18}
                             className="shrink-0 text-blue-500"
@@ -2322,7 +2019,7 @@ export default function SavingsPage({
                 </div>
 
                 {isEditing && selectedSaving ? (
-                  <div className="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-4 lg:p-5">
+                  <div className="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">
@@ -2337,7 +2034,7 @@ export default function SavingsPage({
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-white p-1 shadow-sm">
+                      <div className="grid grid-cols-3 gap-1 rounded-2xl border border-emerald-100 bg-white p-1 shadow-sm">
                         {(["deposit", "withdraw", "settlement"] as const).map(
                           (type) => (
                             <button
@@ -2362,7 +2059,7 @@ export default function SavingsPage({
                                     "",
                                 }))
                               }
-                              className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition ${
+                              className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-[12px] font-black transition ${
                                 transactionForm.type === type
                                   ? "bg-emerald-600 text-white shadow-lg shadow-emerald-100"
                                   : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
@@ -2376,12 +2073,12 @@ export default function SavingsPage({
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_1.2fr]">
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
                       <label>
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                           Số tiền giao dịch
                         </span>
-                        <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-emerald-100 bg-white px-4 transition focus-within:border-emerald-300 focus-within:ring-4 focus-within:ring-emerald-100">
+                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-emerald-100 bg-white px-4 transition focus-within:border-emerald-300 focus-within:ring-4 focus-within:ring-emerald-100">
                           <Banknote
                             size={18}
                             className="shrink-0 text-emerald-500"
@@ -2402,7 +2099,7 @@ export default function SavingsPage({
                                   )
                                 : "10.000.000"
                             }
-                            className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                           />
                         </div>
                       </label>
@@ -2421,7 +2118,7 @@ export default function SavingsPage({
                               event.target.value,
                             )
                           }
-                          className="mt-2 h-12 w-full rounded-2xl border border-emerald-100 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                          className="mt-1.5 min-h-11 w-full rounded-2xl border border-emerald-100 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 sm:text-sm"
                         >
                           <option value="">Chọn ví</option>
                           {wallets.map((wallet) => (
@@ -2436,7 +2133,7 @@ export default function SavingsPage({
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                           Ghi chú giao dịch
                         </span>
-                        <div className="mt-2 flex h-12 items-center gap-3 rounded-2xl border border-emerald-100 bg-white px-4 transition focus-within:border-emerald-300 focus-within:ring-4 focus-within:ring-emerald-100">
+                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-emerald-100 bg-white px-4 transition focus-within:border-emerald-300 focus-within:ring-4 focus-within:ring-emerald-100">
                           <MessageSquareText
                             size={18}
                             className="shrink-0 text-emerald-500"
@@ -2449,7 +2146,7 @@ export default function SavingsPage({
                             placeholder={getTransactionLabel(
                               transactionForm.type,
                             )}
-                            className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                           />
                         </div>
                       </label>
@@ -2519,7 +2216,7 @@ export default function SavingsPage({
                   </div>
                 ) : null}
 
-                <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-4 lg:p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -2527,7 +2224,7 @@ export default function SavingsPage({
                           Preview
                         </p>
                         <h3 className="mt-1 text-base font-black text-slate-950">
-                          Ảnh hưởng sau khi lưu
+                          Tóm tắt khoản tiết kiệm
                         </h3>
                       </div>
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600">
@@ -2535,8 +2232,8 @@ export default function SavingsPage({
                       </span>
                     </div>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-white p-4">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-2xl bg-white p-3.5">
                         <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                           Số tiền hiện tại
                         </p>
@@ -2544,7 +2241,7 @@ export default function SavingsPage({
                           {formatCurrency(previewPrincipal)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-4">
+                      <div className="rounded-2xl bg-white p-3.5">
                         <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                           {formConfig.interestTitle}
                         </p>
@@ -2552,7 +2249,7 @@ export default function SavingsPage({
                           +{formatCurrency(previewInterest)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-4">
+                      <div className="rounded-2xl bg-white p-3.5">
                         <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                           {formConfig.totalTitle}
                         </p>
@@ -2560,7 +2257,7 @@ export default function SavingsPage({
                           {formatCurrency(previewMaturityValue)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-4">
+                      <div className="rounded-2xl bg-white p-3.5">
                         <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                           Ngày đáo hạn
                         </p>
@@ -2573,7 +2270,7 @@ export default function SavingsPage({
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm lg:p-5">
+                  <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
                       Ví
                     </p>
@@ -2615,7 +2312,7 @@ export default function SavingsPage({
                 {isEditing &&
                 selectedSaving &&
                 selectedTransactions.length > 0 ? (
-                  <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm lg:p-5">
+                  <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
@@ -2630,7 +2327,7 @@ export default function SavingsPage({
                       </span>
                     </div>
 
-                    <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
+                    <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
                       {selectedTransactions.slice(0, 3).map((transaction) => {
                         const signedAmount =
                           getSignedTransactionAmount(transaction);
@@ -2684,7 +2381,7 @@ export default function SavingsPage({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 bg-white/95 p-5 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <div className="flex shrink-0 flex-col gap-2.5 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
               {isEditing && selectedSaving ? (
                 <button
                   type="button"
@@ -2692,7 +2389,7 @@ export default function SavingsPage({
                     setDeleteTarget(selectedSaving);
                     closeAddModal();
                   }}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-5 text-sm font-bold text-rose-600 transition hover:bg-rose-100"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-100"
                 >
                   <Trash2 size={17} />
                   Xóa khoản này
@@ -2705,7 +2402,7 @@ export default function SavingsPage({
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 px-5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
                 >
                   Hủy
                 </button>
@@ -2713,7 +2410,7 @@ export default function SavingsPage({
                 <button
                   type="submit"
                   disabled={isPersisting || isInitialDepositTooHigh}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isEditing ? <Pencil size={18} /> : <Plus size={18} />}
                   {isPersisting
