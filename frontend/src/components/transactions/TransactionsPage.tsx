@@ -1946,35 +1946,56 @@ export default function TransactionsPage() {
                   );
                 return (
                   <div key={date}>
-                    <div className="sticky top-0 z-1 flex items-center justify-between border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-slate-800">
-                          {formatTransactionDayLabel(date)}
-                        </span>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-400 ring-1 ring-slate-200">
-                          {txns.length} giao dịch
-                        </span>
+                    <div className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 text-sm font-black text-slate-800">
+                            {formatTransactionDayLabel(date)}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-400 ring-1 ring-slate-200">
+                            {txns.length} giao dịch
+                          </span>
+                        </div>
+
+                        <div className="hidden items-center gap-2 text-[11px] font-bold sm:flex">
+                          {dayIncome > 0 && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
+                              +{formatVND(dayIncome)}
+                            </span>
+                          )}
+                          {dayExpense > 0 && (
+                            <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">
+                              -{formatVND(dayExpense)}
+                            </span>
+                          )}
+                          {dayTransferTurnover > 0 && (
+                            <span
+                              className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-600"
+                              title={
+                                "Luân chuyển nội bộ: " +
+                                formatVND(dayTransferTurnover)
+                              }
+                            >
+                              ⇄ {formatVND(dayTransferTurnover)}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="hidden items-center gap-2 text-[11px] font-bold sm:flex">
+
+                      <div className="mt-2 flex max-w-full gap-1.5 overflow-x-auto pb-0.5 text-[10px] font-black scrollbar-none sm:hidden">
                         {dayIncome > 0 && (
-                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
-                            +{formatVND(dayIncome)}
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-600 ring-1 ring-emerald-100">
+                            Thu +{formatVND(dayIncome)}
                           </span>
                         )}
                         {dayExpense > 0 && (
-                          <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">
-                            -{formatVND(dayExpense)}
+                          <span className="shrink-0 rounded-full bg-rose-50 px-2.5 py-1 text-rose-600 ring-1 ring-rose-100">
+                            Chi -{formatVND(dayExpense)}
                           </span>
                         )}
                         {dayTransferTurnover > 0 && (
-                          <span
-                            className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-600"
-                            title={
-                              "Luân chuyển nội bộ: " +
-                              formatVND(dayTransferTurnover)
-                            }
-                          >
-                            ⇄ {formatVND(dayTransferTurnover)}
+                          <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-600 ring-1 ring-indigo-100">
+                            Chuyển ⇄ {formatVND(dayTransferTurnover)}
                           </span>
                         )}
                       </div>
