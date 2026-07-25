@@ -719,14 +719,14 @@ export default function WalletsPage() {
           Transfer Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[min(84dvh,640px)] w-full flex-col overflow-hidden rounded-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-3 pt-4 sm:p-6 sm:pb-4">
+        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
-                <div className="mb-2 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
+                <div className="mb-1.5 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
                   <ArrowLeftRight size={18} />
                 </div>
-                <h2 className="text-[1.25rem] font-black leading-tight text-slate-900">
+                <h2 className="text-[1.2rem] font-black leading-tight text-slate-900">
                   Chuyển tiền giữa các ví
                 </h2>
                 <p className="mt-1 max-w-[16rem] text-[11px] leading-4 text-slate-400 sm:max-w-none sm:text-xs sm:leading-5">
@@ -746,13 +746,13 @@ export default function WalletsPage() {
               onSubmit={handleTransferSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-6 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 overflow-hidden px-4 py-2.5 sm:overflow-y-auto sm:px-6 sm:py-5">
                 {wallets.length < 2 ? (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-700">
                     Bạn cần ít nhất 2 ví để dùng tính năng chuyển tiền.
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <WalletSelect
                       label="Từ ví"
                       wallets={wallets}
@@ -784,9 +784,9 @@ export default function WalletsPage() {
                       }
                     />
 
-                    <div className="grid gap-2.5 md:grid-cols-2">
+                    <div className="grid gap-2 md:grid-cols-2">
                       <div>
-                        <p className="mb-1.5 text-[13px] font-black text-slate-700 sm:text-sm">
+                        <p className="mb-1 text-[13px] font-black text-slate-700 sm:mb-1.5 sm:text-sm">
                           Số tiền chuyển
                         </p>
                         <CurrencyInput
@@ -827,19 +827,19 @@ export default function WalletsPage() {
                 />
               </div>
 
-              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-4">
+              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-6 sm:py-4">
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => setIsTransferOpen(false)}
-                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
                     disabled={wallets.length < 2}
-                    className="flex-1 rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 flex-1 rounded-2xl bg-indigo-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Chuyển tiền
                   </button>
@@ -1188,7 +1188,7 @@ function WalletSelect({
       <span className="mb-1.5 block text-sm font-black text-slate-700">
         {label}
       </span>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
         <div className="flex items-center gap-2">
           {selectedWallet && (
             <div className="shrink-0">
@@ -1200,7 +1200,7 @@ function WalletSelect({
             <select
               value={value}
               onChange={(event) => onChange(event.target.value)}
-              className="min-h-11 w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-9 text-[15px] font-bold text-slate-700 outline-none focus:border-blue-400 sm:text-sm"
+              className="min-h-10 w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-[15px] font-bold text-slate-700 outline-none focus:border-blue-400 sm:min-h-11 sm:py-2.5 sm:text-sm"
             >
               <option value="">Chọn ví</option>
               {wallets.map((wallet) => (
@@ -1213,7 +1213,7 @@ function WalletSelect({
         </div>
 
         {selectedWallet && (
-          <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs">
+          <div className="mt-1.5 flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-1.5 text-xs">
             <span className="min-w-0 truncate font-bold text-slate-500">
               {getWalletTypeLabel(selectedWallet.type)}
             </span>

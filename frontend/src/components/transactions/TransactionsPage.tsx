@@ -2393,23 +2393,23 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[min(88dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="shrink-0 border-b border-slate-100 px-4 pb-3 pt-4 sm:px-6 sm:py-4">
+            <div className="shrink-0 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-[1.25rem] font-black tracking-tight text-slate-900 sm:text-xl">
+                  <h2 className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl">
                     {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
                   </h2>
-                  <p className="mt-0.5 max-w-[16rem] text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
+                  <p className="mt-0.5 max-w-[15rem] text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
                     Ghi nhận khoản thu, chi hoặc chuyển tiền giữa các ví.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95 sm:size-9"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95 sm:size-9"
                 >
                   <X size={17} />
                 </button>
@@ -2419,10 +2419,10 @@ export default function TransactionsPage() {
             <form
               id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-4 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5"
+              className="min-h-0 flex-1 overflow-hidden px-4 py-2.5 sm:overflow-y-auto sm:px-6 sm:py-4 sm:pb-5"
             >
               {/* Type selector — premium segmented control */}
-              <div className="mb-2.5">
+              <div className="mb-2">
                 <p className="mb-2 text-sm font-black text-slate-700">
                   Loại giao dịch
                 </p>
@@ -2454,7 +2454,7 @@ export default function TransactionsPage() {
                         type="button"
                         onClick={() => handleTypeChange(item.mode)}
                         className={
-                          "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[12px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
+                          "flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[11px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
                           (active
                             ? item.active + " text-white shadow-lg"
                             : "text-slate-500 hover:bg-white hover:text-slate-800")
@@ -2471,7 +2471,7 @@ export default function TransactionsPage() {
               </div>
 
               {/* Amount — hero input */}
-              <div className="mb-3">
+              <div className="mb-2.5">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="text-sm font-black text-slate-700">Số tiền</p>
                   {modalAmount > 0 && (
@@ -2502,11 +2502,11 @@ export default function TransactionsPage() {
                       }))
                     }
                     placeholder="Nhập số tiền"
-                    className="w-full rounded-2xl bg-transparent py-3 pl-11 pr-4 text-[1.45rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-[15px] placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 sm:py-4 sm:text-2xl"
+                    className="w-full rounded-2xl bg-transparent py-2.5 pl-11 pr-4 text-[1.3rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-[14px] placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 sm:py-4 sm:text-2xl"
                   />
                 </div>
 
-                <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1 scrollbar-none">
+                <div className="-mx-1 mt-1.5 flex gap-1 overflow-x-auto px-1 pb-0.5 scrollbar-none">
                   {amountQuickActions.map((value) => (
                     <button
                       key={value}
@@ -2514,7 +2514,7 @@ export default function TransactionsPage() {
                       onClick={() =>
                         setForm((p) => ({ ...p, amount: String(value) }))
                       }
-                      className="min-h-8 shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
+                      className="min-h-7 shrink-0 rounded-full border border-slate-200 bg-white px-3 py-0.5 text-[10px] font-black text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 active:scale-95"
                     >
                       {value >= 1000000
                         ? value / 1000000 + "tr"
@@ -2524,7 +2524,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-2.5 md:grid-cols-2">
+              <div className="grid gap-2 md:grid-cols-2">
                 <FormInput
                   label="Ngày"
                   type="date"
@@ -2597,7 +2597,7 @@ export default function TransactionsPage() {
               {canShowWalletPreview && (
                 <div
                   className={
-                    "mt-3 rounded-2xl border p-3 " +
+                    "mt-3 hidden rounded-2xl border p-3 sm:block " +
                     modalAccent.border +
                     " " +
                     modalAccent.soft
@@ -2671,8 +2671,8 @@ export default function TransactionsPage() {
               )}
 
               {/* Recurring toggle */}
-              <div className="mt-3 border-t border-slate-100 pt-3">
-                <div className="flex min-h-12 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2">
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <div className="flex min-h-10 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-1.5">
                   <div>
                     <p className="text-sm font-black text-slate-700">Định kỳ</p>
                     <p className="text-xs font-medium text-slate-400">
@@ -2724,12 +2724,12 @@ export default function TransactionsPage() {
               />
             </form>
 
-            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
+            <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
+                  className="min-h-10 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:bg-slate-50 active:scale-[.98]"
                 >
                   Hủy
                 </button>
@@ -2737,7 +2737,7 @@ export default function TransactionsPage() {
                   type="submit"
                   form="transaction-form"
                   className={
-                    "min-h-12 flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
+                    "min-h-10 flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
                     modalAccent.bg +
                     " " +
                     modalAccent.bgHover +
@@ -3052,7 +3052,7 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-base outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
+        className="min-h-9 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-[15px] outline-none transition-all focus:border-blue-400 focus:bg-white focus:shadow-sm sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
       />
     </label>
   );
@@ -3077,7 +3077,7 @@ function FormSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-base outline-none transition-all focus:border-blue-400 focus:bg-white sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
+        className="min-h-9 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-[15px] outline-none transition-all focus:border-blue-400 focus:bg-white sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
       >
         <option value="">Chọn</option>
         {options.map((o) => (
