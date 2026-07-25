@@ -49,13 +49,9 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
-  buildCategorySpendingData,
   buildMonthlyCashFlowData,
   calculateDashboardSummary,
   calculateFinancialStructureSummary,
-  calculateFinancialStabilitySummary,
-  calculateFinancialIndependenceSummary,
-  calculateAiCfoInsightSummary,
   calculateRule503020,
   filterBudgetsByDateRange,
   filterTransactionsByDateRange,
@@ -119,16 +115,6 @@ if (invalidDashboardComponents.length > 0) {
     )}`,
   );
 }
-
-const ASSET_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#38bdf8", "#6366f1"];
-const SPEND_COLORS = [
-  "#fb7185",
-  "#f97316",
-  "#0ea5e9",
-  "#6366f1",
-  "#10b981",
-  "#94a3b8",
-];
 
 type SavingRow = {
   id: string;
@@ -614,27 +600,6 @@ function formatOneDecimal(value: number) {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(Math.round(value), 100));
-}
-
-function buildConicGradient(items: Array<{ value: number; color: string }>) {
-  const validItems = items.filter(
-    (item) => Number.isFinite(item.value) && item.value > 0,
-  );
-  const total = validItems.reduce((sum, item) => sum + item.value, 0);
-
-  if (total <= 0) {
-    return "conic-gradient(#e2e8f0 0deg 360deg)";
-  }
-
-  let cursor = 0;
-  const stops = validItems.map((item) => {
-    const start = cursor;
-    const sweep = (item.value / total) * 360;
-    cursor += sweep;
-    return `${item.color} ${start}deg ${cursor}deg`;
-  });
-
-  return `conic-gradient(${stops.join(", ")})`;
 }
 
 export default function DashboardPage() {
@@ -1221,62 +1186,8 @@ export default function DashboardPage() {
   );
 
   // ── Asset pie ─────────────────────────────────────────────────────────────
-  const assetPieData = useMemo(() => {
-    const items = snapshotWallets.map((w, i) => ({
-      name: w.name,
-      value: w.balance,
-      color: ASSET_COLORS[i % ASSET_COLORS.length],
-    }));
-    if (savingsSnapshot.totalSavings > 0)
-      items.push({
-        name: "Tiết kiệm",
-        value: savingsSnapshot.totalSavings,
-        color: "#38bdf8",
-      });
-    if (forexSnapshot.balance > 0)
-      items.push({
-        name: "Forex Cash",
-        value: forexSnapshot.balance,
-        color: "#06b6d4",
-      });
-    if (summary.investmentAssets > 0)
-      items.push({
-        name: "Đầu tư",
-        value: summary.investmentAssets,
-        color: "#10b981",
-      });
-    return items;
-  }, [
-    snapshotWallets,
-    savingsSnapshot.totalSavings,
-    forexSnapshot.balance,
-    summary.investmentAssets,
-  ]);
-  const assetDonutGradient = useMemo(
-    () => buildConicGradient(assetPieData),
-    [assetPieData],
-  );
 
   // ── Spending ──────────────────────────────────────────────────────────────
-  const spendingByCategory = useMemo(
-    () => buildCategorySpendingData(filteredTransactions, categories),
-    [filteredTransactions, categories],
-  );
-  const spendingPieData = useMemo(
-    () =>
-      spendingByCategory.map((item, i) => ({
-        id: item.id,
-        name: item.name,
-        value: item.value, // VND amount drives slice size
-        percent: item.percent,
-        color: SPEND_COLORS[i % SPEND_COLORS.length],
-      })),
-    [spendingByCategory],
-  );
-  const spendingDonutGradient = useMemo(
-    () => buildConicGradient(spendingPieData),
-    [spendingPieData],
-  );
 
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
@@ -1360,109 +1271,7 @@ export default function DashboardPage() {
     [cashFlowTrend, monthlyInvestmentAllocation, monthlySavingAllocation],
   );
 
-  const cashFlowMonthsWithData = useMemo(
-    () =>
-      cashFlowData.filter(
-        (item) =>
-          item.thu > 0 || item.chi > 0 || item.tietKiem !== 0 || item.dauTu > 0,
-      ).length,
-    [cashFlowData],
-  );
-
-  const cashFlowYearTotals = useMemo(
-    () =>
-      cashFlowData.reduce(
-        (totals, item) => ({
-          income: totals.income + item.thu,
-          expense: totals.expense + item.chi,
-          saving: totals.saving + Math.max(item.tietKiem, 0),
-          investment: totals.investment + item.dauTu,
-          net: totals.net + item.dongTienRong,
-        }),
-        { income: 0, expense: 0, saving: 0, investment: 0, net: 0 },
-      ),
-    [cashFlowData],
-  );
-
-  const averageMonthlyNetWorthGrowth = useMemo(() => {
-    const points = netWorthTrend
-      .filter(
-        (point) =>
-          typeof point.value === "number" && Number.isFinite(point.value),
-      )
-      .map((point) => ({ month: point.month, value: Number(point.value) }))
-      .sort((a, b) => a.month - b.month);
-
-    if (points.length < 2) return 0;
-
-    const changes = points.slice(1).map((point, index) => {
-      const previous = points[index];
-      return point.value - previous.value;
-    });
-
-    return changes.reduce((sum, value) => sum + value, 0) / changes.length;
-  }, [netWorthTrend]);
-
-  const cashFlowSubtitle =
-    cashFlowMonthsWithData <= 0
-      ? `Chưa có dữ liệu trong năm ${selectedYear}`
-      : `Dòng tiền 12 tháng trong năm ${selectedYear}`;
-
   const netCashFlow = summary.income - summary.expense;
-  const yearlyNetCashFlow = cashFlowYearTotals.net;
-  const yearlySavingRate =
-    cashFlowYearTotals.income > 0
-      ? Math.round(
-          (Math.max(yearlyNetCashFlow, 0) / cashFlowYearTotals.income) * 100,
-        )
-      : 0;
-
-  const transferAmount = useMemo(
-    () =>
-      filteredTransactions
-        .filter((transaction) => transaction.type === "transfer")
-        .reduce(
-          (sum, transaction) => sum + Math.abs(Number(transaction.amount ?? 0)),
-          0,
-        ),
-    [filteredTransactions],
-  );
-
-  const cashFlowFormulaRows = useMemo(
-    () => [
-      {
-        label: "Thu nhập trong kỳ",
-        value: summary.income,
-        tone: "text-emerald-600",
-      },
-      {
-        label: "Chi tiêu trong kỳ",
-        value: -summary.expense,
-        tone: "text-rose-500",
-      },
-      {
-        label: "Chuyển ví",
-        value: transferAmount,
-        tone: "text-slate-500",
-        note: "Lấy từ lịch sử chuyển ví, không tính vào dòng tiền",
-      },
-    ],
-    [summary.income, summary.expense, transferAmount],
-  );
-
-  const netWorthForecast = useMemo(() => {
-    const monthlyGrowth = Number.isFinite(averageMonthlyNetWorthGrowth)
-      ? averageMonthlyNetWorthGrowth
-      : 0;
-    const project = (months: number) =>
-      summary.netWorth + monthlyGrowth * months;
-
-    return [
-      { label: "3 tháng", value: project(3) },
-      { label: "6 tháng", value: project(6) },
-      { label: "12 tháng", value: project(12) },
-    ];
-  }, [averageMonthlyNetWorthGrowth, summary.netWorth]);
 
   const emergencyMonthsExact = useMemo(() => {
     if (summary.monthlyExpense <= 0) return 0;
@@ -1569,45 +1378,6 @@ export default function DashboardPage() {
       },
     ],
     [financialStructureAdjusted],
-  );
-
-  const financialStability = useMemo(
-    () =>
-      calculateFinancialStabilitySummary({
-        financialStructure: financialStructureAdjusted,
-        emergencyMonths: emergencyMonthsExact,
-      }),
-    [financialStructureAdjusted, emergencyMonthsExact],
-  );
-
-  const financialIndependence = useMemo(
-    () =>
-      calculateFinancialIndependenceSummary({
-        investments: snapshotInvestments,
-        monthlyExpense: summary.monthlyExpense,
-        monthlyInvestment: financialStructureAdjusted.investmentAmount,
-      }),
-    [
-      snapshotInvestments,
-      summary.monthlyExpense,
-      financialStructureAdjusted.investmentAmount,
-    ],
-  );
-
-  const aiCfoInsight = useMemo(
-    () =>
-      calculateAiCfoInsightSummary({
-        financialStructure: financialStructureAdjusted,
-        financialStability,
-        financialIndependence,
-        emergencyMonths: emergencyMonthsExact,
-      }),
-    [
-      financialStructureAdjusted,
-      financialStability,
-      financialIndependence,
-      emergencyMonthsExact,
-    ],
   );
 
   // ── Goal rows: use the same source-of-truth logic as GoalsPage ───────────
@@ -1864,22 +1634,6 @@ export default function DashboardPage() {
         : riskScore <= 75
           ? "Cao"
           : "Nguy hiểm";
-  const riskColor =
-    riskScore <= 25
-      ? "text-emerald-600"
-      : riskScore <= 50
-        ? "text-amber-500"
-        : riskScore <= 75
-          ? "text-orange-500"
-          : "text-rose-600";
-  const riskBg =
-    riskScore <= 25
-      ? "from-emerald-500 to-teal-400"
-      : riskScore <= 50
-        ? "from-amber-400 to-orange-400"
-        : riskScore <= 75
-          ? "from-orange-500 to-rose-400"
-          : "from-rose-500 to-rose-700";
   const healthLabel =
     healthScore >= 90
       ? "Xuất sắc"
@@ -2056,7 +1810,7 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
       {/* Executive overview */}
-      <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         <div className="grid xl:grid-cols-[1.35fr_0.65fr]">
           <div className="bg-linear-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -2477,7 +2231,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Forex + goals + recent activity */}
-      <section className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 [&>*]:min-w-0">
+      <section className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 *:min-w-0">
         <Panel
           title="Tài khoản Forex"
           subtitle="Vốn đã nạp, Equity hiện tại và hiệu suất giao dịch"
@@ -2537,7 +2291,7 @@ export default function DashboardPage() {
             onClick={() => router.push("/investments")}
             className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-slate-900 px-3 py-3 text-center text-sm font-black leading-5 text-white transition hover:bg-slate-700 sm:px-4"
           >
-            <span className="max-w-full break-words">
+            <span className="max-w-full wrap-break-word">
               Quản lý tài khoản Forex
             </span>
           </button>
@@ -2590,7 +2344,9 @@ export default function DashboardPage() {
             onClick={() => router.push("/goals")}
             className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-black leading-5 text-blue-600 transition hover:bg-blue-50 sm:px-4"
           >
-            <span className="max-w-full break-words">Xem tất cả mục tiêu</span>
+            <span className="max-w-full wrap-break-word">
+              Xem tất cả mục tiêu
+            </span>
           </button>
         </Panel>
 
@@ -2660,13 +2416,15 @@ export default function DashboardPage() {
             onClick={() => router.push("/transactions")}
             className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-600 transition hover:bg-blue-50"
           >
-            <span className="max-w-full break-words">Xem tất cả giao dịch</span>
+            <span className="max-w-full wrap-break-word">
+              Xem tất cả giao dịch
+            </span>
           </button>
         </Panel>
       </section>
 
       {/* Action center */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
@@ -2890,71 +2648,6 @@ function formatCompactVND(value: number) {
   return `${rounded}`;
 }
 
-type FormulaRow = {
-  label: string;
-  value: number;
-  tone: string;
-  note?: string;
-};
-
-function FormulaCard({
-  title,
-  formula,
-  rows,
-  resultLabel,
-  resultValue,
-}: {
-  title: string;
-  formula: string;
-  rows: FormulaRow[];
-  resultLabel: string;
-  resultValue: number;
-}) {
-  return (
-    <div className="mt-5 rounded-3xl border border-slate-200 bg-white/75 p-4 shadow-sm backdrop-blur">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            Breakdown
-          </p>
-          <p className="mt-1 text-sm font-black text-slate-900">{title}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{formula}</p>
-        </div>
-        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-            {resultLabel}
-          </p>
-          <p
-            className={`text-sm font-black ${
-              resultValue >= 0 ? "text-emerald-600" : "text-rose-500"
-            }`}
-          >
-            {formatVND(resultValue)}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        {rows.map((row) => (
-          <div key={row.label} className="rounded-2xl bg-slate-50 px-3 py-2">
-            <p className="truncate text-[11px] font-bold text-slate-500">
-              {row.label}
-            </p>
-            <p className={`mt-1 text-sm font-black ${row.tone}`}>
-              {row.value < 0 ? "−" : row.label === "Chuyển ví" ? "" : "+"}
-              {formatVND(Math.abs(row.value))}
-            </p>
-            {row.note ? (
-              <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                {row.note}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function HeroMini({
   icon,
   label,
@@ -3053,10 +2746,10 @@ function Panel({
 }) {
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
-      <h3 className="break-words text-lg font-black leading-tight text-slate-900">
+      <h3 className="wrap-break-word text-lg font-black leading-tight text-slate-900">
         {title}
       </h3>
-      <p className="mt-1 max-w-full break-words text-sm leading-5 text-slate-500">
+      <p className="mt-1 max-w-full wrap-break-word text-sm leading-5 text-slate-500">
         {subtitle}
       </p>
       <div className="min-w-0 max-w-full">{children}</div>
@@ -3076,7 +2769,9 @@ function MiniStat({
   return (
     <div className="min-w-0 max-w-full rounded-2xl bg-slate-50 px-3 py-3">
       <p className="truncate text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 break-words text-sm font-black leading-5 ${color}`}>
+      <p
+        className={`mt-1 wrap-break-word text-sm font-black leading-5 ${color}`}
+      >
         {value}
       </p>
     </div>
@@ -3140,38 +2835,6 @@ function AllocationRow({
             width: `${Math.min(actual, 100)}%`,
             opacity: over ? 0.7 : 1,
           }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function RiskDimension({
-  label,
-  score,
-  description,
-}: {
-  label: string;
-  score: number;
-  description: string;
-}) {
-  const pct = Math.min(Math.max(Math.round(score), 0), 100);
-  const barColor =
-    pct <= 25
-      ? "from-emerald-400 to-teal-400"
-      : pct <= 50
-        ? "from-amber-400 to-orange-400"
-        : "from-rose-400 to-rose-600";
-  return (
-    <div>
-      <div className="mb-1.5 flex justify-between text-xs">
-        <span className="font-bold text-slate-700">{label}</span>
-        <span className="text-slate-500">{description}</span>
-      </div>
-      <div className="h-2.5 rounded-full bg-slate-100">
-        <div
-          className={`h-2.5 rounded-full bg-linear-to-r ${barColor} transition-all`}
-          style={{ width: `${pct}%` }}
         />
       </div>
     </div>

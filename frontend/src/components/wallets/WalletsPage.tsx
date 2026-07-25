@@ -660,7 +660,7 @@ export default function WalletsPage() {
                 </div>
 
                 {/* Contribution bar */}
-                <div className="mt-4">
+                <div className="mt-3">
                   <div className="mb-1.5 flex items-center justify-between text-xs">
                     <span className="text-slate-500">Tỷ trọng tài sản</span>
                     <div className="flex items-center gap-2">
@@ -720,7 +720,7 @@ export default function WalletsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
         <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
                 <div className="mb-1.5 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
@@ -854,10 +854,10 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 px-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[min(82dvh,600px)] w-full flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-3 pt-4 sm:p-6 sm:pb-4">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ví tiền" : "Thêm ví tiền"}
@@ -879,8 +879,8 @@ export default function WalletsPage() {
               onSubmit={handleSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-4 pb-5 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
-                <div className="grid gap-3 md:grid-cols-2">
+              <div className="min-h-0 flex-1 overflow-hidden px-4 py-3 sm:overflow-y-auto sm:px-6 sm:py-5">
+                <div className="grid gap-2.5 md:grid-cols-2">
                   <FormInput
                     label="Tên ví"
                     value={form.name}
@@ -904,7 +904,7 @@ export default function WalletsPage() {
 
                 {/* Wallet type */}
                 <div className="mt-4">
-                  <p className="mb-2.5 text-sm font-black text-slate-700">
+                  <p className="mb-2 text-[13px] font-black text-slate-700 sm:text-sm">
                     Loại ví
                   </p>
                   <div className="grid gap-2 md:grid-cols-2">
@@ -916,7 +916,7 @@ export default function WalletsPage() {
                           setForm((p) => ({ ...p, type: o.value }))
                         }
                         className={
-                          "flex items-center gap-3 rounded-2xl border p-3 text-left transition-all " +
+                          "flex items-center gap-3 rounded-2xl border p-2.5 text-left transition-all " +
                           (form.type === o.value
                             ? "border-blue-300 bg-blue-50 shadow-sm"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50")
@@ -950,18 +950,18 @@ export default function WalletsPage() {
               </div>
 
               {/* Actions */}
-              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-4">
+              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2.5 sm:px-6 sm:py-4">
                 <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => setIsFormOpen(false)}
-                    className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
+                    className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
                   >
                     {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
                   </button>

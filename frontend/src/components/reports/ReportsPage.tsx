@@ -476,7 +476,7 @@ export default function ReportsPage() {
 
   // UI state
   const [stmtTab, setStmtTab] = useState<"income" | "cashflow" | "networth">(
-    "income",
+    "cashflow",
   );
   const [reportTab, setReportTab] = useState<ReportTab>("overview");
 
@@ -918,6 +918,23 @@ export default function ReportsPage() {
       : 0;
   }, [goalMeta]);
 
+  const strongestIncomeMonth = useMemo(
+    () =>
+      [...monthly].sort((a, b) => b.income - a.income)[0] ?? {
+        month: "—",
+        income: 0,
+      },
+    [monthly],
+  );
+
+  const topExpenseCategory = spendingByCategory[0];
+
+  const completedGoals = goalMeta.filter((goal) => goal.pct >= 100).length;
+  const goalRemainingTotal = goalMeta.reduce(
+    (sum, goal) => sum + goal.remaining,
+    0,
+  );
+
   // ── Export helpers (preserved) ────────────────────────────────────────────
   function exportCSV() {
     const rows = [
@@ -980,32 +997,76 @@ export default function ReportsPage() {
           : { gradient: "from-rose-500 to-red-500", label: healthV2.label };
 
   const REPORT_TABS: { id: ReportTab; label: string }[] = [
-    { id: "overview", label: "Tổng Quan" },
-    { id: "income", label: "Thu Nhập" },
-    { id: "expense", label: "Chi Tiêu" },
-    { id: "cashflow", label: "Dòng Tiền" },
-    { id: "investment", label: "Đầu Tư" },
-    { id: "goals", label: "Mục Tiêu" },
-    { id: "ai", label: "AI Insights" },
+    { id: "overview", label: "Tổng quan" },
+    { id: "income", label: "Thu nhập" },
+    { id: "expense", label: "Chi tiêu" },
+    { id: "cashflow", label: "Dòng tiền" },
+    { id: "investment", label: "Đầu tư" },
+    { id: "goals", label: "Mục tiêu" },
+    { id: "ai", label: "Phân tích AI" },
   ];
+
+  const REPORT_TAB_META: Record<
+    ReportTab,
+    { title: string; description: string }
+  > = {
+    overview: {
+      title: "Tổng quan tài chính",
+      description:
+        "Bức tranh tổng hợp về tài sản, dòng tiền, sức khỏe tài chính và tiến độ mục tiêu.",
+    },
+    income: {
+      title: "Phân tích thu nhập",
+      description:
+        "Theo dõi quy mô, xu hướng và hiệu quả tạo thu nhập theo kỳ báo cáo.",
+    },
+    expense: {
+      title: "Phân tích chi tiêu",
+      description:
+        "Xác định nhóm chi tiêu lớn, tỷ trọng và xu hướng chi phí theo thời gian.",
+    },
+    cashflow: {
+      title: "Báo cáo dòng tiền",
+      description:
+        "Đối chiếu tiền vào, chi phí thật, tích lũy và biến động tài sản ròng.",
+    },
+    investment: {
+      title: "Hiệu quả đầu tư",
+      description:
+        "Theo dõi vốn, giá trị hiện tại, ROI và cơ cấu danh mục đầu tư.",
+    },
+    goals: {
+      title: "Tiến độ mục tiêu",
+      description:
+        "Theo dõi số tiền đã tích lũy, phần còn thiếu và mức góp đề xuất.",
+    },
+    ai: {
+      title: "Phân tích và khuyến nghị",
+      description:
+        "Tổng hợp tín hiệu từ sức khỏe tài chính, ngân sách, dự báo và rủi ro.",
+    },
+  };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 print:space-y-4">
+    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0 print:space-y-4">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Bright Hero + 5 KPI cards
           ══════════════════════════════════════════════════════════════════ */}
       <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-5 pt-5 sm:px-8 sm:pb-7 sm:pt-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
-                Personal CFO Report Center
+                Financial Report Center
               </p>
               <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
                 Báo cáo tài chính
               </h1>
-              <p className="mt-1 text-sm text-slate-500">{label}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Báo cáo {label} · Dữ liệu hợp nhất từ giao dịch, ví, tiết kiệm,
+                đầu tư và mục tiêu
+              </p>
             </div>
             <div className="flex gap-2 print:hidden">
               <button
@@ -1179,77 +1240,32 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 · Report Tab Navigation
           ══════════════════════════════════════════════════════════════════ */}
-      <div className="no-scrollbar flex gap-1.5 overflow-x-auto print:hidden">
-        {REPORT_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setReportTab(tab.id)}
-            className={
-              "shrink-0 rounded-2xl border px-5 py-2.5 text-sm font-bold transition-all " +
-              (reportTab === tab.id
-                ? "border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200"
-                : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50")
-            }
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <section className="sticky top-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur print:hidden">
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          {REPORT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setReportTab(tab.id)}
+              className={
+                "shrink-0 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-all " +
+                (reportTab === tab.id
+                  ? "border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200"
+                  : "border-transparent bg-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700")
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
-      <section className="grid gap-3 xl:grid-cols-3">
-        <InsightSummaryCard
-          icon={<WalletCards size={18} />}
-          title="Tài sản & dòng tiền"
-          value={formatVND(summary.netWorth)}
-          note={
-            "Dòng tiền sau chi phí " +
-            formatVND(summary.saving) +
-            ". Đã phân bổ " +
-            formatVND(summary.futureAllocation) +
-            " vào tiết kiệm/đầu tư."
-          }
-          tone={summary.saving >= 0 ? "good" : "danger"}
-        />
-        <InsightSummaryCard
-          icon={<ShieldCheck size={18} />}
-          title="Sức khỏe tài chính"
-          value={healthV2.total + "/100"}
-          note={
-            healthV2.grade +
-            " — " +
-            healthGrade.label +
-            ". Tỷ lệ nợ " +
-            Math.round(summary.debtRatio) +
-            "% và tỷ lệ tích lũy " +
-            summary.savingRate +
-            "% ."
-          }
-          tone={
-            healthV2.total >= 75
-              ? "good"
-              : healthV2.total >= 50
-                ? "warning"
-                : "danger"
-          }
-        />
-        <InsightSummaryCard
-          icon={<Target size={18} />}
-          title="Mục tiêu"
-          value={goalReportScore + "%"}
-          note={
-            goals.length > 0
-              ? goals.length +
-                " mục tiêu đang theo dõi. Tiến độ được lấy từ Goals Page để tránh lệch dữ liệu."
-              : "Chưa có mục tiêu tài chính. Hãy tạo mục tiêu để báo cáo có dự báo rõ hơn."
-          }
-          tone={
-            goalReportScore >= 70
-              ? "good"
-              : goalReportScore >= 30
-                ? "warning"
-                : "danger"
-          }
-        />
+      <section className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600">
+          {REPORT_TAB_META[reportTab].title}
+        </p>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          {REPORT_TAB_META[reportTab].description}
+        </p>
       </section>
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -1257,6 +1273,42 @@ export default function ReportsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "overview" && (
         <>
+          <section className="grid gap-3 xl:grid-cols-3">
+            <InsightSummaryCard
+              icon={<WalletCards size={18} />}
+              title="Tài sản ròng"
+              value={formatVND(summary.netWorth)}
+              note={`Tổng tài sản ${formatVND(summary.totalAssets)} · Nợ ${formatVND(summary.totalDebt)}.`}
+              tone={summary.netWorth >= 0 ? "good" : "danger"}
+            />
+            <InsightSummaryCard
+              icon={<ShieldCheck size={18} />}
+              title="Sức khỏe tài chính"
+              value={healthV2.total + "/100"}
+              note={`${healthV2.grade} — ${healthGrade.label}. Tỷ lệ nợ ${Math.round(summary.debtRatio)}% · Tỷ lệ tích lũy ${summary.savingRate}%.`}
+              tone={
+                healthV2.total >= 75
+                  ? "good"
+                  : healthV2.total >= 50
+                    ? "warning"
+                    : "danger"
+              }
+            />
+            <InsightSummaryCard
+              icon={<Target size={18} />}
+              title="Tiến độ mục tiêu"
+              value={goalReportScore + "%"}
+              note={`${completedGoals}/${goals.length} mục tiêu đã hoàn thành · Còn ${formatVND(goalRemainingTotal)}.`}
+              tone={
+                goalReportScore >= 70
+                  ? "good"
+                  : goalReportScore >= 30
+                    ? "warning"
+                    : "danger"
+              }
+            />
+          </section>
+
           {/* Overview mini-stat row */}
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatMini
@@ -1502,7 +1554,7 @@ export default function ReportsPage() {
       {reportTab === "income" && (
         <>
           {/* Summary mini-stats */}
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatMini
               label="Tổng thu nhập"
               value={formatVND(summary.income)}
@@ -1511,18 +1563,25 @@ export default function ReportsPage() {
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi phí thật"
-              value={formatVND(summary.expense)}
-              color="text-rose-500"
-              bg="bg-rose-50"
-              border="border-rose-100"
-            />
-            <StatMini
-              label="Lợi nhuận ròng"
-              value={formatVND(summary.saving)}
-              color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
+              label="Thu nhập TB/tháng"
+              value={formatVND(monthlyAverages.income)}
+              color="text-blue-600"
               bg="bg-blue-50"
               border="border-blue-100"
+            />
+            <StatMini
+              label="Tháng cao nhất"
+              value={`${strongestIncomeMonth.month} · ${formatVND(strongestIncomeMonth.income)}`}
+              color="text-indigo-600"
+              bg="bg-indigo-50"
+              border="border-indigo-100"
+            />
+            <StatMini
+              label="Dòng tiền sau chi phí"
+              value={formatVND(summary.saving)}
+              color={summary.saving >= 0 ? "text-emerald-600" : "text-rose-500"}
+              bg="bg-slate-50"
+              border="border-slate-200"
             />
           </section>
 
@@ -1548,14 +1607,6 @@ export default function ReportsPage() {
                       />
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor="#f43f5e"
-                        stopOpacity={0.15}
-                      />
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                    </linearGradient>
                   </defs>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -1578,14 +1629,6 @@ export default function ReportsPage() {
                     strokeWidth={2.5}
                     fill="url(#incGrad)"
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="chi"
-                    name="Chi tiêu"
-                    stroke="#f43f5e"
-                    strokeWidth={2.5}
-                    fill="url(#expGrad)"
-                  />
                   <Line
                     type="monotone"
                     dataKey="dongTienRong"
@@ -1600,10 +1643,6 @@ export default function ReportsPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-emerald-500" />
                   Thu nhập (M)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-rose-500" />
-                  Chi tiêu (M)
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-amber-500" />
@@ -1715,146 +1754,163 @@ export default function ReportsPage() {
           TAB: Chi Tiêu
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "expense" && (
-        <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          {/* Pie chart */}
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-            <SectionHeader
-              icon={<PieChartIcon size={20} />}
-              title="Chi tiêu theo danh mục"
-              subtitle="Tỷ trọng từng nhóm"
+        <>
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatMini
+              label="Tổng chi phí thật"
+              value={formatVND(summary.expense)}
+              color="text-rose-600"
+              bg="bg-rose-50"
+              border="border-rose-100"
             />
-            <div className="relative mx-auto mt-5 h-56 w-56">
-              <PieChart width={224} height={224}>
-                <Pie
-                  data={spendingPieData}
-                  dataKey="value"
-                  innerRadius={65}
-                  outerRadius={100}
-                  paddingAngle={4}
-                >
-                  {spendingPieData.map((e) => (
-                    <Cell key={e.name} fill={e.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(v) => [formatVND(Number(v ?? 0)), "Chi tiêu"]}
-                />
-              </PieChart>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-black text-rose-500">
-                  {Math.round(summary.expense / 1e6)}M
-                </span>
-                <span className="text-xs text-slate-500">Tổng chi</span>
-              </div>
-            </div>
-            <div className="mt-5 space-y-3">
-              {spendingPieData.map((item) => (
-                <div key={item.name}>
-                  <div className="mb-1.5 flex justify-between text-sm">
-                    <span className="flex items-center gap-2 font-bold text-slate-700">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ background: item.color }}
-                      />
-                      {item.name}
-                    </span>
-                    <span className="text-slate-500">
-                      {formatVND(item.value)}
-                    </span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-slate-100">
-                    <div
-                      className="h-2.5 rounded-full transition-all"
-                      style={{
-                        width: item.percent + "%",
-                        backgroundColor: item.color,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">{item.percent}%</p>
-                </div>
-              ))}
-              {spendingPieData.length === 0 && (
-                <p className="py-6 text-center text-sm text-slate-400">
-                  Không có dữ liệu chi tiêu cho kỳ này.
-                </p>
-              )}
-            </div>
-          </div>
+            <StatMini
+              label="Chi phí TB/tháng"
+              value={formatVND(monthlyAverages.expense)}
+              color="text-orange-600"
+              bg="bg-orange-50"
+              border="border-orange-100"
+            />
+            <StatMini
+              label="Danh mục lớn nhất"
+              value={topExpenseCategory ? topExpenseCategory.name : "Chưa có"}
+              color="text-slate-700"
+              bg="bg-slate-50"
+              border="border-slate-200"
+            />
+            <StatMini
+              label="Tỷ lệ chi / thu"
+              value={
+                summary.income > 0
+                  ? `${Math.round((summary.expense / summary.income) * 100)}%`
+                  : "0%"
+              }
+              color="text-blue-600"
+              bg="bg-blue-50"
+              border="border-blue-100"
+            />
+          </section>
 
-          {/* Monthly comparison bar chart */}
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-            <SectionHeader
-              icon={<BarChart3 size={20} />}
-              title="Thu chi theo tháng"
-              subtitle={"Đơn vị: triệu đồng — Năm " + year}
-            />
-            <div className="mt-5">
-              <ResponsiveContainer width="100%" height={300} minWidth={0}>
-                <BarChart
-                  data={monthly}
-                  barGap={3}
-                  barCategoryGap={12}
-                  margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis
-                    dataKey="month"
-                    axisLine={false}
-                    tickLine={false}
-                    fontSize={11}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    fontSize={11}
-                    tickFormatter={(value) => String(value) + "M"}
-                  />
+          <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            {/* Pie chart */}
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+              <SectionHeader
+                icon={<PieChartIcon size={20} />}
+                title="Chi tiêu theo danh mục"
+                subtitle="Tỷ trọng từng nhóm"
+              />
+              <div className="relative mx-auto mt-5 h-56 w-56">
+                <PieChart width={224} height={224}>
+                  <Pie
+                    data={spendingPieData}
+                    dataKey="value"
+                    innerRadius={65}
+                    outerRadius={100}
+                    paddingAngle={4}
+                  >
+                    {spendingPieData.map((e) => (
+                      <Cell key={e.name} fill={e.color} />
+                    ))}
+                  </Pie>
                   <Tooltip
-                    formatter={(value) => formatMillionTooltip(value)}
-                    labelFormatter={(label) => String(label)}
+                    formatter={(v) => [formatVND(Number(v ?? 0)), "Chi tiêu"]}
                   />
-                  <Bar
-                    dataKey="thu"
-                    name="Thu nhập"
-                    fill="#10b981"
-                    radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="chi"
-                    name="Chi tiêu"
-                    fill="#f43f5e"
-                    radius={[6, 6, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="tietKiem"
-                    name="Tiết kiệm"
-                    fill="#2563eb"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-4 flex gap-4 text-xs text-slate-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                  Thu nhập
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-rose-500" />
-                  Chi tiêu
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-blue-600" />
-                  Tiết kiệm
-                </span>
+                </PieChart>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-rose-500">
+                    {Math.round(summary.expense / 1e6)}M
+                  </span>
+                  <span className="text-xs text-slate-500">Tổng chi</span>
+                </div>
+              </div>
+              <div className="mt-5 space-y-3">
+                {spendingPieData.map((item) => (
+                  <div key={item.name}>
+                    <div className="mb-1.5 flex justify-between text-sm">
+                      <span className="flex items-center gap-2 font-bold text-slate-700">
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ background: item.color }}
+                        />
+                        {item.name}
+                      </span>
+                      <span className="text-slate-500">
+                        {formatVND(item.value)}
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-slate-100">
+                      <div
+                        className="h-2.5 rounded-full transition-all"
+                        style={{
+                          width: item.percent + "%",
+                          backgroundColor: item.color,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {item.percent}%
+                    </p>
+                  </div>
+                ))}
+                {spendingPieData.length === 0 && (
+                  <p className="py-6 text-center text-sm text-slate-400">
+                    Không có dữ liệu chi tiêu cho kỳ này.
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-        </section>
+
+            {/* Monthly comparison bar chart */}
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+              <SectionHeader
+                icon={<BarChart3 size={20} />}
+                title="Thu chi theo tháng"
+                subtitle={"Đơn vị: triệu đồng — Năm " + year}
+              />
+              <div className="mt-5">
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                  <BarChart
+                    data={monthly}
+                    barGap={3}
+                    barCategoryGap={12}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#e2e8f0"
+                    />
+                    <XAxis
+                      dataKey="month"
+                      axisLine={false}
+                      tickLine={false}
+                      fontSize={11}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      fontSize={11}
+                      tickFormatter={(value) => String(value) + "M"}
+                    />
+                    <Tooltip
+                      formatter={(value) => formatMillionTooltip(value)}
+                      labelFormatter={(label) => String(label)}
+                    />
+                    <Bar
+                      dataKey="chi"
+                      name="Chi tiêu"
+                      fill="#f43f5e"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                  <span className="size-2 rounded-full bg-rose-500" />
+                  Chi phí thật theo từng tháng
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -1862,6 +1918,41 @@ export default function ReportsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "cashflow" && (
         <>
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatMini
+              label="Tiền vào"
+              value={formatVND(summary.income)}
+              color="text-emerald-600"
+              bg="bg-emerald-50"
+              border="border-emerald-100"
+            />
+            <StatMini
+              label="Chi phí thật"
+              value={formatVND(summary.expense)}
+              color="text-rose-600"
+              bg="bg-rose-50"
+              border="border-rose-100"
+            />
+            <StatMini
+              label="Dòng tiền ròng"
+              value={formatVND(summary.saving)}
+              color={summary.saving >= 0 ? "text-blue-600" : "text-rose-600"}
+              bg="bg-blue-50"
+              border="border-blue-100"
+            />
+            <StatMini
+              label="Sau phân bổ tương lai"
+              value={formatVND(summary.availableAfterFutureAllocation)}
+              color={
+                summary.availableAfterFutureAllocation >= 0
+                  ? "text-indigo-600"
+                  : "text-rose-600"
+              }
+              bg="bg-indigo-50"
+              border="border-indigo-100"
+            />
+          </section>
+
           {/* Cash flow statement tabs */}
           <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <SectionHeader
@@ -2178,7 +2269,7 @@ export default function ReportsPage() {
               border="border-blue-100"
             />
             <StatMini
-              label="Vốn giao dịch kỳ này"
+              label="Vốn phân bổ kỳ này"
               value={formatVND(summary.investmentAllocation)}
               color="text-slate-600"
               bg="bg-slate-50"
@@ -2207,7 +2298,7 @@ export default function ReportsPage() {
             <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <SectionHeader
                 icon={<BriefcaseBusiness size={20} />}
-                title="Danh mục đầu tư"
+                title="Chi tiết danh mục đầu tư"
                 subtitle={investments.length + " tài sản đầu tư"}
               />
               <div className="mt-5 space-y-3">
@@ -2358,90 +2449,123 @@ export default function ReportsPage() {
           TAB: Mục Tiêu
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "goals" && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-          <SectionHeader
-            icon={<Target size={20} />}
-            title="Tiến độ mục tiêu"
-            subtitle="Trạng thái từng mục tiêu tài chính"
-          />
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {goalMeta.length === 0 ? (
-              <p className="col-span-3 py-6 text-center text-sm text-slate-400">
-                Chưa có mục tiêu nào.
-              </p>
-            ) : (
-              goalMeta.map((g) => {
-                const effectiveCurrentAmount = g.effectiveCurrentAmount;
-                const remainingAmount = g.remaining;
-                const pct = g.pct;
-                const isComplete = pct >= 100;
-                const isNear = pct >= 75;
-                return (
-                  <div
-                    key={g.id}
-                    className={
-                      "rounded-2xl border p-4 " +
-                      (isComplete
-                        ? "border-emerald-100 bg-emerald-50/50"
-                        : isNear
-                          ? "border-blue-100 bg-blue-50/50"
-                          : "border-slate-100 bg-slate-50")
-                    }
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-black text-slate-900">{g.name}</p>
-                      <span
-                        className={
-                          "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold " +
-                          (isComplete
-                            ? "bg-emerald-100 text-emerald-700"
-                            : isNear
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-amber-100 text-amber-700")
-                        }
-                      >
-                        {pct}%
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {formatVND(effectiveCurrentAmount)} /{" "}
-                      {formatVND(g.targetAmount)}
-                    </p>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-3 rounded-full transition-all"
-                        style={{
-                          width: pct + "%",
-                          background: isComplete
-                            ? "#10b981"
-                            : isNear
-                              ? "#2563eb"
-                              : "#f59e0b",
-                        }}
-                      />
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold">
-                      <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
-                        Còn lại
-                        <p className="mt-0.5 text-slate-900">
-                          {formatVND(remainingAmount)}
-                        </p>
+        <>
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatMini
+              label="Tổng mục tiêu"
+              value={String(goals.length)}
+              color="text-blue-600"
+              bg="bg-blue-50"
+              border="border-blue-100"
+            />
+            <StatMini
+              label="Đã hoàn thành"
+              value={String(completedGoals)}
+              color="text-emerald-600"
+              bg="bg-emerald-50"
+              border="border-emerald-100"
+            />
+            <StatMini
+              label="Tiến độ chung"
+              value={`${goalReportScore}%`}
+              color="text-indigo-600"
+              bg="bg-indigo-50"
+              border="border-indigo-100"
+            />
+            <StatMini
+              label="Còn phải tích lũy"
+              value={formatVND(goalRemainingTotal)}
+              color="text-rose-600"
+              bg="bg-rose-50"
+              border="border-rose-100"
+            />
+          </section>
+
+          <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <SectionHeader
+              icon={<Target size={20} />}
+              title="Tiến độ mục tiêu"
+              subtitle="Trạng thái từng mục tiêu tài chính"
+            />
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {goalMeta.length === 0 ? (
+                <p className="col-span-3 py-6 text-center text-sm text-slate-400">
+                  Chưa có mục tiêu nào.
+                </p>
+              ) : (
+                goalMeta.map((g) => {
+                  const effectiveCurrentAmount = g.effectiveCurrentAmount;
+                  const remainingAmount = g.remaining;
+                  const pct = g.pct;
+                  const isComplete = pct >= 100;
+                  const isNear = pct >= 75;
+                  return (
+                    <div
+                      key={g.id}
+                      className={
+                        "rounded-2xl border p-4 " +
+                        (isComplete
+                          ? "border-emerald-100 bg-emerald-50/50"
+                          : isNear
+                            ? "border-blue-100 bg-blue-50/50"
+                            : "border-slate-100 bg-slate-50")
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-black text-slate-900">{g.name}</p>
+                        <span
+                          className={
+                            "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold " +
+                            (isComplete
+                              ? "bg-emerald-100 text-emerald-700"
+                              : isNear
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700")
+                          }
+                        >
+                          {pct}%
+                        </span>
                       </div>
-                      <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
-                        Góp đề xuất
-                        <p className="mt-0.5 text-blue-600">
-                          {isComplete
-                            ? "Đã xong"
-                            : formatVND(g.suggestedMonthly) + "/tháng"}
-                        </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formatVND(effectiveCurrentAmount)} /{" "}
+                        {formatVND(g.targetAmount)}
+                      </p>
+                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
+                        <div
+                          className="h-3 rounded-full transition-all"
+                          style={{
+                            width: pct + "%",
+                            background: isComplete
+                              ? "#10b981"
+                              : isNear
+                                ? "#2563eb"
+                                : "#f59e0b",
+                          }}
+                        />
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold">
+                        <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
+                          Còn lại
+                          <p className="mt-0.5 text-slate-900">
+                            {formatVND(remainingAmount)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-white px-2 py-1.5 text-slate-500">
+                          Góp đề xuất
+                          <p className="mt-0.5 text-blue-600">
+                            {isComplete
+                              ? "Đã xong"
+                              : formatVND(g.suggestedMonthly) + "/tháng"}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        </>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -2666,7 +2790,7 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           Export Center (always visible)
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
+      <section className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-slate-600 to-slate-700 text-white shadow-sm">
@@ -2681,7 +2805,7 @@ export default function ReportsPage() {
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex w-full gap-2 sm:w-auto sm:gap-3">
             <button
               onClick={exportCSV}
               className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
@@ -2735,8 +2859,12 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+      <p className="mt-2 wrap-break-word text-lg font-black leading-tight text-white">
+        {value}
+      </p>
+      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/75">
+        {sub}
+      </p>
     </div>
   );
 }
@@ -2757,7 +2885,13 @@ function StatMini({
   return (
     <div className={"rounded-2xl border p-4 " + bg + " " + border}>
       <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className={"mt-2 text-xl font-black " + color}>{value}</p>
+      <p
+        className={
+          "mt-2 wrap-break-word text-xl font-black leading-tight " + color
+        }
+      >
+        {value}
+      </p>
     </div>
   );
 }

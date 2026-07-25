@@ -481,16 +481,6 @@ function getTransactionAmountColorClass(transaction: Transaction) {
   return "text-rose-500";
 }
 
-function getInternalTransferSignedAmount(transaction: Transaction) {
-  const savingKind = getSavingTransferKind(transaction);
-
-  if (savingKind === "deposit") return transaction.amount;
-  if (savingKind === "withdraw" || savingKind === "close")
-    return -transaction.amount;
-
-  return 0;
-}
-
 function getInternalTransferTurnoverAmount(transaction: Transaction) {
   return isInternalTransferTransaction(transaction) ||
     isForexUnifiedTransaction(transaction)
@@ -2415,7 +2405,7 @@ export default function TransactionsPage() {
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
         <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+          <div className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Modal header */}
             <div className="shrink-0 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="flex items-start justify-between gap-4">
@@ -2423,7 +2413,7 @@ export default function TransactionsPage() {
                   <h2 className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl">
                     {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
                   </h2>
-                  <p className="mt-0.5 max-w-[15rem] text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
+                  <p className="mt-0.5 max-w-60 text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
                     Ghi nhận khoản thu, chi hoặc chuyển tiền giữa các ví.
                   </p>
                 </div>

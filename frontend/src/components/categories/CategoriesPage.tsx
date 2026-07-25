@@ -303,13 +303,6 @@ export default function CategoriesPage() {
     typeFilter,
   ]);
 
-  const hasActiveFilters =
-    search.trim().length > 0 ||
-    typeFilter !== "all" ||
-    groupFilter !== "all" ||
-    activityFilter !== "all" ||
-    sortBy !== "usage";
-
   function resetFilters() {
     setSearch("");
     setTypeFilter("all");
@@ -734,9 +727,9 @@ export default function CategoriesPage() {
       </section>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full max-w-lg overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6 sm:py-5">
+        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa danh mục" : "Thêm danh mục"}
@@ -757,7 +750,7 @@ export default function CategoriesPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="max-h-[calc(100dvh-8rem)] overflow-y-auto p-5 sm:p-6"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:max-h-[calc(100dvh-8rem)] sm:overflow-y-auto sm:p-6"
             >
               <label className="block">
                 <span className="mb-1.5 block text-sm font-black text-slate-700">
@@ -774,11 +767,11 @@ export default function CategoriesPage() {
                   }
                   placeholder="VD: Ăn uống, Lương, Di chuyển..."
                   autoFocus
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
+                  className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
                 />
               </label>
 
-              <div className="mt-5">
+              <div className="mt-3">
                 <span className="mb-2 block text-sm font-black text-slate-700">
                   Loại danh mục
                 </span>
@@ -797,7 +790,7 @@ export default function CategoriesPage() {
                             type: getTypeFromGroup(group),
                           }))
                         }
-                        className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition ${selected ? `${meta.border} ${meta.bg} ring-2 ring-blue-100` : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
+                        className={`flex items-start gap-3 rounded-2xl border p-2.5 text-left transition ${selected ? `${meta.border} ${meta.bg} ring-2 ring-blue-100` : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
                       >
                         <span
                           className={`flex size-8 shrink-0 items-center justify-center rounded-xl text-white ${meta.iconBg}`}
@@ -829,17 +822,17 @@ export default function CategoriesPage() {
                 onDismiss={() => setSaveError(null)}
               />
 
-              <div className="mt-6 flex gap-3">
+              <div className="mt-auto flex shrink-0 gap-3 border-t border-slate-100 bg-white pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:mt-6 sm:border-t-0 sm:pb-0">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98]"
+                  className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98]"
                 >
                   {form.id ? "Lưu thay đổi" : "Thêm danh mục"}
                 </button>
