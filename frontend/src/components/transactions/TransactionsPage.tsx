@@ -17,6 +17,7 @@ import {
   Search,
   SlidersHorizontal,
   Trash2,
+  WalletCards,
   X,
 } from "lucide-react";
 
@@ -258,8 +259,9 @@ function getCategoryPlanningGroup(category?: Category) {
 
 function getTransactionFormMode(
   transaction: Transaction,
-  _categories: Category[],
+  categories: Category[],
 ): TransactionFormMode {
+  void categories;
   if (isInternalTransferTransaction(transaction)) return "transfer";
   return transaction.type === "income" ? "income" : "expense";
 }
@@ -855,21 +857,6 @@ export default function TransactionsPage() {
         ),
     [filtered],
   );
-  const internalTransferNet = useMemo(
-    () =>
-      filtered
-        .filter(
-          (transaction) =>
-            isInternalTransferTransaction(transaction) ||
-            isForexUnifiedTransaction(transaction),
-        )
-        .reduce(
-          (sum, transaction) =>
-            sum + getInternalTransferSignedAmount(transaction),
-          0,
-        ),
-    [filtered],
-  );
   const transferCount = useMemo(
     () =>
       filtered.filter(
@@ -1367,11 +1354,6 @@ export default function TransactionsPage() {
     totalIncome > 0
       ? Math.round((Math.max(0, netCashFlow) / totalIncome) * 100)
       : 0;
-  const totalPot = totalIncome + totalExpense;
-  const incomePct =
-    totalPot > 0
-      ? Math.min(Math.round((totalIncome / totalPot) * 100), 100)
-      : 50;
 
   const modalAmount = Number(form.amount) || 0;
   const selectedWallet = wallets.find((wallet) => wallet.id === form.walletId);
@@ -1486,29 +1468,52 @@ export default function TransactionsPage() {
           </button>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5">
+          <LiquidityHeroCard
+            value={formatVND(totalLiquidity)}
+            walletCount={wallets.length}
+            netCashFlow={netCashFlow}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Thu nhập"
             value={formatVND(totalIncome)}
             note={`${cashFlowTransactions.filter((item) => item.type === "income").length} giao dịch`}
+            footerLabel="Dòng tiền tháng này"
+            footerValue={getSignedAmountText(netCashFlow)}
             tone="income"
           />
+
           <SummaryCard
             label="Chi tiêu"
             value={formatVND(totalExpense)}
             note={`${cashFlowTransactions.filter((item) => item.type === "expense").length} giao dịch`}
+            footerLabel="Tỷ lệ chi tiêu / Thu nhập"
+            footerValue={
+              totalIncome > 0
+                ? `${Math.round((totalExpense / totalIncome) * 100)}%`
+                : "0%"
+            }
             tone="expense"
           />
+
           <SummaryCard
             label="Dòng tiền ròng"
             value={getSignedAmountText(netCashFlow)}
             note={netCashFlow >= 0 ? "Thu lớn hơn chi" : "Chi lớn hơn thu"}
+            footerLabel="Tỷ lệ tiết kiệm"
+            footerValue={`${savingRate}%`}
             tone={netCashFlow >= 0 ? "positive" : "negative"}
           />
+
           <SummaryCard
             label="Chuyển nội bộ"
             value={formatVND(internalTransferTurnover)}
             note={`${transferCount} giao dịch`}
+            footerLabel="Ảnh hưởng thu chi"
+            footerValue="Không"
             tone="transfer"
           />
         </div>
@@ -1546,7 +1551,7 @@ export default function TransactionsPage() {
             </div>
 
             {/* Type filter pills — color-coded */}
-            <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 scrollbar-none">
               {(["all", "income", "expense", "transfer", "forex"] as const).map(
                 (t) => (
                   <button
@@ -1859,7 +1864,7 @@ export default function TransactionsPage() {
               </span>
             )}
           </div>
-          <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 text-xs text-slate-400 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 text-xs text-slate-400 scrollbar-none">
             <span>Sắp xếp:</span>
             {(["date", "amount", "category", "wallet"] as SortKey[]).map(
               (k) => (
@@ -2086,10 +2091,10 @@ export default function TransactionsPage() {
                                   )}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="max-w-[11.5rem] truncate text-[15px] font-black leading-5 text-slate-900 sm:max-w-65 sm:text-sm">
+                                  <p className="max-w-46 truncate text-[15px] font-black leading-5 text-slate-900 sm:max-w-65 sm:text-sm">
                                     {getTransactionDisplayNote(t)}
                                   </p>
-                                  <p className="mt-0.5 max-w-[13rem] truncate text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs lg:hidden">
+                                  <p className="mt-0.5 max-w-52 truncate text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs lg:hidden">
                                     {isTransfer
                                       ? getTransferWalletLabel(
                                           t,
@@ -2501,7 +2506,7 @@ export default function TransactionsPage() {
                   />
                 </div>
 
-                <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-1 scrollbar-none">
                   {amountQuickActions.map((value) => (
                     <button
                       key={value}
@@ -2795,32 +2800,184 @@ function FilterChip({
   );
 }
 
+function LiquidityHeroCard({
+  value,
+  walletCount,
+  netCashFlow,
+}: {
+  value: string;
+  walletCount: number;
+  netCashFlow: number;
+}) {
+  const positiveFlow = netCashFlow >= 0;
+
+  return (
+    <div className="relative overflow-hidden rounded-[26px] border border-blue-300 bg-linear-to-r from-sky-500 via-blue-600 to-indigo-600 px-5 py-5 text-white shadow-xl shadow-blue-200/60 sm:px-6 sm:py-6">
+      <div className="absolute -right-16 -top-20 size-52 rounded-full bg-white/10" />
+      <div className="absolute -bottom-24 right-8 size-56 rounded-full bg-indigo-400/25" />
+      <div className="absolute left-[42%] top-0 h-full w-px bg-white/10 max-lg:hidden" />
+
+      <div className="relative grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-center">
+        <div className="flex min-w-0 items-start gap-4">
+          <div className="mt-1 flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-lg shadow-blue-950/10">
+            <WalletCards size={22} strokeWidth={2.4} />
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">
+                  Số tiền khả dụng
+                </p>
+                <h3 className="mt-1 text-sm font-black text-white">
+                  Thanh khoản hiện tại
+                </h3>
+              </div>
+              <span className="rounded-full border border-white/15 bg-white/12 px-3 py-1 text-[10px] font-black text-white backdrop-blur">
+                {walletCount} ví đang hoạt động
+              </span>
+            </div>
+
+            <p className="mt-3 text-4xl font-black tracking-[-0.045em] sm:text-[2.7rem]">
+              {value}
+            </p>
+
+            <p className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-blue-50/95 sm:text-sm">
+              Tổng số dư có thể dùng ngay để chi tiêu, thanh toán hoặc thực hiện
+              giao dịch.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm lg:ml-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
+            Dòng tiền tháng này
+          </p>
+          <p className="mt-2 text-2xl font-black text-white">
+            {getSignedAmountText(netCashFlow)}
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold">
+            <span className="text-blue-100">Trạng thái</span>
+            <span
+              className={
+                "rounded-full px-2.5 py-1 " +
+                (positiveFlow
+                  ? "bg-emerald-500/25 text-emerald-100"
+                  : "bg-rose-500/25 text-rose-100")
+              }
+            >
+              {positiveFlow ? "Ổn định" : "Cần kiểm soát"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SummaryCard({
   label,
   value,
   note,
+  footerLabel,
+  footerValue,
   tone,
 }: {
   label: string;
   value: string;
   note: string;
-  tone: "income" | "expense" | "positive" | "negative" | "transfer";
+  footerLabel: string;
+  footerValue: string;
+  tone:
+    | "income"
+    | "expense"
+    | "positive"
+    | "negative"
+    | "liquidity"
+    | "transfer";
 }) {
   const styles = {
-    income: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    expense: "border-rose-200 bg-rose-50 text-rose-700",
-    positive: "border-blue-200 bg-blue-50 text-blue-700",
-    negative: "border-amber-200 bg-amber-50 text-amber-700",
-    transfer: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    income: {
+      shell:
+        "border-emerald-200 bg-linear-to-br from-emerald-50 to-white text-emerald-700",
+      icon: "bg-emerald-100 text-emerald-600",
+      footer: "bg-emerald-100/70 text-emerald-700",
+      symbol: "↑",
+    },
+    expense: {
+      shell:
+        "border-rose-200 bg-linear-to-br from-rose-50 to-white text-rose-700",
+      icon: "bg-rose-100 text-rose-600",
+      footer: "bg-rose-100/70 text-rose-700",
+      symbol: "↓",
+    },
+    positive: {
+      shell:
+        "border-blue-200 bg-linear-to-br from-blue-50 to-white text-blue-700",
+      icon: "bg-blue-100 text-blue-600",
+      footer: "bg-blue-100/70 text-blue-700",
+      symbol: "↗",
+    },
+    negative: {
+      shell:
+        "border-amber-200 bg-linear-to-br from-amber-50 to-white text-amber-700",
+      icon: "bg-amber-100 text-amber-600",
+      footer: "bg-amber-100/70 text-amber-700",
+      symbol: "↘",
+    },
+    liquidity: {
+      shell:
+        "border-cyan-200 bg-linear-to-br from-cyan-50 to-white text-cyan-700",
+      icon: "bg-cyan-100 text-cyan-600",
+      footer: "bg-cyan-100/70 text-cyan-700",
+      symbol: "₫",
+    },
+    transfer: {
+      shell:
+        "border-indigo-200 bg-linear-to-br from-indigo-50 to-white text-indigo-700",
+      icon: "bg-indigo-100 text-indigo-600",
+      footer: "bg-indigo-100/70 text-indigo-700",
+      symbol: "⇄",
+    },
   };
 
+  const style = styles[tone];
+
   return (
-    <div className={"rounded-3xl border p-4 " + styles[tone]}>
-      <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
-        {label}
+    <div
+      className={
+        "flex min-h-44 flex-col rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
+        style.shell
+      }
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={
+            "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-black " +
+            style.icon
+          }
+        >
+          {style.symbol}
+        </span>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em]">
+          {label}
+        </p>
+      </div>
+
+      <p className="mt-4 truncate text-[1.38rem] font-black tracking-tight">
+        {value}
       </p>
-      <p className="mt-2 truncate text-xl font-black">{value}</p>
-      <p className="mt-1 text-xs font-bold opacity-70">{note}</p>
+      <p className="mt-1 text-xs font-bold opacity-75">{note}</p>
+
+      <div
+        className={
+          "mt-auto flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-[10px] font-black " +
+          style.footer
+        }
+      >
+        <span className="truncate">{footerLabel}</span>
+        <span className="shrink-0">{footerValue}</span>
+      </div>
     </div>
   );
 }

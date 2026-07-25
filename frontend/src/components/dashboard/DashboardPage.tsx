@@ -2054,7 +2054,7 @@ export default function DashboardPage() {
   ] as const;
 
   return (
-    <div className="space-y-5 overflow-x-hidden pb-24 md:pb-8">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
       {/* Executive overview */}
       <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
         <div className="grid xl:grid-cols-[1.35fr_0.65fr]">
@@ -2428,7 +2428,7 @@ export default function DashboardPage() {
           title="Cấu trúc tài chính"
           subtitle="4 chỉ số cốt lõi giúp kiểm soát chất lượng dòng tiền"
         >
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 min-w-0 space-y-3">
             {financialStructureCards.map((item) => (
               <div
                 key={item.title}
@@ -2477,12 +2477,12 @@ export default function DashboardPage() {
       </section>
 
       {/* Forex + goals + recent activity */}
-      <section className="grid gap-5 xl:grid-cols-3">
+      <section className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 [&>*]:min-w-0">
         <Panel
           title="Tài khoản Forex"
           subtitle="Vốn đã nạp, Equity hiện tại và hiệu suất giao dịch"
         >
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
             <MiniStat
               label="Vốn ròng"
               value={formatVND(forexSnapshot.balance)}
@@ -2528,16 +2528,18 @@ export default function DashboardPage() {
               }
             />
           </div>
-          <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-xs leading-5 text-violet-700">
+          <div className="mt-4 max-w-full rounded-2xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-700 sm:p-4">
             <span className="font-black">Cách tính:</span> Lời/lỗ = Equity hiện
             tại − Vốn ròng. Phí giao dịch đã được trừ khỏi vốn ròng.
           </div>
           <button
             type="button"
             onClick={() => router.push("/investments")}
-            className="mt-4 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-700"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-slate-900 px-3 py-3 text-center text-sm font-black leading-5 text-white transition hover:bg-slate-700 sm:px-4"
           >
-            Quản lý tài khoản Forex
+            <span className="max-w-full break-words">
+              Quản lý tài khoản Forex
+            </span>
           </button>
         </Panel>
 
@@ -2545,7 +2547,7 @@ export default function DashboardPage() {
           title="Mục tiêu tài chính"
           subtitle={`${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`}
         >
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 min-w-0 space-y-3">
             {goalRows.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
@@ -2559,10 +2561,10 @@ export default function DashboardPage() {
               goalRows.slice(0, 3).map((goal) => (
                 <div
                   key={goal.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                  className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-black text-slate-900">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-black text-slate-900">
                       {goal.name}
                     </p>
                     <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-black text-blue-600">
@@ -2586,9 +2588,9 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/goals")}
-            className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-600 transition hover:bg-blue-50"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-black leading-5 text-blue-600 transition hover:bg-blue-50 sm:px-4"
           >
-            Xem tất cả mục tiêu
+            <span className="max-w-full break-words">Xem tất cả mục tiêu</span>
           </button>
         </Panel>
 
@@ -2616,34 +2618,32 @@ export default function DashboardPage() {
                     {group.items.map((transaction) => (
                       <div
                         key={transaction.id}
-                        className="flex items-center justify-between gap-3 py-3"
+                        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
                       >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div
-                            className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${getRecentIconClass(transaction.kind)}`}
-                          >
-                            {transaction.kind === "income" ? (
-                              <ArrowUpRight size={16} />
-                            ) : transaction.kind === "expense" ? (
-                              <ArrowDownRight size={16} />
-                            ) : (
-                              <Wallet size={16} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-slate-900">
-                              {transaction.title}
-                            </p>
-                            <p className="truncate text-xs text-slate-400">
-                              {transaction.subtitle}
-                              {transaction.timeLabel
-                                ? ` · ${transaction.timeLabel}`
-                                : ""}
-                            </p>
-                          </div>
+                        <div
+                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${getRecentIconClass(transaction.kind)}`}
+                        >
+                          {transaction.kind === "income" ? (
+                            <ArrowUpRight size={16} />
+                          ) : transaction.kind === "expense" ? (
+                            <ArrowDownRight size={16} />
+                          ) : (
+                            <Wallet size={16} />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-900">
+                            {transaction.title}
+                          </p>
+                          <p className="truncate text-xs text-slate-400">
+                            {transaction.subtitle}
+                            {transaction.timeLabel
+                              ? ` · ${transaction.timeLabel}`
+                              : ""}
+                          </p>
                         </div>
                         <p
-                          className={`shrink-0 text-sm font-black ${getRecentAmountClass(transaction.kind)}`}
+                          className={`col-start-2 min-w-0 truncate text-sm font-black sm:col-start-auto sm:shrink-0 ${getRecentAmountClass(transaction.kind)}`}
                         >
                           {getRecentAmountPrefix(transaction.kind)}
                           {formatVND(transaction.amount)}
@@ -2660,7 +2660,7 @@ export default function DashboardPage() {
             onClick={() => router.push("/transactions")}
             className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-600 transition hover:bg-blue-50"
           >
-            Xem tất cả giao dịch
+            <span className="max-w-full break-words">Xem tất cả giao dịch</span>
           </button>
         </Panel>
       </section>
@@ -3052,10 +3052,14 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-black text-slate-900">{title}</h3>
-      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-      {children}
+    <div className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+      <h3 className="break-words text-lg font-black leading-tight text-slate-900">
+        {title}
+      </h3>
+      <p className="mt-1 max-w-full break-words text-sm leading-5 text-slate-500">
+        {subtitle}
+      </p>
+      <div className="min-w-0 max-w-full">{children}</div>
     </div>
   );
 }
@@ -3070,9 +3074,11 @@ function MiniStat({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 truncate text-sm font-black ${color}`}>{value}</p>
+    <div className="min-w-0 max-w-full rounded-2xl bg-slate-50 px-3 py-3">
+      <p className="truncate text-xs text-slate-500">{label}</p>
+      <p className={`mt-1 break-words text-sm font-black leading-5 ${color}`}>
+        {value}
+      </p>
     </div>
   );
 }

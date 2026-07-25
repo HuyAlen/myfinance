@@ -719,8 +719,8 @@ export default function WalletsPage() {
           Transfer Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 px-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-[min(86dvh,650px)] w-full flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-[min(84dvh,640px)] w-full flex-col overflow-hidden rounded-[26px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-3 pt-4 sm:p-6 sm:pb-4">
               <div>
                 <div className="mb-2 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
@@ -746,7 +746,7 @@ export default function WalletsPage() {
               onSubmit={handleTransferSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-4 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 py-3 pb-6 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
                 {wallets.length < 2 ? (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-700">
                     Bạn cần ít nhất 2 ví để dùng tính năng chuyển tiền.
@@ -827,7 +827,7 @@ export default function WalletsPage() {
                 />
               </div>
 
-              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 sm:px-6 sm:py-4">
+              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-4">
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -1189,28 +1189,29 @@ function WalletSelect({
         {label}
       </span>
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-        <div className="relative">
+        <div className="flex items-center gap-2">
           {selectedWallet && (
-            <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2">
-              <WalletBrandLogo wallet={selectedWallet} />
+            <div className="shrink-0">
+              <WalletBrandLogo wallet={selectedWallet} size="md" />
             </div>
           )}
-          <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className={
-              "min-h-11 w-full truncate rounded-xl border border-slate-200 bg-white py-2.5 pr-10 text-[15px] font-bold text-slate-700 outline-none focus:border-blue-400 sm:text-sm " +
-              (selectedWallet ? "pl-13" : "pl-3")
-            }
-          >
-            <option value="">Chọn ví</option>
-            {wallets.map((wallet) => (
-              <option key={wallet.id} value={wallet.id}>
-                {wallet.name} · {formatVND(wallet.balance)}
-              </option>
-            ))}
-          </select>
+
+          <div className="min-w-0 flex-1">
+            <select
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              className="min-h-11 w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-9 text-[15px] font-bold text-slate-700 outline-none focus:border-blue-400 sm:text-sm"
+            >
+              <option value="">Chọn ví</option>
+              {wallets.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>
+                  {wallet.name} · {formatVND(wallet.balance)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
         {selectedWallet && (
           <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs">
             <span className="min-w-0 truncate font-bold text-slate-500">
