@@ -9,6 +9,8 @@ import {
   ChartPie,
   Edit3,
   Plus,
+  PiggyBank,
+  Landmark,
   ShieldCheck,
   Target,
   TrendingDown,
@@ -16,6 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { Cell, Pie, PieChart } from "recharts";
 
 import type {
@@ -46,6 +49,7 @@ import ConfirmDialog, {
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { computeSmartBudget } from "@/src/services/finance/analytics";
+import { supabase } from "@/src/lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -53,6 +57,18 @@ type FormState = {
   categoryId: string;
   month: string;
   limitAmount: string;
+};
+
+type SavingsModuleTransaction = {
+  type: "deposit" | "withdraw" | "interest" | "settlement";
+  amount: number;
+  transactionDate: string;
+};
+
+type InvestmentModuleTransaction = {
+  type: "deposit" | "withdrawal";
+  amount: number;
+  transactionDate: string;
 };
 
 const emptyForm: FormState = {
@@ -237,6 +253,11 @@ export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [savingsModuleTransactions, setSavingsModuleTransactions] = useState<
+    SavingsModuleTransaction[]
+  >([]);
+  const [investmentModuleTransactions, setInvestmentModuleTransactions] =
+    useState<InvestmentModuleTransaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -249,14 +270,41 @@ export default function BudgetsPage() {
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
-    const [b, c, t] = await Promise.all([
+    const [b, c, t, savingsResult, investmentsResult] = await Promise.all([
       getBudgets(),
       getCategories(),
       getTransactions(),
+      supabase
+        .from("saving_transactions")
+        .select("type,amount,transaction_date"),
+      supabase
+        .from("forex_cash_transactions")
+        .select("type,amount,transaction_date"),
     ]);
+
     setBudgets(b);
     setCategories(c);
     setTransactions(t);
+
+    if (!savingsResult.error) {
+      setSavingsModuleTransactions(
+        (savingsResult.data ?? []).map((row) => ({
+          type: row.type as SavingsModuleTransaction["type"],
+          amount: Number(row.amount ?? 0),
+          transactionDate: String(row.transaction_date ?? ""),
+        })),
+      );
+    }
+
+    if (!investmentsResult.error) {
+      setInvestmentModuleTransactions(
+        (investmentsResult.data ?? []).map((row) => ({
+          type: row.type as InvestmentModuleTransaction["type"],
+          amount: Number(row.amount ?? 0),
+          transactionDate: String(row.transaction_date ?? ""),
+        })),
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -269,9 +317,43 @@ export default function BudgetsPage() {
 
   useRealtimeTable(["budgets", "transactions"], reloadData);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("budgets-future-allocation")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "saving_transactions",
+        },
+        () => void reloadData(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "forex_cash_transactions",
+        },
+        () => void reloadData(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [reloadData]);
+
   // ── PRESERVED: expense categories ─────────────────────────────────────────
   const expenseCategories = useMemo(
-    () => categories.filter((item) => item.type === "expense"),
+    () =>
+      categories.filter(
+        (item) =>
+          item.type === "expense" &&
+          item.id !== "saving-demo" &&
+          item.id !== "trading-capital",
+      ),
     [categories],
   );
 
@@ -670,6 +752,31 @@ export default function BudgetsPage() {
   const canClonePreviousBudget =
     filteredBudgets.length === 0 && previousMonthBudgets.length > 0;
 
+  const moduleFutureAllocation = useMemo(() => {
+    const savingsNet = savingsModuleTransactions
+      .filter((item) => item.transactionDate.startsWith(activeMonth))
+      .reduce((sum, item) => {
+        if (item.type === "deposit") return sum + item.amount;
+        if (item.type === "withdraw" || item.type === "settlement") {
+          return sum - item.amount;
+        }
+        return sum;
+      }, 0);
+
+    const investmentNet = investmentModuleTransactions
+      .filter((item) => item.transactionDate.startsWith(activeMonth))
+      .reduce(
+        (sum, item) =>
+          item.type === "deposit" ? sum + item.amount : sum - item.amount,
+        0,
+      );
+
+    return {
+      savingsAmount: Math.max(0, savingsNet),
+      investmentAmount: Math.max(0, investmentNet),
+    };
+  }, [activeMonth, investmentModuleTransactions, savingsModuleTransactions]);
+
   const v7Allocation = useMemo(() => {
     const allocation = calculateRule503020({
       transactions,
@@ -683,6 +790,7 @@ export default function BudgetsPage() {
       actualAmount: number,
       targetAmount: number,
       targetPercent: number,
+      percentOfIncome: number,
       color: string,
       textColor: string,
     ) => {
@@ -701,6 +809,7 @@ export default function BudgetsPage() {
         actualAmount,
         targetAmount,
         targetPercent,
+        percentOfIncome,
         percentOfTarget,
         status,
         difference,
@@ -709,12 +818,21 @@ export default function BudgetsPage() {
       };
     };
 
-    return [
+    const savingsAmount = moduleFutureAllocation.savingsAmount;
+    const investmentAmount = moduleFutureAllocation.investmentAmount;
+    const futureAllocationAmount = savingsAmount + investmentAmount;
+    const futurePercentOfIncome =
+      allocation.income > 0
+        ? Math.round((futureAllocationAmount / allocation.income) * 100)
+        : 0;
+
+    const buckets = [
       makeBucket(
         "Nhu cầu thiết yếu",
         allocation.needsAmount,
         allocation.needsTargetAmount,
         50,
+        allocation.needsPercentOfIncome,
         "#2563eb",
         "text-blue-700",
       ),
@@ -723,22 +841,42 @@ export default function BudgetsPage() {
         allocation.wantsAmount,
         allocation.wantsTargetAmount,
         30,
+        allocation.wantsPercentOfIncome,
         "#f59e0b",
         "text-amber-700",
       ),
       makeBucket(
         "Tiết kiệm & Đầu tư",
-        allocation.savingsAmount,
+        futureAllocationAmount,
         allocation.savingsTargetAmount,
         20,
+        futurePercentOfIncome,
         "#10b981",
         "text-emerald-700",
       ),
     ];
+
+    return {
+      buckets,
+      income: allocation.income,
+      unclassifiedAmount: allocation.unclassifiedAmount,
+      savingsAmount,
+      investmentAmount,
+      futureAllocationAmount,
+      savingsShare:
+        futureAllocationAmount > 0
+          ? Math.round((savingsAmount / futureAllocationAmount) * 100)
+          : 0,
+      investmentShare:
+        futureAllocationAmount > 0
+          ? Math.round((investmentAmount / futureAllocationAmount) * 100)
+          : 0,
+    };
   }, [
     activeMonth,
     categories,
     financialPlanning.effectiveIncome,
+    moduleFutureAllocation,
     transactions,
   ]);
 
@@ -1155,13 +1293,15 @@ export default function BudgetsPage() {
                     0,
                     Math.round(
                       100 -
-                        v7Allocation.reduce(
-                          (penalty, bucket) =>
-                            penalty +
-                            Math.min(
-                              40,
-                              Math.abs(bucket.percentOfTarget - 100) * 0.35,
-                            ),
+                        v7Allocation.buckets.reduce(
+                          (penalty, bucket, bucketIndex) => {
+                            const deviation =
+                              bucketIndex === 2
+                                ? Math.max(0, 100 - bucket.percentOfTarget)
+                                : Math.max(0, bucket.percentOfTarget - 100);
+
+                            return penalty + Math.min(40, deviation * 0.35);
+                          },
                           0,
                         ),
                     ),
@@ -1172,7 +1312,7 @@ export default function BudgetsPage() {
             </div>
 
             <div className="mt-5 space-y-3">
-              {v7Allocation.map((bucket, index) => {
+              {v7Allocation.buckets.map((bucket, index) => {
                 const rowStyles = [
                   {
                     shell: "border-blue-100 bg-blue-50/70",
@@ -1187,20 +1327,44 @@ export default function BudgetsPage() {
                     iconText: "M",
                   },
                   {
-                    shell: "border-emerald-100 bg-emerald-50/70",
+                    shell:
+                      bucket.percentOfTarget >= 100
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-emerald-100 bg-emerald-50/70",
                     icon: "bg-emerald-100 text-emerald-600",
                     bar: "bg-emerald-500",
                     iconText: "T",
                   },
                 ][index];
 
-                const statusStyles =
-                  bucket.status === "over"
+                const isFutureBucket = index === 2;
+                const statusStyles = isFutureBucket
+                  ? bucket.percentOfTarget >= 100
+                    ? {
+                        badge: "bg-emerald-100 text-emerald-700",
+                        value: "text-emerald-700",
+                        bar: "bg-emerald-500",
+                        label: "Vượt mục tiêu tích lũy",
+                      }
+                    : bucket.percentOfTarget >= 85
+                      ? {
+                          badge: "bg-blue-100 text-blue-700",
+                          value: "text-blue-700",
+                          bar: "bg-blue-500",
+                          label: "Gần đạt mục tiêu",
+                        }
+                      : {
+                          badge: "bg-amber-100 text-amber-700",
+                          value: "text-amber-700",
+                          bar: "bg-amber-500",
+                          label: "Cần tăng tích lũy",
+                        }
+                  : bucket.status === "over"
                     ? {
                         badge: "bg-rose-100 text-rose-700",
                         value: "text-rose-600",
                         bar: "bg-rose-500",
-                        label: "Vượt mục tiêu",
+                        label: "Vượt hạn mức",
                       }
                     : bucket.status === "near"
                       ? {
@@ -1229,16 +1393,15 @@ export default function BudgetsPage() {
                           {rowStyles.iconText}
                         </span>
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-black text-slate-900">
-                              {bucket.label}
-                            </p>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-black text-slate-500 shadow-sm">
-                              Mục tiêu {bucket.targetPercent}%
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Đã phân bổ {formatVND(bucket.actualAmount)}
+                          <p className="text-sm font-black text-slate-900">
+                            {bucket.label}
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-slate-600">
+                            {bucket.percentOfIncome}% thu nhập
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Đã sử dụng {bucket.percentOfTarget}% hạn mức{" "}
+                            {bucket.targetPercent}%
                           </p>
                         </div>
                       </div>
@@ -1250,9 +1413,10 @@ export default function BudgetsPage() {
                           {statusStyles.label}
                         </span>
                         <p
-                          className={`mt-1 text-xl font-black ${statusStyles.value}`}
+                          className={`mt-1 text-sm font-black tabular-nums ${statusStyles.value}`}
                         >
-                          {bucket.percentOfTarget}%
+                          {formatVND(bucket.actualAmount)} /{" "}
+                          {formatVND(bucket.targetAmount)}
                         </p>
                       </div>
                     </div>
@@ -1265,6 +1429,56 @@ export default function BudgetsPage() {
                         }}
                       />
                     </div>
+
+                    {index === 2 && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <Link
+                          href="/savings"
+                          className="rounded-2xl border border-blue-100 bg-white/90 p-3 transition hover:border-blue-300 hover:bg-blue-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                              <PiggyBank size={16} />
+                            </span>
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                              {v7Allocation.savingsShare}% nhóm 20%
+                            </span>
+                          </div>
+                          <p className="mt-3 text-xs font-black text-slate-900">
+                            Tiết kiệm
+                          </p>
+                          <p className="mt-1 text-base font-black text-blue-700">
+                            {formatVND(v7Allocation.savingsAmount)}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                            Đồng bộ từ giao dịch nạp/rút tại trang Tiết kiệm
+                          </p>
+                        </Link>
+
+                        <Link
+                          href="/investments"
+                          className="rounded-2xl border border-sky-100 bg-white/90 p-3 transition hover:border-sky-300 hover:bg-sky-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="flex size-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                              <Landmark size={16} />
+                            </span>
+                            <span className="rounded-full bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-700">
+                              {v7Allocation.investmentShare}% nhóm 20%
+                            </span>
+                          </div>
+                          <p className="mt-3 text-xs font-black text-slate-900">
+                            Đầu tư
+                          </p>
+                          <p className="mt-1 text-base font-black text-sky-700">
+                            {formatVND(v7Allocation.investmentAmount)}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                            Đồng bộ từ giao dịch nạp/rút tại trang Đầu tư
+                          </p>
+                        </Link>
+                      </div>
+                    )}
 
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
                       <div className="rounded-2xl bg-white/80 px-3 py-2.5">
@@ -1285,14 +1499,24 @@ export default function BudgetsPage() {
                       </div>
                       <div className="rounded-2xl bg-white/80 px-3 py-2.5">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
-                          {bucket.difference > 0 ? "Đã vượt" : "Còn lại"}
+                          {isFutureBucket
+                            ? bucket.difference >= 0
+                              ? "Vượt mục tiêu"
+                              : "Còn thiếu"
+                            : bucket.difference > 0
+                              ? "Đã vượt"
+                              : "Còn lại"}
                         </p>
                         <p
                           className={
                             "mt-1 text-xs font-black " +
-                            (bucket.difference > 0
-                              ? "text-rose-600"
-                              : "text-emerald-600")
+                            (isFutureBucket
+                              ? bucket.difference >= 0
+                                ? "text-emerald-700"
+                                : "text-amber-700"
+                              : bucket.difference > 0
+                                ? "text-rose-600"
+                                : "text-emerald-600")
                           }
                         >
                           {formatVND(Math.abs(bucket.difference))}
@@ -1304,14 +1528,42 @@ export default function BudgetsPage() {
               })}
             </div>
 
+            {v7Allocation.unclassifiedAmount > 0 && (
+              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                      Chưa phân bổ
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {formatVND(v7Allocation.unclassifiedAmount)} chưa được gán
+                      nhóm 50/30/20
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Số tiền vẫn được tính bằng fallback để không làm thay đổi
+                      dữ liệu cũ. Hãy phân loại danh mục để báo cáo chính xác
+                      hơn.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600">
+                    Cần phân loại
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="mt-4 rounded-3xl border border-violet-100 bg-white p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-500">
                 Gợi ý điều chỉnh
               </p>
               <p className="mt-2 text-sm font-black leading-6 text-slate-900">
-                {v7Allocation.some((bucket) => bucket.status === "over")
-                  ? "Ưu tiên giảm nhóm chi vượt mục tiêu và chuyển phần chênh lệch sang tiết kiệm hoặc đầu tư."
-                  : "Cơ cấu chi tiêu đang nằm trong ngưỡng phù hợp. Hãy tiếp tục duy trì tỷ lệ hiện tại."}
+                {v7Allocation.buckets
+                  .slice(0, 2)
+                  .some((bucket) => bucket.status === "over")
+                  ? "Ưu tiên giảm nhóm chi vượt hạn mức. Phần Tiết kiệm & Đầu tư vượt 20% là tín hiệu tích cực và nên tiếp tục duy trì."
+                  : v7Allocation.buckets[2]?.percentOfTarget >= 100
+                    ? "Chi tiêu đang được kiểm soát và mức tích lũy đã vượt mục tiêu 20%. Đây là tín hiệu tài chính tích cực."
+                    : "Cơ cấu chi tiêu đang trong ngưỡng phù hợp. Hãy tiếp tục tăng Tiết kiệm & Đầu tư để đạt tối thiểu 20% thu nhập."}
               </p>
             </div>
           </div>

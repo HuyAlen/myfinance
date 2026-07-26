@@ -6,6 +6,7 @@ import type {
   Budget,
   Category,
   CategoryPlanningGroup,
+  FinancialGroup,
   Debt,
   Goal,
   Investment,
@@ -26,10 +27,59 @@ async function getAuthUserId(): Promise<string | null> {
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
 
+const LEGACY_FUTURE_ALLOCATION_CATEGORY_IDS = new Set([
+  "saving-demo",
+  "trading-capital",
+]);
+
+function isLegacyFutureAllocationCategoryId(
+  categoryId: string | null | undefined,
+): boolean {
+  return Boolean(
+    categoryId && LEGACY_FUTURE_ALLOCATION_CATEGORY_IDS.has(categoryId),
+  );
+}
+
+function sanitizeDemoFinanceData(
+  demoData: ReturnType<typeof buildDemoFinanceData>,
+): ReturnType<typeof buildDemoFinanceData> {
+  const categories = demoData.categories.filter(
+    (category) => !isLegacyFutureAllocationCategoryId(category.id),
+  );
+
+  const transactions = demoData.transactions.filter(
+    (transaction) =>
+      !isLegacyFutureAllocationCategoryId(transaction.categoryId),
+  );
+
+  const budgets = demoData.budgets.filter(
+    (budget) => !isLegacyFutureAllocationCategoryId(budget.categoryId),
+  );
+
+  const goals = demoData.goals.map((goal) => ({
+    ...goal,
+    savingCategoryIds: (goal.savingCategoryIds ?? []).filter(
+      (categoryId) => !isLegacyFutureAllocationCategoryId(categoryId),
+    ),
+  }));
+
+  return {
+    ...demoData,
+    categories,
+    transactions,
+    budgets,
+    goals,
+  };
+}
+
 // ─── Category planning group mapping ─────────────────────────────────────────
+// `planning_group` remains the operational classification.
+// `financial_group` is an optional, backward-compatible 50/30/20 classification.
+// Existing rows with NULL financial_group remain valid and are not backfilled here.
 
 type CategoryDbRow = Category & {
   planning_group?: CategoryPlanningGroup | null;
+  financial_group?: FinancialGroup | null;
   user_id?: string;
 };
 
@@ -82,6 +132,7 @@ function fromCategoryRow(row: CategoryDbRow): Category {
     type: row.type,
     planningGroup:
       row.planning_group ?? row.planningGroup ?? inferDefaultPlanningGroup(row),
+    financialGroup: row.financial_group ?? row.financialGroup ?? undefined,
   };
 }
 
@@ -92,6 +143,7 @@ function toCategoryRow(category: Category): Omit<CategoryDbRow, "user_id"> {
     type: category.type,
     planning_group:
       category.planningGroup ?? inferDefaultPlanningGroup(category),
+    financial_group: category.financialGroup ?? null,
   };
 }
 
@@ -526,7 +578,9 @@ export async function getCategories(): Promise<Category[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getCategories:", error.message);
-  return ((data ?? []) as CategoryDbRow[]).map(fromCategoryRow);
+  return ((data ?? []) as CategoryDbRow[])
+    .filter((row) => !isLegacyFutureAllocationCategoryId(row.id))
+    .map(fromCategoryRow);
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
@@ -538,7 +592,9 @@ export async function getTransactions(): Promise<Transaction[]> {
     .eq("user_id", userId)
     .order("date", { ascending: false });
   if (error) console.error("[financeStorage] getTransactions:", error.message);
-  return ((data ?? []) as TransactionDbRow[]).map(fromTransactionRow);
+  return ((data ?? []) as TransactionDbRow[])
+    .filter((row) => !isLegacyFutureAllocationCategoryId(row.categoryId))
+    .map(fromTransactionRow);
 }
 
 export async function getDebts(): Promise<Debt[]> {
@@ -560,7 +616,15 @@ export async function getGoals(): Promise<Goal[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getGoals:", error.message);
-  return ((data ?? []) as GoalDbRow[]).map(fromGoalRow);
+  return ((data ?? []) as GoalDbRow[]).map((row) => {
+    const goal = fromGoalRow(row);
+    return {
+      ...goal,
+      savingCategoryIds: (goal.savingCategoryIds ?? []).filter(
+        (categoryId) => !isLegacyFutureAllocationCategoryId(categoryId),
+      ),
+    };
+  });
 }
 
 export async function getBudgets(): Promise<Budget[]> {
@@ -571,7 +635,9 @@ export async function getBudgets(): Promise<Budget[]> {
     .select("*")
     .eq("user_id", userId);
   if (error) console.error("[financeStorage] getBudgets:", error.message);
-  return (data ?? []) as Budget[];
+  return ((data ?? []) as Budget[]).filter(
+    (budget) => !isLegacyFutureAllocationCategoryId(budget.categoryId),
+  );
 }
 
 export async function getInvestments(): Promise<Investment[]> {
@@ -676,7 +742,7 @@ export async function initFinanceDemoData() {
     .limit(1);
   if (data && data.length > 0) return;
 
-  const demoData = buildDemoFinanceData(userId);
+  const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
 
   await Promise.all([
     supabase.from("wallets").upsert(
@@ -751,7 +817,7 @@ export async function resetFinanceDemoData(): Promise<{
     return { error: firstDeleteErr.message };
   }
 
-  const demoData = buildDemoFinanceData(userId);
+  const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
 
   const insertErrors = await Promise.all([
     supabase
@@ -893,24 +959,33 @@ export async function importAllData(data: {
     );
   }
 
-  if (data.categories?.length) {
+  const importCategories = (data.categories ?? []).filter(
+    (category) => !isLegacyFutureAllocationCategoryId(category.id),
+  );
+
+  if (importCategories.length) {
     inserts.push(
       supabase
         .from("categories")
         .insert(
-          data.categories.map((category) =>
+          importCategories.map((category) =>
             toCategoryInsertRow(category, userId),
           ) as never,
         ),
     );
   }
 
-  if (data.transactions?.length) {
+  const importTransactions = (data.transactions ?? []).filter(
+    (transaction) =>
+      !isLegacyFutureAllocationCategoryId(transaction.categoryId),
+  );
+
+  if (importTransactions.length) {
     inserts.push(
       supabase
         .from("transactions")
         .insert(
-          data.transactions.map((transaction) =>
+          importTransactions.map((transaction) =>
             toTransactionInsertRow(transaction, userId),
           ) as never,
         ),
@@ -935,11 +1010,15 @@ export async function importAllData(data: {
     );
   }
 
-  if (data.budgets?.length) {
+  const importBudgets = (data.budgets ?? []).filter(
+    (budget) => !isLegacyFutureAllocationCategoryId(budget.categoryId),
+  );
+
+  if (importBudgets.length) {
     inserts.push(
       supabase
         .from("budgets")
-        .insert(data.budgets.map((budget) => toBudgetRow(budget, userId))),
+        .insert(importBudgets.map((budget) => toBudgetRow(budget, userId))),
     );
   }
 
@@ -1515,6 +1594,13 @@ export async function deleteWallet(
 export async function addCategory(
   category: Category,
 ): Promise<{ error: string | null }> {
+  if (isLegacyFutureAllocationCategoryId(category.id)) {
+    return {
+      error:
+        "Danh mục demo Tiết kiệm/Đầu tư đã bị loại bỏ. Hãy dùng module Tiết kiệm hoặc Đầu tư.",
+    };
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
@@ -1530,6 +1616,13 @@ export async function addCategory(
 export async function updateCategory(
   updatedCategory: Category,
 ): Promise<{ error: string | null }> {
+  if (isLegacyFutureAllocationCategoryId(updatedCategory.id)) {
+    return {
+      error:
+        "Danh mục demo Tiết kiệm/Đầu tư đã bị loại bỏ. Hãy dùng module Tiết kiệm hoặc Đầu tư.",
+    };
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
@@ -1566,6 +1659,12 @@ export async function deleteCategory(
 export async function addBudget(
   budget: Budget,
 ): Promise<{ error: string | null }> {
+  if (isLegacyFutureAllocationCategoryId(budget.categoryId)) {
+    return {
+      error: "Không thể tạo ngân sách cho danh mục demo đã bị loại bỏ.",
+    };
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
@@ -1581,6 +1680,12 @@ export async function addBudget(
 export async function updateBudget(
   updatedBudget: Budget,
 ): Promise<{ error: string | null }> {
+  if (isLegacyFutureAllocationCategoryId(updatedBudget.categoryId)) {
+    return {
+      error: "Không thể cập nhật ngân sách cho danh mục demo đã bị loại bỏ.",
+    };
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
