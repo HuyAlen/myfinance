@@ -83,6 +83,13 @@ export type Category = {
    * category is classified.
    */
   financialGroup?: FinancialGroup;
+
+  /** Category-level recurring schedule used by Dashboard upcoming bills/income. */
+  isRecurring?: boolean;
+  recurrence?: RecurrenceFrequency;
+  defaultAmount?: number;
+  defaultWalletId?: string;
+  nextRunDate?: string;
 };
 
 export type Transaction = {

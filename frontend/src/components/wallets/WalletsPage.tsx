@@ -999,7 +999,7 @@ export default function WalletsPage() {
       )}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng xác nhận xóa ví"

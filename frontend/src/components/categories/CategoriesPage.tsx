@@ -13,6 +13,9 @@ import {
   Search,
   Tag,
   Trash2,
+  Repeat2,
+  CalendarDays,
+  WalletCards,
   X,
 } from "lucide-react";
 
@@ -28,7 +31,9 @@ import type {
   CategoryPlanningGroup,
   CategoryType,
   FinancialGroup,
+  RecurrenceFrequency,
   Transaction,
+  Wallet,
 } from "@/src/types/finance";
 
 import {
@@ -36,6 +41,7 @@ import {
   deleteCategory,
   getCategories,
   getTransactions,
+  getWallets,
   updateCategory,
 } from "@/src/services/finance/financeStorage";
 
@@ -56,6 +62,11 @@ type FormState = {
   type: CategoryType;
   group: CategoryGroup;
   financialGroup: FinancialGroup | "";
+  isRecurring: boolean;
+  recurrence: RecurrenceFrequency;
+  defaultAmount: string;
+  defaultWalletId: string;
+  nextRunDate: string;
 };
 
 const emptyForm: FormState = {
@@ -63,6 +74,11 @@ const emptyForm: FormState = {
   type: "expense",
   group: "variable",
   financialGroup: "",
+  isRecurring: false,
+  recurrence: "monthly",
+  defaultAmount: "",
+  defaultWalletId: "",
+  nextRunDate: "",
 };
 
 type GroupMeta = {
@@ -162,6 +178,18 @@ function normalizeText(value: string) {
     .replace(/đ/g, "d");
 }
 
+function formatCurrencyInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+
+  const amount = Number(digits);
+  if (!Number.isFinite(amount)) return "";
+
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function inferCategoryGroup(
   category: Pick<Category, "name" | "type" | "planningGroup">,
 ): CategoryGroup | null {
@@ -220,6 +248,7 @@ function getTypeFromGroup(group: CategoryGroup): CategoryType {
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -236,12 +265,14 @@ export default function CategoriesPage() {
   const { toast } = useToast();
 
   const reloadData = useCallback(async () => {
-    const [categoryData, transactionData] = await Promise.all([
+    const [categoryData, transactionData, walletData] = await Promise.all([
       getCategories(),
       getTransactions(),
+      getWallets(),
     ]);
     setCategories(categoryData);
     setTransactions(transactionData);
+    setWallets(walletData);
   }, []);
 
   useEffect(() => {
@@ -364,6 +395,11 @@ export default function CategoriesPage() {
       group,
       type: getTypeFromGroup(group),
       financialGroup: group === "income" ? "income" : "",
+      isRecurring: false,
+      recurrence: "monthly",
+      defaultAmount: "",
+      defaultWalletId: "",
+      nextRunDate: "",
     });
     setIsFormOpen(true);
   }
@@ -379,6 +415,14 @@ export default function CategoriesPage() {
       group,
       financialGroup:
         category.financialGroup ?? (category.type === "income" ? "income" : ""),
+      isRecurring: category.isRecurring ?? false,
+      recurrence: category.recurrence ?? "monthly",
+      defaultAmount:
+        category.defaultAmount === undefined
+          ? ""
+          : String(category.defaultAmount),
+      defaultWalletId: category.defaultWalletId ?? "",
+      nextRunDate: category.nextRunDate ?? "",
     });
     setIsFormOpen(true);
   }
@@ -401,6 +445,22 @@ export default function CategoriesPage() {
       return;
     }
 
+    const recurringAmount = Number(form.defaultAmount);
+    if (form.isRecurring) {
+      if (!Number.isFinite(recurringAmount) || recurringAmount <= 0) {
+        setSaveError("Vui lòng nhập số tiền định kỳ lớn hơn 0");
+        return;
+      }
+      if (!form.defaultWalletId) {
+        setSaveError("Vui lòng chọn ví mặc định cho khoản định kỳ");
+        return;
+      }
+      if (!form.nextRunDate) {
+        setSaveError("Vui lòng chọn ngày chạy tiếp theo");
+        return;
+      }
+    }
+
     const category: Category = {
       id: form.id ?? crypto.randomUUID(),
       name,
@@ -408,6 +468,11 @@ export default function CategoriesPage() {
       planningGroup: form.group,
       financialGroup:
         form.group === "income" ? "income" : form.financialGroup || undefined,
+      isRecurring: form.isRecurring,
+      recurrence: form.isRecurring ? form.recurrence : undefined,
+      defaultAmount: form.isRecurring ? recurringAmount : undefined,
+      defaultWalletId: form.isRecurring ? form.defaultWalletId : undefined,
+      nextRunDate: form.isRecurring ? form.nextRunDate : undefined,
     };
 
     setSaveError(null);
@@ -714,6 +779,12 @@ export default function CategoriesPage() {
                         >
                           {category.isActive ? "Đang sử dụng" : "Chưa sử dụng"}
                         </span>
+                        {category.isRecurring && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-700">
+                            <Repeat2 size={10} />
+                            Định kỳ
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -945,6 +1016,141 @@ export default function CategoriesPage() {
                         </button>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">
+                      <Repeat2 size={18} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-black text-slate-800">
+                        Khoản định kỳ
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                        Bật để khoản này xuất hiện trong “Sắp đến hạn trong 30
+                        ngày” trên Dashboard.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.isRecurring}
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        isRecurring: !current.isRecurring,
+                      }))
+                    }
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                      form.isRecurring ? "bg-cyan-600" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 size-5 rounded-full bg-white shadow transition ${
+                        form.isRecurring ? "left-6" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {form.isRecurring && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black text-slate-700">
+                        <Repeat2 size={13} /> Chu kỳ
+                      </span>
+                      <select
+                        value={form.recurrence}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            recurrence: event.target
+                              .value as RecurrenceFrequency,
+                          }))
+                        }
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                      >
+                        <option value="daily">Hàng ngày</option>
+                        <option value="weekly">Hàng tuần</option>
+                        <option value="monthly">Hàng tháng</option>
+                        <option value="yearly">Hàng năm</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black text-slate-700">
+                        Số tiền mặc định
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={formatCurrencyInput(form.defaultAmount)}
+                          onChange={(event) => {
+                            const rawAmount = event.target.value.replace(
+                              /\D/g,
+                              "",
+                            );
+
+                            setForm((current) => ({
+                              ...current,
+                              defaultAmount: rawAmount,
+                            }));
+                          }}
+                          placeholder="0"
+                          autoComplete="off"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 pr-12 text-right text-sm font-bold tabular-nums outline-none focus:border-cyan-400"
+                        />
+                        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                          ₫
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black text-slate-700">
+                        <WalletCards size={13} /> Ví mặc định
+                      </span>
+                      <select
+                        value={form.defaultWalletId}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            defaultWalletId: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                      >
+                        <option value="">Chọn ví</option>
+                        {wallets.map((wallet) => (
+                          <option key={wallet.id} value={wallet.id}>
+                            {wallet.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black text-slate-700">
+                        <CalendarDays size={13} /> Ngày chạy tiếp theo
+                      </span>
+                      <input
+                        type="date"
+                        value={form.nextRunDate}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            nextRunDate: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-cyan-400"
+                      />
+                    </label>
                   </div>
                 )}
               </div>

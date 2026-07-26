@@ -25,15 +25,18 @@ import {
   ArrowUpRight,
   Bot,
   Briefcase,
+  CalendarClock,
   CreditCard,
   Landmark,
   PiggyBank,
   ShieldCheck,
+  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
   Wallet,
   Zap,
+  ReceiptText,
 } from "lucide-react";
 
 import {
@@ -93,15 +96,18 @@ const DASHBOARD_RUNTIME_COMPONENTS = {
   ArrowUpRight,
   Bot,
   Briefcase,
+  CalendarClock,
   CreditCard,
   Landmark,
   PiggyBank,
   ShieldCheck,
+  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
   Wallet,
   Zap,
+  ReceiptText,
 };
 
 const invalidDashboardComponents = Object.entries(DASHBOARD_RUNTIME_COMPONENTS)
@@ -600,6 +606,15 @@ function formatOneDecimal(value: number) {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(Math.round(value), 100));
+}
+
+function toLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function DashboardPage() {
@@ -1807,8 +1822,435 @@ export default function DashboardPage() {
     },
   ] as const;
 
+  // ── MyFinance v2 daily command center ───────────────────────────────────
+  const todaySnapshot = useMemo(() => {
+    const todayKey = toLocalDateKey(new Date());
+    const todayTransactions = transactions.filter(
+      (transaction) => toLocalDateKey(transaction.date) === todayKey,
+    );
+    const income = todayTransactions
+      .filter((transaction) => transaction.type === "income")
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const expense = todayTransactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          !isInternalTransferTransaction(transaction),
+      )
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const saving = savingTransactions
+      .filter(
+        (transaction) =>
+          transaction.type === "deposit" &&
+          toLocalDateKey(transaction.date) === todayKey,
+      )
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    return { income, expense, saving, net: income - expense };
+  }, [transactions, savingTransactions]);
+
+  const monthlyPulse = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const elapsedDays = Math.max(now.getDate(), 1);
+    const monthTransactions = transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return (
+        !Number.isNaN(date.getTime()) &&
+        date.getFullYear() === year &&
+        date.getMonth() === month
+      );
+    });
+    const income = monthTransactions
+      .filter((transaction) => transaction.type === "income")
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const expense = monthTransactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          !isInternalTransferTransaction(transaction),
+      )
+      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const projectedExpense =
+      elapsedDays > 0
+        ? Math.round((expense / elapsedDays) * daysInMonth)
+        : expense;
+    const budgetLimit = budgets
+      .filter((budget) => budget.month.startsWith(monthKey))
+      .reduce((sum, budget) => sum + Math.max(budget.limitAmount, 0), 0);
+    const progress = Math.round((elapsedDays / daysInMonth) * 100);
+    const budgetUsage =
+      budgetLimit > 0 ? Math.round((expense / budgetLimit) * 100) : 0;
+    const projectedBudgetUsage =
+      budgetLimit > 0 ? Math.round((projectedExpense / budgetLimit) * 100) : 0;
+
+    return {
+      year,
+      month: month + 1,
+      elapsedDays,
+      daysInMonth,
+      progress,
+      income,
+      expense,
+      projectedExpense,
+      budgetLimit,
+      budgetUsage,
+      projectedBudgetUsage,
+    };
+  }, [transactions, budgets]);
+
+  const upcomingMoneyEvents = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const limit = new Date(today);
+    limit.setDate(limit.getDate() + 30);
+
+    const categorySchedules = categories
+      .filter(
+        (category) =>
+          category.isRecurring &&
+          category.nextRunDate &&
+          Number(category.defaultAmount ?? 0) > 0,
+      )
+      .map((category) => ({
+        id: `category-${category.id}`,
+        title: category.name,
+        categoryName: category.name,
+        amount: Math.abs(Number(category.defaultAmount ?? 0)),
+        type: category.type,
+        date: new Date(category.nextRunDate as string),
+      }));
+
+    // Keep backward compatibility with older transaction-level schedules.
+    const transactionSchedules = transactions
+      .filter(
+        (transaction) => transaction.isRecurring && transaction.nextRunDate,
+      )
+      .map((transaction) => {
+        const date = new Date(transaction.nextRunDate as string);
+        const categoryName =
+          categories.find((category) => category.id === transaction.categoryId)
+            ?.name ?? "Chưa phân loại";
+        return {
+          id: `transaction-${transaction.id}`,
+          title: transaction.note?.trim() || categoryName,
+          categoryName,
+          amount: Math.abs(transaction.amount),
+          type: transaction.type,
+          date,
+        };
+      });
+
+    return [...categorySchedules, ...transactionSchedules]
+      .filter(
+        (item) =>
+          !Number.isNaN(item.date.getTime()) &&
+          item.date >= today &&
+          item.date <= limit &&
+          (item.type === "income" || item.type === "expense"),
+      )
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 5);
+  }, [transactions, categories]);
+
+  const topSpendingCategories = useMemo(() => {
+    const totals = new Map<string, number>();
+    const now = new Date();
+    transactions.forEach((transaction) => {
+      if (
+        transaction.type !== "expense" ||
+        isInternalTransferTransaction(transaction)
+      )
+        return;
+      const date = new Date(transaction.date);
+      if (
+        Number.isNaN(date.getTime()) ||
+        date.getFullYear() !== now.getFullYear() ||
+        date.getMonth() !== now.getMonth()
+      )
+        return;
+      totals.set(
+        transaction.categoryId,
+        (totals.get(transaction.categoryId) ?? 0) +
+          Math.abs(transaction.amount),
+      );
+    });
+
+    return Array.from(totals.entries())
+      .map(([categoryId, amount]) => ({
+        categoryId,
+        name:
+          categories.find((category) => category.id === categoryId)?.name ??
+          "Khác",
+        amount,
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4);
+  }, [transactions, categories]);
+
+  const dashboardNarrative = useMemo(() => {
+    const messages: string[] = [];
+    if (monthlyPulse.income <= 0) {
+      messages.push("Chưa ghi nhận thu nhập trong tháng hiện tại.");
+    } else if (monthlyPulse.projectedExpense > monthlyPulse.income) {
+      messages.push(
+        `Nếu giữ tốc độ hiện tại, chi tiêu cuối tháng có thể vượt thu nhập khoảng ${formatVND(
+          monthlyPulse.projectedExpense - monthlyPulse.income,
+        )}.`,
+      );
+    } else {
+      messages.push(
+        `Dự báo cuối tháng còn lại khoảng ${formatVND(
+          monthlyPulse.income - monthlyPulse.projectedExpense,
+        )} sau chi tiêu.`,
+      );
+    }
+
+    if (monthlyPulse.projectedBudgetUsage > 100) {
+      messages.push(
+        `Ngân sách có nguy cơ vượt ${monthlyPulse.projectedBudgetUsage - 100}% vào cuối tháng.`,
+      );
+    } else if (monthlyPulse.budgetLimit > 0) {
+      messages.push(
+        `Bạn đang dùng ${monthlyPulse.budgetUsage}% tổng ngân sách tháng.`,
+      );
+    }
+
+    if (emergencyMonthsExact < 3) {
+      messages.push(
+        `Quỹ khẩn cấp mới đáp ứng ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu; ưu tiên gần nhất là đạt 3 tháng.`,
+      );
+    } else if (summary.savingRate >= 20) {
+      messages.push(
+        `Tỷ lệ tiết kiệm ${summary.savingRate}% đang đạt hoặc vượt chuẩn 20%.`,
+      );
+    }
+
+    return messages.slice(0, 3);
+  }, [monthlyPulse, emergencyMonthsExact, summary.savingRate]);
+
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
+      {/* MyFinance v2 command center */}
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="relative overflow-hidden rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
+          <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
+
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+                MyFinance v2 · Daily Brief
+              </p>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                Tổng quan hôm nay
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
+              </p>
+            </div>
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+              <Sparkles size={20} />
+            </div>
+          </div>
+
+          <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <DailyMetric
+              label="Thu hôm nay"
+              value={formatVND(todaySnapshot.income)}
+              tone="good"
+            />
+            <DailyMetric
+              label="Chi hôm nay"
+              value={formatVND(todaySnapshot.expense)}
+              tone="danger"
+            />
+            <DailyMetric
+              label="Đã tiết kiệm"
+              value={formatVND(todaySnapshot.saving)}
+              tone="saving"
+            />
+            <DailyMetric
+              label="Ròng hôm nay"
+              value={`${todaySnapshot.net >= 0 ? "+" : ""}${formatVND(todaySnapshot.net)}`}
+              tone={todaySnapshot.net >= 0 ? "good" : "danger"}
+            />
+          </div>
+
+          <div className="relative mt-5 rounded-3xl border border-blue-100 bg-linear-to-br from-blue-50 via-sky-50/70 to-cyan-50 p-4">
+            <div className="flex items-center gap-2 text-blue-700">
+              <span className="flex size-8 items-center justify-center rounded-xl bg-white shadow-sm">
+                <Bot size={16} />
+              </span>
+              <p className="text-sm font-black">AI Financial Brief</p>
+            </div>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {dashboardNarrative.map((message) => (
+                <p key={message} className="flex gap-2">
+                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-blue-500" />
+                  <span>{message}</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Monthly Pulse
+              </p>
+              <h2 className="mt-2 text-xl font-black text-slate-900">
+                Tiến độ tháng {monthlyPulse.month}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Ngày {monthlyPulse.elapsedDays}/{monthlyPulse.daysInMonth}
+              </p>
+            </div>
+            <CalendarClock className="text-blue-600" size={24} />
+          </div>
+
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
+              style={{ width: `${Math.min(monthlyPulse.progress, 100)}%` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-xs font-bold text-slate-400">
+            <span>{monthlyPulse.progress}% thời gian</span>
+            <span>
+              {monthlyPulse.daysInMonth - monthlyPulse.elapsedDays} ngày còn lại
+            </span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <MiniStat
+              label="Đã chi"
+              value={formatVND(monthlyPulse.expense)}
+              color="text-rose-500"
+            />
+            <MiniStat
+              label="Dự báo cuối tháng"
+              value={formatVND(monthlyPulse.projectedExpense)}
+              color="text-blue-600"
+            />
+            <MiniStat
+              label="Dùng ngân sách"
+              value={
+                monthlyPulse.budgetLimit > 0
+                  ? `${monthlyPulse.budgetUsage}%`
+                  : "Chưa lập"
+              }
+              color={
+                monthlyPulse.budgetUsage > 100
+                  ? "text-rose-500"
+                  : "text-emerald-600"
+              }
+            />
+            <MiniStat
+              label="Dự báo ngân sách"
+              value={
+                monthlyPulse.budgetLimit > 0
+                  ? `${monthlyPulse.projectedBudgetUsage}%`
+                  : "—"
+              }
+              color={
+                monthlyPulse.projectedBudgetUsage > 100
+                  ? "text-rose-500"
+                  : "text-emerald-600"
+              }
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Panel
+          title="Sắp đến hạn trong 30 ngày"
+          subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
+        >
+          <div className="mt-4 space-y-2">
+            {upcomingMoneyEvents.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+                <ReceiptText className="mx-auto text-slate-300" size={24} />
+                <p className="mt-2 text-sm font-black text-slate-700">
+                  Chưa có khoản định kỳ sắp tới
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Bật giao dịch định kỳ và đặt ngày chạy tiếp theo để theo dõi
+                  tại đây.
+                </p>
+              </div>
+            ) : (
+              upcomingMoneyEvents.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-900">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {item.date.toLocaleDateString("vi-VN")} ·{" "}
+                      {item.categoryName}
+                    </p>
+                  </div>
+                  <p
+                    className={`shrink-0 text-sm font-black ${item.type === "income" ? "text-emerald-600" : "text-rose-500"}`}
+                  >
+                    {item.type === "income" ? "+" : "−"}
+                    {formatVND(item.amount)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Danh mục chi tiêu lớn nhất"
+          subtitle="Top danh mục trong tháng hiện tại để nhận diện nơi cần tối ưu"
+        >
+          <div className="mt-4 space-y-3">
+            {topSpendingCategories.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-400">
+                Chưa có chi tiêu trong tháng này.
+              </div>
+            ) : (
+              topSpendingCategories.map((item, index) => {
+                const maxAmount = topSpendingCategories[0]?.amount || 1;
+                const width = Math.max(
+                  8,
+                  Math.round((item.amount / maxAmount) * 100),
+                );
+                return (
+                  <div key={item.categoryId}>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate font-bold text-slate-700">
+                        {index + 1}. {item.name}
+                      </span>
+                      <span className="shrink-0 font-black text-slate-900">
+                        {formatVND(item.amount)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Panel>
+      </section>
+
       {/* Executive overview */}
       <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
         <div className="grid xl:grid-cols-[1.45fr_0.55fr]">
@@ -2646,6 +3088,57 @@ function formatCompactVND(value: number) {
     return `${Math.round(rounded / 1_000)}K`;
   }
   return `${rounded}`;
+}
+
+function DailyMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "good" | "danger" | "saving";
+}) {
+  const styles =
+    tone === "good"
+      ? {
+          card: "border-emerald-100 bg-emerald-50/70",
+          label: "text-emerald-700",
+          value: "text-emerald-600",
+          dot: "bg-emerald-500",
+        }
+      : tone === "danger"
+        ? {
+            card: "border-rose-100 bg-rose-50/70",
+            label: "text-rose-700",
+            value: "text-rose-500",
+            dot: "bg-rose-500",
+          }
+        : {
+            card: "border-cyan-100 bg-cyan-50/70",
+            label: "text-cyan-700",
+            value: "text-cyan-600",
+            dot: "bg-cyan-500",
+          };
+
+  return (
+    <div
+      className={`min-w-0 rounded-2xl border p-3.5 transition hover:-translate-y-0.5 hover:shadow-sm ${styles.card}`}
+    >
+      <div className="flex items-center gap-2">
+        <span className={`size-2 shrink-0 rounded-full ${styles.dot}`} />
+        <p className={`truncate text-[11px] font-bold ${styles.label}`}>
+          {label}
+        </p>
+      </div>
+      <p
+        className={`mt-2 truncate text-sm font-black tracking-tight sm:text-base ${styles.value}`}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
 function HeroMini({

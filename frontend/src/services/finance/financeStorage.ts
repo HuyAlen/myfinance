@@ -77,9 +77,23 @@ function sanitizeDemoFinanceData(
 // `financial_group` is an optional, backward-compatible 50/30/20 classification.
 // Existing rows with NULL financial_group remain valid and are not backfilled here.
 
-type CategoryDbRow = Category & {
+type CategoryDbRow = Omit<
+  Category,
+  | "planningGroup"
+  | "financialGroup"
+  | "isRecurring"
+  | "recurrence"
+  | "defaultAmount"
+  | "defaultWalletId"
+  | "nextRunDate"
+> & {
   planning_group?: CategoryPlanningGroup | null;
   financial_group?: FinancialGroup | null;
+  is_recurring?: boolean | null;
+  recurrence?: Category["recurrence"] | null;
+  default_amount?: number | string | null;
+  default_wallet_id?: string | null;
+  next_run_date?: string | null;
   user_id?: string;
 };
 
@@ -130,9 +144,16 @@ function fromCategoryRow(row: CategoryDbRow): Category {
     id: row.id,
     name: row.name,
     type: row.type,
-    planningGroup:
-      row.planning_group ?? row.planningGroup ?? inferDefaultPlanningGroup(row),
-    financialGroup: row.financial_group ?? row.financialGroup ?? undefined,
+    planningGroup: row.planning_group ?? inferDefaultPlanningGroup(row),
+    financialGroup: row.financial_group ?? undefined,
+    isRecurring: row.is_recurring ?? false,
+    recurrence: row.recurrence ?? undefined,
+    defaultAmount:
+      row.default_amount === null || row.default_amount === undefined
+        ? undefined
+        : Number(row.default_amount),
+    defaultWalletId: row.default_wallet_id ?? undefined,
+    nextRunDate: row.next_run_date ?? undefined,
   };
 }
 
@@ -144,6 +165,16 @@ function toCategoryRow(category: Category): Omit<CategoryDbRow, "user_id"> {
     planning_group:
       category.planningGroup ?? inferDefaultPlanningGroup(category),
     financial_group: category.financialGroup ?? null,
+    is_recurring: category.isRecurring ?? false,
+    recurrence: category.isRecurring ? (category.recurrence ?? null) : null,
+    default_amount:
+      category.isRecurring && category.defaultAmount !== undefined
+        ? category.defaultAmount
+        : null,
+    default_wallet_id: category.isRecurring
+      ? (category.defaultWalletId ?? null)
+      : null,
+    next_run_date: category.isRecurring ? (category.nextRunDate ?? null) : null,
   };
 }
 
