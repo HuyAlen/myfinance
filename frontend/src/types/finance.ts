@@ -25,6 +25,17 @@ export type CategoryPlanningGroup =
   | "saving"
   | "investment";
 
+/**
+ * 50/30/20 financial classification.
+ *
+ * This field is intentionally separate from `CategoryPlanningGroup`:
+ * - planningGroup describes bookkeeping/operating behavior.
+ * - financialGroup describes financial analysis under the 50/30/20 model.
+ *
+ * It is optional for backward compatibility with existing category rows.
+ */
+export type FinancialGroup = "income" | "needs" | "wants" | "saving";
+
 export type Wallet = {
   id: string;
   name: string;
@@ -58,6 +69,20 @@ export type Category = {
    * investment -> investing allocation, e.g. trading, ETF, crypto
    */
   planningGroup?: CategoryPlanningGroup;
+
+  /**
+   * Optional 50/30/20 classification.
+   * Stored in Supabase as `financial_group`.
+   *
+   * income -> income category
+   * needs  -> essential spending
+   * wants  -> discretionary spending
+   * saving -> saving and investment allocation
+   *
+   * Optional by design so existing category data remains valid until each
+   * category is classified.
+   */
+  financialGroup?: FinancialGroup;
 };
 
 export type Transaction = {
