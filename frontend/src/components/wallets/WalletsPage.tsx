@@ -38,9 +38,6 @@ import {
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
-import ConfirmDialog, {
-  type PendingConfirm,
-} from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -131,9 +128,8 @@ export default function WalletsPage() {
     createEmptyTransferForm,
   );
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
-    null,
-  );
+  const [deleteTarget, setDeleteTarget] = useState<WalletType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   async function reloadData() {
@@ -355,32 +351,62 @@ export default function WalletsPage() {
   }
 
   function handleDelete(id: string) {
-    const wallet = wallets.find((w) => w.id === id);
-    const linked = transactions.filter(
-      (t) => t.walletId === id || t.transferToWalletId === id,
-    );
-    if (linked.length > 0) {
+    const wallet = wallets.find((item) => item.id === id);
+    if (!wallet) {
       toast({
-        variant: "warning",
-        message: `Không thể xóa ví "${wallet?.name ?? "này"}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+        variant: "error",
+        message: "Không tìm thấy ví cần xóa.",
       });
       return;
     }
-    setPendingAction({
-      title: `Xóa ví "${wallet?.name ?? "này"}"?`,
-      description:
-        "Hành động này không thể hoàn tác. Ví sẽ bị xóa khỏi tài khoản của bạn.",
-      variant: "danger",
-      onConfirm: async () => {
-        const { error } = await deleteWallet(id);
-        if (error) {
-          toast({ variant: "error", message: "Lỗi xóa ví: " + error });
-          return;
-        }
-        toast({ variant: "success", message: "Đã xóa ví thành công." });
-        await reloadData();
-      },
-    });
+
+    const linked = transactions.filter(
+      (transaction) =>
+        transaction.walletId === id || transaction.transferToWalletId === id,
+    );
+
+    if (linked.length > 0) {
+      toast({
+        variant: "warning",
+        message: `Không thể xóa ví "${wallet.name}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+      });
+      return;
+    }
+
+    setDeleteTarget(wallet);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget || isDeleting) return;
+
+    const walletToDelete = deleteTarget;
+    setIsDeleting(true);
+
+    try {
+      const { error } = await deleteWallet(walletToDelete.id);
+
+      if (error) {
+        toast({
+          variant: "error",
+          message: "Lỗi xóa ví: " + error,
+        });
+        return;
+      }
+
+      setWallets((current) =>
+        current.filter((wallet) => wallet.id !== walletToDelete.id),
+      );
+      setDeleteTarget(null);
+
+      toast({
+        variant: "success",
+        message: `Đã xóa ví "${walletToDelete.name}" thành công.`,
+      });
+
+      await reloadData();
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
@@ -589,7 +615,7 @@ export default function WalletsPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(wallet.id)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      className="flex size-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 shadow-sm transition active:scale-95 sm:size-8 sm:rounded-xl sm:border-slate-200 sm:bg-white/95 sm:text-slate-400 sm:hover:border-rose-200 sm:hover:bg-rose-50 sm:hover:text-rose-500"
                       aria-label="Xóa ví"
                     >
                       <Trash2 size={13} />
@@ -972,10 +998,82 @@ export default function WalletsPage() {
         </div>
       )}
 
-      <ConfirmDialog
-        action={pendingAction}
-        onCancel={() => setPendingAction(null)}
-      />
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <button
+            type="button"
+            aria-label="Đóng xác nhận xóa ví"
+            className="absolute inset-0 cursor-default"
+            onClick={() => {
+              if (!isDeleting) setDeleteTarget(null);
+            }}
+          />
+
+          <div className="relative z-10 w-full overflow-hidden rounded-t-[30px] bg-white shadow-2xl sm:max-w-md sm:rounded-4xl">
+            <div className="px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+              <div className="flex items-start justify-between gap-4">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                  <Trash2 size={21} />
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={isDeleting}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"
+                  aria-label="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="mt-5 text-[11px] font-black uppercase tracking-[0.18em] text-rose-500">
+                Xác nhận xóa
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                Xóa ví tiền?
+              </h2>
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                Bạn sắp xóa{" "}
+                <span className="font-black text-slate-800">
+                  {deleteTarget.name}
+                </span>
+                . Hành động này không thể hoàn tác.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wide text-rose-400">
+                  Số dư hiện tại
+                </p>
+                <p className="mt-1 text-xl font-black text-rose-700">
+                  {formatVND(deleteTarget.balance)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-5">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleConfirmDelete()}
+                disabled={isDeleting}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 text-sm font-black text-white shadow-lg shadow-rose-100 transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 size={17} />
+                {isDeleting ? "Đang xóa..." : "Xóa ví"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

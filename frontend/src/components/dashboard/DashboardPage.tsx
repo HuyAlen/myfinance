@@ -1811,7 +1811,7 @@ export default function DashboardPage() {
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
       {/* Executive overview */}
       <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid xl:grid-cols-[1.35fr_0.65fr]">
+        <div className="grid xl:grid-cols-[1.45fr_0.55fr]">
           <div className="bg-linear-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -1844,7 +1844,7 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
               <HeroMini
                 icon={<Wallet size={16} />}
                 label="Thanh khoản"
@@ -2289,7 +2289,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/investments")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-slate-900 px-3 py-3 text-center text-sm font-black leading-5 text-white transition hover:bg-slate-700 sm:px-4"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition hover:from-violet-700 hover:to-blue-700 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Quản lý tài khoản Forex
@@ -2342,7 +2342,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/goals")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-black leading-5 text-blue-600 transition hover:bg-blue-50 sm:px-4"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả mục tiêu
@@ -2414,7 +2414,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/transactions")}
-            className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-blue-600 transition hover:bg-blue-50"
+            className="mt-4 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả giao dịch
@@ -2660,16 +2660,22 @@ function HeroMini({
   valueClass: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-2">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+    <div className="min-w-0 rounded-2xl border border-white/70 bg-white/85 px-2.5 py-3 shadow-sm backdrop-blur">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
           {icon}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-[10px] font-medium text-slate-500">
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[9px] font-semibold leading-3.5 text-slate-500 xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
-          <p className={`truncate text-sm font-black ${valueClass}`}>{value}</p>
+          <p
+            className={`mt-0.5 whitespace-nowrap text-[clamp(9px,0.72vw,13px)] font-black leading-4 tracking-[-0.03em] tabular-nums ${valueClass}`}
+            title={value}
+          >
+            {value}
+          </p>
         </div>
       </div>
     </div>
@@ -2870,6 +2876,11 @@ function ActionCard({
     warning: "bg-amber-500",
     good: "bg-emerald-600",
   };
+  const buttonStyles = {
+    danger: "bg-rose-600 text-white shadow-rose-100 hover:bg-rose-700",
+    warning: "bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600",
+    good: "bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700",
+  };
   return (
     <div className={`rounded-2xl border p-4 ${styles[tone]}`}>
       <div className="flex gap-3">
@@ -2886,7 +2897,10 @@ function ActionCard({
             <button
               type="button"
               onClick={() => onNavigate(ctaRoute)}
-              className="mt-3 inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-700"
+              className={
+                "mt-3 inline-flex items-center rounded-lg px-3 py-2 text-xs font-black shadow-md transition " +
+                buttonStyles[tone]
+              }
             >
               {ctaLabel}
             </button>

@@ -938,7 +938,7 @@ export default function BudgetsPage() {
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
       <section className="overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 py-6 sm:px-8 sm:py-7">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-5 py-6 sm:px-7 sm:py-7">
           {/* Top row */}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -967,16 +967,14 @@ export default function BudgetsPage() {
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
               sub={filteredBudgets.length + " danh mục · tháng " + activeMonth}
-              gradient="from-blue-500 to-blue-600"
-              iconBg="bg-white/20"
+              tone="blue"
               icon={<Target size={16} />}
             />
             <KpiCard
               label="Đã sử dụng"
               value={formatVND(filteredSummary.totalSpent)}
               sub={filteredSummary.percent + "% hạn mức"}
-              gradient="from-indigo-500 to-violet-500"
-              iconBg="bg-white/20"
+              tone="violet"
               icon={<ArrowDownRight size={16} />}
             />
             <KpiCard
@@ -989,12 +987,7 @@ export default function BudgetsPage() {
                   ? `Vượt ${Math.max(0, filteredSummary.percent - 100)}% hạn mức`
                   : "Có thể tiếp tục chi"
               }
-              gradient={
-                filteredSummary.remaining < 0
-                  ? "from-rose-500 to-red-500"
-                  : "from-emerald-500 to-teal-500"
-              }
-              iconBg="bg-white/20"
+              tone={filteredSummary.remaining < 0 ? "rose" : "emerald"}
               icon={
                 filteredSummary.remaining >= 0 ? (
                   <ArrowUpRight size={16} />
@@ -1013,39 +1006,39 @@ export default function BudgetsPage() {
                     ? "Sắp đạt giới hạn"
                     : "Trong vùng an toàn"
               }
-              gradient={
+              tone={
                 filteredSummary.percent >= 100
-                  ? "from-orange-500 to-rose-500"
+                  ? "orange"
                   : filteredSummary.percent >= 80
-                    ? "from-amber-400 to-orange-500"
-                    : "from-cyan-500 to-blue-500"
+                    ? "amber"
+                    : "cyan"
               }
-              iconBg="bg-white/20"
               icon={<ChartPie size={16} />}
             />
-            <div
-              className={
-                "col-span-2 rounded-2xl bg-linear-to-br p-4 shadow-sm sm:col-span-1 " +
-                healthGrade.gradient
-              }
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-                  Budget Health
-                </p>
-                <ShieldCheck size={16} className="text-white/90" />
+            <div className="col-span-2 rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 to-white p-4 shadow-sm sm:col-span-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">
+                    Budget Health
+                  </p>
+                  <p className="mt-2 text-2xl font-black tracking-tight text-rose-700">
+                    {budgetHealthScore}
+                    <span className="text-sm text-rose-400">/100</span>
+                  </p>
+                </div>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                  <ShieldCheck size={16} />
+                </span>
               </div>
-              <p className="mt-1 text-3xl font-black text-white">
-                {budgetHealthScore}
-                <span className="text-base opacity-70">/100</span>
-              </p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
+
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-rose-100">
                 <div
-                  className="h-1.5 rounded-full bg-white"
+                  className="h-full rounded-full bg-rose-500"
                   style={{ width: Math.min(budgetHealthScore, 100) + "%" }}
                 />
               </div>
-              <p className="mt-1.5 truncate text-[10px] text-white/85">
+
+              <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-4 text-rose-500/80">
                 {filteredSummary.remaining < 0
                   ? `${realExpenseViolations.length} danh mục cần rà soát · ${healthGrade.label}`
                   : `${healthGrade.label} · ngân sách đang được kiểm soát`}
@@ -1134,75 +1127,192 @@ export default function BudgetsPage() {
             </div>
           </div>
 
-          <div className="rounded-4xl border border-violet-100 bg-linear-to-br from-violet-50/80 via-white to-indigo-50/70 p-5 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
-                <ShieldCheck size={17} />
+          <div className="rounded-4xl border border-violet-100 bg-linear-to-br from-violet-50 via-white to-indigo-50 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm shadow-violet-100">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-500">
+                    Quy tắc phân bổ
+                  </p>
+                  <h2 className="mt-1 text-lg font-black text-slate-900">
+                    Khung 50/30/20
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Cân bằng nhu cầu thiết yếu, mong muốn và tích lũy tương lai.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-black text-slate-900">
-                  Khung 50/30/20
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Nhu cầu · Mong muốn · Tiết kiệm & đầu tư
+
+              <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-right shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                  Điểm tuân thủ
+                </p>
+                <p className="mt-1 text-2xl font-black text-violet-700">
+                  {Math.max(
+                    0,
+                    Math.round(
+                      100 -
+                        v7Allocation.reduce(
+                          (penalty, bucket) =>
+                            penalty +
+                            Math.min(
+                              40,
+                              Math.abs(bucket.percentOfTarget - 100) * 0.35,
+                            ),
+                          0,
+                        ),
+                    ),
+                  )}
+                  <span className="text-sm text-violet-400">/100</span>
                 </p>
               </div>
             </div>
 
-            <div className="space-y-5">
-              {v7Allocation.map((bucket) => {
-                const actualColor =
+            <div className="mt-5 space-y-3">
+              {v7Allocation.map((bucket, index) => {
+                const rowStyles = [
+                  {
+                    shell: "border-blue-100 bg-blue-50/70",
+                    icon: "bg-blue-100 text-blue-600",
+                    bar: "bg-blue-600",
+                    iconText: "N",
+                  },
+                  {
+                    shell: "border-amber-100 bg-amber-50/70",
+                    icon: "bg-amber-100 text-amber-600",
+                    bar: "bg-amber-500",
+                    iconText: "M",
+                  },
+                  {
+                    shell: "border-emerald-100 bg-emerald-50/70",
+                    icon: "bg-emerald-100 text-emerald-600",
+                    bar: "bg-emerald-500",
+                    iconText: "T",
+                  },
+                ][index];
+
+                const statusStyles =
                   bucket.status === "over"
-                    ? "text-rose-600"
+                    ? {
+                        badge: "bg-rose-100 text-rose-700",
+                        value: "text-rose-600",
+                        bar: "bg-rose-500",
+                        label: "Vượt mục tiêu",
+                      }
                     : bucket.status === "near"
-                      ? "text-amber-600"
-                      : bucket.textColor;
-                const diffText =
-                  bucket.difference > 0
-                    ? `Vượt ${formatVND(bucket.difference)}`
-                    : `Còn ${formatVND(Math.abs(bucket.difference))}`;
+                      ? {
+                          badge: "bg-amber-100 text-amber-700",
+                          value: "text-amber-600",
+                          bar: "bg-amber-500",
+                          label: "Gần giới hạn",
+                        }
+                      : {
+                          badge: "bg-emerald-100 text-emerald-700",
+                          value: "text-emerald-600",
+                          bar: rowStyles.bar,
+                          label: "Trong ngưỡng",
+                        };
+
                 return (
-                  <div key={bucket.label}>
-                    <div className="mb-1.5 flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-xs font-black text-slate-700">
-                          {bucket.label}
+                  <div
+                    key={bucket.label}
+                    className={`rounded-3xl border p-4 ${rowStyles.shell}`}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-black ${rowStyles.icon}`}
+                        >
+                          {rowStyles.iconText}
                         </span>
-                        <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-slate-500 shadow-sm">
-                          Mục tiêu {bucket.targetPercent}%
-                        </span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-black text-slate-900">
+                              {bucket.label}
+                            </p>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[9px] font-black text-slate-500 shadow-sm">
+                              Mục tiêu {bucket.targetPercent}%
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Đã phân bổ {formatVND(bucket.actualAmount)}
+                          </p>
+                        </div>
                       </div>
-                      <span className={"text-sm font-black " + actualColor}>
-                        {bucket.percentOfTarget}%
-                      </span>
+
+                      <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-black ${statusStyles.badge}`}
+                        >
+                          {statusStyles.label}
+                        </span>
+                        <p
+                          className={`mt-1 text-xl font-black ${statusStyles.value}`}
+                        >
+                          {bucket.percentOfTarget}%
+                        </p>
+                      </div>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-white shadow-inner">
+
+                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-white shadow-inner">
                       <div
-                        className="h-2.5 rounded-full transition-all duration-500"
+                        className={`h-full rounded-full transition-all duration-500 ${statusStyles.bar}`}
                         style={{
                           width: Math.min(bucket.percentOfTarget, 100) + "%",
-                          background: bucket.color,
                         }}
                       />
                     </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-3 text-[10px]">
-                      <span className="text-slate-400">
-                        {formatVND(bucket.actualAmount)} /{" "}
-                        {formatVND(bucket.targetAmount)}
-                      </span>
-                      <span
-                        className={
-                          bucket.difference > 0
-                            ? "font-bold text-rose-500"
-                            : "font-bold text-emerald-600"
-                        }
-                      >
-                        {diffText}
-                      </span>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                          Mục tiêu
+                        </p>
+                        <p className="mt-1 text-xs font-black text-slate-700">
+                          {formatVND(bucket.targetAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                          Thực tế
+                        </p>
+                        <p className="mt-1 text-xs font-black text-slate-700">
+                          {formatVND(bucket.actualAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                          {bucket.difference > 0 ? "Đã vượt" : "Còn lại"}
+                        </p>
+                        <p
+                          className={
+                            "mt-1 text-xs font-black " +
+                            (bucket.difference > 0
+                              ? "text-rose-600"
+                              : "text-emerald-600")
+                          }
+                        >
+                          {formatVND(Math.abs(bucket.difference))}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+            </div>
+
+            <div className="mt-4 rounded-3xl border border-violet-100 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-500">
+                Gợi ý điều chỉnh
+              </p>
+              <p className="mt-2 text-sm font-black leading-6 text-slate-900">
+                {v7Allocation.some((bucket) => bucket.status === "over")
+                  ? "Ưu tiên giảm nhóm chi vượt mục tiêu và chuyển phần chênh lệch sang tiết kiệm hoặc đầu tư."
+                  : "Cơ cấu chi tiêu đang nằm trong ngưỡng phù hợp. Hãy tiếp tục duy trì tỷ lệ hiện tại."}
+              </p>
             </div>
           </div>
         </section>
@@ -1644,34 +1754,114 @@ function KpiCard({
   label,
   value,
   sub,
-  gradient,
-  iconBg,
+  tone,
   icon,
 }: {
   label: string;
   value: string;
   sub: string;
-  gradient: string;
-  iconBg: string;
+  tone: "blue" | "violet" | "emerald" | "rose" | "orange" | "amber" | "cyan";
   icon: React.ReactNode;
 }) {
+  const styles = {
+    blue: {
+      shell: "border-blue-200 bg-linear-to-br from-blue-50 to-white",
+      label: "text-blue-500",
+      value: "text-blue-700",
+      note: "text-blue-500/80",
+      icon: "bg-blue-100 text-blue-600",
+    },
+    violet: {
+      shell: "border-violet-200 bg-linear-to-br from-violet-50 to-white",
+      label: "text-violet-500",
+      value: "text-violet-700",
+      note: "text-violet-500/80",
+      icon: "bg-violet-100 text-violet-600",
+    },
+    emerald: {
+      shell: "border-emerald-200 bg-linear-to-br from-emerald-50 to-white",
+      label: "text-emerald-500",
+      value: "text-emerald-700",
+      note: "text-emerald-500/80",
+      icon: "bg-emerald-100 text-emerald-600",
+    },
+    rose: {
+      shell: "border-rose-200 bg-linear-to-br from-rose-50 to-white",
+      label: "text-rose-500",
+      value: "text-rose-700",
+      note: "text-rose-500/80",
+      icon: "bg-rose-100 text-rose-600",
+    },
+    orange: {
+      shell: "border-orange-200 bg-linear-to-br from-orange-50 to-white",
+      label: "text-orange-500",
+      value: "text-orange-700",
+      note: "text-orange-500/80",
+      icon: "bg-orange-100 text-orange-600",
+    },
+    amber: {
+      shell: "border-amber-200 bg-linear-to-br from-amber-50 to-white",
+      label: "text-amber-500",
+      value: "text-amber-700",
+      note: "text-amber-500/80",
+      icon: "bg-amber-100 text-amber-600",
+    },
+    cyan: {
+      shell: "border-cyan-200 bg-linear-to-br from-cyan-50 to-white",
+      label: "text-cyan-500",
+      value: "text-cyan-700",
+      note: "text-cyan-500/80",
+      icon: "bg-cyan-100 text-cyan-600",
+    },
+  };
+
+  const style = styles[tone];
+
   return (
-    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-          {label}
-        </p>
+    <div
+      className={
+        "min-w-0 rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
+        style.shell
+      }
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p
+            className={
+              "text-[10px] font-black uppercase tracking-[0.16em] " +
+              style.label
+            }
+          >
+            {label}
+          </p>
+          <p
+            className={
+              "mt-2 whitespace-nowrap text-[clamp(13px,1vw,20px)] font-black tracking-[-0.03em] tabular-nums " +
+              style.value
+            }
+            title={value}
+          >
+            {value}
+          </p>
+          <p
+            className={
+              "mt-1 line-clamp-2 text-[11px] font-semibold leading-4 " +
+              style.note
+            }
+          >
+            {sub}
+          </p>
+        </div>
+
         <div
           className={
-            "flex size-6 shrink-0 items-center justify-center rounded-lg text-white " +
-            iconBg
+            "flex size-9 shrink-0 items-center justify-center rounded-2xl " +
+            style.icon
           }
         >
           {icon}
         </div>
       </div>
-      <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
     </div>
   );
 }

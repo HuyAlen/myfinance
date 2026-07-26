@@ -471,7 +471,9 @@ export default function SavingsPage({
   const [] = useState<string[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingSavingId, setEditingSavingId] = useState<string | null>(null);
-  const [, setDeleteTarget] = useState<SavingWithWallet | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavingWithWallet | null>(
+    null,
+  );
   const [toast, setToast] = useState<ToastState | null>(null);
   const [form, setForm] = useState<SavingFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState("");
@@ -1519,6 +1521,76 @@ export default function SavingsPage({
           ? "Đã tất toán khoản tiết kiệm trên Supabase."
           : "Đã lưu giao dịch tiết kiệm vào Supabase.",
     });
+  };
+
+  const handleDeleteSaving = async () => {
+    if (!deleteTarget || isPersisting) return;
+
+    const savingToDelete = deleteTarget;
+    const relatedTransactions = transactionsBySavingId[savingToDelete.id] ?? [];
+
+    setIsPersisting(true);
+
+    try {
+      if (supabase) {
+        const { error: transactionDeleteError } = await supabase
+          .from("saving_transactions")
+          .delete()
+          .eq("saving_id", savingToDelete.id);
+
+        if (transactionDeleteError) {
+          throw new Error(
+            transactionDeleteError.message ||
+              "Không thể xóa lịch sử giao dịch tiết kiệm.",
+          );
+        }
+
+        const { error: savingDeleteError } = await supabase
+          .from("savings")
+          .delete()
+          .eq("id", savingToDelete.id);
+
+        if (savingDeleteError) {
+          throw new Error(
+            savingDeleteError.message || "Không thể xóa khoản tiết kiệm.",
+          );
+        }
+      }
+
+      setLocalSavings((current) =>
+        current.filter((item) => item.id !== savingToDelete.id),
+      );
+
+      setTransactionsBySavingId((current) => {
+        const next = { ...current };
+        delete next[savingToDelete.id];
+        return next;
+      });
+
+      if (editingSavingId === savingToDelete.id) {
+        setEditingSavingId(null);
+        setIsAddOpen(false);
+      }
+
+      setDeleteTarget(null);
+      showToast({
+        type: "success",
+        message:
+          relatedTransactions.length > 0
+            ? "Đã xóa khoản tiết kiệm và toàn bộ lịch sử liên quan."
+            : "Đã xóa khoản tiết kiệm.",
+      });
+    } catch (error) {
+      showToast({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Không thể xóa khoản tiết kiệm.",
+      });
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
   return (
@@ -2714,7 +2786,6 @@ export default function SavingsPage({
                   type="button"
                   onClick={() => {
                     setDeleteTarget(selectedSaving);
-                    closeAddModal();
                   }}
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-100"
                 >
@@ -2749,6 +2820,84 @@ export default function SavingsPage({
               </div>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <button
+            type="button"
+            aria-label="Đóng xác nhận xóa"
+            className="absolute inset-0 cursor-default"
+            onClick={() => {
+              if (!isPersisting) setDeleteTarget(null);
+            }}
+          />
+
+          <div className="relative z-10 w-full overflow-hidden rounded-t-[30px] bg-white shadow-2xl sm:max-w-md sm:rounded-4xl">
+            <div className="px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
+              <div className="flex items-start justify-between gap-4">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                  <Trash2 size={21} />
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={isPersisting}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"
+                  aria-label="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className="mt-5 text-[11px] font-black uppercase tracking-[0.18em] text-rose-500">
+                Xác nhận xóa
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                Xóa khoản tiết kiệm?
+              </h2>
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                Bạn sắp xóa{" "}
+                <span className="font-black text-slate-800">
+                  {deleteTarget.name}
+                </span>
+                . Toàn bộ lịch sử nạp, rút và tất toán của khoản này cũng sẽ bị
+                xóa khỏi trang Tiết kiệm.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-wide text-rose-400">
+                  Số dư hiện tại
+                </p>
+                <p className="mt-1 text-xl font-black text-rose-700">
+                  {formatCurrency(deleteTarget.balance)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-5">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isPersisting}
+                className="min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleDeleteSaving()}
+                disabled={isPersisting}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 text-sm font-black text-white shadow-lg shadow-rose-100 transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 size={17} />
+                {isPersisting ? "Đang xóa..." : "Xóa khoản này"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>
