@@ -1071,19 +1071,19 @@ export default function BudgetsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:space-y-6 sm:pb-8">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-5 py-6 sm:px-7 sm:py-7">
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm sm:rounded-4xl">
+        <div className="bg-linear-to-br from-blue-50/70 via-white to-cyan-50/60 px-4 py-4 sm:px-7 sm:py-7">
           {/* Top row */}
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
                 Budget Intelligence
               </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-4xl">
                 Ngân sách chi tiêu
               </h1>
               <p className="mt-1 text-sm text-slate-500">
@@ -1092,7 +1092,7 @@ export default function BudgetsPage() {
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/50 transition-all hover:bg-blue-700 active:scale-[.98] sm:w-auto"
             >
               <Plus size={17} />
               Tạo ngân sách
@@ -1100,7 +1100,7 @@ export default function BudgetsPage() {
           </div>
 
           {/* Executive KPI cards */}
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
@@ -1153,7 +1153,7 @@ export default function BudgetsPage() {
               }
               icon={<ChartPie size={16} />}
             />
-            <div className="col-span-2 rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 to-white p-4 shadow-sm sm:col-span-1">
+            <div className="col-span-2 rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 to-white p-4 shadow-sm xl:col-span-1">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">
@@ -1187,10 +1187,10 @@ export default function BudgetsPage() {
       </section>
 
       {filteredSummary.totalLimit > 0 && (
-        <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid gap-4 sm:gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div
             className={
-              "rounded-4xl border p-5 shadow-sm " +
+              "rounded-3xl border p-4 shadow-sm sm:rounded-4xl sm:p-5 " +
               financialPlanning.fixedStatus.bg +
               " " +
               financialPlanning.fixedStatus.border
@@ -1265,7 +1265,7 @@ export default function BudgetsPage() {
             </div>
           </div>
 
-          <div className="rounded-4xl border border-violet-100 bg-linear-to-br from-violet-50 via-white to-indigo-50 p-5 shadow-sm sm:p-6">
+          <div className="rounded-3xl border border-violet-100 bg-linear-to-br from-violet-50 via-white to-indigo-50 p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm shadow-violet-100">
@@ -1571,7 +1571,7 @@ export default function BudgetsPage() {
       )}
 
       {budgets.length > 0 && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
               <ChartPie size={17} />
@@ -1671,7 +1671,7 @@ export default function BudgetsPage() {
           </p>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredBudgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
             const spent = getSpent(budget.categoryId, budget.month);
@@ -1698,7 +1698,7 @@ export default function BudgetsPage() {
               <div
                 key={budget.id}
                 className={
-                  "group relative rounded-3xl border bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md " +
+                  "group relative rounded-3xl border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 " +
                   s.border
                 }
               >
@@ -1750,14 +1750,14 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                       Đã chi
                     </p>
                     <p
                       className={
-                        "mt-1 text-xl font-black " +
+                        "mt-1 wrap-break-word text-lg font-black leading-tight sm:text-xl " +
                         (status === "over" ? "text-rose-600" : "text-slate-900")
                       }
                     >
@@ -1768,7 +1768,7 @@ export default function BudgetsPage() {
                     <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                       Hạn mức
                     </p>
-                    <p className="mt-1 text-base font-black text-slate-700">
+                    <p className="mt-1 wrap-break-word text-sm font-black leading-tight text-slate-700 sm:text-base">
                       {formatVND(budget.limitAmount)}
                     </p>
                   </div>
@@ -1834,7 +1834,7 @@ export default function BudgetsPage() {
 
           {/* Empty state */}
           {filteredBudgets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-6 text-center sm:rounded-4xl sm:p-12 md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <ChartPie size={24} className="text-blue-400" />
               </div>
@@ -1850,7 +1850,7 @@ export default function BudgetsPage() {
                     : "Chọn tháng khác hoặc tạo ngân sách mới."
                   : "Bắt đầu bằng cách tạo ngân sách đầu tiên."}
               </p>
-              <div className="mt-5 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
                 <button
                   onClick={openCreateForm}
                   className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
@@ -2072,15 +2072,15 @@ function KpiCard({
   return (
     <div
       className={
-        "min-w-0 rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
+        "min-w-0 rounded-3xl border p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
         style.shell
       }
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-2.5 sm:gap-3">
         <div className="min-w-0 flex-1">
           <p
             className={
-              "text-[10px] font-black uppercase tracking-[0.16em] " +
+              "line-clamp-2 min-h-8 text-[10px] font-black uppercase leading-4 tracking-[0.14em] sm:min-h-0 sm:tracking-[0.16em] " +
               style.label
             }
           >
@@ -2088,7 +2088,7 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-2 whitespace-nowrap text-[clamp(13px,1vw,20px)] font-black tracking-[-0.03em] tabular-nums " +
+              "mt-2 wrap-break-word text-[clamp(15px,4.7vw,20px)] font-black leading-tight tracking-[-0.03em] tabular-nums sm:whitespace-nowrap sm:text-[clamp(13px,1vw,20px)] " +
               style.value
             }
             title={value}
@@ -2097,7 +2097,7 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-1 line-clamp-2 text-[11px] font-semibold leading-4 " +
+              "mt-1 line-clamp-2 min-h-8 text-[11px] font-semibold leading-4 " +
               style.note
             }
           >
@@ -2107,7 +2107,7 @@ function KpiCard({
 
         <div
           className={
-            "flex size-9 shrink-0 items-center justify-center rounded-2xl " +
+            "flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9 sm:rounded-2xl " +
             style.icon
           }
         >

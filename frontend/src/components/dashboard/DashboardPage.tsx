@@ -475,7 +475,7 @@ function getRecentIconClass(kind: RecentActivityKind) {
   if (kind === "saving") return "bg-blue-50 text-blue-600";
   if (kind === "investment") return "bg-violet-50 text-violet-600";
   if (kind === "forex") return "bg-cyan-50 text-cyan-600";
-  return "bg-slate-100 text-slate-500";
+  return "bg-slate-100 text-slate-600";
 }
 
 function getRecentAmountClass(kind: RecentActivityKind) {
@@ -484,7 +484,7 @@ function getRecentAmountClass(kind: RecentActivityKind) {
   if (kind === "saving") return "text-blue-600";
   if (kind === "investment") return "text-violet-600";
   if (kind === "forex") return "text-cyan-600";
-  return "text-slate-500";
+  return "text-slate-600";
 }
 
 function getTransactionNetWorthImpact(transaction: Transaction) {
@@ -549,50 +549,6 @@ function getSavingTransactionNetWorthImpact(
   return 0;
 }
 
-function getSavingCashflowAmount(saving: DashboardSavingAccount) {
-  const record = saving as Record<string, unknown>;
-
-  // Cash-flow uses the opening amount of the saving account, not the current
-  // balance after interest/settlement. Balance is only a temporary fallback for
-  // older records that do not yet have principal/initial_amount.
-  const rawAmount =
-    record.principal ??
-    record.principal_amount ??
-    record.initialAmount ??
-    record.initial_amount ??
-    record.openingAmount ??
-    record.opening_amount ??
-    record.depositAmount ??
-    record.deposit_amount ??
-    record.balance;
-
-  const amount = Number(rawAmount ?? 0);
-  return Number.isFinite(amount) ? Math.max(amount, 0) : 0;
-}
-
-function getInvestmentCashflowAmount(investment: Investment) {
-  const record = investment as Record<string, unknown>;
-
-  // Cash-flow uses invested capital only. Do not use currentValue/marketValue
-  // because unrealized gain/loss belongs to asset performance, not cash-flow.
-  const rawAmount =
-    record.investedAmount ??
-    record.invested_amount ??
-    record.investedCapital ??
-    record.invested_capital ??
-    record.principal ??
-    record.initialCapital ??
-    record.initial_capital ??
-    record.initialAmount ??
-    record.initial_amount ??
-    record.costBasis ??
-    record.cost_basis ??
-    record.amount;
-
-  const amount = Number(rawAmount ?? 0);
-  return Number.isFinite(amount) ? Math.max(amount, 0) : 0;
-}
-
 function getEndOfMonth(year: number, month: number) {
   return new Date(year, month, 0, 23, 59, 59, 999);
 }
@@ -615,6 +571,56 @@ function toLocalDateKey(value: string | Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isDateWithinRange(
+  value: string | Date | null | undefined,
+  startDate: string,
+  endDate: string,
+) {
+  if (!value) return false;
+
+  const dateKey = toLocalDateKey(value);
+  if (!dateKey) return false;
+
+  return dateKey >= startDate.slice(0, 10) && dateKey <= endDate.slice(0, 10);
+}
+
+function getNetSavingAllocation(
+  transactions: DashboardSavingTransaction[],
+  startDate: string,
+  endDate: string,
+) {
+  return transactions.reduce((sum, transaction) => {
+    if (!isDateWithinRange(transaction.date, startDate, endDate)) return sum;
+
+    if (transaction.type === "deposit") return sum + transaction.amount;
+    if (transaction.type === "withdraw" || transaction.type === "settlement") {
+      return sum - transaction.amount;
+    }
+
+    return sum;
+  }, 0);
+}
+
+function getNetInvestmentAllocation(
+  transactions: ForexCashTransaction[],
+  startDate: string,
+  endDate: string,
+) {
+  return transactions.reduce((sum, transaction) => {
+    if (!isDateWithinRange(transaction.transactionDate, startDate, endDate)) {
+      return sum;
+    }
+
+    const fee = Math.max(0, transaction.fee ?? 0);
+
+    if (transaction.type === "deposit") {
+      return sum + Math.max(0, transaction.amount + fee);
+    }
+
+    return sum - Math.max(0, transaction.amount - fee);
+  }, 0);
 }
 
 export default function DashboardPage() {
@@ -646,6 +652,63 @@ export default function DashboardPage() {
     () => filterBudgetsByDateRange(budgets, dateRange),
     [budgets, dateRange],
   );
+
+  /**
+   * Canonical period flow.
+   *
+   * This is the only source used by visible income, expense and net cash-flow
+   * KPIs. Internal transfers are excluded because they only move money between
+   * owned accounts.
+   */
+  const periodFlowSummary = useMemo(() => {
+    return filteredTransactions.reduce(
+      (result, transaction) => {
+        if (isInternalTransferTransaction(transaction)) return result;
+
+        const amount = Math.abs(Number(transaction.amount ?? 0));
+        if (!Number.isFinite(amount) || amount <= 0) return result;
+
+        if (transaction.type === "income") {
+          result.income += amount;
+        } else if (transaction.type === "expense") {
+          result.expense += amount;
+        }
+
+        return result;
+      },
+      { income: 0, expense: 0 },
+    );
+  }, [filteredTransactions]);
+
+  const periodFutureAllocation = useMemo(() => {
+    const savingAmount = Math.max(
+      0,
+      getNetSavingAllocation(
+        savingTransactions,
+        dateRange.startDate,
+        dateRange.endDate,
+      ),
+    );
+    const investmentAmount = Math.max(
+      0,
+      getNetInvestmentAllocation(
+        forexCashTransactions,
+        dateRange.startDate,
+        dateRange.endDate,
+      ),
+    );
+
+    return {
+      savingAmount,
+      investmentAmount,
+      totalAmount: savingAmount + investmentAmount,
+    };
+  }, [
+    dateRange.endDate,
+    dateRange.startDate,
+    forexCashTransactions,
+    savingTransactions,
+  ]);
 
   /**
    * Dashboard v5 data model
@@ -977,11 +1040,12 @@ export default function DashboardPage() {
   );
 
   const savingsRateFromSavings = useMemo(() => {
-    if (baseSummary.income <= 0) return 0;
+    if (periodFlowSummary.income <= 0) return 0;
+
     return clampScore(
-      (savingsSnapshot.totalSavings / baseSummary.income) * 100,
+      (periodFutureAllocation.totalAmount / periodFlowSummary.income) * 100,
     );
-  }, [baseSummary.income, savingsSnapshot.totalSavings]);
+  }, [periodFlowSummary.income, periodFutureAllocation.totalAmount]);
 
   const netWorthWithSavings = useMemo(
     () =>
@@ -1002,21 +1066,25 @@ export default function DashboardPage() {
   const summary = useMemo(
     () => ({
       ...baseSummary,
+      income: periodFlowSummary.income,
+      expense: periodFlowSummary.expense,
       liquidBalance: walletLiquidity,
       forexCashBalance: forexSnapshot.balance,
       forexCashFees: forexSnapshot.totalFees,
       netWorth: netWorthWithSavings,
-      saving: savingsSnapshot.totalSavings,
+      saving: periodFutureAllocation.totalAmount,
       savingRate: savingsRateFromSavings,
       goalScore: goalSnapshot.averageProgress,
     }),
     [
       baseSummary,
+      periodFlowSummary.income,
+      periodFlowSummary.expense,
       walletLiquidity,
       forexSnapshot.balance,
       forexSnapshot.totalFees,
       netWorthWithSavings,
-      savingsSnapshot.totalSavings,
+      periodFutureAllocation.totalAmount,
       savingsRateFromSavings,
       goalSnapshot.averageProgress,
     ],
@@ -1185,7 +1253,7 @@ export default function DashboardPage() {
       filterTransactionsByDateRange(transactions, {
         startDate: `${selectedYear}-01-01`,
         endDate: `${selectedYear}-12-31`,
-      }),
+      }).filter((transaction) => !isInternalTransferTransaction(transaction)),
     [transactions, selectedYear],
   );
 
@@ -1207,84 +1275,85 @@ export default function DashboardPage() {
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
     const allocation = calculateRule503020({
-      transactions: filteredTransactions,
+      transactions: filteredTransactions.filter(
+        (transaction) => !isInternalTransferTransaction(transaction),
+      ),
       categories,
       income: summary.income,
     });
 
+    const savingsAmount = periodFutureAllocation.totalAmount;
+    const savings =
+      summary.income > 0
+        ? Math.round((savingsAmount / summary.income) * 100)
+        : 0;
+
     return {
       needs: allocation.needsPercentOfIncome,
       wants: allocation.wantsPercentOfIncome,
-      savings: allocation.savingsPercentOfIncome,
+      savings,
       needsAmount: allocation.needsAmount,
       wantsAmount: allocation.wantsAmount,
-      savingsAmount: allocation.savingsAmount,
+      savingsAmount,
       unclassifiedAmount: allocation.unclassifiedAmount,
     };
-  }, [filteredTransactions, categories, summary.income]);
+  }, [
+    filteredTransactions,
+    categories,
+    periodFutureAllocation.totalAmount,
+    summary.income,
+  ]);
 
-  const monthlySavingAllocation = useMemo(() => {
-    const values = Array.from({ length: 12 }, () => 0);
+  const cashFlowData = useMemo(() => {
+    const now = new Date();
+    const latestActualMonth =
+      selectedYear < now.getFullYear()
+        ? 12
+        : selectedYear === now.getFullYear()
+          ? now.getMonth() + 1
+          : 0;
 
-    savings.forEach((saving) => {
-      const date = getRecordDate({
-        createdAt: saving.createdAt,
-        created_at: (saving as Record<string, unknown>).created_at,
-      });
+    return cashFlowTrend.map((item, index) => {
+      const month = index + 1;
+      const isFutureMonth = month > latestActualMonth;
 
-      if (!date || date.getFullYear() !== selectedYear) return;
-
-      // Cash-flow chart shows money allocated into Savings in the month the
-      // saving account was created. Use opening principal/initial amount, not
-      // current balance after interest.
-      values[date.getMonth()] += getSavingCashflowAmount(saving);
-    });
-
-    return values;
-  }, [savings, selectedYear]);
-
-  const monthlyInvestmentAllocation = useMemo(() => {
-    const values = Array.from({ length: 12 }, () => 0);
-
-    investments.forEach((investment) => {
-      const record = investment as Record<string, unknown>;
-      const date = getRecordDate({
-        createdAt: record.createdAt,
-        created_at: record.created_at,
-        date: record.date,
-        purchaseDate: record.purchaseDate,
-        purchase_date: record.purchase_date,
-        transactionDate: record.transactionDate,
-        transaction_date: record.transaction_date,
-      });
-
-      if (!date || date.getFullYear() !== selectedYear) return;
-
-      // Cash-flow chart shows money allocated into Investments in the month
-      // the investment position was created. It uses invested capital, not
-      // unrealized profit/loss or current market value unless that is the only
-      // amount available.
-      values[date.getMonth()] += getInvestmentCashflowAmount(investment);
-    });
-
-    return values;
-  }, [investments, selectedYear]);
-
-  const cashFlowData = useMemo(
-    () =>
-      cashFlowTrend.map((item, index) => {
-        const tietKiem = monthlySavingAllocation[index] ?? 0;
-        const dauTu = monthlyInvestmentAllocation[index] ?? 0;
-
+      if (isFutureMonth) {
         return {
           ...item,
-          tietKiem,
-          dauTu,
-          dongTienRong: item.thu - item.chi,
+          thu: null,
+          chi: null,
+          tietKiem: null,
+          dauTu: null,
+          dongTienRong: null,
+          hasData: false,
         };
-      }),
-    [cashFlowTrend, monthlyInvestmentAllocation, monthlySavingAllocation],
-  );
+      }
+
+      const monthStart = `${selectedYear}-${String(month).padStart(2, "0")}-01`;
+      const monthEndDate = new Date(selectedYear, month, 0);
+      const monthEnd = toLocalDateKey(monthEndDate);
+      const tietKiem = Math.max(
+        0,
+        getNetSavingAllocation(savingTransactions, monthStart, monthEnd),
+      );
+      const dauTu = Math.max(
+        0,
+        getNetInvestmentAllocation(forexCashTransactions, monthStart, monthEnd),
+      );
+      const thu = Number(item.thu ?? 0);
+      const chi = Number(item.chi ?? 0);
+
+      return {
+        ...item,
+        thu,
+        chi,
+        tietKiem,
+        dauTu,
+        dongTienRong: thu - chi,
+        hasData: thu > 0 || chi > 0 || tietKiem > 0 || dauTu > 0,
+      };
+    });
+  }, [cashFlowTrend, forexCashTransactions, savingTransactions, selectedYear]);
 
   const netCashFlow = summary.income - summary.expense;
 
@@ -1305,7 +1374,7 @@ export default function DashboardPage() {
 
   const financialStructureAdjusted = useMemo(() => {
     const income = financialStructure.income || summary.income;
-    const savingAmount = savingsSnapshot.totalSavings;
+    const savingAmount = periodFutureAllocation.totalAmount;
     const planningSavingRate =
       income > 0 ? clampScore((savingAmount / income) * 100) : 0;
 
@@ -1315,7 +1384,7 @@ export default function DashboardPage() {
       savingAmount,
       planningSavingRate,
     };
-  }, [financialStructure, summary.income, savingsSnapshot.totalSavings]);
+  }, [financialStructure, periodFutureAllocation.totalAmount, summary.income]);
 
   const financialStructureCards = useMemo(
     () => [
@@ -1850,37 +1919,46 @@ export default function DashboardPage() {
 
   const monthlyPulse = useMemo(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const elapsedDays = Math.max(now.getDate(), 1);
+    const year = selectedYear;
+    const monthIndex = selectedMonth - 1;
+    const monthKey = `${year}-${String(selectedMonth).padStart(2, "0")}`;
+    const daysInMonth = new Date(year, selectedMonth, 0).getDate();
+    const isCurrentMonth =
+      now.getFullYear() === year && now.getMonth() === monthIndex;
+    const isPastMonth =
+      year < now.getFullYear() ||
+      (year === now.getFullYear() && monthIndex < now.getMonth());
+    const elapsedDays = isCurrentMonth
+      ? Math.max(now.getDate(), 1)
+      : isPastMonth
+        ? daysInMonth
+        : 0;
+
     const monthTransactions = transactions.filter((transaction) => {
+      if (isInternalTransferTransaction(transaction)) return false;
+
       const date = new Date(transaction.date);
       return (
         !Number.isNaN(date.getTime()) &&
         date.getFullYear() === year &&
-        date.getMonth() === month
+        date.getMonth() === monthIndex
       );
     });
     const income = monthTransactions
       .filter((transaction) => transaction.type === "income")
       .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
     const expense = monthTransactions
-      .filter(
-        (transaction) =>
-          transaction.type === "expense" &&
-          !isInternalTransferTransaction(transaction),
-      )
+      .filter((transaction) => transaction.type === "expense")
       .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
     const projectedExpense =
-      elapsedDays > 0
+      isCurrentMonth && elapsedDays > 0
         ? Math.round((expense / elapsedDays) * daysInMonth)
         : expense;
     const budgetLimit = budgets
       .filter((budget) => budget.month.startsWith(monthKey))
       .reduce((sum, budget) => sum + Math.max(budget.limitAmount, 0), 0);
-    const progress = Math.round((elapsedDays / daysInMonth) * 100);
+    const progress =
+      daysInMonth > 0 ? Math.round((elapsedDays / daysInMonth) * 100) : 0;
     const budgetUsage =
       budgetLimit > 0 ? Math.round((expense / budgetLimit) * 100) : 0;
     const projectedBudgetUsage =
@@ -1888,7 +1966,7 @@ export default function DashboardPage() {
 
     return {
       year,
-      month: month + 1,
+      month: selectedMonth,
       elapsedDays,
       daysInMonth,
       progress,
@@ -1899,7 +1977,7 @@ export default function DashboardPage() {
       budgetUsage,
       projectedBudgetUsage,
     };
-  }, [transactions, budgets]);
+  }, [budgets, selectedMonth, selectedYear, transactions]);
 
   const upcomingMoneyEvents = useMemo(() => {
     const today = new Date();
@@ -1953,11 +2031,10 @@ export default function DashboardPage() {
       )
       .sort((a, b) => a.date.getTime() - b.date.getTime())
       .slice(0, 5);
-  }, [transactions, categories]);
+  }, [categories, transactions]);
 
   const topSpendingCategories = useMemo(() => {
     const totals = new Map<string, number>();
-    const now = new Date();
     transactions.forEach((transaction) => {
       if (
         transaction.type !== "expense" ||
@@ -1967,8 +2044,8 @@ export default function DashboardPage() {
       const date = new Date(transaction.date);
       if (
         Number.isNaN(date.getTime()) ||
-        date.getFullYear() !== now.getFullYear() ||
-        date.getMonth() !== now.getMonth()
+        date.getFullYear() !== selectedYear ||
+        date.getMonth() !== selectedMonth - 1
       )
         return;
       totals.set(
@@ -1988,7 +2065,7 @@ export default function DashboardPage() {
       }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 4);
-  }, [transactions, categories]);
+  }, [transactions, categories, selectedMonth, selectedYear]);
 
   const dashboardNarrative = useMemo(() => {
     const messages: string[] = [];
@@ -2032,10 +2109,10 @@ export default function DashboardPage() {
   }, [monthlyPulse, emergencyMonthsExact, summary.savingRate]);
 
   return (
-    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
+    <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
       {/* MyFinance v2 command center */}
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="relative overflow-hidden rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
           <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
 
@@ -2047,7 +2124,7 @@ export default function DashboardPage() {
               <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
                 Tổng quan hôm nay
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-600">
                 Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
               </p>
             </div>
@@ -2081,7 +2158,7 @@ export default function DashboardPage() {
 
           <div className="relative mt-5 rounded-3xl border border-blue-100 bg-linear-to-br from-blue-50 via-sky-50/70 to-cyan-50 p-4">
             <div className="flex items-center gap-2 text-blue-700">
-              <span className="flex size-8 items-center justify-center rounded-xl bg-white shadow-sm">
+              <span className="flex size-8 items-center justify-center rounded-xl bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
                 <Bot size={16} />
               </span>
               <p className="text-sm font-black">AI Financial Brief</p>
@@ -2097,16 +2174,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
                 Monthly Pulse
               </p>
               <h2 className="mt-2 text-xl font-black text-slate-900">
                 Tiến độ tháng {monthlyPulse.month}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-600">
                 Ngày {monthlyPulse.elapsedDays}/{monthlyPulse.daysInMonth}
               </p>
             </div>
@@ -2119,7 +2196,7 @@ export default function DashboardPage() {
               style={{ width: `${Math.min(monthlyPulse.progress, 100)}%` }}
             />
           </div>
-          <div className="mt-2 flex justify-between text-xs font-bold text-slate-400">
+          <div className="mt-2 flex justify-between text-xs font-bold text-slate-500">
             <span>{monthlyPulse.progress}% thời gian</span>
             <span>
               {monthlyPulse.daysInMonth - monthlyPulse.elapsedDays} ngày còn lại
@@ -2174,12 +2251,12 @@ export default function DashboardPage() {
         >
           <div className="mt-4 space-y-2">
             {upcomingMoneyEvents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <ReceiptText className="mx-auto text-slate-300" size={24} />
                 <p className="mt-2 text-sm font-black text-slate-700">
                   Chưa có khoản định kỳ sắp tới
                 </p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-500">
                   Bật giao dịch định kỳ và đặt ngày chạy tiếp theo để theo dõi
                   tại đây.
                 </p>
@@ -2188,13 +2265,13 @@ export default function DashboardPage() {
               upcomingMoneyEvents.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-900">
                       {item.title}
                     </p>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-slate-500">
                       {item.date.toLocaleDateString("vi-VN")} ·{" "}
                       {item.categoryName}
                     </p>
@@ -2217,7 +2294,7 @@ export default function DashboardPage() {
         >
           <div className="mt-4 space-y-3">
             {topSpendingCategories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-400">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
                 Chưa có chi tiêu trong tháng này.
               </div>
             ) : (
@@ -2252,9 +2329,9 @@ export default function DashboardPage() {
       </section>
 
       {/* Executive overview */}
-      <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
         <div className="grid xl:grid-cols-[1.45fr_0.55fr]">
-          <div className="bg-linear-to-br from-blue-50 via-white to-sky-50 p-5 sm:p-7">
+          <div className="bg-linear-to-br from-blue-50/80 via-white to-sky-50/80 p-4 sm:p-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
@@ -2263,21 +2340,21 @@ export default function DashboardPage() {
                 <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
                   Tài sản ròng
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-600">
                   Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => router.push("/reports")}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white px-4 text-sm font-black text-blue-600 transition hover:bg-blue-50"
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/95 px-4 text-sm font-black text-blue-600 transition-all duration-200 hover:bg-blue-50"
               >
                 Xem báo cáo
               </button>
             </div>
 
             <div className="mt-5 flex flex-wrap items-end gap-3">
-              <p className="text-3xl font-black tracking-tight text-blue-600 sm:text-5xl">
+              <p className="text-[clamp(1.25rem,5vw,1.875rem)] font-black tracking-tight text-blue-600 sm:text-5xl">
                 {formatVND(summary.netWorth)}
               </p>
               <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -2319,18 +2396,18 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-5 rounded-3xl border border-slate-200 bg-white/85 p-4 shadow-sm">
+            <div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-slate-900">
                     Biến động tài sản ròng
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-600">
                     Chỉ dùng dữ liệu thật đã ghi nhận trong năm {selectedYear}.
                   </p>
                 </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-2 text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                     So với kỳ trước
                   </p>
                   <p
@@ -2394,7 +2471,7 @@ export default function DashboardPage() {
                       contentStyle={{
                         borderRadius: "0.9rem",
                         border: "1px solid #dbeafe",
-                        boxShadow: "0 8px 24px -12px rgb(37 99 235 / 0.4)",
+                        boxShadow: "0 16px 40px -16px rgb(15 23 42 / 0.25)",
                         fontSize: "12px",
                       }}
                       formatter={(value) => [
@@ -2419,10 +2496,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="border-t border-slate-200 bg-linear-to-br from-emerald-50 via-sky-50 to-blue-50 p-5 sm:p-7 xl:border-l xl:border-t-0">
+          <div className="border-t border-slate-200 bg-linear-to-br from-emerald-50 via-sky-50 to-blue-50 p-4 sm:p-7 xl:border-l xl:border-t-0">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600">
                   Sức khỏe tài chính
                 </p>
                 <p
@@ -2430,7 +2507,7 @@ export default function DashboardPage() {
                 >
                   {financialGrade.label}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-600">
                   Grade {financialGrade.grade} · Rủi ro {riskLevel}
                 </p>
               </div>
@@ -2439,13 +2516,13 @@ export default function DashboardPage() {
                 onClick={() => setIsHealthDrawerOpen(true)}
                 className={`flex size-20 shrink-0 items-center justify-center rounded-full bg-linear-to-br ${financialGrade.gradient} p-1.5 shadow-lg`}
               >
-                <span className="flex size-full flex-col items-center justify-center rounded-full bg-white">
+                <span className="flex size-full flex-col items-center justify-center rounded-full bg-white/95">
                   <span
                     className={`text-2xl font-black ${financialGrade.color}`}
                   >
                     {healthScore}
                   </span>
-                  <span className="text-[10px] text-slate-400">/100</span>
+                  <span className="text-[10px] text-slate-500">/100</span>
                 </span>
               </button>
             </div>
@@ -2463,8 +2540,8 @@ export default function DashboardPage() {
               <ScoreLine label="Mục tiêu" value={healthMetrics.goalScore} />
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white bg-white/75 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+            <div className="mt-6 rounded-2xl border border-white bg-white/95/75 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                 Việc cần ưu tiên
               </p>
               <p className="mt-2 text-sm font-black text-slate-900">
@@ -2474,7 +2551,7 @@ export default function DashboardPage() {
                     ? "Đẩy nhanh mục tiêu tài chính"
                     : "Duy trì nhịp tài chính hiện tại"}
               </p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-slate-600">
                 {emergencyMonthsExact < 3
                   ? `Hiện có ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu, nên đạt tối thiểu 3 tháng.`
                   : summary.goalScore < 30
@@ -2559,7 +2636,9 @@ export default function DashboardPage() {
                     fontSize: "12px",
                   }}
                   formatter={(value, name) => [
-                    formatVND(Number(value ?? 0)),
+                    value === null || value === undefined
+                      ? "Chưa có dữ liệu"
+                      : formatVND(Number(value)),
                     String(name),
                   ]}
                 />
@@ -2581,21 +2660,23 @@ export default function DashboardPage() {
                   name="Dòng tiền ròng"
                   stroke="#2563eb"
                   strokeWidth={2.5}
+                  connectNulls={false}
                   dot={{ r: 3 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+          <div className="mt-5 rounded-2xl bg-slate-50/80 p-4">
             <p className="text-sm font-black text-slate-900">
               Quy tắc 50/30/20
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600">
               So sánh chi tiêu thực tế với cơ cấu tài chính cân bằng.
             </p>
             <div className="mt-4">
               <AllocationRow
+                kind="needs"
                 label="Thiết yếu"
                 actual={allocation5030.needs}
                 target={50}
@@ -2603,6 +2684,7 @@ export default function DashboardPage() {
                 color="bg-blue-500"
               />
               <AllocationRow
+                kind="wants"
                 label="Mong muốn"
                 actual={allocation5030.wants}
                 target={30}
@@ -2610,6 +2692,7 @@ export default function DashboardPage() {
                 color="bg-violet-500"
               />
               <AllocationRow
+                kind="savings"
                 label="Tiết kiệm"
                 actual={allocation5030.savings}
                 target={20}
@@ -2628,14 +2711,14 @@ export default function DashboardPage() {
             {financialStructureCards.map((item) => (
               <div
                 key={item.title}
-                className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-900">
                       {item.title}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">{item.amount}</p>
+                    <p className="mt-1 text-xs text-slate-600">{item.amount}</p>
                   </div>
                   <p
                     className={`text-xl font-black ${
@@ -2649,7 +2732,7 @@ export default function DashboardPage() {
                     {item.value}
                   </p>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
                   <div
                     className={`h-full rounded-full ${
                       item.tone === "good"
@@ -2702,7 +2785,7 @@ export default function DashboardPage() {
               }
               color={
                 forexSnapshot.profitLoss === null
-                  ? "text-slate-500"
+                  ? "text-slate-600"
                   : forexSnapshot.profitLoss >= 0
                     ? "text-emerald-600"
                     : "text-rose-500"
@@ -2717,7 +2800,7 @@ export default function DashboardPage() {
               }
               color={
                 forexSnapshot.roi === null
-                  ? "text-slate-500"
+                  ? "text-slate-600"
                   : forexSnapshot.roi >= 0
                     ? "text-emerald-600"
                     : "text-rose-500"
@@ -2731,7 +2814,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/investments")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition hover:from-violet-700 hover:to-blue-700 sm:px-4"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition-all duration-200 hover:from-violet-700 hover:to-blue-700 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Quản lý tài khoản Forex
@@ -2745,11 +2828,11 @@ export default function DashboardPage() {
         >
           <div className="mt-4 min-w-0 space-y-3">
             {goalRows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
                   Chưa có mục tiêu
                 </p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-500">
                   Tạo mục tiêu để theo dõi tiến độ và số tiền cần góp mỗi tháng.
                 </p>
               </div>
@@ -2757,7 +2840,7 @@ export default function DashboardPage() {
               goalRows.slice(0, 3).map((goal) => (
                 <div
                   key={goal.id}
-                  className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4"
+                  className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 sm:p-4"
                 >
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <p className="min-w-0 truncate text-sm font-black text-slate-900">
@@ -2767,11 +2850,11 @@ export default function DashboardPage() {
                       {goal.percent}%
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-600">
                     {formatVND(goal.effectiveCurrentAmount)} /{" "}
                     {formatVND(goal.targetAmount)}
                   </p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
                     <div
                       className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
                       style={{ width: `${goal.percent}%` }}
@@ -2784,7 +2867,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/goals")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 sm:px-4"
+            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả mục tiêu
@@ -2798,18 +2881,18 @@ export default function DashboardPage() {
         >
           <div className="mt-4 space-y-3">
             {recentTxnGroups.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
                   Chưa có giao dịch trong kỳ
                 </p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-500">
                   Thêm thu nhập hoặc chi tiêu để Dashboard cập nhật.
                 </p>
               </div>
             ) : (
               recentTxnGroups.map((group) => (
                 <div key={group.dayLabel}>
-                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                     {group.dayLabel}
                   </p>
                   <div className="divide-y divide-slate-100">
@@ -2833,7 +2916,7 @@ export default function DashboardPage() {
                           <p className="truncate text-sm font-bold text-slate-900">
                             {transaction.title}
                           </p>
-                          <p className="truncate text-xs text-slate-400">
+                          <p className="truncate text-xs text-slate-500">
                             {transaction.subtitle}
                             {transaction.timeLabel
                               ? ` · ${transaction.timeLabel}`
@@ -2856,7 +2939,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/transactions")}
-            className="mt-4 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+            className="mt-4 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả giao dịch
@@ -2866,7 +2949,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Action center */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
@@ -2876,12 +2959,12 @@ export default function DashboardPage() {
               <h2 className="text-lg font-black text-slate-900">
                 Ưu tiên tài chính
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-600">
                 Các hành động nên làm tiếp theo dựa trên dữ liệu hiện tại.
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
             Tối đa 3 việc quan trọng
           </span>
         </div>
@@ -2975,7 +3058,7 @@ function FinancialHealthDrawer({
         onClick={onClose}
         className="absolute inset-0 cursor-default"
       />
-      <aside className="relative h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-2xl sm:p-8">
+      <aside className="relative h-full w-full max-w-xl overflow-y-auto bg-white/95 p-4 shadow-2xl sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-blue-500">
@@ -2984,32 +3067,34 @@ function FinancialHealthDrawer({
             <h2 className="mt-1 text-2xl font-black text-slate-900">
               Giải thích sức khỏe tài chính
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-600">
               Cách hệ thống chấm điểm hồ sơ tài chính hiện tại của bạn.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-500 hover:bg-slate-200"
+            className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 hover:bg-slate-200"
           >
             ×
           </button>
         </div>
 
-        <div className="mt-6 rounded-4xl border border-slate-200 bg-linear-to-br from-blue-50 via-white to-emerald-50 p-5">
+        <div className="mt-6 rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-linear-to-br from-blue-50 via-white to-emerald-50 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-slate-500">Tổng điểm</p>
+              <p className="text-sm font-bold text-slate-600">Tổng điểm</p>
               <p className="mt-1 text-5xl font-black text-blue-600">
                 {score}
-                <span className="text-base text-slate-400">/100</span>
+                <span className="text-base text-slate-500">/100</span>
               </p>
             </div>
-            <div className="rounded-2xl border border-white bg-white/80 px-5 py-4 text-center shadow-sm">
-              <p className="text-xs font-bold text-slate-400">Grade</p>
-              <p className="text-3xl font-black text-slate-900">{grade}</p>
-              <p className="mt-1 text-xs font-bold text-slate-500">
+            <div className="rounded-2xl border border-white bg-white/95/80 px-5 py-4 text-center shadow-sm transition-all duration-200 hover:shadow-md">
+              <p className="text-xs font-bold text-slate-500">Grade</p>
+              <p className="text-[clamp(1.25rem,5vw,1.875rem)] font-black text-slate-900">
+                {grade}
+              </p>
+              <p className="mt-1 text-xs font-bold text-slate-600">
                 {healthLabel} · Rủi ro {riskLevel}
               </p>
             </div>
@@ -3020,29 +3105,29 @@ function FinancialHealthDrawer({
           {breakdown.map((item) => (
             <div
               key={item.label}
-              className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+              className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-black text-slate-900">{item.label}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.note}</p>
+                  <p className="mt-1 text-xs text-slate-600">{item.note}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-blue-600">
                     +{item.points} điểm
                   </p>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     Trọng số {item.weight}%
                   </p>
                 </div>
               </div>
-              <div className="mt-3 h-2.5 rounded-full bg-white">
+              <div className="mt-3 h-2.5 rounded-full bg-white/95">
                 <div
                   className="h-2.5 rounded-full bg-linear-to-r from-emerald-400 to-blue-500"
                   style={{ width: `${clampScore(item.score)}%` }}
                 />
               </div>
-              <div className="mt-1 flex justify-between text-[11px] text-slate-400">
+              <div className="mt-1 flex justify-between text-[11px] text-slate-500">
                 <span>Score {clampScore(item.score)}/100</span>
                 <span>Đóng góp tối đa {item.weight} điểm</span>
               </div>
@@ -3123,7 +3208,7 @@ function DailyMetric({
 
   return (
     <div
-      className={`min-w-0 rounded-2xl border p-3.5 transition hover:-translate-y-0.5 hover:shadow-sm ${styles.card}`}
+      className={`min-w-0 rounded-2xl border p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${styles.card}`}
     >
       <div className="flex items-center gap-2">
         <span className={`size-2 shrink-0 rounded-full ${styles.dot}`} />
@@ -3153,18 +3238,18 @@ function HeroMini({
   valueClass: string;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-white/70 bg-white/85 px-2.5 py-3 shadow-sm backdrop-blur">
+    <div className="min-w-0 rounded-2xl border border-white/70 bg-white/95/85 px-2.5 py-3 shadow-sm transition-all duration-200 hover:shadow-md backdrop-blur">
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
           {icon}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[9px] font-semibold leading-3.5 text-slate-500 xl:text-[8px] 2xl:text-[10px]">
+          <p className="truncate text-[9px] font-semibold leading-3.5 text-slate-600 xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           <p
-            className={`mt-0.5 whitespace-nowrap text-[clamp(9px,0.72vw,13px)] font-black leading-4 tracking-[-0.03em] tabular-nums ${valueClass}`}
+            className={`mt-0.5 wrap-break-word sm:whitespace-nowrap text-[clamp(9px,0.72vw,13px)] font-black leading-4 tracking-[-0.03em] tabular-nums ${valueClass}`}
             title={value}
           >
             {value}
@@ -3206,7 +3291,7 @@ function KpiCard({
     },
     neutral: {
       value: "text-slate-700",
-      icon: "bg-slate-100 text-slate-500",
+      icon: "bg-slate-100 text-slate-600",
       border: "border-slate-200",
     },
   } as const;
@@ -3214,15 +3299,15 @@ function KpiCard({
 
   return (
     <div
-      className={`min-w-52 rounded-2xl border bg-white p-4 shadow-sm md:min-w-0 ${styles.border}`}
+      className={`min-w-52 rounded-2xl border bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md md:min-w-0 ${styles.border}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-bold text-slate-500">{title}</p>
+          <p className="text-xs font-bold text-slate-600">{title}</p>
           <p className={`mt-2 truncate text-xl font-black ${styles.value}`}>
             {value}
           </p>
-          <p className="mt-1 truncate text-xs text-slate-400">{note}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
         </div>
         <div
           className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}
@@ -3244,11 +3329,11 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+    <div className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-6">
       <h3 className="wrap-break-word text-lg font-black leading-tight text-slate-900">
         {title}
       </h3>
-      <p className="mt-1 max-w-full wrap-break-word text-sm leading-5 text-slate-500">
+      <p className="mt-1 max-w-full wrap-break-word text-sm leading-5 text-slate-600">
         {subtitle}
       </p>
       <div className="min-w-0 max-w-full">{children}</div>
@@ -3266,8 +3351,8 @@ function MiniStat({
   color: string;
 }) {
   return (
-    <div className="min-w-0 max-w-full rounded-2xl bg-slate-50 px-3 py-3">
-      <p className="truncate text-xs text-slate-500">{label}</p>
+    <div className="min-w-0 max-w-full rounded-2xl bg-slate-50/80 px-3 py-3">
+      <p className="truncate text-xs text-slate-600">{label}</p>
       <p
         className={`mt-1 wrap-break-word text-sm font-black leading-5 ${color}`}
       >
@@ -3285,7 +3370,7 @@ function ScoreLine({ label, value }: { label: string; value: number }) {
         <span className="font-medium text-slate-600">{label}</span>
         <span className="font-bold text-slate-900">{value}</span>
       </div>
-      <div className="h-2 rounded-full bg-white/80">
+      <div className="h-2 rounded-full bg-white/95/80">
         <div
           className="h-2 rounded-full bg-linear-to-r from-emerald-400 to-blue-500 transition-all"
           style={{ width: `${pct}%` }}
@@ -3295,45 +3380,67 @@ function ScoreLine({ label, value }: { label: string; value: number }) {
   );
 }
 
+type AllocationKind = "needs" | "wants" | "savings";
+
 function AllocationRow({
+  kind,
   label,
   actual,
   target,
   amount,
   color,
 }: {
+  kind: AllocationKind;
   label: string;
   actual: number;
   target: number;
   amount: number;
   color: string;
 }) {
-  const over = actual > target;
-  const diff = actual - target;
+  const roundedActual = Math.max(0, Math.round(actual));
+  const roundedTarget = Math.max(0, Math.round(target));
+  const difference = Math.abs(roundedActual - roundedTarget);
+  const isSavings = kind === "savings";
+  const isPositive = isSavings
+    ? roundedActual >= roundedTarget
+    : roundedActual <= roundedTarget;
+
+  const statusText = (() => {
+    if (roundedActual === roundedTarget) return "Đạt mục tiêu";
+
+    if (isSavings) {
+      return roundedActual > roundedTarget
+        ? `Vượt mục tiêu ${difference}%`
+        : `Thiếu ${difference}%`;
+    }
+
+    return roundedActual > roundedTarget
+      ? `Cần giảm ${difference}%`
+      : `Còn dư ${difference}%`;
+  })();
+
+  const statusClass = isPositive ? "text-emerald-600" : "text-rose-500";
+  const barClass = isPositive ? color : "bg-rose-500";
+
   return (
     <div className="mb-3">
-      <div className="mb-1 flex justify-between gap-3 text-xs">
+      <div className="mb-1 flex flex-col gap-1.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className="font-medium text-slate-600">
-          {label}: {actual}% / {target}%
-          <span className="ml-1 text-slate-400">({formatVND(amount)})</span>
+          {label}: {roundedActual}% / {roundedTarget}%
+          <span className="ml-1 text-slate-500">({formatVND(amount)})</span>
         </span>
-        <span
-          className={`shrink-0 font-bold ${over ? "text-rose-500" : "text-emerald-600"}`}
-        >
-          {over ? `Vượt ${diff}%` : `Còn ${Math.max(target - actual, 0)}%`}
+        <span className={`shrink-0 font-bold ${statusClass}`}>
+          {statusText}
         </span>
       </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-white">
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-white/95">
         <div
-          className="absolute left-0 top-0 h-full border-l border-slate-400/60"
-          style={{ left: `${Math.min(target, 100)}%` }}
+          className="absolute top-0 z-10 h-full border-l border-slate-400/60"
+          style={{ left: `${Math.min(roundedTarget, 100)}%` }}
         />
         <div
-          className={`h-full rounded-full ${color} transition-all`}
-          style={{
-            width: `${Math.min(actual, 100)}%`,
-            opacity: over ? 0.7 : 1,
-          }}
+          className={`h-full rounded-full ${barClass} transition-all duration-300`}
+          style={{ width: `${Math.min(roundedActual, 100)}%` }}
         />
       </div>
     </div>
