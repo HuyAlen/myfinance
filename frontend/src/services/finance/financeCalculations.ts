@@ -2,6 +2,7 @@ import type {
   Budget,
   Category,
   CategoryPlanningGroup,
+  FinancialGroup,
   Debt,
   Goal,
   Investment,
@@ -232,6 +233,67 @@ export function getCategoryPlanningGroup(
   );
 }
 
+/**
+ * Normalizes the optional 50/30/20 classification stored on Category.
+ *
+ * This is intentionally separate from planningGroup:
+ * - planningGroup controls operational reporting (fixed/variable/saving/investment).
+ * - financialGroup controls 50/30/20 analysis (needs/wants/saving).
+ */
+export function normalizeFinancialGroup(
+  value: FinancialGroup | string | null | undefined,
+): FinancialGroup | undefined {
+  if (
+    value === "income" ||
+    value === "needs" ||
+    value === "wants" ||
+    value === "saving"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolves a category into the 50/30/20 model without changing stored data.
+ *
+ * Priority:
+ * 1. Use explicit financialGroup when present.
+ * 2. Fall back to the existing planningGroup for backward compatibility.
+ * 3. Use the existing planning-group inference only when planningGroup is absent.
+ *
+ * No database backfill or mutation happens in this function.
+ */
+export function getCategoryFinancialGroup(
+  category:
+    | Pick<Category, "name" | "type" | "planningGroup" | "financialGroup">
+    | undefined,
+): FinancialGroup | null {
+  if (!category) return null;
+
+  const explicitFinancialGroup = normalizeFinancialGroup(
+    category.financialGroup,
+  );
+  if (explicitFinancialGroup) return explicitFinancialGroup;
+
+  if (category.type === "income") return "income";
+
+  const planningGroup =
+    normalizePlanningGroup(category.planningGroup) ??
+    inferCategoryPlanningGroup(category);
+
+  if (planningGroup === "income") return "income";
+  if (planningGroup === "fixed") return "needs";
+  if (planningGroup === "variable") return "wants";
+
+  if (planningGroup === "saving" || planningGroup === "investment") {
+    return "saving";
+  }
+
+  return null;
+}
+
 export interface Rule503020Summary {
   income: number;
   needsAmount: number;
@@ -276,10 +338,13 @@ export function calculateRule503020(input: {
     (current, transaction) => {
       const transactionType = String(transaction.type);
 
+      // Income defines the denominator. Transfers only move money between
+      // accounts and must never affect the 50/30/20 allocation.
       if (transactionType === "income" || transactionType === "transfer") {
         return current;
       }
 
+      // Legacy transaction types remain supported.
       if (transactionType === "saving") {
         current.savings += transaction.amount;
         return current;
@@ -295,33 +360,59 @@ export function calculateRule503020(input: {
       }
 
       const category = categoryById.get(transaction.categoryId);
+
+      // Keep the previous behavior for orphaned category references so old
+      // totals remain stable, while still exposing the amount as unclassified.
       if (!category) {
         current.wants += transaction.amount;
         current.unclassified += transaction.amount;
         return current;
       }
 
-      const group = getCategoryPlanningGroup(category);
+      const explicitFinancialGroup = normalizeFinancialGroup(
+        category.financialGroup,
+      );
 
-      if (group === "fixed") {
+      // A category resolved through planningGroup fallback is still reported as
+      // unclassified so the UI can prompt the user to classify it explicitly.
+      if (!explicitFinancialGroup) {
+        current.unclassified += transaction.amount;
+      }
+
+      const financialGroup = getCategoryFinancialGroup(category);
+
+      if (financialGroup === "needs") {
         current.needs += transaction.amount;
         return current;
       }
 
-      if (group === "saving") {
-        current.savings += transaction.amount;
+      if (financialGroup === "wants") {
+        current.wants += transaction.amount;
         return current;
       }
 
-      if (group === "investment") {
-        current.investment += transaction.amount;
+      if (financialGroup === "saving") {
+        // Preserve the legacy saving/investment split for compatibility while
+        // combining both amounts into the 20% bucket below.
+        const planningGroup = getCategoryPlanningGroup(category);
+
+        if (planningGroup === "investment") {
+          current.investment += transaction.amount;
+        } else {
+          current.savings += transaction.amount;
+        }
+
         return current;
       }
 
-      if (group === "income") {
+      // Expense transactions attached to an income-classified category should
+      // not be silently counted as Needs or Wants.
+      if (financialGroup === "income") {
+        current.unclassified += explicitFinancialGroup ? transaction.amount : 0;
         return current;
       }
 
+      // Defensive fallback for malformed or unsupported category data.
       current.wants += transaction.amount;
       return current;
     },
