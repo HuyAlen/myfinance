@@ -2069,18 +2069,31 @@ function KpiCard({
 
   const style = styles[tone];
 
+  // Mobile Finance UX: keep the complete amount visible on one line.
+  // The font scales down by formatted string length instead of truncating.
+  const mobileValueSize =
+    value.length >= 20
+      ? "text-[10px] tracking-[-0.055em]"
+      : value.length >= 17
+        ? "text-[11px] tracking-[-0.05em]"
+        : value.length >= 14
+          ? "text-[12px] tracking-[-0.045em]"
+          : value.length >= 11
+            ? "text-[14px] tracking-[-0.04em]"
+            : "text-[18px] tracking-[-0.03em]";
+
   return (
     <div
       className={
-        "min-w-0 rounded-3xl border p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
+        "min-w-0 overflow-hidden rounded-3xl border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
         style.shell
       }
     >
-      <div className="flex min-w-0 items-start justify-between gap-2.5 sm:gap-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 items-start justify-between gap-1.5 sm:gap-3">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <p
             className={
-              "line-clamp-2 min-h-8 text-[10px] font-black uppercase leading-4 tracking-[0.14em] sm:min-h-0 sm:tracking-[0.16em] " +
+              "line-clamp-2 min-h-8 text-[9px] font-black uppercase leading-4 tracking-[0.11em] sm:min-h-0 sm:text-[10px] sm:tracking-[0.16em] " +
               style.label
             }
           >
@@ -2088,7 +2101,9 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-2 wrap-break-word text-[clamp(15px,4.7vw,20px)] font-black leading-tight tracking-[-0.03em] tabular-nums sm:whitespace-nowrap sm:text-[clamp(13px,1vw,20px)] " +
+              "mt-2 block w-full whitespace-nowrap font-black leading-none tabular-nums sm:text-[clamp(13px,1vw,20px)] sm:tracking-[-0.03em] " +
+              mobileValueSize +
+              " " +
               style.value
             }
             title={value}
@@ -2097,7 +2112,7 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-1 line-clamp-2 min-h-8 text-[11px] font-semibold leading-4 " +
+              "mt-1 line-clamp-2 min-h-8 text-[10px] font-semibold leading-4 sm:text-[11px] " +
               style.note
             }
           >
@@ -2107,7 +2122,7 @@ function KpiCard({
 
         <div
           className={
-            "flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9 sm:rounded-2xl " +
+            "flex size-7 shrink-0 items-center justify-center rounded-xl sm:size-9 sm:rounded-2xl " +
             style.icon
           }
         >

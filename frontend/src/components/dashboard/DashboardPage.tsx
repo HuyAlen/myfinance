@@ -1374,17 +1374,33 @@ export default function DashboardPage() {
 
   const financialStructureAdjusted = useMemo(() => {
     const income = financialStructure.income || summary.income;
-    const savingAmount = periodFutureAllocation.totalAmount;
-    const planningSavingRate =
+    const savingAmount = periodFutureAllocation.savingAmount;
+    const investmentAmount = periodFutureAllocation.investmentAmount;
+    const futureAllocationAmount = savingAmount + investmentAmount;
+
+    const savingRate =
       income > 0 ? clampScore((savingAmount / income) * 100) : 0;
+    const investmentRate =
+      income > 0 ? clampScore((investmentAmount / income) * 100) : 0;
+    const futureAllocationRate =
+      income > 0 ? clampScore((futureAllocationAmount / income) * 100) : 0;
 
     return {
       ...financialStructure,
       income,
       savingAmount,
-      planningSavingRate,
+      investmentAmount,
+      futureAllocationAmount,
+      savingRate,
+      investmentRate,
+      futureAllocationRate,
     };
-  }, [financialStructure, periodFutureAllocation.totalAmount, summary.income]);
+  }, [
+    financialStructure,
+    periodFutureAllocation.investmentAmount,
+    periodFutureAllocation.savingAmount,
+    summary.income,
+  ]);
 
   const financialStructureCards = useMemo(
     () => [
@@ -1425,25 +1441,20 @@ export default function DashboardPage() {
         bar: Math.min(financialStructureAdjusted.variableCostRatio, 100),
       },
       {
-        title: "Tỷ lệ tiết kiệm",
-        value: `${financialStructureAdjusted.planningSavingRate}%`,
-        amount: `${formatVND(financialStructureAdjusted.savingAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
-        note:
-          financialStructureAdjusted.planningSavingRate >= 20
-            ? "Xuất sắc · trên 20% thu nhập"
-            : financialStructureAdjusted.planningSavingRate >= 10
-              ? "Tốt · 10–20% thu nhập"
-              : "Thấp · nên tăng dần",
+        title: "Tiết kiệm & Đầu tư",
+        value: `${financialStructureAdjusted.futureAllocationRate}%`,
+        amount: `${formatVND(financialStructureAdjusted.futureAllocationAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
+        note: `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
         tone:
-          financialStructureAdjusted.planningSavingRate >= 20
+          financialStructureAdjusted.futureAllocationRate >= 20
             ? "good"
-            : financialStructureAdjusted.planningSavingRate >= 10
+            : financialStructureAdjusted.futureAllocationRate >= 10
               ? "warning"
               : "danger",
-        bar: Math.min(financialStructureAdjusted.planningSavingRate, 100),
+        bar: Math.min(financialStructureAdjusted.futureAllocationRate, 100),
       },
       {
-        title: "Tỷ lệ đầu tư",
+        title: "Tỷ trọng đầu tư",
         value: `${financialStructureAdjusted.investmentRate}%`,
         amount: `${formatVND(financialStructureAdjusted.investmentAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
@@ -1451,7 +1462,9 @@ export default function DashboardPage() {
             ? "Tích cực xây tài sản"
             : financialStructureAdjusted.investmentRate >= 5
               ? "Đang bắt đầu"
-              : "Cần tăng đầu tư",
+              : financialStructureAdjusted.futureAllocationRate >= 20
+                ? "20% hiện đang phân bổ vào tiết kiệm"
+                : "Chưa ghi nhận phân bổ đầu tư",
         tone:
           financialStructureAdjusted.investmentRate >= 15
             ? "good"
@@ -1626,11 +1639,11 @@ export default function DashboardPage() {
   const healthBreakdown = useMemo(
     () => [
       {
-        label: "Tiết kiệm",
+        label: "Tiết kiệm & Đầu tư",
         score: healthMetrics.savingScore,
         weight: 30,
         points: Math.round(healthMetrics.savingScore * 0.3),
-        note: `Tỷ lệ tiết kiệm hiện tại ${summary.savingRate}%`,
+        note: `Tỷ lệ tiết kiệm & đầu tư hiện tại ${summary.savingRate}%`,
       },
       {
         label: "An toàn nợ",
@@ -1672,7 +1685,7 @@ export default function DashboardPage() {
     if (healthMetrics.debtSafetyScore >= 90)
       items.push("Không có nợ hoặc tỷ lệ nợ rất an toàn.");
     if (healthMetrics.savingScore >= 70)
-      items.push(`Tỷ lệ tiết kiệm tốt (${summary.savingRate}%).`);
+      items.push(`Tỷ lệ tiết kiệm & đầu tư tốt (${summary.savingRate}%).`);
     if (healthMetrics.emergencyScore >= 50)
       items.push(
         `Quỹ khẩn cấp đạt ${formatOneDecimal(emergencyMonthsExact)} tháng.`,
@@ -1693,7 +1706,7 @@ export default function DashboardPage() {
         `Đẩy nhanh tiến độ mục tiêu tài chính, hiện mới đạt ${summary.goalScore}%.`,
       );
     if (summary.savingRate < 20)
-      items.push("Nâng tỷ lệ tiết kiệm lên ít nhất 20% thu nhập.");
+      items.push("Nâng tỷ lệ tiết kiệm & đầu tư lên ít nhất 20% thu nhập.");
     if (summary.debtRatio > 40)
       items.push("Giảm tỷ lệ nợ xuống dưới 40% tổng tài sản.");
     return items.length > 0
@@ -1806,8 +1819,8 @@ export default function DashboardPage() {
     if (summary.savingRate >= 30) {
       actions.push({
         icon: <PiggyBank size={18} />,
-        title: "Tỷ lệ tiết kiệm rất tốt",
-        body: `Bạn đang tiết kiệm ${summary.savingRate}% thu nhập, cao hơn mốc 20%. Có thể phân bổ phần dư vào quỹ khẩn cấp hoặc đầu tư dài hạn.`,
+        title: "Tỷ lệ tiết kiệm & đầu tư rất tốt",
+        body: `Bạn đang phân bổ ${summary.savingRate}% thu nhập cho tiết kiệm & đầu tư, cao hơn mốc 20%. Có thể tiếp tục ưu tiên quỹ khẩn cấp hoặc đầu tư dài hạn.`,
         tone: "good",
         ctaLabel: "Phân bổ mục tiêu",
         ctaRoute: "/goals",
@@ -1848,7 +1861,7 @@ export default function DashboardPage() {
       icon: TrendingUp,
     },
     {
-      title: "Tiết kiệm",
+      title: "Tiết kiệm & Đầu tư",
       value: `${summary.savingRate}%`,
       note: `${formatCompactVND(savingsSnapshot.totalSavings)} đã tích lũy`,
       tone: summary.savingRate >= 20 ? "good" : "warning",
@@ -2101,7 +2114,7 @@ export default function DashboardPage() {
       );
     } else if (summary.savingRate >= 20) {
       messages.push(
-        `Tỷ lệ tiết kiệm ${summary.savingRate}% đang đạt hoặc vượt chuẩn 20%.`,
+        `Tỷ lệ tiết kiệm & đầu tư ${summary.savingRate}% đang đạt hoặc vượt chuẩn 20%.`,
       );
     }
 
@@ -2354,7 +2367,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-end gap-3">
-              <p className="text-[clamp(1.25rem,5vw,1.875rem)] font-black tracking-tight text-blue-600 sm:text-5xl">
+              <p
+                className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
+                title={formatVND(summary.netWorth)}
+              >
                 {formatVND(summary.netWorth)}
               </p>
               <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -2528,7 +2544,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-6 space-y-4">
-              <ScoreLine label="Tiết kiệm" value={healthMetrics.savingScore} />
+              <ScoreLine
+                label="Tiết kiệm & Đầu tư"
+                value={healthMetrics.savingScore}
+              />
               <ScoreLine
                 label="An toàn nợ"
                 value={healthMetrics.debtSafetyScore}
@@ -2672,7 +2691,8 @@ export default function DashboardPage() {
               Quy tắc 50/30/20
             </p>
             <p className="mt-1 text-xs text-slate-600">
-              So sánh chi tiêu thực tế với cơ cấu tài chính cân bằng.
+              So sánh phân bổ thu nhập theo quy tắc 50% Thiết yếu · 30% Mong
+              muốn · 20% Tiết kiệm & Đầu tư.
             </p>
             <div className="mt-4">
               <AllocationRow
@@ -2693,7 +2713,7 @@ export default function DashboardPage() {
               />
               <AllocationRow
                 kind="savings"
-                label="Tiết kiệm"
+                label="Tiết kiệm & Đầu tư"
                 actual={allocation5030.savings}
                 target={20}
                 amount={allocation5030.savingsAmount}
@@ -2924,7 +2944,7 @@ export default function DashboardPage() {
                           </p>
                         </div>
                         <p
-                          className={`col-start-2 min-w-0 truncate text-sm font-black sm:col-start-auto sm:shrink-0 ${getRecentAmountClass(transaction.kind)}`}
+                          className={`col-start-2 min-w-0 whitespace-nowrap text-[clamp(11px,3.1vw,14px)] font-black tracking-[-0.035em] tabular-nums sm:col-start-auto sm:shrink-0 ${getRecentAmountClass(transaction.kind)}`}
                         >
                           {getRecentAmountPrefix(transaction.kind)}
                           {formatVND(transaction.amount)}
@@ -3217,7 +3237,7 @@ function DailyMetric({
         </p>
       </div>
       <p
-        className={`mt-2 truncate text-sm font-black tracking-tight sm:text-base ${styles.value}`}
+        className={`mt-2 whitespace-nowrap text-[clamp(10px,3.15vw,16px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
         title={value}
       >
         {value}
@@ -3249,7 +3269,7 @@ function HeroMini({
             {label}
           </p>
           <p
-            className={`mt-0.5 wrap-break-word sm:whitespace-nowrap text-[clamp(9px,0.72vw,13px)] font-black leading-4 tracking-[-0.03em] tabular-nums ${valueClass}`}
+            className={`mt-0.5 whitespace-nowrap text-[clamp(8px,2.35vw,13px)] font-black leading-4 tracking-[-0.045em] tabular-nums ${valueClass}`}
             title={value}
           >
             {value}
@@ -3299,12 +3319,15 @@ function KpiCard({
 
   return (
     <div
-      className={`min-w-52 rounded-2xl border bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md md:min-w-0 ${styles.border}`}
+      className={`min-w-52 overflow-hidden rounded-2xl border bg-white/95 p-3.5 shadow-sm transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold text-slate-600">{title}</p>
-          <p className={`mt-2 truncate text-xl font-black ${styles.value}`}>
+          <p
+            className={`mt-2 whitespace-nowrap text-[clamp(15px,4vw,20px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
+            title={value}
+          >
             {value}
           </p>
           <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
@@ -3351,10 +3374,11 @@ function MiniStat({
   color: string;
 }) {
   return (
-    <div className="min-w-0 max-w-full rounded-2xl bg-slate-50/80 px-3 py-3">
+    <div className="min-w-0 max-w-full overflow-hidden rounded-2xl bg-slate-50/80 px-2.5 py-3 sm:px-3">
       <p className="truncate text-xs text-slate-600">{label}</p>
       <p
-        className={`mt-1 wrap-break-word text-sm font-black leading-5 ${color}`}
+        className={`mt-1 whitespace-nowrap text-[clamp(10px,2.9vw,14px)] font-black leading-5 tracking-[-0.04em] tabular-nums ${color}`}
+        title={value}
       >
         {value}
       </p>
