@@ -34,7 +34,7 @@ export default function OnboardingChecklist() {
   const pct = Math.round((checklistCount / checklistTotal) * 100);
 
   return (
-    <div className="fixed bottom-24 left-4 z-100 w-72 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-2xl shadow-emerald-100/60 lg:bottom-6">
+    <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] left-4 z-100 w-72 overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-2xl shadow-emerald-100/60 lg:bottom-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 border-b border-emerald-100 bg-linear-to-r from-emerald-50 to-white px-4 py-3">
         <div className="flex items-center gap-2">

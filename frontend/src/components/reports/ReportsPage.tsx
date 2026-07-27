@@ -1049,7 +1049,7 @@ export default function ReportsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0 print:space-y-4">
+    <div className="space-y-5 overflow-x-hidden md:space-y-6 print:space-y-4">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Bright Hero + 5 KPI cards
           ══════════════════════════════════════════════════════════════════ */}

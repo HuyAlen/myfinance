@@ -52,7 +52,7 @@ export default function QuickActionFab() {
   if (!wizardDone || isFullyOnboarded) return null;
 
   return (
-    <div className="fixed bottom-24 right-4 z-[100] flex flex-col items-end gap-2 lg:bottom-6">
+    <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-[100] flex flex-col items-end gap-2 lg:bottom-6">
       {/* Action items */}
       {open && (
         <div className="flex flex-col items-end gap-2">

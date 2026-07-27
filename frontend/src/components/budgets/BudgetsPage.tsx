@@ -1071,7 +1071,7 @@ export default function BudgetsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:space-y-6 sm:pb-8">
+    <div className="space-y-4 overflow-x-hidden sm:space-y-6">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}

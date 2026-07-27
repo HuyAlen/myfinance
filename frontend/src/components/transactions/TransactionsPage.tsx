@@ -1399,7 +1399,7 @@ export default function TransactionsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 overflow-x-hidden pb-28 md:space-y-5 md:pb-0">
+    <div className="space-y-3 overflow-x-hidden md:space-y-5">
       {toastState && (
         <div
           className={[

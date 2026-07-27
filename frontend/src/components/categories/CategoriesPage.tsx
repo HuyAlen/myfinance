@@ -522,7 +522,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="space-y-5 overflow-x-hidden pb-24 md:pb-0">
+    <div className="space-y-5 overflow-x-hidden">
       <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>

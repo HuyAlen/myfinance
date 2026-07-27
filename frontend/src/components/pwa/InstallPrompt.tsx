@@ -52,9 +52,9 @@ export default function InstallPrompt() {
   if (!visible) return null;
 
   return (
-    /* On mobile: sits above bottom nav (bottom-20).
-       On desktop (lg+): anchored to bottom-right (bottom-6 right-6). */
-    <div className="fixed bottom-20 inset-x-4 z-50 lg:bottom-6 lg:left-auto lg:right-6 lg:w-80">
+    /* Mobile position uses the shared BottomNav clearance from AppShell.
+       Desktop remains anchored to the bottom-right corner. */
+    <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] inset-x-4 z-50 lg:bottom-6 lg:left-auto lg:right-6 lg:w-80">
       <div className="rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-2xl shadow-blue-100 backdrop-blur-xl">
         <div className="flex items-start gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">

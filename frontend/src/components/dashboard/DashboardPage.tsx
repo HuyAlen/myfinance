@@ -2121,7 +2121,7 @@ export default function DashboardPage() {
   }, [monthlyPulse, emergencyMonthsExact, summary.savingRate]);
 
   return (
-    <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden pb-28 sm:space-y-5 md:pb-8">
+    <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
       {/* MyFinance v2 command center */}
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
