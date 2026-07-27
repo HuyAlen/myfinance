@@ -116,7 +116,7 @@ export default function AppShell({ children }: AppShellProps) {
             sidebarOpen={sidebarOpen}
           />
 
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
             {children}
           </main>
         </div>
