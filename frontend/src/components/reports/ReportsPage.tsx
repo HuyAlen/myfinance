@@ -2844,9 +2844,24 @@ function KpiCard({
   iconBg: string;
   icon: React.ReactNode;
 }) {
+  // formatVND() output is unbounded in length (large net worth / investment
+  // capital can produce a long digit string). Past a threshold, the normal
+  // mobile clamp can no longer fit the value in a 2-column 375px card at a
+  // readable size, so it steps down to a smaller (still legible) tier
+  // instead of ever wrapping/clipping. Current real report values are well
+  // under this threshold and use the normal tier.
+  const amountSizeClass =
+    value.length > 13
+      ? "text-[clamp(0.72rem,3vw,0.95rem)]"
+      : "text-[clamp(0.95rem,4.2vw,1.125rem)]";
+
   return (
-    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
-      <div className="flex items-start justify-between gap-2">
+    <div
+      className={
+        "min-w-0 rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient
+      }
+    >
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
         </p>
@@ -2859,7 +2874,12 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <p className="mt-2 wrap-break-word text-lg font-black leading-tight text-white">
+      <p
+        className={
+          "mt-2 w-full whitespace-nowrap font-black leading-none tabular-nums text-white sm:text-lg " +
+          amountSizeClass
+        }
+      >
         {value}
       </p>
       <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/75">

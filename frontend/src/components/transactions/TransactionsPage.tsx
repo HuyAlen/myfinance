@@ -1466,13 +1466,14 @@ export default function TransactionsPage() {
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
           <SummaryCard
             label="Thu nhập"
             value={formatVND(totalIncome)}
             note={`${cashFlowTransactions.filter((item) => item.type === "income").length} giao dịch`}
             footerLabel="Dòng tiền tháng này"
             footerValue={getSignedAmountText(netCashFlow)}
+            hideFooterValueOnMobile
             tone="income"
           />
 
@@ -1481,6 +1482,7 @@ export default function TransactionsPage() {
             value={formatVND(totalExpense)}
             note={`${cashFlowTransactions.filter((item) => item.type === "expense").length} giao dịch`}
             footerLabel="Tỷ lệ chi tiêu / Thu nhập"
+            mobileFooterLabel="Tỷ lệ chi / thu"
             footerValue={
               totalIncome > 0
                 ? `${Math.round((totalExpense / totalIncome) * 100)}%`
@@ -2891,14 +2893,26 @@ function SummaryCard({
   value,
   note,
   footerLabel,
+  mobileFooterLabel,
   footerValue,
+  hideFooterValueOnMobile = false,
   tone,
 }: {
   label: string;
   value: string;
   note: string;
   footerLabel: string;
+  /** Shorter, semantic-equivalent label used only below `sm`, when the full
+   * copy + value can't both fit on one line at 375-430px. Desktop always
+   * shows `footerLabel` in full. */
+  mobileFooterLabel?: string;
   footerValue: string;
+  /** For the one footer that pairs a long label with a full VND amount
+   * (Thu nhập's "Dòng tiền tháng này"): that exact figure is already shown,
+   * unabbreviated, as the "Dòng tiền ròng" card's own headline value in the
+   * same 2x2 grid, so on mobile we drop the redundant repeat here instead of
+   * shrinking the text below a readable size to force it onto one line. */
+  hideFooterValueOnMobile?: boolean;
   tone:
     | "income"
     | "expense"
@@ -2953,41 +2967,45 @@ function SummaryCard({
   };
 
   const style = styles[tone];
+  const mobileFooterText = hideFooterValueOnMobile
+    ? (mobileFooterLabel ?? footerLabel)
+    : `${mobileFooterLabel ?? footerLabel} ${footerValue}`;
 
   return (
     <div
       className={
-        "flex min-w-0 flex-col rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
+        "flex min-w-0 flex-col rounded-3xl border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
         style.shell
       }
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
         <span
           className={
-            "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-black " +
+            "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-black sm:size-8 " +
             style.icon
           }
         >
           {style.symbol}
         </span>
-        <p className="min-w-0 truncate text-[10px] font-black uppercase tracking-[0.16em]">
+        <p className="min-w-0 whitespace-nowrap text-[clamp(0.5625rem,2.3vw,0.625rem)] font-black uppercase tracking-[0.02em] sm:text-[10px] sm:tracking-[0.16em]">
           {label}
         </p>
       </div>
 
-      <p className="mt-4 overflow-hidden whitespace-nowrap text-[clamp(1.05rem,4.8vw,1.38rem)] font-black leading-none tracking-tight tabular-nums">
+      <p className="mt-4 whitespace-nowrap text-[clamp(0.85rem,4vw,1.38rem)] font-black leading-none tracking-tight tabular-nums">
         {value}
       </p>
       <p className="mt-1 truncate text-xs font-bold opacity-75">{note}</p>
 
       <div
         className={
-          "mt-auto flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-[10px] font-black " +
+          "mt-auto flex items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[9px] font-black sm:justify-between sm:gap-3 sm:px-3 sm:py-2 sm:text-[10px] " +
           style.footer
         }
       >
-        <span className="truncate">{footerLabel}</span>
-        <span className="shrink-0">{footerValue}</span>
+        <span className="sm:hidden">{mobileFooterText}</span>
+        <span className="hidden truncate sm:inline">{footerLabel}</span>
+        <span className="hidden shrink-0 sm:inline">{footerValue}</span>
       </div>
     </div>
   );
