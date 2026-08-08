@@ -1,23 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
-
-import {
-  Area,
-  AreaChart,
-  Bar,
-  Line,
-  CartesianGrid,
-  ComposedChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { formatCompactVND } from "./dashboardFormat";
 
 import {
   AlertTriangle,
@@ -78,17 +67,22 @@ import type {
   SavingAccount,
 } from "@/src/types/finance";
 
+// Net Worth / Cash Flow charts are below-the-fold, so recharts is code-split
+// into its own chunk instead of shipping with the initial Dashboard bundle.
+const NetWorthTrendChart = dynamic(() => import("./NetWorthTrendChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+  ),
+});
+const CashFlowChart = dynamic(() => import("./CashFlowChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="mt-5 h-52 animate-pulse rounded-2xl bg-slate-100" />
+  ),
+});
+
 const DASHBOARD_RUNTIME_COMPONENTS = {
-  Area,
-  AreaChart,
-  Bar,
-  Line,
-  CartesianGrid,
-  ComposedChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
@@ -853,13 +847,9 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void reloadData();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
+    void (async () => {
+      await reloadData();
+    })();
   }, [reloadData]);
 
   useRealtimeTable(
@@ -2266,76 +2256,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-3 h-44">
-              <ResponsiveContainer width="100%" height={176} minWidth={0}>
-                <AreaChart
-                  data={netWorthTrend}
-                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="dashboardNetWorth"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="5%"
-                        stopColor="#2563eb"
-                        stopOpacity={0.25}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor="#2563eb"
-                        stopOpacity={0.02}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis
-                    dataKey="label"
-                    axisLine={false}
-                    tickLine={false}
-                    fontSize={11}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    width={46}
-                    fontSize={10}
-                    tickFormatter={(value) => formatCompactVND(Number(value))}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "0.9rem",
-                      border: "1px solid #dbeafe",
-                      boxShadow: "0 16px 40px -16px rgb(15 23 42 / 0.25)",
-                      fontSize: "12px",
-                    }}
-                    formatter={(value) => [
-                      value == null
-                        ? "Không có dữ liệu"
-                        : formatVND(Number(value)),
-                      "Tài sản ròng",
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    connectNulls={false}
-                    stroke="#2563eb"
-                    strokeWidth={3}
-                    fill="url(#dashboardNetWorth)"
-                    dot={{ r: 3, strokeWidth: 2, fill: "#fff" }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <NetWorthTrendChart trend={netWorthTrend} />
           </div>
         </div>
       </section>
@@ -2373,69 +2294,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-5 h-52">
-            <ResponsiveContainer width="100%" height={208} minWidth={0}>
-              <ComposedChart
-                data={cashFlowData}
-                barGap={3}
-                barCategoryGap={12}
-                margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#e2e8f0"
-                />
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  fontSize={11}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  width={46}
-                  fontSize={10}
-                  tickFormatter={(value) => formatCompactVND(Number(value))}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "0.9rem",
-                    border: "1px solid #e2e8f0",
-                    fontSize: "12px",
-                  }}
-                  formatter={(value, name) => [
-                    value === null || value === undefined
-                      ? "Chưa có dữ liệu"
-                      : formatVND(Number(value)),
-                    String(name),
-                  ]}
-                />
-                <Bar
-                  dataKey="thu"
-                  name="Thu nhập"
-                  fill="#10b981"
-                  radius={[6, 6, 0, 0]}
-                />
-                <Bar
-                  dataKey="chi"
-                  name="Chi tiêu"
-                  fill="#f43f5e"
-                  radius={[6, 6, 0, 0]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="dongTienRong"
-                  name="Dòng tiền ròng"
-                  stroke="#2563eb"
-                  strokeWidth={2.5}
-                  connectNulls={false}
-                  dot={{ r: 3 }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          <CashFlowChart data={cashFlowData} />
 
           <div className="mt-5 rounded-2xl bg-slate-50/80 p-4">
             <p className="text-sm font-black text-slate-900">
@@ -2779,17 +2638,6 @@ export default function DashboardPage() {
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
-
-function formatCompactVND(value: number) {
-  const rounded = Math.round(Number.isFinite(value) ? value : 0);
-  if (Math.abs(rounded) >= 1_000_000) {
-    return `${Math.round(rounded / 1_000_000)}M`;
-  }
-  if (Math.abs(rounded) >= 1_000) {
-    return `${Math.round(rounded / 1_000)}K`;
-  }
-  return `${rounded}`;
-}
 
 function DailyMetric({
   label,

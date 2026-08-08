@@ -1,19 +1,40 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
 import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
-import AIAgentDrawer from "@/src/components/ai-agent/AIAgentDrawer";
 import { useAuth } from "@/src/components/auth/AuthProvider";
-import WelcomeWizard from "@/src/components/onboarding/WelcomeWizard";
-import ProductTour from "@/src/components/onboarding/ProductTour";
-import OnboardingChecklist from "@/src/components/onboarding/OnboardingChecklist";
-import QuickActionFab from "@/src/components/onboarding/QuickActionFab";
+import { useOnboarding } from "@/src/components/onboarding/OnboardingProvider";
 import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
 import { DateFilterProvider } from "./DateFilterProvider";
+
+// Below-the-fold / on-demand UI: not needed for first paint, so they're
+// code-split out of the initial route bundle instead of being parsed and
+// mounted on every page load.
+const AIAgentDrawer = dynamic(
+  () => import("@/src/components/ai-agent/AIAgentDrawer"),
+  { ssr: false, loading: () => null },
+);
+const WelcomeWizard = dynamic(
+  () => import("@/src/components/onboarding/WelcomeWizard"),
+  { ssr: false, loading: () => null },
+);
+const ProductTour = dynamic(
+  () => import("@/src/components/onboarding/ProductTour"),
+  { ssr: false, loading: () => null },
+);
+const OnboardingChecklist = dynamic(
+  () => import("@/src/components/onboarding/OnboardingChecklist"),
+  { ssr: false, loading: () => null },
+);
+const QuickActionFab = dynamic(
+  () => import("@/src/components/onboarding/QuickActionFab"),
+  { ssr: false, loading: () => null },
+);
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -22,8 +43,15 @@ type AppShellProps = {
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiAgentOpen, setAiAgentOpen] = useState(false);
+  // Latches true the first time the user opens the AI drawer, so it can be
+  // fetched/mounted on demand instead of on every page load. Once opened,
+  // it stays mounted even while closed (open={false} just hides it), so an
+  // in-progress chat/stream isn't torn down when the panel is dismissed —
+  // same lifecycle as before, just deferred until actually needed.
+  const [hasOpenedAI, setHasOpenedAI] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { wizardDone, tourDone, isFullyOnboarded } = useOnboarding();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -124,18 +152,29 @@ export default function AppShell({ children }: AppShellProps) {
         <BottomNav />
 
         {!aiAgentOpen && (
-          <AIFloatingButton onClick={() => setAiAgentOpen(true)} />
+          <AIFloatingButton
+            onClick={() => {
+              setHasOpenedAI(true);
+              setAiAgentOpen(true);
+            }}
+          />
         )}
 
-        <AIAgentDrawer
-          open={aiAgentOpen}
-          onClose={() => setAiAgentOpen(false)}
-        />
+        {hasOpenedAI && (
+          <AIAgentDrawer
+            open={aiAgentOpen}
+            onClose={() => setAiAgentOpen(false)}
+          />
+        )}
 
-        <WelcomeWizard />
-        <ProductTour />
-        <OnboardingChecklist />
-        <QuickActionFab />
+        {!wizardDone && <WelcomeWizard />}
+        {wizardDone && !tourDone && <ProductTour />}
+        {wizardDone && !isFullyOnboarded && (
+          <>
+            <OnboardingChecklist />
+            <QuickActionFab />
+          </>
+        )}
         <AchievementToast />
       </div>
     </DateFilterProvider>

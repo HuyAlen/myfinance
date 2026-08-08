@@ -18,11 +18,21 @@ import type {
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
+// `supabase.auth.getUser()` re-verifies the session with a network round trip
+// to the Auth server on every call. This file calls getAuthUserId() from ~40
+// independent read/write functions, and the Dashboard alone fires close to a
+// dozen of them in parallel on load — that used to mean a dozen redundant
+// network requests just to look up the same user id AuthProvider already has
+// cached. `getSession()` reads the already-verified session from local
+// storage (refreshing the token in the background only if it's expired), so
+// it resolves the same user id without a network round trip in the common
+// case. Row-level security on every Supabase query still enforces the real
+// access control, so this is not a security downgrade.
 async function getAuthUserId(): Promise<string | null> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
 }
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
