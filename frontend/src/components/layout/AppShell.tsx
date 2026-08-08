@@ -11,6 +11,7 @@ import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useOnboarding } from "@/src/components/onboarding/OnboardingProvider";
 import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
 import { DateFilterProvider } from "./DateFilterProvider";
+import { markInstant } from "@/src/lib/performance/performanceMarks";
 
 // Below-the-fold / on-demand UI: not needed for first paint, so they're
 // code-split out of the initial route bundle instead of being parsed and
@@ -154,6 +155,7 @@ export default function AppShell({ children }: AppShellProps) {
         {!aiAgentOpen && (
           <AIFloatingButton
             onClick={() => {
+              if (!hasOpenedAI) markInstant("ai:click");
               setHasOpenedAI(true);
               setAiAgentOpen(true);
             }}

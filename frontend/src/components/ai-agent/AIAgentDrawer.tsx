@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import { measureAndReport } from "@/src/lib/performance/performanceMarks";
 import AIConversationHistory from "./AIConversationHistory";
 import AIPendingActionCard, {
   type AIPendingActionCardData,
@@ -535,6 +536,19 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
   >(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // This component is only ever mounted once, on the AI button's first
+  // click (see AppShell), and stays mounted afterward — so this effect
+  // fires exactly once per session, measuring click-to-first-paint of the
+  // dynamically-imported drawer chunk. Not re-armed on later opens.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      measureAndReport("ai_first_open", "ai:click", "ai:ready", {
+        status: "success",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const streamedTextRef = useRef("");
   const userId = session?.user?.id ?? "";
 

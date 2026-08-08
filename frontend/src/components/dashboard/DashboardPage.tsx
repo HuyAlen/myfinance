@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { formatCompactVND } from "./dashboardFormat";
+import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
+import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
 
 import {
   AlertTriangle,
@@ -16,6 +18,7 @@ import {
   Briefcase,
   CalendarClock,
   CreditCard,
+  Info,
   Landmark,
   PiggyBank,
   ShieldCheck,
@@ -90,6 +93,7 @@ const DASHBOARD_RUNTIME_COMPONENTS = {
   Briefcase,
   CalendarClock,
   CreditCard,
+  Info,
   Landmark,
   PiggyBank,
   ShieldCheck,
@@ -632,8 +636,25 @@ function getDashboardFetchRange(selectedYear: number) {
   };
 }
 
+/**
+ * A single logical write (e.g. a Forex deposit) can touch several tables in
+ * one Postgres transaction (wallets + forex_cash_transactions, possibly
+ * forex_accounts). Supabase Realtime delivers one postgres_changes event per
+ * table, independently, so that one user action can fire this many separate
+ * realtime callbacks in quick succession. This window only coalesces events
+ * that land close together from the same underlying write — it is not a
+ * general-purpose delay, and it never applies to the initial/month-driven
+ * load (see runReload vs requestDashboardRefresh below).
+ */
+const REALTIME_REFRESH_DEBOUNCE_MS = 100;
+
 export default function DashboardPage() {
   const router = useRouter();
+  const mountedAtRef = useRef<number | null>(null);
+  const hasReportedCriticalReadyRef = useRef(false);
+  useEffect(() => {
+    mountedAtRef.current = performance.now();
+  }, []);
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
@@ -737,6 +758,7 @@ export default function DashboardPage() {
   const snapshotGoals = goals;
 
   const reloadData = useCallback(async () => {
+    markInstant("dashboard:reload:start");
     try {
       const fetchRange = getDashboardFetchRange(selectedYear);
       const [
@@ -855,6 +877,12 @@ export default function DashboardPage() {
       // has been resolved. This prevents transient 0 values while transactions
       // are still loading on real iPhone Safari.
       setIsDashboardReady(true);
+      measureAndReport(
+        "dashboard_snapshot",
+        "dashboard:reload:start",
+        "dashboard:reload:end",
+        { status: "success" },
+      );
     } catch (error) {
       console.error("[DashboardPage] reloadData failed", error);
 
@@ -862,14 +890,89 @@ export default function DashboardPage() {
       // failures. Clearing every array here caused the net-cash-flow KPI to
       // flash 0 before the slower transaction request finished again.
       setIsDashboardReady(true);
+      measureAndReport(
+        "dashboard_snapshot",
+        "dashboard:reload:start",
+        "dashboard:reload:end",
+        { status: "error" },
+      );
     }
   }, [selectedYear]);
 
+  // Guards against overlapping Dashboard reloads: if a caller asks for a
+  // refresh while one is already running (e.g. a realtime event arriving
+  // mid-fetch), it marks `pending` instead of starting a second concurrent
+  // Promise.all group, then runs exactly one trailing reload once the
+  // in-flight one finishes — so the final state always reflects the latest
+  // writes without ever running two overlapping query sets.
+  const isReloadingRef = useRef(false);
+  const hasPendingReloadRef = useRef(false);
+  const runReload = useCallback(async () => {
+    if (isReloadingRef.current) {
+      hasPendingReloadRef.current = true;
+      return;
+    }
+    isReloadingRef.current = true;
+    try {
+      do {
+        hasPendingReloadRef.current = false;
+        await reloadData();
+      } while (hasPendingReloadRef.current);
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, [reloadData]);
+
+  // Realtime-only entry point: coalesces bursts of postgres_changes events
+  // that land within a short window (one multi-table write can fire several
+  // independent table events — see REALTIME_REFRESH_DEBOUNCE_MS above) into
+  // a single runReload() call. Initial/month-driven loads intentionally
+  // bypass this and call runReload() directly so they stay immediate.
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const requestDashboardRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+    realtimeRefreshTimerRef.current = window.setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      void runReload();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [runReload]);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     void (async () => {
-      await reloadData();
+      await runReload();
     })();
-  }, [reloadData]);
+  }, [runReload]);
+
+  // Fires once, the first time isDashboardReady flips true: an rAF after the
+  // commit approximates when the above-the-fold KPI values actually painted,
+  // not just when the network/state update resolved (that's dashboard_snapshot).
+  useEffect(() => {
+    if (!isDashboardReady) return;
+    if (hasReportedCriticalReadyRef.current) return;
+    if (mountedAtRef.current === null) return;
+    hasReportedCriticalReadyRef.current = true;
+
+    const startedAt = mountedAtRef.current;
+    const frame = requestAnimationFrame(() => {
+      reportPerformanceMetric(
+        "dashboard_critical_ready",
+        performance.now() - startedAt,
+        { status: "success" },
+      );
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isDashboardReady]);
 
   useRealtimeTable(
     [
@@ -882,7 +985,7 @@ export default function DashboardPage() {
       "goals",
       "budgets",
     ],
-    reloadData,
+    requestDashboardRefresh,
   );
 
   // ── Core summary ──────────────────────────────────────────────────────────
@@ -2410,60 +2513,65 @@ export default function DashboardPage() {
           title="Tài khoản Forex"
           subtitle="Vốn đã nạp, Equity hiện tại và hiệu suất giao dịch"
         >
-          <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-            <MiniStat
-              label="Vốn ròng"
-              value={formatVND(forexSnapshot.balance)}
-              color="text-violet-600"
-            />
-            <MiniStat
-              label="Equity hiện tại"
-              value={
-                forexSnapshot.accountsWithEquity > 0
-                  ? formatVND(forexSnapshot.currentEquity)
-                  : "Chưa có dữ liệu"
-              }
-              color="text-blue-600"
-            />
-            <MiniStat
-              label="Lời / lỗ"
-              value={
-                forexSnapshot.profitLoss === null
-                  ? "Chưa đủ dữ liệu"
-                  : `${forexSnapshot.profitLoss >= 0 ? "+" : ""}${formatVND(forexSnapshot.profitLoss)}`
-              }
-              color={
-                forexSnapshot.profitLoss === null
-                  ? "text-slate-600"
-                  : forexSnapshot.profitLoss >= 0
-                    ? "text-emerald-600"
-                    : "text-rose-500"
-              }
-            />
-            <MiniStat
-              label="ROI"
-              value={
-                forexSnapshot.roi === null
-                  ? "—"
-                  : `${forexSnapshot.roi >= 0 ? "+" : ""}${forexSnapshot.roi}%`
-              }
-              color={
-                forexSnapshot.roi === null
-                  ? "text-slate-600"
-                  : forexSnapshot.roi >= 0
-                    ? "text-emerald-600"
-                    : "text-rose-500"
-              }
-            />
-          </div>
-          <div className="mt-4 max-w-full rounded-2xl border border-violet-100 bg-violet-50 p-3 text-xs leading-5 text-violet-700 sm:p-4">
-            <span className="font-black">Cách tính:</span> Lời/lỗ = Equity hiện
-            tại − Vốn ròng. Phí giao dịch đã được trừ khỏi vốn ròng.
+          <div className="mt-5 flex min-h-0 flex-1 flex-col gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+              <MiniStat
+                label="Vốn ròng"
+                value={formatVND(forexSnapshot.balance)}
+                color="text-violet-600"
+              />
+              <MiniStat
+                label="Equity hiện tại"
+                value={
+                  forexSnapshot.accountsWithEquity > 0
+                    ? formatVND(forexSnapshot.currentEquity)
+                    : "Chưa có dữ liệu"
+                }
+                color="text-blue-600"
+              />
+              <MiniStat
+                label="Lời / lỗ"
+                value={
+                  forexSnapshot.profitLoss === null
+                    ? "Chưa đủ dữ liệu"
+                    : `${forexSnapshot.profitLoss >= 0 ? "+" : ""}${formatVND(forexSnapshot.profitLoss)}`
+                }
+                color={
+                  forexSnapshot.profitLoss === null
+                    ? "text-slate-600"
+                    : forexSnapshot.profitLoss >= 0
+                      ? "text-emerald-600"
+                      : "text-rose-500"
+                }
+              />
+              <MiniStat
+                label="ROI"
+                value={
+                  forexSnapshot.roi === null
+                    ? "—"
+                    : `${forexSnapshot.roi >= 0 ? "+" : ""}${forexSnapshot.roi}%`
+                }
+                color={
+                  forexSnapshot.roi === null
+                    ? "text-slate-600"
+                    : forexSnapshot.roi >= 0
+                      ? "text-emerald-600"
+                      : "text-rose-500"
+                }
+              />
+            </div>
+            <div className="flex max-w-full items-start gap-1.5 rounded-xl bg-violet-50/70 px-3 py-2 text-[11px] leading-4 text-violet-700">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              <p>
+                <span className="font-bold">Lời/lỗ</span> = Equity hiện tại −
+                Vốn ròng. Phí giao dịch đã trừ khỏi vốn ròng.
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => router.push("/investments")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition-all duration-200 hover:from-violet-700 hover:to-blue-700 sm:px-4"
+            className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition-all duration-200 hover:from-violet-700 hover:to-blue-700 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Quản lý tài khoản Forex
@@ -2475,7 +2583,7 @@ export default function DashboardPage() {
           title="Mục tiêu tài chính"
           subtitle={`${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`}
         >
-          <div className="mt-4 min-w-0 space-y-3">
+          <div className="mt-5 min-h-0 min-w-0 flex-1 space-y-3">
             {goalRows.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
@@ -2516,7 +2624,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/goals")}
-            className="mt-4 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
+            className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả mục tiêu
@@ -2528,7 +2636,7 @@ export default function DashboardPage() {
           title="Giao dịch gần đây"
           subtitle="5 hoạt động mới nhất, đã loại chuyển nội bộ"
         >
-          <div className="mt-4 space-y-3">
+          <div className="mt-5 min-h-0 flex-1 space-y-3">
             {recentTxnGroups.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
@@ -2588,7 +2696,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/transactions")}
-            className="mt-4 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
+            className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Xem tất cả giao dịch
@@ -2826,14 +2934,16 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-6">
-      <h3 className="wrap-break-word text-lg font-black leading-tight text-slate-900">
-        {title}
-      </h3>
-      <p className="mt-1 max-w-full wrap-break-word text-sm leading-5 text-slate-600">
-        {subtitle}
-      </p>
-      <div className="min-w-0 max-w-full">{children}</div>
+    <div className="flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-6">
+      <div>
+        <h3 className="wrap-break-word text-lg font-black leading-tight text-slate-900">
+          {title}
+        </h3>
+        <p className="mt-1 min-h-10 max-w-full wrap-break-word text-sm leading-5 text-slate-600">
+          {subtitle}
+        </p>
+      </div>
+      <div className="flex min-w-0 max-w-full flex-1 flex-col">{children}</div>
     </div>
   );
 }

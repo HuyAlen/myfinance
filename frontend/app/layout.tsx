@@ -7,6 +7,7 @@ import { OnboardingProvider } from "@/src/components/onboarding/OnboardingProvid
 import { ToastProvider } from "@/src/components/ui/ToastProvider";
 import ServiceWorkerRegistration from "@/src/components/pwa/ServiceWorkerRegistration";
 import InstallPrompt from "@/src/components/pwa/InstallPrompt";
+import WebVitalsReporter from "@/src/components/performance/WebVitalsReporter";
 
 const beVietnam = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
@@ -40,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="vi" data-scroll-behavior="smooth">
       <body className={beVietnam.variable}>
+        <WebVitalsReporter />
         <AuthProvider>
           <RealtimeProvider>
             <ToastProvider>

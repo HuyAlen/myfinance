@@ -12,6 +12,7 @@ import {
 import type { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { supabase } from "@/src/lib/supabase";
+import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,8 +78,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const hasReportedRealtimeReadyRef = useRef(false);
+
   useEffect(() => {
     if (!user?.id) return;
+
+    markInstant("realtime:subscribe:start");
 
     const tables: RealtimeTable[] = [
       "wallets",
@@ -114,6 +119,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
     channel.subscribe((state) => {
       setStatus(state);
+      if (state === "SUBSCRIBED" && !hasReportedRealtimeReadyRef.current) {
+        hasReportedRealtimeReadyRef.current = true;
+        measureAndReport(
+          "realtime_ready",
+          "realtime:subscribe:start",
+          "realtime:subscribed",
+          { status: "success" },
+        );
+      }
     });
 
     return () => {
