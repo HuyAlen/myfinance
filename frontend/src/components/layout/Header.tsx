@@ -54,7 +54,7 @@ import type {
 
 // ─── Page meta ────────────────────────────────────────────────────────────────
 const PAGE_META: Record<string, { title: string; desc: string }> = {
-  "/": { title: "Tổng quan", desc: "Financial Overview & Insights" },
+  "/": { title: "Tổng quan", desc: "Tổng quan & phân tích tài chính" },
   "/transactions": { title: "Giao Dịch", desc: "Thu chi & lịch sử giao dịch" },
   "/wallets": { title: "Ví Tiền", desc: "Quản lý tài khoản & nguồn tiền" },
   "/budgets": { title: "Ngân Sách", desc: "Kế hoạch & kiểm soát chi tiêu" },
@@ -516,7 +516,9 @@ export default function Header({
   }
 
   function updateUrlFilter(key: string, value: string) {
-    router.replace(`${pathname}?${key}=${encodeURIComponent(value)}`);
+    const params = new URLSearchParams(window.location.search);
+    params.set(key, value);
+    router.replace(`${pathname}?${params.toString()}`);
   }
 
   function handleSelectMonth(month: string) {

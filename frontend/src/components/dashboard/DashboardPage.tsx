@@ -30,7 +30,6 @@ import {
   Landmark,
   PiggyBank,
   ShieldCheck,
-  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
@@ -60,7 +59,6 @@ import {
   filterTransactionsByDateRange,
   formatVND,
   generateDashboardActions,
-  getFinancialGrade,
   getGoalEffectiveCurrentAmount,
   getGoalLinkedSavingAmount,
 } from "@/src/services/finance/financeCalculations";
@@ -101,7 +99,6 @@ const DASHBOARD_RUNTIME_COMPONENTS = {
   Landmark,
   PiggyBank,
   ShieldCheck,
-  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
@@ -641,7 +638,6 @@ export default function DashboardPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [isDashboardReady, setIsDashboardReady] = useState(false);
-  const [isHealthDrawerOpen, setIsHealthDrawerOpen] = useState(false);
   const { dateRange, selectedYear } = useDateFilter();
 
   const filteredTransactions = useMemo(
@@ -1633,114 +1629,6 @@ export default function DashboardPage() {
     emergencyMonthsExact,
   ]);
 
-  const healthScore = healthMetrics.totalScore;
-  const financialGrade = getFinancialGrade(healthScore);
-  const healthBreakdown = useMemo(
-    () => [
-      {
-        label: "Tiết kiệm & Đầu tư",
-        score: healthMetrics.savingScore,
-        weight: 30,
-        points: Math.round(healthMetrics.savingScore * 0.3),
-        note: `Tỷ lệ tiết kiệm & đầu tư hiện tại ${summary.savingRate}%`,
-      },
-      {
-        label: "An toàn nợ",
-        score: healthMetrics.debtSafetyScore,
-        weight: 30,
-        points: Math.round(healthMetrics.debtSafetyScore * 0.3),
-        note:
-          summary.debtRatio <= 0
-            ? "Không có nợ, rủi ro thấp"
-            : `Tỷ lệ nợ ${summary.debtRatio}%`,
-      },
-      {
-        label: "Quỹ khẩn cấp",
-        score: healthMetrics.emergencyScore,
-        weight: 25,
-        points: Math.round(healthMetrics.emergencyScore * 0.25),
-        note: `${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu`,
-      },
-      {
-        label: "Mục tiêu",
-        score: healthMetrics.goalScore,
-        weight: 15,
-        points: Math.round(healthMetrics.goalScore * 0.15),
-        note: `${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`,
-      },
-    ],
-    [
-      healthMetrics,
-      summary.savingRate,
-      summary.debtRatio,
-      summary.goalScore,
-      emergencyMonthsExact,
-      goalSnapshot.trackedCount,
-    ],
-  );
-
-  const healthStrengths = useMemo(() => {
-    const items: string[] = [];
-    if (healthMetrics.debtSafetyScore >= 90)
-      items.push("Không có nợ hoặc tỷ lệ nợ rất an toàn.");
-    if (healthMetrics.savingScore >= 70)
-      items.push(`Tỷ lệ tiết kiệm & đầu tư tốt (${summary.savingRate}%).`);
-    if (healthMetrics.emergencyScore >= 50)
-      items.push(
-        `Quỹ khẩn cấp đạt ${formatOneDecimal(emergencyMonthsExact)} tháng.`,
-      );
-    if (healthMetrics.goalScore >= 50)
-      items.push("Mục tiêu tài chính có tiến độ tốt.");
-    return items.length > 0
-      ? items
-      : ["Bạn đã có dữ liệu tài chính để bắt đầu tối ưu."];
-  }, [healthMetrics, summary.savingRate, emergencyMonthsExact]);
-
-  const healthImprovements = useMemo(() => {
-    const items: string[] = [];
-    if (emergencyMonthsExact < 3)
-      items.push(`Tăng quỹ khẩn cấp lên tối thiểu 3 tháng chi tiêu.`);
-    if (healthMetrics.goalScore < 30 && goals.length > 0)
-      items.push(
-        `Đẩy nhanh tiến độ mục tiêu tài chính, hiện mới đạt ${summary.goalScore}%.`,
-      );
-    if (summary.savingRate < 20)
-      items.push("Nâng tỷ lệ tiết kiệm & đầu tư lên ít nhất 20% thu nhập.");
-    if (summary.debtRatio > 40)
-      items.push("Giảm tỷ lệ nợ xuống dưới 40% tổng tài sản.");
-    return items.length > 0
-      ? items
-      : ["Duy trì nhịp hiện tại và cân nhắc tăng đầu tư dài hạn."];
-  }, [
-    healthMetrics.goalScore,
-    emergencyMonthsExact,
-    goals.length,
-    summary.goalScore,
-    summary.savingRate,
-    summary.debtRatio,
-  ]);
-
-  const riskScore = Math.max(0, 100 - healthScore);
-
-  const riskLevel =
-    riskScore <= 25
-      ? "Thấp"
-      : riskScore <= 50
-        ? "Trung bình"
-        : riskScore <= 75
-          ? "Cao"
-          : "Nguy hiểm";
-  const healthLabel =
-    healthScore >= 90
-      ? "Xuất sắc"
-      : healthScore >= 75
-        ? "Tốt"
-        : healthScore >= 60
-          ? "Khá"
-          : healthScore >= 40
-            ? "Trung bình"
-            : "Cần cải thiện";
-
   // ── AI actions ────────────────────────────────────────────────────────────
   const aiActions = useMemo(
     () =>
@@ -1826,18 +1714,7 @@ export default function DashboardPage() {
       });
     }
 
-    if (summary.debtRatio <= 0) {
-      actions.push({
-        icon: <ShieldCheck size={18} />,
-        title: "Không có nợ",
-        body: "Đây là điểm mạnh lớn của hồ sơ tài chính. Hãy tận dụng dòng tiền dương để tăng tài sản thanh khoản và mục tiêu dài hạn.",
-        tone: "good",
-        ctaLabel: "Xem báo cáo",
-        ctaRoute: "/reports",
-      });
-    }
-
-    return actions.slice(0, 4);
+    return actions.slice(0, 3);
   }, [
     emergencyMonthsExact,
     goals.length,
@@ -1847,8 +1724,21 @@ export default function DashboardPage() {
     savingsSnapshot.emergencyFund,
     summary.goalScore,
     summary.savingRate,
-    summary.debtRatio,
   ]);
+
+  const priorityActions =
+    v3AdvisorActions.length > 0
+      ? v3AdvisorActions
+      : aiActions.slice(0, 3).map((action) => ({
+          icon: actionIcons[action.icon],
+          title: action.title,
+          body: action.body,
+          tone: action.tone,
+          ctaLabel: action.ctaLabel,
+          ctaRoute: action.ctaRoute,
+        }));
+
+  const hasNoDebt = summary.debtRatio <= 0;
 
   // ── Compact operating KPIs ───────────────────────────────────────────────
   const kpiCards = [
@@ -2079,47 +1969,6 @@ export default function DashboardPage() {
       .slice(0, 4);
   }, [transactions, categories, selectedMonth, selectedYear]);
 
-  const dashboardNarrative = useMemo(() => {
-    const messages: string[] = [];
-    if (monthlyPulse.income <= 0) {
-      messages.push("Chưa ghi nhận thu nhập trong tháng hiện tại.");
-    } else if (monthlyPulse.projectedExpense > monthlyPulse.income) {
-      messages.push(
-        `Nếu giữ tốc độ hiện tại, chi tiêu cuối tháng có thể vượt thu nhập khoảng ${formatVND(
-          monthlyPulse.projectedExpense - monthlyPulse.income,
-        )}.`,
-      );
-    } else {
-      messages.push(
-        `Dự báo cuối tháng còn lại khoảng ${formatVND(
-          monthlyPulse.income - monthlyPulse.projectedExpense,
-        )} sau chi tiêu.`,
-      );
-    }
-
-    if (monthlyPulse.projectedBudgetUsage > 100) {
-      messages.push(
-        `Ngân sách có nguy cơ vượt ${monthlyPulse.projectedBudgetUsage - 100}% vào cuối tháng.`,
-      );
-    } else if (monthlyPulse.budgetLimit > 0) {
-      messages.push(
-        `Bạn đang dùng ${monthlyPulse.budgetUsage}% tổng ngân sách tháng.`,
-      );
-    }
-
-    if (emergencyMonthsExact < 3) {
-      messages.push(
-        `Quỹ khẩn cấp mới đáp ứng ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu; ưu tiên gần nhất là đạt 3 tháng.`,
-      );
-    } else if (summary.savingRate >= 20) {
-      messages.push(
-        `Tỷ lệ tiết kiệm & đầu tư ${summary.savingRate}% đang đạt hoặc vượt chuẩn 20%.`,
-      );
-    }
-
-    return messages.slice(0, 3);
-  }, [monthlyPulse, emergencyMonthsExact, summary.savingRate]);
-
   return (
     <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
       {/* MyFinance v2 command center */}
@@ -2131,7 +1980,7 @@ export default function DashboardPage() {
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
-                MyFinance v2 · Daily Brief
+                Tổng quan tài chính
               </p>
               <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
                 Tổng quan hôm nay
@@ -2139,9 +1988,6 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm text-slate-600">
                 Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
               </p>
-            </div>
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
-              <Sparkles size={20} />
             </div>
           </div>
 
@@ -2167,30 +2013,13 @@ export default function DashboardPage() {
               tone={todaySnapshot.net >= 0 ? "good" : "danger"}
             />
           </div>
-
-          <div className="relative mt-5 rounded-3xl border border-blue-100 bg-linear-to-br from-blue-50 via-sky-50/70 to-cyan-50 p-4">
-            <div className="flex items-center gap-2 text-blue-700">
-              <span className="flex size-8 items-center justify-center rounded-xl bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
-                <Bot size={16} />
-              </span>
-              <p className="text-sm font-black">AI Financial Brief</p>
-            </div>
-            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-              {dashboardNarrative.map((message) => (
-                <p key={message} className="flex gap-2">
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-blue-500" />
-                  <span>{message}</span>
-                </p>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                Monthly Pulse
+                Tiến độ tháng
               </p>
               <h2 className="mt-2 text-xl font-black text-slate-900">
                 Tiến độ tháng {monthlyPulse.month}
@@ -2256,7 +2085,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <section className="grid items-start gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Panel
           title="Sắp đến hạn trong 30 ngày"
           subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
@@ -2342,247 +2171,170 @@ export default function DashboardPage() {
 
       {/* Executive overview */}
       <section className="overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
-        <div className="grid xl:grid-cols-[1.45fr_0.55fr]">
-          <div className="bg-linear-to-br from-blue-50/80 via-white to-sky-50/80 p-4 sm:p-7">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
-                  Tổng quan tài chính
-                </p>
-                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                  Tài sản ròng
-                </h1>
-                <p className="mt-1 text-sm text-slate-600">
-                  Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push("/reports")}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/95 px-4 text-sm font-black text-blue-600 transition-all duration-200 hover:bg-blue-50"
-              >
-                Xem báo cáo
-              </button>
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-end gap-3">
-              <p
-                className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
-                title={formatVND(summary.netWorth)}
-              >
-                {formatVND(summary.netWorth)}
+        <div className="bg-linear-to-br from-blue-50/80 via-white to-sky-50/80 p-4 sm:p-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+                Tài sản & nợ
               </p>
-              <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-                {formatVND(netCashFlow)}
-              </span>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                Tài sản ròng
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
+              </p>
             </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
-              <HeroMini
-                icon={<Wallet size={16} />}
-                label="Thanh khoản"
-                value={formatVND(summary.liquidBalance)}
-                valueClass="text-blue-600"
-              />
-              <HeroMini
-                icon={<PiggyBank size={16} />}
-                label="Tiết kiệm"
-                value={formatVND(savingsSnapshot.totalSavings)}
-                valueClass="text-cyan-600"
-              />
-              <HeroMini
-                icon={<Landmark size={16} />}
-                label="Vốn Forex"
-                value={formatVND(forexSnapshot.balance)}
-                valueClass="text-violet-600"
-              />
-              <HeroMini
-                icon={<Briefcase size={16} />}
-                label="Đầu tư khác"
-                value={formatVND(summary.investmentAssets)}
-                valueClass="text-emerald-600"
-              />
-              <HeroMini
-                icon={<CreditCard size={16} />}
-                label="Nợ phải trả"
-                value={formatVND(summary.totalDebt)}
-                valueClass="text-rose-500"
-              />
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">
-                    Biến động tài sản ròng
-                  </p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    Chỉ dùng dữ liệu thật đã ghi nhận trong năm {selectedYear}.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    So với kỳ trước
-                  </p>
-                  <p
-                    className={`text-sm font-black ${
-                      netWorthChartStats.changeFromPrevious >= 0
-                        ? "text-emerald-600"
-                        : "text-rose-500"
-                    }`}
-                  >
-                    {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
-                    {formatVND(netWorthChartStats.changeFromPrevious)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 h-52">
-                <ResponsiveContainer width="100%" height={208} minWidth={0}>
-                  <AreaChart
-                    data={netWorthTrend}
-                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="dashboardNetWorth"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#2563eb"
-                          stopOpacity={0.25}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#2563eb"
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-                    <XAxis
-                      dataKey="label"
-                      axisLine={false}
-                      tickLine={false}
-                      fontSize={11}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      width={46}
-                      fontSize={10}
-                      tickFormatter={(value) => formatCompactVND(Number(value))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "0.9rem",
-                        border: "1px solid #dbeafe",
-                        boxShadow: "0 16px 40px -16px rgb(15 23 42 / 0.25)",
-                        fontSize: "12px",
-                      }}
-                      formatter={(value) => [
-                        value == null
-                          ? "Không có dữ liệu"
-                          : formatVND(Number(value)),
-                        "Tài sản ròng",
-                      ]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      connectNulls={false}
-                      stroke="#2563eb"
-                      strokeWidth={3}
-                      fill="url(#dashboardNetWorth)"
-                      dot={{ r: 3, strokeWidth: 2, fill: "#fff" }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => router.push("/reports")}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/95 px-4 text-sm font-black text-blue-600 transition-all duration-200 hover:bg-blue-50"
+            >
+              Xem báo cáo
+            </button>
           </div>
 
-          <div className="border-t border-slate-200 bg-linear-to-br from-emerald-50 via-sky-50 to-blue-50 p-4 sm:p-7 xl:border-l xl:border-t-0">
-            <div className="flex items-start justify-between gap-3">
+          <div className="mt-5 flex flex-wrap items-end gap-3">
+            <p
+              className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
+              title={formatVND(summary.netWorth)}
+            >
+              {formatVND(summary.netWorth)}
+            </p>
+            <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+              {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
+              {formatVND(netCashFlow)}
+            </span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+            <HeroMini
+              icon={<Wallet size={16} />}
+              label="Thanh khoản"
+              value={formatVND(summary.liquidBalance)}
+              valueClass="text-blue-600"
+            />
+            <HeroMini
+              icon={<PiggyBank size={16} />}
+              label="Tiết kiệm"
+              value={formatVND(savingsSnapshot.totalSavings)}
+              valueClass="text-cyan-600"
+            />
+            <HeroMini
+              icon={<Landmark size={16} />}
+              label="Vốn Forex"
+              value={formatVND(forexSnapshot.balance)}
+              valueClass="text-violet-600"
+            />
+            <HeroMini
+              icon={<Briefcase size={16} />}
+              label="Đầu tư khác"
+              value={formatVND(summary.investmentAssets)}
+              valueClass="text-emerald-600"
+            />
+            <HeroMini
+              icon={<CreditCard size={16} />}
+              label="Nợ phải trả"
+              value={formatVND(summary.totalDebt)}
+              valueClass="text-rose-500"
+            />
+          </div>
+
+          <div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600">
-                  Sức khỏe tài chính
+                <p className="text-sm font-black text-slate-900">
+                  Biến động tài sản ròng
                 </p>
-                <p
-                  className={`mt-2 text-2xl font-black ${financialGrade.color}`}
-                >
-                  {financialGrade.label}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Grade {financialGrade.grade} · Rủi ro {riskLevel}
+                <p className="mt-1 text-xs text-slate-600">
+                  Chỉ dùng dữ liệu thật đã ghi nhận trong năm {selectedYear}.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsHealthDrawerOpen(true)}
-                className={`flex size-20 shrink-0 items-center justify-center rounded-full bg-linear-to-br ${financialGrade.gradient} p-1.5 shadow-lg`}
-              >
-                <span className="flex size-full flex-col items-center justify-center rounded-full bg-white/95">
-                  <span
-                    className={`text-2xl font-black ${financialGrade.color}`}
-                  >
-                    {healthScore}
-                  </span>
-                  <span className="text-[10px] text-slate-500">/100</span>
-                </span>
-              </button>
+              <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  So với kỳ trước
+                </p>
+                <p
+                  className={`text-sm font-black ${
+                    netWorthChartStats.changeFromPrevious >= 0
+                      ? "text-emerald-600"
+                      : "text-rose-500"
+                  }`}
+                >
+                  {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
+                  {formatVND(netWorthChartStats.changeFromPrevious)}
+                </p>
+              </div>
             </div>
 
-            <div className="mt-6 space-y-4">
-              <ScoreLine
-                label="Tiết kiệm & Đầu tư"
-                value={healthMetrics.savingScore}
-              />
-              <ScoreLine
-                label="An toàn nợ"
-                value={healthMetrics.debtSafetyScore}
-              />
-              <ScoreLine
-                label="Quỹ khẩn cấp"
-                value={healthMetrics.emergencyScore}
-              />
-              <ScoreLine label="Mục tiêu" value={healthMetrics.goalScore} />
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-white bg-white/95/75 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                Việc cần ưu tiên
-              </p>
-              <p className="mt-2 text-sm font-black text-slate-900">
-                {emergencyMonthsExact < 3
-                  ? "Tăng quỹ khẩn cấp"
-                  : summary.goalScore < 30
-                    ? "Đẩy nhanh mục tiêu tài chính"
-                    : "Duy trì nhịp tài chính hiện tại"}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">
-                {emergencyMonthsExact < 3
-                  ? `Hiện có ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu, nên đạt tối thiểu 3 tháng.`
-                  : summary.goalScore < 30
-                    ? `Tiến độ mục tiêu trung bình hiện là ${summary.goalScore}%.`
-                    : "Dòng tiền và mức tiết kiệm đang đi đúng hướng."}
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsHealthDrawerOpen(true)}
-                className="mt-3 text-xs font-black text-blue-600"
-              >
-                Xem cách tính điểm →
-              </button>
+            <div className="mt-3 h-44">
+              <ResponsiveContainer width="100%" height={176} minWidth={0}>
+                <AreaChart
+                  data={netWorthTrend}
+                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="dashboardNetWorth"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="#2563eb"
+                        stopOpacity={0.25}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="#2563eb"
+                        stopOpacity={0.02}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#e2e8f0"
+                  />
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    fontSize={11}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    width={46}
+                    fontSize={10}
+                    tickFormatter={(value) => formatCompactVND(Number(value))}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "0.9rem",
+                      border: "1px solid #dbeafe",
+                      boxShadow: "0 16px 40px -16px rgb(15 23 42 / 0.25)",
+                      fontSize: "12px",
+                    }}
+                    formatter={(value) => [
+                      value == null
+                        ? "Không có dữ liệu"
+                        : formatVND(Number(value)),
+                      "Tài sản ròng",
+                    ]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    connectNulls={false}
+                    stroke="#2563eb"
+                    strokeWidth={3}
+                    fill="url(#dashboardNetWorth)"
+                    dot={{ r: 3, strokeWidth: 2, fill: "#fff" }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
@@ -2621,8 +2373,8 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-5 h-60">
-            <ResponsiveContainer width="100%" height={240} minWidth={0}>
+          <div className="mt-5 h-52">
+            <ResponsiveContainer width="100%" height={208} minWidth={0}>
               <ComposedChart
                 data={cashFlowData}
                 barGap={3}
@@ -2983,205 +2735,50 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-            Tối đa 3 việc quan trọng
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasNoDebt && (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                ✓ Không có nợ phải trả
+              </span>
+            )}
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+              Tối đa 3 việc quan trọng
+            </span>
+          </div>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          {v3AdvisorActions.slice(0, 3).map((action, index) => (
-            <ActionCard
-              key={`${action.title}-${index}`}
-              rank={index + 1}
-              icon={action.icon}
-              title={action.title}
-              body={action.body}
-              tone={action.tone}
-              ctaLabel={action.ctaLabel}
-              ctaRoute={action.ctaRoute}
-              onNavigate={router.push}
-            />
-          ))}
-          {v3AdvisorActions.length === 0 &&
-            aiActions
-              .slice(0, 3)
-              .map((action, index) => (
-                <ActionCard
-                  key={`${action.title}-${index}`}
-                  rank={index + 1}
-                  icon={actionIcons[action.icon]}
-                  title={action.title}
-                  body={action.body}
-                  tone={action.tone}
-                  ctaLabel={action.ctaLabel}
-                  ctaRoute={action.ctaRoute}
-                  onNavigate={router.push}
-                />
-              ))}
-        </div>
+        {priorityActions.length > 0 ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            {priorityActions.map((action, index) => (
+              <ActionCard
+                key={`${action.title}-${index}`}
+                rank={index + 1}
+                icon={action.icon}
+                title={action.title}
+                body={action.body}
+                tone={action.tone}
+                ctaLabel={action.ctaLabel}
+                ctaRoute={action.ctaRoute}
+                onNavigate={router.push}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-center sm:p-5">
+            <p className="text-sm font-black text-emerald-700">
+              Tài chính đang trong trạng thái ổn định.
+            </p>
+            <p className="mt-1 text-xs text-emerald-700/80">
+              Không có việc khẩn cấp cần xử lý.
+            </p>
+          </div>
+        )}
       </section>
-
-      <FinancialHealthDrawer
-        open={isHealthDrawerOpen}
-        onClose={() => setIsHealthDrawerOpen(false)}
-        score={healthScore}
-        grade={financialGrade.grade}
-        healthLabel={healthLabel}
-        riskLevel={riskLevel}
-        breakdown={healthBreakdown}
-        strengths={healthStrengths}
-        improvements={healthImprovements}
-      />
     </div>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
-
-function FinancialHealthDrawer({
-  open,
-  onClose,
-  score,
-  grade,
-  healthLabel,
-  riskLevel,
-  breakdown,
-  strengths,
-  improvements,
-}: {
-  open: boolean;
-  onClose: () => void;
-  score: number;
-  grade: string;
-  healthLabel: string;
-  riskLevel: string;
-  breakdown: {
-    label: string;
-    score: number;
-    weight: number;
-    points: number;
-    note: string;
-  }[];
-  strengths: string[];
-  improvements: string[];
-}) {
-  if (!open) return null;
-
-  const totalPoints = breakdown.reduce((sum, item) => sum + item.points, 0);
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm">
-      <button
-        type="button"
-        aria-label="Đóng"
-        onClick={onClose}
-        className="absolute inset-0 cursor-default"
-      />
-      <aside className="relative h-full w-full max-w-xl overflow-y-auto bg-white/95 p-4 shadow-2xl sm:p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-blue-500">
-              AI Explain Score
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-900">
-              Giải thích sức khỏe tài chính
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Cách hệ thống chấm điểm hồ sơ tài chính hiện tại của bạn.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 hover:bg-slate-200"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="mt-6 rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-linear-to-br from-blue-50 via-white to-emerald-50 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-slate-600">Tổng điểm</p>
-              <p className="mt-1 text-5xl font-black text-blue-600">
-                {score}
-                <span className="text-base text-slate-500">/100</span>
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white bg-white/95/80 px-5 py-4 text-center shadow-sm transition-all duration-200 hover:shadow-md">
-              <p className="text-xs font-bold text-slate-500">Grade</p>
-              <p className="text-[clamp(1.25rem,5vw,1.875rem)] font-black text-slate-900">
-                {grade}
-              </p>
-              <p className="mt-1 text-xs font-bold text-slate-600">
-                {healthLabel} · Rủi ro {riskLevel}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {breakdown.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-black text-slate-900">{item.label}</p>
-                  <p className="mt-1 text-xs text-slate-600">{item.note}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-black text-blue-600">
-                    +{item.points} điểm
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Trọng số {item.weight}%
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 h-2.5 rounded-full bg-white/95">
-                <div
-                  className="h-2.5 rounded-full bg-linear-to-r from-emerald-400 to-blue-500"
-                  style={{ width: `${clampScore(item.score)}%` }}
-                />
-              </div>
-              <div className="mt-1 flex justify-between text-[11px] text-slate-500">
-                <span>Score {clampScore(item.score)}/100</span>
-                <span>Đóng góp tối đa {item.weight} điểm</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-            <p className="font-black text-emerald-700">Điểm mạnh</p>
-            <ul className="mt-3 space-y-2 text-sm text-emerald-700">
-              {strengths.map((item) => (
-                <li key={item}>✓ {item}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-            <p className="font-black text-amber-700">Cần cải thiện</p>
-            <ul className="mt-3 space-y-2 text-sm text-amber-700">
-              {improvements.map((item) => (
-                <li key={item}>⚠ {item}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
-          Tổng điểm hiện tại được tính từ các phần trên:{" "}
-          <span className="font-black">{totalPoints}/100</span>. Khi quỹ khẩn
-          cấp và mục tiêu tăng lên, điểm sức khỏe tài chính sẽ tự cải thiện.
-        </div>
-      </aside>
-    </div>
-  );
-}
 
 function formatCompactVND(value: number) {
   const rounded = Math.round(Number.isFinite(value) ? value : 0);
@@ -3392,24 +2989,6 @@ function MiniStat({
       >
         {value}
       </p>
-    </div>
-  );
-}
-
-function ScoreLine({ label, value }: { label: string; value: number }) {
-  const pct = Math.min(Math.max(value, 0), 100);
-  return (
-    <div>
-      <div className="mb-1.5 flex justify-between text-xs">
-        <span className="font-medium text-slate-600">{label}</span>
-        <span className="font-bold text-slate-900">{value}</span>
-      </div>
-      <div className="h-2 rounded-full bg-white/95/80">
-        <div
-          className="h-2 rounded-full bg-linear-to-r from-emerald-400 to-blue-500 transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   );
 }

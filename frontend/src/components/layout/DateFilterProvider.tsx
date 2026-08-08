@@ -3,13 +3,23 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 const STORAGE_KEY = "myfinance_date_filter_v2";
 const LEGACY_MONTH_KEY = "myfinance_selected_month";
+
+// Module-scope flag: stays `false` only for the first DateFilterProvider
+// mount after a real document load (initial visit or hard reload), and
+// `true` for every subsequent SPA route change within the same document
+// lifetime. This lets us reset to the current month exactly once per
+// browser session/reload without disturbing in-app month selection.
+let hasBootstrappedDateFilter = false;
 
 export type DateFilterMode = "month" | "quarter" | "year" | "custom";
 
@@ -72,7 +82,7 @@ function getDefaultMonth() {
 }
 
 function isValidMonthKey(value: string | null): value is string {
-  return Boolean(value && /^\d{4}-\d{2}$/.test(value));
+  return Boolean(value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
 }
 
 function isValidQuarterKey(value: string | null): value is string {
@@ -306,6 +316,17 @@ function getFilterFromUrl(): Partial<StoredDateFilter> | null {
 function getInitialFilter(): StoredDateFilter {
   if (typeof window === "undefined") return getDefaultStoredFilter();
 
+  // First DateFilterProvider mount since the document loaded (fresh tab or
+  // hard reload): always start from the current month, ignoring any stale
+  // ?month= query param or a previously persisted selection. This is a
+  // pure read of the module flag — it must NOT mutate it here, because
+  // React (Strict Mode) can invoke this initializer more than once per
+  // render pass; the flag is only ever flipped from the mount effect
+  // below, after the state produced by this call has already committed.
+  if (!hasBootstrappedDateFilter) {
+    return getDefaultStoredFilter();
+  }
+
   try {
     const urlFilter = getFilterFromUrl();
     if (urlFilter) {
@@ -368,6 +389,41 @@ function getFilterLabel(filter: StoredDateFilter) {
 
 export function DateFilterProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState(getInitialFilter);
+  const router = useRouter();
+  const pathname = usePathname();
+  const didSyncUrlRef = useRef(false);
+
+  // Mark this document's DateFilterProvider lifecycle as bootstrapped and
+  // persist the resolved filter, but only the FIRST time this happens for
+  // the current document (module flag stays true across SPA remounts,
+  // resets only on a real reload). This intentionally lives in an effect,
+  // not in the lazy `useState` initializer above, because that initializer
+  // can be invoked more than once per render in React Strict Mode — a
+  // module-level mutation there would make the second invocation see a
+  // stale flag and fall through to the URL/localStorage branch, silently
+  // reintroducing the exact bug this is meant to fix.
+  useEffect(() => {
+    if (hasBootstrappedDateFilter) return;
+    hasBootstrappedDateFilter = true;
+    persistFilter(filter);
+  }, [filter]);
+
+  // Sync the resolved filter (possibly just reset to the current month)
+  // back into the URL exactly once per mount, without touching unrelated
+  // query params or creating a new history entry. This never calls
+  // setFilter, so it only synchronizes the URL (an external system) and
+  // cannot loop or fight with user-driven month changes.
+  useEffect(() => {
+    if (didSyncUrlRef.current) return;
+    didSyncUrlRef.current = true;
+    if (typeof window === "undefined" || filter.mode !== "month") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("month") === filter.selectedMonth) return;
+
+    params.set("month", filter.selectedMonth);
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [filter, pathname, router]);
 
   const updateFilter = (next: StoredDateFilter) => {
     setFilter(next);

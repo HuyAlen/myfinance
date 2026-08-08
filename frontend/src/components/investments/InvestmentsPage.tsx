@@ -135,10 +135,6 @@ const isSupabaseConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 );
 
-function createId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
-
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -580,7 +576,7 @@ export default function InvestmentsPage() {
 
     try {
       const payload = {
-        id: accountForm.id || createId("fxa"),
+        id: accountForm.id || crypto.randomUUID(),
         name: accountForm.name.trim(),
         broker: accountForm.broker.trim(),
         account_number: accountForm.accountNumber.trim() || null,
@@ -648,7 +644,7 @@ export default function InvestmentsPage() {
 
     const amount = Number(transactionForm.amount);
     const fee = Number(transactionForm.fee || 0);
-    const id = transactionForm.id || createId("fxt");
+    const id = transactionForm.id || crypto.randomUUID();
 
     setIsSaving(true);
     setSaveError(null);
