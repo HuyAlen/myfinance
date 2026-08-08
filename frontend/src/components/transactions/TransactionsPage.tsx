@@ -1435,12 +1435,12 @@ export default function TransactionsPage() {
       )}
       {/* SECTION 1 · Transaction Summary */}
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
+          <div className="min-w-0">
+            <p className="whitespace-nowrap text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
               Transaction Center
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-1 whitespace-nowrap text-3xl font-black tracking-tight text-slate-900">
               Giao dịch
             </h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -1451,7 +1451,7 @@ export default function TransactionsPage() {
 
           <button
             onClick={openCreateForm}
-            className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700 active:scale-[.98]"
+            className="flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700 active:scale-[.98] xl:w-auto"
           >
             <Plus size={16} />
             Thêm giao dịch
@@ -1466,7 +1466,7 @@ export default function TransactionsPage() {
           />
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <SummaryCard
             label="Thu nhập"
             value={formatVND(totalIncome)}
@@ -1515,7 +1515,7 @@ export default function TransactionsPage() {
       <div className="sticky top-0 z-20">
         <div className="rounded-3xl border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md sm:rounded-4xl">
           {/* Main bar */}
-          <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-5 sm:py-3.5">
+          <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5 sm:py-3.5">
             {/* Search */}
             <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 transition-all focus-within:border-blue-400 focus-within:bg-white focus-within:shadow-sm">
               <Search size={14} className="shrink-0 text-slate-400" />
@@ -1548,7 +1548,7 @@ export default function TransactionsPage() {
                     key={t}
                     onClick={() => setTypeFilter(t)}
                     className={
-                      "shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-all duration-150 " +
+                      "shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-bold transition-all duration-150 " +
                       (typeFilter === t
                         ? t === "income"
                           ? "bg-emerald-500 text-white shadow-sm"
@@ -2836,20 +2836,20 @@ function LiquidityHeroCard({
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">
+              <div className="min-w-0">
+                <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">
                   Số tiền khả dụng
                 </p>
-                <h3 className="mt-1 text-sm font-black text-white">
+                <h3 className="mt-1 whitespace-nowrap text-sm font-black text-white">
                   Thanh khoản hiện tại
                 </h3>
               </div>
-              <span className="rounded-full border border-white/15 bg-white/12 px-3 py-1 text-[10px] font-black text-white backdrop-blur">
+              <span className="whitespace-nowrap rounded-full border border-white/15 bg-white/12 px-3 py-1 text-[10px] font-black text-white backdrop-blur">
                 {walletCount} ví đang hoạt động
               </span>
             </div>
 
-            <p className="mt-3 text-4xl font-black tracking-[-0.045em] sm:text-[2.7rem]">
+            <p className="mt-3 whitespace-nowrap text-[clamp(1.9rem,7.5vw,2.35rem)] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[2.7rem]">
               {value}
             </p>
 
@@ -2860,11 +2860,11 @@ function LiquidityHeroCard({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm lg:ml-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
+        <div className="min-w-0 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm lg:ml-2">
+          <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
             Dòng tiền tháng này
           </p>
-          <p className="mt-2 text-2xl font-black text-white">
+          <p className="mt-2 whitespace-nowrap text-2xl font-black leading-none tabular-nums text-white">
             {getSignedAmountText(netCashFlow)}
           </p>
           <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold">
@@ -2957,11 +2957,11 @@ function SummaryCard({
   return (
     <div
       className={
-        "flex min-h-44 flex-col rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
+        "flex min-w-0 flex-col rounded-3xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md " +
         style.shell
       }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <span
           className={
             "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-black " +
@@ -2970,15 +2970,15 @@ function SummaryCard({
         >
           {style.symbol}
         </span>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em]">
+        <p className="min-w-0 truncate text-[10px] font-black uppercase tracking-[0.16em]">
           {label}
         </p>
       </div>
 
-      <p className="mt-4 truncate text-[1.38rem] font-black tracking-tight">
+      <p className="mt-4 overflow-hidden whitespace-nowrap text-[clamp(1.05rem,4.8vw,1.38rem)] font-black leading-none tracking-tight tabular-nums">
         {value}
       </p>
-      <p className="mt-1 text-xs font-bold opacity-75">{note}</p>
+      <p className="mt-1 truncate text-xs font-bold opacity-75">{note}</p>
 
       <div
         className={
