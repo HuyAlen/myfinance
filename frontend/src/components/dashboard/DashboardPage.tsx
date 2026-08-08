@@ -35,7 +35,7 @@ import {
   getInvestments,
   getForexAccounts,
   getForexCashTransactions,
-  getTransactions,
+  getTransactionsInRange,
   getWallets,
 } from "@/src/services/finance/financeStorage";
 
@@ -614,6 +614,24 @@ function getNetInvestmentAllocation(
   }, 0);
 }
 
+/**
+ * Every Dashboard figure that reads from raw transactions only ever needs
+ * two windows: the selected year (monthly pulse, net worth trend, cash flow
+ * trend all walk month-by-month through `selectedYear`) and the real
+ * current year (the "today" snapshot always reflects the actual current
+ * date, regardless of which month/year is selected). This covers both in
+ * one contiguous range instead of fetching the user's entire history.
+ */
+function getDashboardFetchRange(selectedYear: number) {
+  const currentYear = new Date().getFullYear();
+  const minYear = Math.min(selectedYear, currentYear);
+  const maxYear = Math.max(selectedYear, currentYear);
+  return {
+    startDate: `${minYear}-01-01`,
+    endDate: `${maxYear}-12-31`,
+  };
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [wallets, setWallets] = useState<WalletType[]>([]);
@@ -720,6 +738,7 @@ export default function DashboardPage() {
 
   const reloadData = useCallback(async () => {
     try {
+      const fetchRange = getDashboardFetchRange(selectedYear);
       const [
         w,
         inv,
@@ -742,7 +761,7 @@ export default function DashboardPage() {
           : Promise.resolve({ data: [], error: null }),
         getForexCashTransactions(),
         getCategories(),
-        getTransactions(),
+        getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
         getDebts(),
         getGoals(),
         getBudgets(),
@@ -844,7 +863,7 @@ export default function DashboardPage() {
       // flash 0 before the slower transaction request finished again.
       setIsDashboardReady(true);
     }
-  }, []);
+  }, [selectedYear]);
 
   useEffect(() => {
     void (async () => {

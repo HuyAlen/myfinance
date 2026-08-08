@@ -638,6 +638,32 @@ export async function getTransactions(): Promise<Transaction[]> {
     .map(fromTransactionRow);
 }
 
+/**
+ * Same as getTransactions(), scoped to an inclusive date range. Callers that
+ * only need a bounded window (e.g. the Dashboard, which only ever derives
+ * figures for the selected year) should use this instead of fetching the
+ * user's entire transaction history.
+ */
+export async function getTransactionsInRange(
+  startDate: string,
+  endDate: string,
+): Promise<Transaction[]> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: false });
+  if (error)
+    console.error("[financeStorage] getTransactionsInRange:", error.message);
+  return ((data ?? []) as TransactionDbRow[])
+    .filter((row) => !isLegacyFutureAllocationCategoryId(row.categoryId))
+    .map(fromTransactionRow);
+}
+
 export async function getDebts(): Promise<Debt[]> {
   const userId = await getAuthUserId();
   if (!userId) return [];
