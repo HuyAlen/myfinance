@@ -84,3 +84,33 @@ button {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/*
+ * Startup skeleton pulse (StartupShellSkeleton). Tailwind's animate-pulse
+ * only fades opacity, which read as too subtle on real iPhone — this
+ * oscillates the block's own background-color between slate-100 (idle) and
+ * slate-200 (highlight) instead, a clearer signal at the same low visual
+ * weight. CSS-only: no JS timer, no transform, no gradient/shimmer sweep.
+ * The base background-color below is the reduced-motion resting state;
+ * the animation (which does the actual pulsing) only applies when the user
+ * hasn't asked for reduced motion.
+ */
+.skeleton-pulse {
+  background-color: #f1f5f9; /* slate-100 */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-pulse {
+    animation: skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    background-color: #f1f5f9; /* slate-100 */
+  }
+  50% {
+    background-color: #e2e8f0; /* slate-200 */
+  }
+}
