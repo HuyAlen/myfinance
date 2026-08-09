@@ -40,6 +40,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" data-scroll-behavior="smooth">
+      <head>
+        {/* Inline critical CSS: guarantees the app's background paints
+            immediately, even on a slow connection where the compiled
+            Tailwind stylesheet hasn't finished downloading yet. Without
+            this, the browser's default white canvas shows until that
+            external stylesheet loads — the "white screen" real iPhone
+            users were seeing was this pre-CSS window, not a React/auth
+            delay (the app-shell skeleton below already renders during the
+            auth window, but only once styles are present to make it look
+            like anything). Matches globals.css's --background exactly. */}
+        <style>{"html,body{background:#f8fafc}"}</style>
+      </head>
       <body className={beVietnam.variable}>
         <WebVitalsReporter />
         <AuthProvider>
