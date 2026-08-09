@@ -30,10 +30,6 @@ const ProductTour = dynamic(
   () => import("@/src/components/onboarding/ProductTour"),
   { ssr: false, loading: () => null },
 );
-const OnboardingChecklist = dynamic(
-  () => import("@/src/components/onboarding/OnboardingChecklist"),
-  { ssr: false, loading: () => null },
-);
 const QuickActionFab = dynamic(
   () => import("@/src/components/onboarding/QuickActionFab"),
   { ssr: false, loading: () => null },
@@ -187,12 +183,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {!wizardDone && <WelcomeWizard />}
         {wizardDone && !tourDone && <ProductTour />}
-        {wizardDone && !isFullyOnboarded && (
-          <>
-            <OnboardingChecklist />
-            <QuickActionFab />
-          </>
-        )}
+        {wizardDone && !isFullyOnboarded && <QuickActionFab />}
         <AchievementToast />
       </div>
     </DateFilterProvider>
