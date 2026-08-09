@@ -28,9 +28,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "MyFinance",
   },
-  icons: {
-    apple: "/icon-192.svg",
-  },
+  // No explicit `icons.apple` here: app/apple-icon.tsx (Next.js file
+  // convention) generates the apple-touch-icon PNG and its <link> tag
+  // automatically. Declaring both would produce two conflicting
+  // apple-touch-icon tags.
 };
 
 export default function RootLayout({
