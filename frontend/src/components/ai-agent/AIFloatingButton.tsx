@@ -19,8 +19,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+// QuickActionFab sits at bottom-nav-height (~76px) + safe-area + 12px gap on
+// mobile, and 24px (lg:bottom-6) on desktop, each ~56px tall. The AI FAB's
+// default spot is pushed further up so the two never overlap out of the box
+// (the user can still drag the AI FAB anywhere afterward).
 function getDefaultPosition(): Position {
-  const safeBottom = window.innerWidth >= 1024 ? 24 : 112;
+  const safeBottom = window.innerWidth >= 1024 ? 100 : 200;
 
   return {
     x: window.innerWidth - BUTTON_SIZE - 20,
@@ -165,7 +169,7 @@ export default function AIFloatingButton({ onClick }: AIFloatingButtonProps) {
       onPointerCancel={() => {
         dragRef.current.dragging = false;
       }}
-      aria-label="Mở AI Finance Agent"
+      aria-label="Mở trợ lý AI"
       className={[
         "fixed z-90 flex size-14 touch-none select-none items-center justify-center rounded-3xl",
         "bg-linear-to-br from-blue-600 via-cyan-500 to-emerald-400",

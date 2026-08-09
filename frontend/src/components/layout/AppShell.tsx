@@ -31,7 +31,7 @@ const ProductTour = dynamic(
   { ssr: false, loading: () => null },
 );
 const QuickActionFab = dynamic(
-  () => import("@/src/components/onboarding/QuickActionFab"),
+  () => import("@/src/components/layout/QuickActionFab"),
   { ssr: false, loading: () => null },
 );
 
@@ -50,7 +50,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [hasOpenedAI, setHasOpenedAI] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { wizardDone, tourDone, isFullyOnboarded } = useOnboarding();
+  const { wizardDone, tourDone } = useOnboarding();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -183,7 +183,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {!wizardDone && <WelcomeWizard />}
         {wizardDone && !tourDone && <ProductTour />}
-        {wizardDone && !isFullyOnboarded && <QuickActionFab />}
+        {!aiAgentOpen && <QuickActionFab />}
         <AchievementToast />
       </div>
     </DateFilterProvider>

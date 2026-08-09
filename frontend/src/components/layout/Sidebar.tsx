@@ -15,7 +15,6 @@ import {
   Home,
   Landmark,
   PiggyBank,
-  Plus,
   ReceiptText,
   Settings,
   Target,
@@ -52,25 +51,6 @@ const NAV_GROUPS = [
       { label: "Cài Đặt", icon: Settings, href: "/settings" },
       { label: "Hướng Dẫn", icon: BookOpen, href: "/help" },
     ],
-  },
-];
-
-// ─── Quick Actions ────────────────────────────────────────────────────────────
-const QUICK_ACTIONS = [
-  {
-    label: "Thêm giao dịch",
-    href: "/transactions",
-    cls: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-200",
-  },
-  {
-    label: "Thêm ví tiền",
-    href: "/wallets",
-    cls: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200",
-  },
-  {
-    label: "Thêm tiết kiệm",
-    href: "/savings",
-    cls: "bg-teal-600 text-white hover:bg-teal-700 shadow-sm shadow-teal-200",
   },
 ];
 
@@ -177,29 +157,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
           </div>
         ))}
-
-        {/* ══ Quick Actions ════════════════════════════════════════════════ */}
-        <div>
-          <p className="mb-2 px-3 text-[9px] font-black uppercase tracking-widest text-slate-400">
-            Thao tác nhanh
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {QUICK_ACTIONS.map((a) => (
-              <Link
-                key={a.href}
-                href={a.href}
-                onClick={onClose}
-                className={[
-                  "flex items-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-bold transition-all active:scale-[.98] ",
-                  a.cls,
-                ].join("")}
-              >
-                <Plus size={13} />
-                {a.label}
-              </Link>
-            ))}
-          </div>
-        </div>
       </nav>
 
       {/* ══ Footer: Sync Status ══════════════════════════════════════════════ */}
