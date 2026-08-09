@@ -1282,116 +1282,31 @@ function getTransactionEffects(transaction: Transaction): BalanceEffect[] {
   }
 }
 
-function collectWalletIdsFromTransactions(transactions: Transaction[]) {
-  const ids = new Set<string>();
-  transactions.forEach((transaction) => {
-    getTransactionEffects(transaction).forEach((effect) => {
-      if (effect.walletId) ids.add(effect.walletId);
-    });
-  });
-  return [...ids];
-}
-
-async function fetchWalletBalanceMap(userId: string, walletIds: string[]) {
-  const uniqueWalletIds = [...new Set(walletIds)].filter(Boolean);
-  if (uniqueWalletIds.length === 0) {
-    return {
-      wallets: [] as Wallet[],
-      balanceMap: new Map<string, number>(),
-      error: null as string | null,
-    };
-  }
-
-  const { data, error } = await supabase
-    .from("wallets")
-    .select("*")
-    .eq("user_id", userId)
-    .in("id", uniqueWalletIds);
-
-  if (error) {
-    return {
-      wallets: [] as Wallet[],
-      balanceMap: new Map<string, number>(),
-      error: error.message,
-    };
-  }
-
-  const wallets = (data ?? []) as Wallet[];
-  const balanceMap = new Map(
-    wallets.map((wallet) => [wallet.id, wallet.balance]),
-  );
-
-  for (const walletId of uniqueWalletIds) {
-    if (!balanceMap.has(walletId)) {
-      return {
-        wallets,
-        balanceMap,
-        error: "Không tìm thấy ví liên quan đến giao dịch.",
-      };
-    }
-  }
-
-  return { wallets, balanceMap, error: null };
-}
-
-function applyEffectsToBalanceMap(
-  balanceMap: Map<string, number>,
-  transaction: Transaction,
-  direction: 1 | -1,
-) {
-  for (const effect of getTransactionEffects(transaction)) {
-    const currentBalance = balanceMap.get(effect.walletId);
-    if (currentBalance === undefined) {
+/**
+ * Maps the custom SQLSTATEs raised by the create/update/delete_finance_
+ * transaction RPCs (see supabase/finance-engine-2-atomic-transactions.sql)
+ * back to the same user-facing Vietnamese messages the previous JS-side
+ * compensation logic used, so no caller/UI copy needed to change.
+ */
+function mapFinanceEngineError(error: { code?: string; message: string }) {
+  switch (error.code) {
+    case "MFE01":
+      return ERR_NO_AUTH;
+    case "MFE02":
       return "Không tìm thấy ví liên quan đến giao dịch.";
-    }
-    balanceMap.set(effect.walletId, currentBalance + effect.delta * direction);
+    case "MFE03":
+      return "Không tìm thấy giao dịch.";
+    case "MFE04":
+      return "Dữ liệu giao dịch không hợp lệ.";
+    case "MFE05":
+    // wallets_balance_nn CHECK constraint — final backstop for the same rule.
+    case "23514":
+      return "Số dư ví không đủ để thực hiện thao tác này. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.";
+    case "MFE07":
+      return "Giao dịch đã được thay đổi bởi một thao tác khác. Vui lòng tải lại và thử lại.";
+    default:
+      return error.message;
   }
-  return null;
-}
-
-function getNegativeWalletError(balanceMap: Map<string, number>) {
-  const negativeWallet = [...balanceMap.entries()].find(
-    ([, balance]) => balance < 0,
-  );
-  if (!negativeWallet) return null;
-  return "Số dư ví không đủ để thực hiện thao tác này. Vui lòng chọn ví khác, giảm số tiền hoặc nạp thêm tiền vào ví.";
-}
-
-async function persistWalletBalances(
-  userId: string,
-  originalWallets: Wallet[],
-  nextBalanceMap: Map<string, number>,
-) {
-  const changedWallets = originalWallets.filter(
-    (wallet) =>
-      nextBalanceMap.has(wallet.id) &&
-      nextBalanceMap.get(wallet.id) !== wallet.balance,
-  );
-
-  const updateResults = await Promise.all(
-    changedWallets.map((wallet) =>
-      supabase
-        .from("wallets")
-        .update({ balance: nextBalanceMap.get(wallet.id) ?? wallet.balance })
-        .eq("id", wallet.id)
-        .eq("user_id", userId),
-    ),
-  );
-
-  const firstError = updateResults.find((result) => result.error)?.error;
-  return firstError?.message ?? null;
-}
-
-async function restoreWalletBalances(userId: string, wallets: Wallet[]) {
-  await Promise.all(
-    wallets.map((wallet) =>
-      supabase
-        .from("wallets")
-        .update({ balance: wallet.balance })
-        .eq("id", wallet.id)
-        .eq("user_id", userId),
-    ),
-  );
 }
 
 export async function addTransaction(
@@ -1411,48 +1326,46 @@ export async function addTransaction(
     }
   }
 
-  const walletIds = collectWalletIdsFromTransactions([transaction]);
-  const {
-    wallets,
-    balanceMap,
-    error: walletFetchError,
-  } = await fetchWalletBalanceMap(userId, walletIds);
-  if (walletFetchError) {
-    console.error(
-      "[financeStorage] addTransaction – fetch wallets:",
-      walletFetchError,
-    );
-    return { error: walletFetchError };
+  const effects = getTransactionEffects(transaction);
+  if (effects.length === 0) {
+    return { error: "Không xác định được ảnh hưởng ví của giao dịch." };
   }
 
-  const effectError = applyEffectsToBalanceMap(balanceMap, transaction, 1);
-  if (effectError) return { error: effectError };
+  const row = toTransactionInsertRow(transaction, userId);
 
-  const negativeError = getNegativeWalletError(balanceMap);
-  if (negativeError) return { error: negativeError };
+  // Finance Engine v2: the transaction insert and its wallet balance
+  // effect(s) are applied atomically inside create_finance_transaction (see
+  // supabase/finance-engine-2-atomic-transactions.sql) — a single Postgres
+  // function call, one implicit DB transaction. No manual JS-side rollback
+  // is needed: any failure inside the function rolls back the insert and
+  // every balance update together.
+  const { error } = await supabase.rpc("create_finance_transaction", {
+    p_id: row.id,
+    p_type: row.type,
+    p_amount: row.amount,
+    p_category_id: row.categoryId,
+    p_wallet_id: row.walletId,
+    p_note: row.note,
+    p_date: row.date,
+    p_transfer_to_wallet_id: row.transferToWalletId ?? null,
+    p_is_recurring: row.isRecurring ?? false,
+    p_recurrence: row.recurrence ?? null,
+    p_next_run_date: row.nextRunDate ?? null,
+    p_transfer_fee: row.transfer_fee ?? null,
+    p_exchange_rate: row.exchange_rate ?? null,
+    p_transfer_reference: row.transfer_reference ?? null,
+    p_transfer_reference_type: row.transfer_reference_type ?? null,
+    p_source_type: row.source_type ?? null,
+    p_destination_type: row.destination_type ?? null,
+    p_effect_wallet_id_1: effects[0].walletId,
+    p_effect_delta_1: effects[0].delta,
+    p_effect_wallet_id_2: effects[1]?.walletId ?? null,
+    p_effect_delta_2: effects[1]?.delta ?? null,
+  });
 
-  const { error: txErr } = await supabase
-    .from("transactions")
-    .insert(toTransactionInsertRow(transaction, userId) as never);
-
-  if (txErr) {
-    console.error("[financeStorage] addTransaction:", txErr.message);
-    return { error: txErr.message };
-  }
-
-  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
-  if (balanceError) {
-    await supabase
-      .from("transactions")
-      .delete()
-      .eq("id", transaction.id)
-      .eq("user_id", userId);
-
-    console.error(
-      "[financeStorage] addTransaction – wallet balance:",
-      balanceError,
-    );
-    return { error: balanceError };
+  if (error) {
+    console.error("[financeStorage] addTransaction:", error.message);
+    return { error: mapFinanceEngineError(error) };
   }
 
   return { error: null };
@@ -1498,61 +1411,55 @@ export async function updateTransaction(
     }
   }
 
-  const walletIds = collectWalletIdsFromTransactions([
-    oldTransaction,
-    updatedTransaction,
-  ]);
-  const {
-    wallets,
-    balanceMap,
-    error: walletFetchError,
-  } = await fetchWalletBalanceMap(userId, walletIds);
-  if (walletFetchError) {
-    console.error(
-      "[financeStorage] updateTransaction – fetch wallets:",
-      walletFetchError,
-    );
-    return { error: walletFetchError };
+  const oldEffects = getTransactionEffects(oldTransaction);
+  const newEffects = getTransactionEffects(updatedTransaction);
+  if (oldEffects.length === 0 || newEffects.length === 0) {
+    return { error: "Không xác định được ảnh hưởng ví của giao dịch." };
   }
 
-  const reverseError = applyEffectsToBalanceMap(balanceMap, oldTransaction, -1);
-  if (reverseError) return { error: reverseError };
+  const row = toTransactionInsertRow(updatedTransaction, userId);
 
-  const applyError = applyEffectsToBalanceMap(
-    balanceMap,
-    updatedTransaction,
-    1,
-  );
-  if (applyError) return { error: applyError };
+  // Finance Engine v2: reverse-old-effects + apply-new-effects + row update
+  // all happen atomically inside update_finance_transaction. The function
+  // also verifies (via p_expected_*) that the row still matches what this
+  // client read as "old" — if another request changed it in between, this
+  // call is rejected instead of silently reversing stale effects.
+  const { error } = await supabase.rpc("update_finance_transaction", {
+    p_id: updatedTransaction.id,
+    p_type: row.type,
+    p_amount: row.amount,
+    p_category_id: row.categoryId,
+    p_wallet_id: row.walletId,
+    p_note: row.note,
+    p_date: row.date,
+    p_expected_amount: oldTransaction.amount,
+    p_expected_wallet_id: oldTransaction.walletId,
+    p_expected_type: oldTransaction.type,
+    p_expected_transfer_to_wallet_id:
+      oldTransaction.transferToWalletId ?? null,
+    p_transfer_to_wallet_id: row.transferToWalletId ?? null,
+    p_is_recurring: row.isRecurring ?? false,
+    p_recurrence: row.recurrence ?? null,
+    p_next_run_date: row.nextRunDate ?? null,
+    p_transfer_fee: row.transfer_fee ?? null,
+    p_exchange_rate: row.exchange_rate ?? null,
+    p_transfer_reference: row.transfer_reference ?? null,
+    p_transfer_reference_type: row.transfer_reference_type ?? null,
+    p_source_type: row.source_type ?? null,
+    p_destination_type: row.destination_type ?? null,
+    p_old_effect_wallet_id_1: oldEffects[0].walletId,
+    p_old_effect_delta_1: oldEffects[0].delta,
+    p_old_effect_wallet_id_2: oldEffects[1]?.walletId ?? null,
+    p_old_effect_delta_2: oldEffects[1]?.delta ?? null,
+    p_new_effect_wallet_id_1: newEffects[0].walletId,
+    p_new_effect_delta_1: newEffects[0].delta,
+    p_new_effect_wallet_id_2: newEffects[1]?.walletId ?? null,
+    p_new_effect_delta_2: newEffects[1]?.delta ?? null,
+  });
 
-  const negativeError = getNegativeWalletError(balanceMap);
-  if (negativeError) return { error: negativeError };
-
-  const { error: txErr } = await supabase
-    .from("transactions")
-    .update({ ...toTransactionInsertRow(updatedTransaction, userId) } as never)
-    .eq("id", updatedTransaction.id)
-    .eq("user_id", userId);
-
-  if (txErr) {
-    console.error("[financeStorage] updateTransaction:", txErr.message);
-    return { error: txErr.message };
-  }
-
-  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
-  if (balanceError) {
-    await supabase
-      .from("transactions")
-      .update({ ...toTransactionInsertRow(oldTransaction, userId) } as never)
-      .eq("id", oldTransaction.id)
-      .eq("user_id", userId);
-    await restoreWalletBalances(userId, wallets);
-
-    console.error(
-      "[financeStorage] updateTransaction – wallet balance:",
-      balanceError,
-    );
-    return { error: balanceError };
+  if (error) {
+    console.error("[financeStorage] updateTransaction:", error.message);
+    return { error: mapFinanceEngineError(error) };
   }
 
   return { error: null };
@@ -1587,49 +1494,26 @@ export async function deleteTransaction(
     return { error: "Không tìm thấy giao dịch cần xóa." };
   }
 
-  const walletIds = collectWalletIdsFromTransactions([transaction]);
-  const {
-    wallets,
-    balanceMap,
-    error: walletFetchError,
-  } = await fetchWalletBalanceMap(userId, walletIds);
-  if (walletFetchError) {
-    console.error(
-      "[financeStorage] deleteTransaction – fetch wallets:",
-      walletFetchError,
-    );
-    return { error: walletFetchError };
-  }
+  const effects = getTransactionEffects(transaction);
 
-  const reverseError = applyEffectsToBalanceMap(balanceMap, transaction, -1);
-  if (reverseError) return { error: reverseError };
+  // Finance Engine v2: reversing the wallet effect(s) and deleting the row
+  // happen atomically inside delete_finance_transaction, with the same
+  // optimistic conflict check as update (see there for the reasoning).
+  const { error } = await supabase.rpc("delete_finance_transaction", {
+    p_id: transactionId,
+    p_expected_amount: transaction.amount,
+    p_expected_wallet_id: transaction.walletId,
+    p_expected_type: transaction.type,
+    p_expected_transfer_to_wallet_id: transaction.transferToWalletId ?? null,
+    p_effect_wallet_id_1: effects[0]?.walletId ?? null,
+    p_effect_delta_1: effects[0]?.delta ?? null,
+    p_effect_wallet_id_2: effects[1]?.walletId ?? null,
+    p_effect_delta_2: effects[1]?.delta ?? null,
+  });
 
-  const negativeError = getNegativeWalletError(balanceMap);
-  if (negativeError) return { error: negativeError };
-
-  const { error: delErr } = await supabase
-    .from("transactions")
-    .delete()
-    .eq("id", transactionId)
-    .eq("user_id", userId);
-
-  if (delErr) {
-    console.error("[financeStorage] deleteTransaction:", delErr.message);
-    return { error: delErr.message };
-  }
-
-  const balanceError = await persistWalletBalances(userId, wallets, balanceMap);
-  if (balanceError) {
-    await supabase
-      .from("transactions")
-      .insert(toTransactionInsertRow(transaction, userId) as never);
-    await restoreWalletBalances(userId, wallets);
-
-    console.error(
-      "[financeStorage] deleteTransaction – wallet balance:",
-      balanceError,
-    );
-    return { error: balanceError };
+  if (error) {
+    console.error("[financeStorage] deleteTransaction:", error.message);
+    return { error: mapFinanceEngineError(error) };
   }
 
   return { error: null };

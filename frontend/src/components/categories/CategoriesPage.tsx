@@ -522,7 +522,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="space-y-5 overflow-x-hidden">
+    <div className="space-y-4 overflow-x-hidden pb-24 sm:space-y-5 md:pb-0">
       <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -734,16 +734,16 @@ export default function CategoriesPage() {
       </section>
 
       <section>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
           {filteredCategories.map((category) => {
             const meta = GROUP_META[category.group];
             return (
               <article
                 key={category.id}
-                className="group rounded-4xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+                className="group rounded-4xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md sm:p-5"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <div
                       className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${meta.iconBg}`}
                     >
@@ -754,7 +754,7 @@ export default function CategoriesPage() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
+                      <h3 className="text-base font-black leading-tight text-slate-900 wrap-anywhere">
                         {category.name}
                       </h3>
                       <div className="mt-1 flex flex-wrap gap-1.5">
@@ -792,7 +792,7 @@ export default function CategoriesPage() {
                     <button
                       type="button"
                       onClick={() => openEditForm(category)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:size-8"
                       aria-label={`Sửa ${category.name}`}
                     >
                       <Edit3 size={13} />
@@ -800,7 +800,7 @@ export default function CategoriesPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(category)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500 sm:size-8"
                       aria-label={`Xóa ${category.name}`}
                     >
                       <Trash2 size={13} />
@@ -808,28 +808,28 @@ export default function CategoriesPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-3">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3">
+                  <div className="min-w-0">
+                    <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Giao dịch
                     </p>
-                    <p className="mt-1 text-lg font-black text-slate-900">
+                    <p className="mt-1 whitespace-nowrap text-[clamp(1.1rem,5.5vw,1.25rem)] font-black tabular-nums leading-none text-slate-900">
                       {category.count}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
+                  <div className="min-w-0 text-right">
+                    <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Tổng tiền
                     </p>
                     <p
-                      className={`mt-1 truncate text-sm font-black ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
+                      className={`mt-1 whitespace-nowrap text-[clamp(0.8rem,4vw,1.05rem)] font-black tabular-nums leading-none tracking-tight ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
                     >
                       {category.total > 0 ? formatVND(category.total) : "—"}
                     </p>
                   </div>
                 </div>
 
-                <p className="mt-3 line-clamp-1 text-xs text-slate-500">
+                <p className="mt-3 text-xs leading-5 text-slate-500">
                   {meta.description}
                 </p>
               </article>
