@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
   ArrowLeftRight,
@@ -393,6 +394,7 @@ export default function WalletsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || isTransferOpen || !!deleteTarget);
 
   function openEditForm(wallet: SpendableWallet) {
     setForm({

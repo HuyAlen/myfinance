@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "../layout/DateFilterProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -914,6 +915,7 @@ export default function BudgetsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
   function openEditForm(budget: Budget) {
     setForm({

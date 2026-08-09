@@ -12,6 +12,7 @@ import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useOnboarding } from "@/src/components/onboarding/OnboardingProvider";
 import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
 import { DateFilterProvider } from "./DateFilterProvider";
+import { FabSuppressionProvider } from "./FabVisibilityProvider";
 import { markInstant } from "@/src/lib/performance/performanceMarks";
 import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
 
@@ -48,6 +49,11 @@ export default function AppShell({ children }: AppShellProps) {
   // in-progress chat/stream isn't torn down when the panel is dismissed —
   // same lifecycle as before, just deferred until actually needed.
   const [hasOpenedAI, setHasOpenedAI] = useState(false);
+  // Set by whichever page is currently mounted, whenever its own primary
+  // create/edit modal (or a blocking confirm dialog) is open — see
+  // FabVisibilityProvider. AppShell owns this boolean directly since it's
+  // the one deciding whether to render the FABs; pages only get a setter.
+  const [isGlobalFabSuppressed, setGlobalFabSuppressed] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
   const { wizardDone, tourDone } = useOnboarding();
@@ -158,13 +164,15 @@ export default function AppShell({ children }: AppShellProps) {
           />
 
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
-            {children}
+            <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
+              {children}
+            </FabSuppressionProvider>
           </main>
         </div>
 
         <BottomNav />
 
-        {!aiAgentOpen && (
+        {!aiAgentOpen && !isGlobalFabSuppressed && (
           <AIFloatingButton
             onClick={() => {
               if (!hasOpenedAI) markInstant("ai:click");
@@ -183,7 +191,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {!wizardDone && <WelcomeWizard />}
         {wizardDone && !tourDone && <ProductTour />}
-        {!aiAgentOpen && <QuickActionFab />}
+        {!aiAgentOpen && !isGlobalFabSuppressed && <QuickActionFab />}
         <AchievementToast />
       </div>
     </DateFilterProvider>

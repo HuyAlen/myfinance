@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
   ArrowLeftRight,
@@ -1268,6 +1269,7 @@ export default function TransactionsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
   function openEditForm(t: Transaction) {
     if (isForexUnifiedTransaction(t)) {

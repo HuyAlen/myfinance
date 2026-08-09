@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { supabase } from "@/src/lib/supabase";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -308,6 +309,7 @@ export default function GoalsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
   function openEditForm(goal: Goal) {
     setForm({
