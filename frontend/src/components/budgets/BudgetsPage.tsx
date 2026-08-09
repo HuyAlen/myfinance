@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "../layout/DateFilterProvider";
+import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -911,6 +912,8 @@ export default function BudgetsPage() {
     });
     setIsFormOpen(true);
   }
+
+  useQuickActionCreateIntent(openCreateForm);
 
   function openEditForm(budget: Budget) {
     setForm({

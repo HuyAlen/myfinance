@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import {
   ArrowDownRight,
   ArrowLeftRight,
@@ -390,6 +391,8 @@ export default function WalletsPage() {
     setSaveError(null);
     setIsFormOpen(true);
   }
+
+  useQuickActionCreateIntent(openCreateForm);
 
   function openEditForm(wallet: SpendableWallet) {
     setForm({

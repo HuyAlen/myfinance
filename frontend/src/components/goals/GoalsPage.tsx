@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { supabase } from "@/src/lib/supabase";
+import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -305,6 +306,8 @@ export default function GoalsPage() {
     setForm(emptyForm);
     setIsFormOpen(true);
   }
+
+  useQuickActionCreateIntent(openCreateForm);
 
   function openEditForm(goal: Goal) {
     setForm({

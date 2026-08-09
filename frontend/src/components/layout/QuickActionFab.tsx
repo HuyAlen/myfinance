@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChartPie,
   ReceiptText,
@@ -10,29 +10,30 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { buildQuickActionCreateHref } from "@/src/lib/navigation/quickActionIntent";
 
 const QUICK_ACTIONS = [
   {
     label: "Thêm giao dịch",
-    href: "/transactions",
+    href: buildQuickActionCreateHref("/transactions"),
     icon: ReceiptText,
     cls: "bg-blue-600 shadow-blue-200/60 hover:bg-blue-700",
   },
   {
     label: "Tạo ví tiền",
-    href: "/wallets",
+    href: buildQuickActionCreateHref("/wallets"),
     icon: Wallet,
     cls: "bg-emerald-600 shadow-emerald-200/60 hover:bg-emerald-700",
   },
   {
     label: "Tạo mục tiêu",
-    href: "/goals",
+    href: buildQuickActionCreateHref("/goals"),
     icon: Target,
     cls: "bg-violet-600 shadow-violet-200/60 hover:bg-violet-700",
   },
   {
     label: "Tạo ngân sách",
-    href: "/budgets",
+    href: buildQuickActionCreateHref("/budgets"),
     icon: ChartPie,
     cls: "bg-cyan-600 shadow-cyan-200/60 hover:bg-cyan-700",
   },
@@ -49,7 +50,16 @@ const QUICK_ACTIONS = [
  * and finishing onboarding must not affect this.
  */
 export default function QuickActionFab() {
+  const router = useRouter();
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
+
+  function selectAction(href: string) {
+    // Close synchronously, before kicking off navigation, so the expanded
+    // menu never stays visible mid-transition (including a same-page
+    // re-tap, which doesn't unmount this component at all).
+    setIsQuickActionOpen(false);
+    router.push(href);
+  }
 
   return (
     <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 flex flex-col items-end gap-2 lg:bottom-6">
@@ -59,10 +69,10 @@ export default function QuickActionFab() {
           {QUICK_ACTIONS.map((action) => {
             const Icon = action.icon;
             return (
-              <Link
+              <button
                 key={action.href}
-                href={action.href}
-                onClick={() => setIsQuickActionOpen(false)}
+                type="button"
+                onClick={() => selectAction(action.href)}
                 className={[
                   "flex items-center gap-2.5 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95",
                   action.cls,
@@ -70,7 +80,7 @@ export default function QuickActionFab() {
               >
                 <Icon size={15} />
                 {action.label}
-              </Link>
+              </button>
             );
           })}
         </div>

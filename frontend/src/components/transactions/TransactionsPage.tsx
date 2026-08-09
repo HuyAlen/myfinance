@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
+import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import {
   ArrowDownRight,
   ArrowLeftRight,
@@ -1265,6 +1266,8 @@ export default function TransactionsPage() {
     setSaveError(null);
     setIsFormOpen(true);
   }
+
+  useQuickActionCreateIntent(openCreateForm);
 
   function openEditForm(t: Transaction) {
     if (isForexUnifiedTransaction(t)) {
