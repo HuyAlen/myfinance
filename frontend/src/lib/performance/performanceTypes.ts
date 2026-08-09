@@ -19,7 +19,8 @@ export type CustomMetricName =
   | "dashboard_critical_ready"
   | "route_transition"
   | "ai_first_open"
-  | "realtime_ready";
+  | "realtime_ready"
+  | "app_shell_visible";
 
 export type PerformanceMetricName = CoreWebVitalName | CustomMetricName;
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -12,6 +12,7 @@ import { useOnboarding } from "@/src/components/onboarding/OnboardingProvider";
 import { AchievementToast } from "@/src/components/onboarding/AchievementToast";
 import { DateFilterProvider } from "./DateFilterProvider";
 import { markInstant } from "@/src/lib/performance/performanceMarks";
+import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
 
 // Below-the-fold / on-demand UI: not needed for first paint, so they're
 // code-split out of the initial route bundle instead of being parsed and
@@ -59,6 +60,23 @@ export default function AppShell({ children }: AppShellProps) {
       router.replace("/login");
     }
   }, [user, loading, router]);
+
+  // Fires once on AppShell's very first render (whether that's the loading
+  // skeleton below or the fully-resolved shell), independent of auth state —
+  // measures how long the user sees *some* app chrome, as distinct from
+  // auth_ready (session resolved) and dashboard_critical_ready (finance
+  // numbers painted).
+  const hasReportedShellVisibleRef = useRef(false);
+  useEffect(() => {
+    if (hasReportedShellVisibleRef.current) return;
+    hasReportedShellVisibleRef.current = true;
+    const frame = requestAnimationFrame(() => {
+      reportPerformanceMetric("app_shell_visible", performance.now(), {
+        status: "success",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   // Keep real viewport height in sync for iPhone Safari/Chrome.
   useEffect(() => {
@@ -111,11 +129,62 @@ export default function AppShell({ children }: AppShellProps) {
   }, [sidebarOpen]);
 
   if (loading || !user) {
+    // Shell-shaped skeleton instead of a blank/spinner screen: the real
+    // Sidebar/Header/BottomNav dimensions are approximated so there's no
+    // layout jump once auth resolves and the real shell + route mount in.
+    // Route content itself still waits for `user` (RLS-scoped reads need
+    // it), only the surrounding chrome renders early.
     return (
-      <div className="flex min-h-(--app-height) items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="size-12 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-          <p className="text-sm text-slate-500">Đang tải...</p>
+      <div className="h-(--app-height) overflow-hidden bg-slate-50 [--mobile-bottom-nav-height:4.75rem]">
+        <div className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-100 bg-white px-3 py-5 lg:block">
+          <div className="mb-6 flex items-center gap-3 px-2">
+            <div className="size-11 shrink-0 animate-pulse rounded-2xl bg-slate-200" />
+            <div className="space-y-1.5">
+              <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="h-2.5 w-20 animate-pulse rounded bg-slate-100" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-10 animate-pulse rounded-2xl bg-slate-100"
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex h-full min-w-0 flex-col lg:pl-72">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 py-4 sm:px-6 lg:px-8">
+            <div className="space-y-1.5">
+              <div className="h-4 w-32 animate-pulse rounded bg-slate-200" />
+              <div className="h-3 w-44 animate-pulse rounded bg-slate-100" />
+            </div>
+            <div className="size-9 shrink-0 animate-pulse rounded-full bg-slate-200" />
+          </div>
+
+          <main className="min-h-0 flex-1 overflow-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-24 animate-pulse rounded-3xl bg-white shadow-sm ring-1 ring-slate-100"
+                />
+              ))}
+            </div>
+            <div className="mt-4 h-48 animate-pulse rounded-3xl bg-white shadow-sm ring-1 ring-slate-100" />
+          </main>
+        </div>
+
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 pb-[max(env(safe-area-inset-bottom),0.5rem)] lg:hidden">
+          <div className="mx-auto grid max-w-md grid-cols-5 gap-1 px-1 pb-1 pt-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="mx-auto size-9 animate-pulse rounded-2xl bg-slate-100"
+              />
+            ))}
+          </div>
         </div>
       </div>
     );

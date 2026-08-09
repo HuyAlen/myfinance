@@ -31,6 +31,7 @@ import {
   type DateFilterMode,
 } from "../layout/DateFilterProvider";
 import { signOut } from "@/src/lib/auth";
+import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 
 import {
   getBudgets,
@@ -465,47 +466,54 @@ export default function Header({
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
 
-  // Load all data once on mount
+  // Load all data once on mount — feeds the global search index and the
+  // notification bell only, neither of which is above-the-fold critical
+  // content. Deferred to an idle moment so these 7 parallel full-table
+  // reads don't compete with the current route's own critical data fetch
+  // (e.g. Dashboard's Promise.all) for network/CPU right at startup.
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    (async () => {
-      const [
-        transactions,
-        wallets,
-        categories,
-        goals,
-        budgets,
-        debts,
-        investments,
-      ] = await Promise.all([
-        getTransactions(),
-        getWallets(),
-        getCategories(),
-        getGoals(),
-        getBudgets(),
-        getDebts(),
-        getInvestments(),
-      ]);
-      const data: AppData = {
-        transactions,
-        wallets,
-        categories,
-        goals,
-        budgets,
-        debts,
-        investments,
-      };
-      setAppData(data);
 
-      const readIds = readNotificationIds();
-      setNotifList(
-        buildNotifications(data).map((notification) => ({
-          ...notification,
-          read: readIds.has(notification.id),
-        })),
-      );
-    })();
+    runWhenIdle(() => {
+      void (async () => {
+        const [
+          transactions,
+          wallets,
+          categories,
+          goals,
+          budgets,
+          debts,
+          investments,
+        ] = await Promise.all([
+          getTransactions(),
+          getWallets(),
+          getCategories(),
+          getGoals(),
+          getBudgets(),
+          getDebts(),
+          getInvestments(),
+        ]);
+        const data: AppData = {
+          transactions,
+          wallets,
+          categories,
+          goals,
+          budgets,
+          debts,
+          investments,
+        };
+        setAppData(data);
+
+        const readIds = readNotificationIds();
+        setNotifList(
+          buildNotifications(data).map((notification) => ({
+            ...notification,
+            read: readIds.has(notification.id),
+          })),
+        );
+      })();
+    });
   }, []);
 
   // Handlers
