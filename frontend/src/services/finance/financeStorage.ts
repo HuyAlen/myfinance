@@ -760,6 +760,36 @@ export async function getForexCashTransactions(): Promise<
   );
 }
 
+export async function getForexCashTransactionsInRange(
+  startDate: string,
+  endDate: string,
+): Promise<ForexCashTransaction[]> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("forex_cash_transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("transaction_date", startDate)
+    .lte("transaction_date", endDate)
+    .order("transaction_date", { ascending: false })
+    .order("transaction_time", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(
+      "[financeStorage] getForexCashTransactionsInRange:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as ForexCashTransactionDbRow[]).map(
+    fromForexCashTransactionRow,
+  );
+}
+
 // ─── Demo seed guard ──────────────────────────────────────────────────────────
 // Key stored in localStorage per user. When set, initFinanceDemoData() is a
 // no-op — ensures demo data never re-seeds after "Clear All Data".

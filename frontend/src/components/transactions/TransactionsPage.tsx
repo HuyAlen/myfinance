@@ -36,8 +36,8 @@ import {
   deleteForexCashTransaction,
   getCategories,
   getForexAccounts,
-  getForexCashTransactions,
-  getTransactions,
+  getForexCashTransactionsInRange,
+  getTransactionsInRange,
   getWallets,
   updateTransaction,
 } from "@/src/services/finance/financeStorage";
@@ -83,18 +83,57 @@ type FormState = {
   recurrence: RecurrenceFrequency;
 };
 
-const emptyForm: FormState = {
-  type: "expense",
-  formMode: "expense",
-  amount: "",
-  categoryId: "",
-  walletId: "",
-  transferToWalletId: "",
-  note: "",
-  date: new Date().toISOString().slice(0, 10),
-  isRecurring: false,
-  recurrence: "monthly",
-};
+/**
+ * `toISOString()` is UTC-based — at UTC+7, calling it between 00:00 and
+ * 06:59 local time returns the PREVIOUS calendar day. Transaction dates are
+ * a local calendar concept, so the default must be derived from the
+ * device's local Y/M/D fields, never from a UTC conversion.
+ */
+function getLocalDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Factory, not a module-level constant: a `const emptyForm` would compute
+ * `date` once when the module first loads and freeze it there for the
+ * lifetime of the page (including across midnight, for a PWA/tab left open
+ * for hours) — every subsequent "Thêm giao dịch" click would keep reusing
+ * that stale date instead of the day the user actually clicked on.
+ */
+function createEmptyForm(): FormState {
+  return {
+    type: "expense",
+    formMode: "expense",
+    amount: "",
+    categoryId: "",
+    walletId: "",
+    transferToWalletId: "",
+    note: "",
+    date: getLocalDateInputValue(),
+    isRecurring: false,
+    recurrence: "monthly",
+  };
+}
+
+/**
+ * Derives the [start, end] day-string bounds (inclusive, "YYYY-MM-DD") of a
+ * "YYYY-MM" calendar month using local Date components — never UTC — so the
+ * range lines up with how transaction dates are stored and compared.
+ */
+function getSelectedMonthRange(selectedMonth: string) {
+  const [yearStr, monthStr] = selectedMonth.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const startDate = `${yearStr}-${monthStr}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
+
+  return { startDate, endDate };
+}
 
 type ForexUnifiedTransaction = Transaction & {
   unifiedSource: "forex_cash";
@@ -277,10 +316,12 @@ function getTransactionTypeFromFormMode(
 function formatTransactionDayLabel(dateValue: string) {
   dateValue = String(dateValue ?? "").slice(0, 10);
   const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  // Local calendar date comparison — toISOString() is UTC-based and would
+  // mislabel "Hôm nay" as a plain date during the UTC+7 00:00-06:59 window.
+  const todayIso = getLocalDateInputValue(today);
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  const yesterdayIso = yesterday.toISOString().slice(0, 10);
+  const yesterdayIso = getLocalDateInputValue(yesterday);
 
   if (dateValue === todayIso) return "Hôm nay";
   if (dateValue === yesterdayIso) return "Hôm qua";
@@ -568,6 +609,32 @@ function getTransferWalletLabel(
   };
 }
 
+// Bursts of realtime events from a single multi-table write (e.g. a Forex
+// deposit touching both forex_cash_transactions and wallets) are coalesced
+// within this window instead of triggering one reload per event.
+const REALTIME_REFRESH_DEBOUNCE_MS = 100;
+
+// Group-aware pagination target. At ~200-300 tx/month this keeps rendered
+// rows per page well under the range that causes iPhone Safari scroll jank,
+// without needing virtualization.
+const TRANSACTIONS_PAGE_SIZE = 50;
+
+function getVisiblePageNumbers(totalPages: number, currentPage: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i);
+  }
+  const pages = new Set<number>([
+    0,
+    totalPages - 1,
+    currentPage,
+    currentPage - 1,
+    currentPage + 1,
+  ]);
+  return Array.from(pages)
+    .filter((page) => page >= 0 && page < totalPages)
+    .sort((a, b) => a - b);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
   const { selectedMonth } = useDateFilter();
@@ -597,8 +664,11 @@ export default function TransactionsPage() {
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const touchStartX = useRef<number>(0);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const feedSectionRef = useRef<HTMLElement>(null);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => createEmptyForm());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
@@ -625,6 +695,7 @@ export default function TransactionsPage() {
   }, []);
 
   const reloadData = useCallback(async () => {
+    const { startDate, endDate } = getSelectedMonthRange(selectedMonth);
     const [
       txnsResult,
       forexAccountsResult,
@@ -632,9 +703,9 @@ export default function TransactionsPage() {
       catsResult,
       walletsResult,
     ] = await Promise.allSettled([
-      getTransactions(),
+      getTransactionsInRange(startDate, endDate),
       getForexAccounts(),
-      getForexCashTransactions(),
+      getForexCashTransactionsInRange(startDate, endDate),
       getCategories(),
       getWallets(),
     ]);
@@ -678,17 +749,67 @@ export default function TransactionsPage() {
     setForexCashTransactions(forexTxns);
     setCategories(cats);
     setWallets(wlts);
-  }, [toast]);
+  }, [selectedMonth, toast]);
+
+  // ── Reload coordinator ──────────────────────────────────────────────────
+  // `reloadData`'s identity changes with `selectedMonth`. `latestReloadDataRef`
+  // always points at the current one so a reload that was already in flight
+  // when the month changed still resolves its trailing/pending run against
+  // the newly selected month, never a stale one.
+  const latestReloadDataRef = useRef(reloadData);
+  useEffect(() => {
+    latestReloadDataRef.current = reloadData;
+  }, [reloadData]);
+
+  const isReloadingRef = useRef(false);
+  const hasPendingReloadRef = useRef(false);
+
+  // Coalesces overlapping reload requests (rapid month switches, bursts of
+  // realtime events from a single multi-table write) into at most one
+  // trailing run, instead of firing an overlapping Promise.allSettled group
+  // per request.
+  const runReload = useCallback(async () => {
+    if (isReloadingRef.current) {
+      hasPendingReloadRef.current = true;
+      return;
+    }
+
+    isReloadingRef.current = true;
+    try {
+      do {
+        hasPendingReloadRef.current = false;
+        await latestReloadDataRef.current();
+      } while (hasPendingReloadRef.current);
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, []);
+
+  const realtimeDebounceTimerRef = useRef<number | null>(null);
+  const requestTransactionsRefresh = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      window.clearTimeout(realtimeDebounceTimerRef.current);
+    }
+    realtimeDebounceTimerRef.current = window.setTimeout(() => {
+      realtimeDebounceTimerRef.current = null;
+      void runReload();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [runReload]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void reloadData();
-    }, 0);
-
     return () => {
-      window.clearTimeout(timer);
+      if (realtimeDebounceTimerRef.current) {
+        window.clearTimeout(realtimeDebounceTimerRef.current);
+      }
     };
-  }, [reloadData]);
+  }, []);
+
+  // Initial load and every month change trigger an immediate (non-debounced)
+  // reload — Transactions must follow the selected month exactly, unlike
+  // Dashboard's year-cache.
+  useEffect(() => {
+    void runReload();
+  }, [selectedMonth, runReload]);
 
   useEffect(() => {
     return () => {
@@ -705,30 +826,41 @@ export default function TransactionsPage() {
       "forex_accounts",
       "forex_cash_transactions",
     ],
-    reloadData,
+    requestTransactionsRefresh,
+  );
+
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
+  const walletById = useMemo(
+    () => new Map(wallets.map((wallet) => [wallet.id, wallet])),
+    [wallets],
+  );
+  const forexAccountById = useMemo(
+    () => new Map(forexAccounts.map((account) => [account.id, account])),
+    [forexAccounts],
   );
 
   const unifiedTransactions = useMemo(() => {
     const forexItems = forexCashTransactions.map((transaction) =>
       mapForexCashTransactionToUnified(
         transaction,
-        forexAccounts.find(
-          (account) => account.id === transaction.forexAccountId,
-        ),
-        wallets.find((wallet) => wallet.id === transaction.walletId),
+        forexAccountById.get(transaction.forexAccountId),
+        walletById.get(transaction.walletId),
       ),
     );
 
     return [...transactions, ...forexItems];
-  }, [transactions, forexCashTransactions, forexAccounts, wallets]);
+  }, [transactions, forexCashTransactions, forexAccountById, walletById]);
 
   const filtered = useMemo(() => {
     return unifiedTransactions.filter((t) => {
       if (!t.date.startsWith(selectedMonth)) return false;
-      const cat = categories.find((c) => c.id === t.categoryId);
-      const wal = wallets.find((w) => w.id === t.walletId);
+      const cat = categoryById.get(t.categoryId);
+      const wal = walletById.get(t.walletId);
       const dstWal = t.transferToWalletId
-        ? wallets.find((w) => w.id === t.transferToWalletId)
+        ? walletById.get(t.transferToWalletId)
         : undefined;
       const displayType = getTransactionDisplayType(t);
       const typeLabel =
@@ -774,8 +906,8 @@ export default function TransactionsPage() {
   }, [
     unifiedTransactions,
     selectedMonth,
-    categories,
-    wallets,
+    categoryById,
+    walletById,
     keyword,
     typeFilter,
     dateFrom,
@@ -798,19 +930,19 @@ export default function TransactionsPage() {
       if (sortKey === "amount") {
         cmp = a.amount - b.amount;
       } else if (sortKey === "category") {
-        const ca = categories.find((c) => c.id === a.categoryId)?.name ?? "";
-        const cb = categories.find((c) => c.id === b.categoryId)?.name ?? "";
+        const ca = categoryById.get(a.categoryId)?.name ?? "";
+        const cb = categoryById.get(b.categoryId)?.name ?? "";
         cmp = ca.localeCompare(cb);
       } else {
-        const wa = wallets.find((w) => w.id === a.walletId)?.name ?? "";
-        const wb = wallets.find((w) => w.id === b.walletId)?.name ?? "";
+        const wa = walletById.get(a.walletId)?.name ?? "";
+        const wb = walletById.get(b.walletId)?.name ?? "";
         cmp = wa.localeCompare(wb);
       }
 
       if (cmp === 0) return compareTransactionNewestFirst(a, b);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [filtered, sortKey, sortDir, categories, wallets]);
+  }, [filtered, sortKey, sortDir, categoryById, walletById]);
 
   const cashFlowTransactions = useMemo(
     () =>
@@ -878,6 +1010,92 @@ export default function TransactionsPage() {
         ),
       }));
   }, [sorted, sortDir]);
+
+  // Group-aware pagination: pack whole date groups into pages of roughly
+  // TRANSACTIONS_PAGE_SIZE transactions. A date group is only ever split
+  // across pages if a single day itself exceeds the page size, so day
+  // totals (computed from a group's full txns) always stay correct.
+  const groupedPages = useMemo(() => {
+    const pages: typeof timelineGroups[] = [];
+    let currentPageGroups: typeof timelineGroups = [];
+    let currentCount = 0;
+
+    for (const group of timelineGroups) {
+      if (
+        currentCount > 0 &&
+        currentCount + group.txns.length > TRANSACTIONS_PAGE_SIZE
+      ) {
+        pages.push(currentPageGroups);
+        currentPageGroups = [];
+        currentCount = 0;
+      }
+      currentPageGroups.push(group);
+      currentCount += group.txns.length;
+    }
+    if (currentPageGroups.length > 0) pages.push(currentPageGroups);
+
+    return pages;
+  }, [timelineGroups]);
+
+  const totalPages = groupedPages.length;
+  const safePage = Math.min(currentPage, Math.max(0, totalPages - 1));
+  const visibleGroups = groupedPages[safePage] ?? [];
+  const visibleCount = visibleGroups.reduce(
+    (sum, group) => sum + group.txns.length,
+    0,
+  );
+  const precedingCount = groupedPages
+    .slice(0, safePage)
+    .reduce(
+      (sum, page) =>
+        sum + page.reduce((pageSum, group) => pageSum + group.txns.length, 0),
+      0,
+    );
+  const displayRangeStart = sorted.length === 0 ? 0 : precedingCount + 1;
+  const displayRangeEnd = precedingCount + visibleCount;
+
+  // Reset to page 1 whenever the month changes (also clears any stale
+  // selection from a different month's data set).
+  const prevSelectedMonthRef = useRef(selectedMonth);
+  if (prevSelectedMonthRef.current !== selectedMonth) {
+    prevSelectedMonthRef.current = selectedMonth;
+    setCurrentPage(0);
+    setSelectedIds(new Set());
+  }
+
+  // Reset to page 1 whenever filters/search/sort change the result shape —
+  // adjusting derived state during render (not in an effect) avoids an
+  // extra commit and any set-state-in-effect lint concerns.
+  const filterSortResetKey = [
+    keyword,
+    typeFilter,
+    dateFrom,
+    dateTo,
+    walletFilter,
+    categoryFilter,
+    amountMin,
+    amountMax,
+    sortKey,
+    sortDir,
+  ].join("|");
+  const prevFilterSortResetKeyRef = useRef(filterSortResetKey);
+  if (prevFilterSortResetKeyRef.current !== filterSortResetKey) {
+    prevFilterSortResetKeyRef.current = filterSortResetKey;
+    setCurrentPage(0);
+  }
+
+  function goToPage(page: number) {
+    const clamped = Math.max(0, Math.min(page, totalPages - 1));
+    setCurrentPage(clamped);
+    setSwipedId(null);
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    feedSectionRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -958,7 +1176,7 @@ export default function TransactionsPage() {
         }
         setSelectedIds(new Set());
         toast({ variant: "success", message: `Đã xóa ${count} giao dịch.` });
-        await reloadData();
+        await runReload();
       },
     });
   }
@@ -971,10 +1189,10 @@ export default function TransactionsPage() {
     const rows = [
       ["Ngày", "Loại", "Ghi chú", "Danh mục", "Ví", "Số tiền"],
       ...toExport.map((t) => {
-        const cat = categories.find((c) => c.id === t.categoryId)?.name ?? "";
-        const wal = wallets.find((w) => w.id === t.walletId)?.name ?? "";
+        const cat = categoryById.get(t.categoryId)?.name ?? "";
+        const wal = walletById.get(t.walletId)?.name ?? "";
         const dstWal = t.transferToWalletId
-          ? (wallets.find((w) => w.id === t.transferToWalletId)?.name ?? "")
+          ? (walletById.get(t.transferToWalletId)?.name ?? "")
           : "";
         return [
           t.date,
@@ -1033,7 +1251,7 @@ export default function TransactionsPage() {
   function openCreateForm() {
     const defaultMode: TransactionFormMode = "expense";
     setForm({
-      ...emptyForm,
+      ...createEmptyForm(),
       formMode: defaultMode,
       type: getTransactionTypeFromFormMode(defaultMode),
       categoryId:
@@ -1245,7 +1463,14 @@ export default function TransactionsPage() {
       toast({ variant: "error", message: error });
       return;
     }
-    await reloadData();
+    await runReload();
+    // A newly created transaction sorts to the top only under the default
+    // newest-first view — jump to page 1 there so the user sees it without
+    // extra clicks. Leave the page alone under any other sort/filter, since
+    // we can't assume where the new row landed.
+    if (!form.id && sortKey === "date" && sortDir === "desc") {
+      setCurrentPage(0);
+    }
     toast({
       variant: "success",
       message: form.id
@@ -1253,7 +1478,7 @@ export default function TransactionsPage() {
         : "Đã thêm giao dịch thành công.",
     });
     setIsFormOpen(false);
-    setForm(emptyForm);
+    setForm(createEmptyForm());
   }
 
   function handleDelete(id: string) {
@@ -1281,7 +1506,7 @@ export default function TransactionsPage() {
             return;
           }
           toast({ variant: "success", message: "Đã xóa giao dịch Forex." });
-          await reloadData();
+          await runReload();
           return;
         }
 
@@ -1306,7 +1531,7 @@ export default function TransactionsPage() {
           return;
         }
         toast({ variant: "success", message: "Đã xóa giao dịch thành công." });
-        await reloadData();
+        await runReload();
       },
     });
   }
@@ -1843,13 +2068,21 @@ export default function TransactionsPage() {
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 4 · Transaction Feed
           ════════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
+      <section
+        ref={feedSectionRef}
+        className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm"
+      >
         {/* Feed header */}
         <div className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <p className="text-sm font-black text-blue-700">
               {sorted.length} giao dịch
             </p>
+            {totalPages > 1 && (
+              <span className="text-[11px] font-bold text-blue-400">
+                Hiển thị {displayRangeStart}–{displayRangeEnd}
+              </span>
+            )}
             {hasActiveFilters && (
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
                 Đã lọc
@@ -1900,6 +2133,7 @@ export default function TransactionsPage() {
                     selectedIds.size === sorted.length && sorted.length > 0
                   }
                   onChange={toggleSelectAll}
+                  title="Chọn tất cả giao dịch đã lọc (mọi trang)"
                   className="h-4 w-4 cursor-pointer rounded border-slate-300"
                 />
               </div>
@@ -1912,7 +2146,7 @@ export default function TransactionsPage() {
             </div>
 
             <div>
-              {timelineGroups.map(({ date, txns }) => {
+              {visibleGroups.map(({ date, txns }) => {
                 const dayIncome = txns
                   .filter(
                     (transaction) =>
@@ -1995,12 +2229,10 @@ export default function TransactionsPage() {
 
                     <div className="divide-y divide-slate-100/80">
                       {txns.map((t) => {
-                        const cat = categories.find(
-                          (c) => c.id === t.categoryId,
-                        );
-                        const wal = wallets.find((w) => w.id === t.walletId);
+                        const cat = categoryById.get(t.categoryId);
+                        const wal = walletById.get(t.walletId);
                         const dstWal = t.transferToWalletId
-                          ? wallets.find((w) => w.id === t.transferToWalletId)
+                          ? walletById.get(t.transferToWalletId)
                           : undefined;
                         const isSelected = selectedIds.has(t.id);
                         const isSwiped = swipedId === t.id;
@@ -2285,7 +2517,7 @@ export default function TransactionsPage() {
                 onAdd={openCreateForm}
               />
             )}
-            {timelineGroups.map(({ date, txns }) => {
+            {visibleGroups.map(({ date, txns }) => {
               const dayInc = txns
                 .filter((t) => getTransactionDisplayType(t) === "income")
                 .reduce((s, t) => s + t.amount, 0);
@@ -2322,10 +2554,10 @@ export default function TransactionsPage() {
 
                   {/* Transactions for this date */}
                   {txns.map((t) => {
-                    const cat = categories.find((c) => c.id === t.categoryId);
-                    const wal = wallets.find((w) => w.id === t.walletId);
+                    const cat = categoryById.get(t.categoryId);
+                    const wal = walletById.get(t.walletId);
                     const tDstWal = t.transferToWalletId
-                      ? wallets.find((w) => w.id === t.transferToWalletId)
+                      ? walletById.get(t.transferToWalletId)
                       : undefined;
                     const displayType = getTransactionDisplayType(t);
                     const isIncome = displayType === "income";
@@ -2400,6 +2632,84 @@ export default function TransactionsPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 sm:px-6">
+            {/* Mobile: compact prev/next + "Trang N / M" */}
+            <div className="flex w-full items-center justify-between gap-2 sm:hidden">
+              <button
+                type="button"
+                aria-label="Trang trước"
+                disabled={safePage === 0}
+                onClick={() => goToPage(safePage - 1)}
+                className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronDown size={16} className="rotate-90" />
+              </button>
+              <span className="text-xs font-bold text-slate-500">
+                Trang {safePage + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                aria-label="Trang sau"
+                disabled={safePage === totalPages - 1}
+                onClick={() => goToPage(safePage + 1)}
+                className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronDown size={16} className="-rotate-90" />
+              </button>
+            </div>
+
+            {/* Desktop: prev/next + nearby page numbers */}
+            <div className="hidden w-full items-center justify-center gap-1 sm:flex">
+              <button
+                type="button"
+                aria-label="Trang trước"
+                disabled={safePage === 0}
+                onClick={() => goToPage(safePage - 1)}
+                className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 transition-colors hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500"
+              >
+                <ChevronDown size={14} className="rotate-90" />
+                Trước
+              </button>
+
+              {getVisiblePageNumbers(totalPages, safePage).map(
+                (page, index, pages) => (
+                  <span key={page} className="flex items-center gap-1">
+                    {index > 0 && pages[index - 1] !== page - 1 && (
+                      <span className="px-1 text-xs text-slate-300">…</span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Trang ${page + 1}`}
+                      aria-current={page === safePage ? "page" : undefined}
+                      onClick={() => goToPage(page)}
+                      className={
+                        "flex size-8 items-center justify-center rounded-xl text-xs font-bold transition-colors " +
+                        (page === safePage
+                          ? "bg-blue-600 text-white"
+                          : "border border-slate-200 text-slate-500 hover:border-blue-200 hover:text-blue-600")
+                      }
+                    >
+                      {page + 1}
+                    </button>
+                  </span>
+                ),
+              )}
+
+              <button
+                type="button"
+                aria-label="Trang sau"
+                disabled={safePage === totalPages - 1}
+                onClick={() => goToPage(safePage + 1)}
+                className="flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-500 transition-colors hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500"
+              >
+                Sau
+                <ChevronDown size={14} className="-rotate-90" />
+              </button>
+            </div>
           </div>
         )}
       </section>
