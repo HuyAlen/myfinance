@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   ArrowDownRight,
@@ -25,8 +25,11 @@ import {
   addTransaction,
   addWallet,
   deleteWallet,
-  getTransactions,
+  getForexCashWalletLinks,
+  getTransactionWalletLinks,
+  getTransactionsInRange,
   getWallets,
+  hasWalletReferences,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
 
@@ -41,10 +44,25 @@ import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+/**
+ * Wallets page only manages liquid, transferable accounts. "investment" is
+ * a legacy/legitimate `FinanceWalletType` value (still used by the
+ * Investments domain's Dashboard liquidity math), but it is not part of the
+ * Wallet domain's own UI — no new investment wallet can be created/selected
+ * here, and existing investment-typed rows are hidden rather than migrated.
+ */
+type WalletUiType = "cash" | "bank" | "ewallet";
+type SpendableWallet = WalletType & { type: WalletUiType };
+
+function isSpendableWallet(wallet: WalletType): wallet is SpendableWallet {
+  return wallet.type !== "investment";
+}
+
 type FormState = {
   id?: string;
   name: string;
-  type: FinanceWalletType;
+  type: WalletUiType;
   balance: string;
 };
 
@@ -56,11 +74,41 @@ type TransferFormState = {
   note: string;
 };
 
+/**
+ * `toISOString()` is UTC-based — at UTC+7, calling it between 00:00 and
+ * 06:59 local time returns the PREVIOUS calendar day. Transfer dates are a
+ * local calendar concept, so the default must come from local Y/M/D fields.
+ */
+function getLocalDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * [startDate, endDate] (inclusive, "YYYY-MM-DD") for the CURRENT local
+ * calendar month — Wallets page analytics intentionally follow the actual
+ * current month, not the app-wide DateFilterProvider selection. Uses local
+ * Date components, never UTC, so the boundary can't shift near midnight.
+ */
+function getCurrentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  return { startDate, endDate };
+}
+
 const createEmptyTransferForm = (): TransferFormState => ({
   fromWalletId: "",
   toWalletId: "",
   amount: "",
-  date: new Date().toISOString().slice(0, 10),
+  date: getLocalDateInputValue(),
   note: "",
 });
 
@@ -72,7 +120,7 @@ const emptyForm: FormState = {
 
 const walletTypeOptions: {
   label: string;
-  value: FinanceWalletType;
+  value: WalletUiType;
   description: string;
 }[] = [
   { label: "Tiền mặt", value: "cash", description: "Tiền mặt đang giữ" },
@@ -84,11 +132,10 @@ const walletTypeOptions: {
   },
 ];
 
-const TYPE_COLORS: Record<FinanceWalletType, string> = {
+const TYPE_COLORS: Record<WalletUiType, string> = {
   cash: "#f59e0b",
   bank: "#2563eb",
   ewallet: "#7c3aed",
-  investment: "#10b981",
 };
 
 type EngineTransferTransaction = Transaction & {
@@ -117,10 +164,24 @@ function isWalletTransfer(transaction: Transaction) {
   return referenceType === "wallet";
 }
 
+// Bursts of realtime events from a single multi-table write (e.g. a
+// transfer touching both source and destination wallets) are coalesced
+// within this window instead of triggering one reload per event.
+const REALTIME_REFRESH_DEBOUNCE_MS = 100;
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [currentMonthTransactions, setCurrentMonthTransactions] = useState<
+    Transaction[]
+  >([]);
+  // All-time per-wallet linked-record count, for the wallet card caption
+  // only. Built from a narrow id-only projection (see
+  // getTransactionWalletLinks/getForexCashWalletLinks) instead of full
+  // transaction rows, so it stays cheap even across a full history.
+  const [walletLinkCounts, setWalletLinkCounts] = useState<
+    Map<string, number>
+  >(new Map());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -129,37 +190,122 @@ export default function WalletsPage() {
   );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WalletType | null>(null);
+  const [isCheckingDelete, setIsCheckingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingWallet, setIsSavingWallet] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
   const { toast } = useToast();
 
-  async function reloadData() {
-    const [w, t] = await Promise.all([getWallets(), getTransactions()]);
+  // Stable identity: unlike Transactions/Dashboard, Wallets analytics always
+  // follow the actual current calendar month (not a user-selectable prop),
+  // so reloadData never needs to change identity across renders.
+  const reloadData = useCallback(async () => {
+    const { startDate, endDate } = getCurrentMonthRange();
+    const [w, monthTxns, txnLinks, forexLinks] = await Promise.all([
+      getWallets(),
+      getTransactionsInRange(startDate, endDate),
+      getTransactionWalletLinks(),
+      getForexCashWalletLinks(),
+    ]);
+
+    const counts = new Map<string, number>();
+    for (const link of txnLinks) {
+      counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+      if (link.transferToWalletId) {
+        counts.set(
+          link.transferToWalletId,
+          (counts.get(link.transferToWalletId) ?? 0) + 1,
+        );
+      }
+    }
+    for (const link of forexLinks) {
+      counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+    }
+
     setWallets(w);
-    setTransactions(t);
-  }
+    setCurrentMonthTransactions(monthTxns);
+    setWalletLinkCounts(counts);
+  }, []);
+
+  // ── Reload coordinator ──────────────────────────────────────────────────
+  // Coalesces overlapping reload requests (realtime bursts from a single
+  // multi-table write, e.g. a transfer touching both wallets) into at most
+  // one trailing run instead of one Promise.all group per event.
+  const isReloadingRef = useRef(false);
+  const hasPendingReloadRef = useRef(false);
+
+  const runReload = useCallback(async () => {
+    if (isReloadingRef.current) {
+      hasPendingReloadRef.current = true;
+      return;
+    }
+    isReloadingRef.current = true;
+    try {
+      do {
+        hasPendingReloadRef.current = false;
+        await reloadData();
+      } while (hasPendingReloadRef.current);
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, [reloadData]);
+
+  const realtimeDebounceTimerRef = useRef<number | null>(null);
+  const requestRealtimeRefresh = useCallback(() => {
+    if (realtimeDebounceTimerRef.current) {
+      window.clearTimeout(realtimeDebounceTimerRef.current);
+    }
+    realtimeDebounceTimerRef.current = window.setTimeout(() => {
+      realtimeDebounceTimerRef.current = null;
+      void runReload();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [runReload]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void reloadData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+    return () => {
+      if (realtimeDebounceTimerRef.current) {
+        window.clearTimeout(realtimeDebounceTimerRef.current);
+      }
+    };
   }, []);
-  useRealtimeTable(["wallets", "transactions"], reloadData);
+
+  // Initial load: immediate, no artificial delay.
+  useEffect(() => {
+    void runReload();
+  }, [runReload]);
+
+  // Forex/savings writes go through server-side RPCs that also update
+  // `wallets.balance` directly, so watching `wallets` already catches them —
+  // no separate forex_cash_transactions subscription needed here.
+  useRealtimeTable(["wallets", "transactions"], requestRealtimeRefresh);
 
   // ── Existing computations ─────────────────────────────────────────────────
-  const totalAssets = useMemo(() => getTotalAssets(wallets), [wallets]);
+  // Wallets page only manages liquid, transferable accounts (cash/bank/
+  // ewallet). Legacy "investment"-typed rows are neither deleted nor
+  // converted — they're simply excluded from this page's lists, counts,
+  // totals, and transfer selectors, since that domain now belongs to the
+  // Investments page (which reads Wallet rows independently, unaffected by
+  // this page-local filter, and holds its own asset value via `Investment[]`).
+  const spendableWallets = useMemo(
+    () => wallets.filter(isSpendableWallet),
+    [wallets],
+  );
+
+  const totalAssets = useMemo(
+    () => getTotalAssets(spendableWallets),
+    [spendableWallets],
+  );
 
   const walletStats = useMemo(
     () =>
       walletTypeOptions.map((o) => ({
         ...o,
-        total: wallets
+        total: spendableWallets
           .filter((w) => w.type === o.value)
           .reduce((s, w) => s + w.balance, 0),
-        count: wallets.filter((w) => w.type === o.value).length,
+        count: spendableWallets.filter((w) => w.type === o.value).length,
       })),
-    [wallets],
+    [spendableWallets],
   );
 
   // ── New analytics ─────────────────────────────────────────────────────────
@@ -167,9 +313,12 @@ export default function WalletsPage() {
   const currentMonth =
     now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
 
+  // currentMonthTransactions is already fetched scoped to the current month
+  // (see getCurrentMonthRange/getTransactionsInRange in reloadData); this
+  // filter is a cheap defensive re-check, not the primary scoping mechanism.
   const currentMonthTxns = useMemo(
-    () => transactions.filter((t) => t.date.startsWith(currentMonth)),
-    [transactions, currentMonth],
+    () => currentMonthTransactions.filter((t) => t.date.startsWith(currentMonth)),
+    [currentMonthTransactions, currentMonth],
   );
   const currentMonthNet = useMemo(
     () => getTotalIncome(currentMonthTxns) - getTotalExpense(currentMonthTxns),
@@ -186,8 +335,34 @@ export default function WalletsPage() {
     [currentMonthTransfers],
   );
 
-  // Per-wallet monthly flow
+  // Per-wallet monthly flow — one pass over currentMonthTxns to bucket by
+  // wallet and one pass over currentMonthTransfers for transfer totals,
+  // instead of re-filtering the shared arrays once per wallet. Income/expense
+  // classification still goes through the canonical getTotalIncome/
+  // getTotalExpense helpers (applied to each wallet's pre-bucketed slice),
+  // so the actual amounts are identical to before.
   const walletFlow = useMemo(() => {
+    const txnsByWallet = new Map<string, Transaction[]>();
+    for (const t of currentMonthTxns) {
+      if (!txnsByWallet.has(t.walletId)) txnsByWallet.set(t.walletId, []);
+      txnsByWallet.get(t.walletId)!.push(t);
+    }
+
+    const transferInByWallet = new Map<string, number>();
+    const transferOutByWallet = new Map<string, number>();
+    for (const t of currentMonthTransfers) {
+      transferOutByWallet.set(
+        t.walletId,
+        (transferOutByWallet.get(t.walletId) ?? 0) + t.amount,
+      );
+      if (t.transferToWalletId) {
+        transferInByWallet.set(
+          t.transferToWalletId,
+          (transferInByWallet.get(t.transferToWalletId) ?? 0) + t.amount,
+        );
+      }
+    }
+
     const map = new Map<
       string,
       {
@@ -197,42 +372,40 @@ export default function WalletsPage() {
         transferOut: number;
       }
     >();
-    for (const w of wallets) {
-      const wt = currentMonthTxns.filter((t) => t.walletId === w.id);
+    for (const w of spendableWallets) {
+      const wt = txnsByWallet.get(w.id) ?? [];
       map.set(w.id, {
         income: getTotalIncome(wt),
         expense: getTotalExpense(wt),
-        transferIn: currentMonthTransfers
-          .filter((t) => t.transferToWalletId === w.id)
-          .reduce((sum, t) => sum + t.amount, 0),
-        transferOut: currentMonthTransfers
-          .filter((t) => t.walletId === w.id)
-          .reduce((sum, t) => sum + t.amount, 0),
+        transferIn: transferInByWallet.get(w.id) ?? 0,
+        transferOut: transferOutByWallet.get(w.id) ?? 0,
       });
     }
     return map;
-  }, [wallets, currentMonthTxns, currentMonthTransfers]);
+  }, [spendableWallets, currentMonthTxns, currentMonthTransfers]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   function openCreateForm() {
     setForm(emptyForm);
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
-  function openEditForm(wallet: WalletType) {
+  function openEditForm(wallet: SpendableWallet) {
     setForm({
       id: wallet.id,
       name: wallet.name,
       type: wallet.type,
       balance: String(wallet.balance),
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
   function openTransferForm(defaultFromWalletId?: string) {
-    const fromWalletId = defaultFromWalletId ?? wallets[0]?.id ?? "";
+    const fromWalletId = defaultFromWalletId ?? spendableWallets[0]?.id ?? "";
     const toWalletId =
-      wallets.find((wallet) => wallet.id !== fromWalletId)?.id ?? "";
+      spendableWallets.find((wallet) => wallet.id !== fromWalletId)?.id ?? "";
 
     setTransferForm({
       ...createEmptyTransferForm(),
@@ -245,12 +418,17 @@ export default function WalletsPage() {
 
   async function handleTransferSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (isTransferring) return;
 
     const amount = Number(transferForm.amount);
-    const fromWallet = wallets.find(
+    // Restricted to spendableWallets, not the raw fetched list — investment
+    // is excluded from wallet-to-wallet transfer, so a stale/tampered id
+    // referencing an investment wallet correctly fails as "not found"
+    // instead of silently transferring against it.
+    const fromWallet = spendableWallets.find(
       (wallet) => wallet.id === transferForm.fromWalletId,
     );
-    const toWallet = wallets.find(
+    const toWallet = spendableWallets.find(
       (wallet) => wallet.id === transferForm.toWalletId,
     );
 
@@ -282,8 +460,12 @@ export default function WalletsPage() {
     const transaction = {
       id: crypto.randomUUID(),
       type: "transfer",
+      // Canonical for transfer transactions per schema contract (see
+      // supabase_schema.sql: 'Empty string for transfer transactions; UUID/slug
+      // for income and expense') and matches TransactionsPage's own transfer
+      // payload — not a category id, so never a fake/invented UUID.
+      categoryId: "",
       amount,
-      categoryId: "wallet-transfer",
       walletId: fromWallet.id,
       transferToWalletId: toWallet.id,
       note:
@@ -299,38 +481,70 @@ export default function WalletsPage() {
     } as Transaction & EngineTransferTransaction;
 
     setSaveError(null);
+    setIsTransferring(true);
+    try {
+      // Finance Engine v2 rule:
+      // WalletsPage only creates the transfer transaction.
+      // addTransaction() is the single place that applies wallet balance effects.
+      // Do not call updateWallet() here, otherwise the source/destination balances
+      // are deducted/added twice.
+      const transactionResult = await addTransaction(transaction);
+      if (transactionResult.error) {
+        setSaveError(transactionResult.error);
+        return;
+      }
 
-    // Finance Engine v2 rule:
-    // WalletsPage only creates the transfer transaction.
-    // addTransaction() is the single place that applies wallet balance effects.
-    // Do not call updateWallet() here, otherwise the source/destination balances
-    // are deducted/added twice.
-    const transactionResult = await addTransaction(transaction);
-    if (transactionResult.error) {
-      setSaveError(transactionResult.error);
-      return;
+      toast({
+        variant: "success",
+        message: `Đã chuyển ${formatVND(amount)} từ ${fromWallet.name} sang ${toWallet.name}.`,
+      });
+      await runReload();
+      setIsTransferOpen(false);
+      setTransferForm(createEmptyTransferForm());
+    } finally {
+      setIsTransferring(false);
     }
-
-    toast({
-      variant: "success",
-      message: `Đã chuyển ${formatVND(amount)} từ ${fromWallet.name} sang ${toWallet.name}.`,
-    });
-    await reloadData();
-    setIsTransferOpen(false);
-    setTransferForm(createEmptyTransferForm());
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const balance = Number(form.balance);
+    if (isSavingWallet) return;
+
     if (!form.name.trim()) {
       setSaveError("Vui lòng nhập tên ví");
       return;
     }
-    if (Number.isNaN(balance) || balance < 0) {
-      setSaveError("Vui lòng nhập số dư hợp lệ");
+
+    // Restricted to spendableWallets: a legacy investment wallet is hidden
+    // from this page entirely, so it can never be reached/edited here — if
+    // form.id somehow referenced one, this correctly reports "not found"
+    // rather than silently editing it.
+    const existingWallet = form.id
+      ? spendableWallets.find((item) => item.id === form.id)
+      : undefined;
+    if (form.id && !existingWallet) {
+      setSaveError("Không tìm thấy ví cần cập nhật.");
       return;
     }
+
+    // Finance Engine v2 rule: addTransaction()/updateTransaction()/
+    // deleteTransaction() are the only places that mutate wallet.balance,
+    // each backed by a transaction record. An EDIT here must never
+    // overwrite the persisted balance directly — that would silently
+    // change net worth with no corresponding transaction history, breaking
+    // reconciliation. Only a brand-new wallet may set an opening balance,
+    // since it has no history to diverge from.
+    let balance: number;
+    if (existingWallet) {
+      balance = existingWallet.balance;
+    } else {
+      balance = Number(form.balance);
+      if (Number.isNaN(balance) || balance < 0) {
+        setSaveError("Vui lòng nhập số dư hợp lệ");
+        return;
+      }
+    }
+
     const wallet: WalletType = {
       id: form.id ?? crypto.randomUUID(),
       name: form.name.trim(),
@@ -338,20 +552,30 @@ export default function WalletsPage() {
       balance,
     };
     setSaveError(null);
-    const { error } = form.id
-      ? await updateWallet(wallet)
-      : await addWallet(wallet);
-    if (error) {
-      setSaveError(error);
-      return;
+    setIsSavingWallet(true);
+    try {
+      const { error } = form.id
+        ? await updateWallet(wallet)
+        : await addWallet(wallet);
+      if (error) {
+        setSaveError(error);
+        return;
+      }
+      await runReload();
+      setIsFormOpen(false);
+      setForm(emptyForm);
+    } finally {
+      setIsSavingWallet(false);
     }
-    await reloadData();
-    setIsFormOpen(false);
-    setForm(emptyForm);
   }
 
-  function handleDelete(id: string) {
-    const wallet = wallets.find((item) => item.id === id);
+  async function handleDelete(id: string) {
+    if (isCheckingDelete) return;
+
+    // Restricted to spendableWallets — legacy investment wallets are hidden
+    // from this page (no delete button is ever rendered for one), so this
+    // correctly reports "not found" if ever called with such an id.
+    const wallet = spendableWallets.find((item) => item.id === id);
     if (!wallet) {
       toast({
         variant: "error",
@@ -360,20 +584,35 @@ export default function WalletsPage() {
       return;
     }
 
-    const linked = transactions.filter(
-      (transaction) =>
-        transaction.walletId === id || transaction.transferToWalletId === id,
-    );
+    // On-demand, lightweight dependency check (head-only counts, no row
+    // data) instead of relying on in-memory current-month data — an old
+    // transaction from a prior month/year would otherwise be missed. No DB
+    // FK enforces this (walletId/transferToWalletId → wallets is
+    // intentionally omitted; see supabase_schema.sql), so this remains the
+    // integrity guard before delete.
+    setIsCheckingDelete(true);
+    try {
+      const { hasReferences, error } = await hasWalletReferences(id);
+      if (error) {
+        toast({
+          variant: "error",
+          message: "Không thể kiểm tra giao dịch liên kết: " + error,
+        });
+        return;
+      }
 
-    if (linked.length > 0) {
-      toast({
-        variant: "warning",
-        message: `Không thể xóa ví "${wallet.name}" vì đang có ${linked.length} giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
-      });
-      return;
+      if (hasReferences) {
+        toast({
+          variant: "warning",
+          message: `Không thể xóa ví "${wallet.name}" vì đang có giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+        });
+        return;
+      }
+
+      setDeleteTarget(wallet);
+    } finally {
+      setIsCheckingDelete(false);
     }
-
-    setDeleteTarget(wallet);
   }
 
   async function handleConfirmDelete() {
@@ -403,7 +642,7 @@ export default function WalletsPage() {
         message: `Đã xóa ví "${walletToDelete.name}" thành công.`,
       });
 
-      await reloadData();
+      await runReload();
     } finally {
       setIsDeleting(false);
     }
@@ -430,7 +669,7 @@ export default function WalletsPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => openTransferForm()}
-              disabled={wallets.length < 2}
+              disabled={spendableWallets.length < 2}
               className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ArrowLeftRight size={16} />
@@ -446,11 +685,11 @@ export default function WalletsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
           <WalletSummaryCard
             label="Tổng số dư"
             value={formatVND(totalAssets)}
-            note={`${wallets.length} ví đang quản lý`}
+            note={`${spendableWallets.length} ví đang quản lý`}
             tone="blue"
           />
           <WalletSummaryCard
@@ -487,7 +726,7 @@ export default function WalletsPage() {
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-            {wallets.length} ví
+            {spendableWallets.length} ví
           </span>
         </div>
 
@@ -502,12 +741,13 @@ export default function WalletsPage() {
                 key={stat.value}
                 type="button"
                 onClick={() => {
-                  const wallet = wallets.find(
+                  const wallet = spendableWallets.find(
                     (item) => item.type === stat.value,
                   );
                   if (wallet) openEditForm(wallet);
                   else {
                     setForm({ ...emptyForm, type: stat.value });
+                    setSaveError(null);
                     setIsFormOpen(true);
                   }
                 }}
@@ -529,7 +769,7 @@ export default function WalletsPage() {
                     {percentage}%
                   </span>
                 </div>
-                <p className="mt-4 text-xl font-black text-slate-900">
+                <p className="mt-4 whitespace-nowrap text-xl font-black tabular-nums text-slate-900">
                   {formatVND(stat.total)}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
@@ -557,7 +797,7 @@ export default function WalletsPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {wallets.map((wallet) => {
+          {spendableWallets.map((wallet) => {
             const pct =
               totalAssets > 0
                 ? Math.round((wallet.balance / totalAssets) * 100)
@@ -569,10 +809,7 @@ export default function WalletsPage() {
               transferOut: 0,
             };
             const net = flow.income - flow.expense;
-            const txCount = transactions.filter(
-              (t) =>
-                t.walletId === wallet.id || t.transferToWalletId === wallet.id,
-            ).length;
+            const txCount = walletLinkCounts.get(wallet.id) ?? 0;
             const color = TYPE_COLORS[wallet.type];
 
             return (
@@ -581,7 +818,7 @@ export default function WalletsPage() {
                 className="group relative rounded-4xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md"
               >
                 {/* Header */}
-                <div className="min-w-0 pr-20">
+                <div className="min-w-0 pr-24 sm:pr-20">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="shrink-0">
                       <WalletIcon type={wallet.type} />
@@ -603,19 +840,20 @@ export default function WalletsPage() {
                     </div>
                   </div>
 
-                  <div className="absolute right-6 top-6 z-10 flex shrink-0 gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="absolute right-5 top-5 z-10 flex shrink-0 gap-1.5 opacity-100 transition-opacity sm:right-6 sm:top-6 sm:opacity-0 sm:group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => openEditForm(wallet)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      className="flex size-10 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:size-8 sm:rounded-xl"
                       aria-label="Sửa ví"
                     >
                       <Edit3 size={13} />
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(wallet.id)}
-                      className="flex size-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 shadow-sm transition active:scale-95 sm:size-8 sm:rounded-xl sm:border-slate-200 sm:bg-white/95 sm:text-slate-400 sm:hover:border-rose-200 sm:hover:bg-rose-50 sm:hover:text-rose-500"
+                      onClick={() => void handleDelete(wallet.id)}
+                      disabled={isCheckingDelete}
+                      className="flex size-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:size-8 sm:rounded-xl sm:border-slate-200 sm:bg-white/95 sm:text-slate-400 sm:hover:border-rose-200 sm:hover:bg-rose-50 sm:hover:text-rose-500"
                       aria-label="Xóa ví"
                     >
                       <Trash2 size={13} />
@@ -628,7 +866,7 @@ export default function WalletsPage() {
                   <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                     Số dư hiện tại
                   </p>
-                  <p className="mt-1 text-2xl font-black text-blue-700">
+                  <p className="mt-1 whitespace-nowrap text-2xl font-black tabular-nums text-blue-700">
                     {formatVND(wallet.balance)}
                   </p>
                 </div>
@@ -687,9 +925,9 @@ export default function WalletsPage() {
 
                 {/* Contribution bar */}
                 <div className="mt-3">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs">
                     <span className="text-slate-500">Tỷ trọng tài sản</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
                       <span className="font-black text-slate-700">{pct}%</span>
                       <span className="text-slate-400">
                         · {txCount} giao dịch
@@ -707,7 +945,7 @@ export default function WalletsPage() {
                 <button
                   type="button"
                   onClick={() => openTransferForm(wallet.id)}
-                  disabled={wallets.length < 2}
+                  disabled={spendableWallets.length < 2}
                   className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ArrowLeftRight size={13} />
@@ -718,7 +956,7 @@ export default function WalletsPage() {
           })}
 
           {/* Empty state */}
-          {wallets.length === 0 && (
+          {spendableWallets.length === 0 && (
             <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Wallet size={24} className="text-blue-400" />
@@ -772,8 +1010,8 @@ export default function WalletsPage() {
               onSubmit={handleTransferSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 overflow-hidden px-4 py-2.5 sm:overflow-y-auto sm:px-6 sm:py-5">
-                {wallets.length < 2 ? (
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5 sm:px-6 sm:py-5">
+                {spendableWallets.length < 2 ? (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-700">
                     Bạn cần ít nhất 2 ví để dùng tính năng chuyển tiền.
                   </div>
@@ -781,7 +1019,7 @@ export default function WalletsPage() {
                   <div className="space-y-2">
                     <WalletSelect
                       label="Từ ví"
-                      wallets={wallets}
+                      wallets={spendableWallets}
                       value={transferForm.fromWalletId}
                       onChange={(value) => {
                         setTransferForm((prev) => ({
@@ -790,15 +1028,16 @@ export default function WalletsPage() {
                           toWalletId:
                             prev.toWalletId && prev.toWalletId !== value
                               ? prev.toWalletId
-                              : (wallets.find((wallet) => wallet.id !== value)
-                                  ?.id ?? ""),
+                              : (spendableWallets.find(
+                                  (wallet) => wallet.id !== value,
+                                )?.id ?? ""),
                         }));
                       }}
                     />
 
                     <WalletSelect
                       label="Đến ví"
-                      wallets={wallets.filter(
+                      wallets={spendableWallets.filter(
                         (wallet) => wallet.id !== transferForm.fromWalletId,
                       )}
                       value={transferForm.toWalletId}
@@ -858,16 +1097,17 @@ export default function WalletsPage() {
                   <button
                     type="button"
                     onClick={() => setIsTransferOpen(false)}
-                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                    disabled={isTransferring}
+                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    disabled={wallets.length < 2}
+                    disabled={spendableWallets.length < 2 || isTransferring}
                     className="min-h-11 flex-1 rounded-2xl bg-indigo-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Chuyển tiền
+                    {isTransferring ? "Đang chuyển..." : "Chuyển tiền"}
                   </button>
                 </div>
               </div>
@@ -905,7 +1145,7 @@ export default function WalletsPage() {
               onSubmit={handleSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 overflow-hidden px-4 py-3 sm:overflow-y-auto sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-5">
                 <div className="grid gap-2.5 md:grid-cols-2">
                   <FormInput
                     label="Tên ví"
@@ -916,7 +1156,7 @@ export default function WalletsPage() {
                   {/* Balance with ₫ prefix */}
                   <div>
                     <p className="mb-1.5 text-sm font-black text-slate-700">
-                      Số dư hiện tại
+                      {form.id ? "Số dư hiện tại" : "Số dư ban đầu"}
                     </p>
                     <CurrencyInput
                       value={form.balance}
@@ -924,7 +1164,14 @@ export default function WalletsPage() {
                         setForm((p) => ({ ...p, balance: raw }))
                       }
                       placeholder="0"
+                      disabled={Boolean(form.id)}
                     />
+                    {form.id && (
+                      <p className="mt-1.5 text-[11px] font-medium leading-4 text-slate-400">
+                        Số dư được cập nhật tự động qua giao dịch và không thể
+                        sửa trực tiếp tại đây.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -981,15 +1228,21 @@ export default function WalletsPage() {
                   <button
                     type="button"
                     onClick={() => setIsFormOpen(false)}
-                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                    disabled={isSavingWallet}
+                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
+                    disabled={isSavingWallet}
+                    className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {form.id ? "Lưu thay đổi" : "Thêm ví tiền"}
+                    {isSavingWallet
+                      ? "Đang lưu..."
+                      : form.id
+                        ? "Lưu thay đổi"
+                        : "Thêm ví tiền"}
                   </button>
                 </div>
               </div>
@@ -1045,7 +1298,7 @@ export default function WalletsPage() {
                 <p className="text-[10px] font-black uppercase tracking-wide text-rose-400">
                   Số dư hiện tại
                 </p>
-                <p className="mt-1 text-xl font-black text-rose-700">
+                <p className="mt-1 whitespace-nowrap text-xl font-black tabular-nums text-rose-700">
                   {formatVND(deleteTarget.balance)}
                 </p>
               </div>
@@ -1099,11 +1352,13 @@ function WalletSummaryCard({
   };
 
   return (
-    <div className={"rounded-3xl border p-4 " + styles[tone]}>
+    <div className={"rounded-3xl border p-3 sm:p-4 " + styles[tone]}>
       <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
         {label}
       </p>
-      <p className="mt-2 truncate text-xl font-black">{value}</p>
+      <p className="mt-2 whitespace-nowrap text-[clamp(0.85rem,4.2vw,1.25rem)] leading-none font-black tabular-nums sm:text-xl">
+        {value}
+      </p>
       <p className="mt-1 text-xs font-bold opacity-70">{note}</p>
     </div>
   );
@@ -1113,7 +1368,7 @@ function WalletIcon({
   type,
   compact = false,
 }: {
-  type: FinanceWalletType;
+  type: WalletUiType;
   compact?: boolean;
 }) {
   const base = compact
@@ -1132,14 +1387,6 @@ function WalletIcon({
     return (
       <div className={base + " bg-linear-to-br from-violet-500 to-indigo-500"}>
         <Wallet size={20} />
-      </div>
-    );
-  }
-
-  if (type === "investment") {
-    return (
-      <div className={base + " bg-linear-to-br from-emerald-500 to-teal-400"}>
-        <Landmark size={20} />
       </div>
     );
   }
@@ -1265,6 +1512,7 @@ function WalletBrandLogo({
 function getWalletTypeLabel(type: FinanceWalletType) {
   if (type === "bank") return "Ngân hàng";
   if (type === "ewallet") return "Ví điện tử";
+  if (type === "investment") return "Đầu tư";
   return "Tiền mặt";
 }
 

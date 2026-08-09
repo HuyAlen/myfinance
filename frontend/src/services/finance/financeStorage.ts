@@ -1686,6 +1686,98 @@ export async function deleteWallet(
   return { error: null };
 }
 
+/**
+ * On-demand, lightweight dependency check for wallet deletion. Uses
+ * head-only exact counts (no rows transferred) instead of downloading full
+ * transaction history — safe to call once per delete attempt.
+ *
+ * No DB foreign key enforces this (walletId/transferToWalletId → wallets is
+ * intentionally omitted; see supabase_schema.sql), so this application-layer
+ * check remains the only integrity guard before delete.
+ */
+export async function hasWalletReferences(
+  walletId: string,
+): Promise<{ hasReferences: boolean; error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { hasReferences: false, error: ERR_NO_AUTH };
+
+  const [sourceResult, destinationResult, forexResult] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("walletId", walletId),
+    supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("transferToWalletId", walletId),
+    supabase
+      .from("forex_cash_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("wallet_id", walletId),
+  ]);
+
+  const results = [sourceResult, destinationResult, forexResult];
+  const firstError = results.find((result) => result.error)?.error;
+  if (firstError) {
+    console.error("[financeStorage] hasWalletReferences:", firstError.message);
+    return { hasReferences: false, error: firstError.message };
+  }
+
+  const hasReferences = results.some((result) => (result.count ?? 0) > 0);
+  return { hasReferences, error: null };
+}
+
+/**
+ * Narrow-projection, all-time read used only to compute the per-wallet
+ * "linked transaction count" shown on wallet cards. Selects just the two id
+ * columns needed for counting instead of full transaction rows (amount,
+ * category, note, date, transfer metadata, ...), so it stays cheap even
+ * across a full transaction history.
+ */
+export async function getTransactionWalletLinks(): Promise<
+  { walletId: string; transferToWalletId: string | null }[]
+> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("walletId, transferToWalletId")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[financeStorage] getTransactionWalletLinks:", error.message);
+    return [];
+  }
+
+  return (data ?? []) as { walletId: string; transferToWalletId: string | null }[];
+}
+
+/** Same narrow-projection intent as getTransactionWalletLinks, for Forex cash. */
+export async function getForexCashWalletLinks(): Promise<
+  { walletId: string }[]
+> {
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("forex_cash_transactions")
+    .select("wallet_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[financeStorage] getForexCashWalletLinks:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as { wallet_id: string }[]).map((row) => ({
+    walletId: row.wallet_id,
+  }));
+}
+
 // ─── Category CRUD ────────────────────────────────────────────────────────────
 
 export async function addCategory(
