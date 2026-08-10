@@ -46,9 +46,6 @@ import {
   type InsightIconType,
 } from "@/src/services/finance/analytics";
 
-// InsightTone is re-exported from the engine; alias it locally for JSX use.
-type InsightTone = InsightData["tone"];
-
 // UI-only: Insight enriches InsightData with a React node icon.
 type Insight = InsightData & { icon: React.ReactNode };
 
@@ -144,7 +141,7 @@ export default function AIInsightsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-6 shadow-sm">
+      <section className="rounded-4xl border border-slate-200 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6 shadow-sm">
         <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <div>
             <p className="text-sm font-bold text-blue-600">
@@ -194,9 +191,9 @@ export default function AIInsightsPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
               <Brain size={22} />
             </div>
             <div>
@@ -217,7 +214,7 @@ export default function AIInsightsPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-black text-slate-900">
               Việc nên làm tiếp theo
             </h2>
@@ -242,7 +239,7 @@ export default function AIInsightsPage() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-emerald-50 to-blue-50 p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-linear-to-br from-emerald-50 to-blue-50 p-6 shadow-sm">
             <h2 className="text-xl font-black text-slate-900">Tóm tắt nhanh</h2>
 
             <div className="mt-5 space-y-4">
@@ -266,9 +263,9 @@ export default function AIInsightsPage() {
 
       {/* ── Health Score V2 ──────────────────────────────────────────────── */}
       <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-100">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-100">
               <ShieldCheck size={22} />
             </div>
             <div>
@@ -285,12 +282,12 @@ export default function AIInsightsPage() {
             <div
               className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
                 healthV2.grade === "A"
-                  ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
+                  ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : healthV2.grade === "B"
-                    ? "bg-gradient-to-br from-blue-400 to-cyan-500 shadow-blue-100"
+                    ? "bg-linear-to-br from-blue-400 to-cyan-500 shadow-blue-100"
                     : healthV2.grade === "C"
-                      ? "bg-gradient-to-br from-amber-400 to-orange-400 shadow-amber-100"
-                      : "bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-100"
+                      ? "bg-linear-to-br from-amber-400 to-orange-400 shadow-amber-100"
+                      : "bg-linear-to-br from-rose-400 to-rose-600 shadow-rose-100"
               }`}
             >
               <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
@@ -323,12 +320,12 @@ export default function AIInsightsPage() {
                   <div
                     className={`h-2 rounded-full transition-all ${
                       f.score >= 8
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                        ? "bg-linear-to-r from-emerald-500 to-teal-400"
                         : f.score >= 5
-                          ? "bg-gradient-to-r from-blue-500 to-cyan-400"
+                          ? "bg-linear-to-r from-blue-500 to-cyan-400"
                           : f.score >= 3
-                            ? "bg-gradient-to-r from-amber-400 to-orange-400"
-                            : "bg-gradient-to-r from-rose-500 to-rose-400"
+                            ? "bg-linear-to-r from-amber-400 to-orange-400"
+                            : "bg-linear-to-r from-rose-500 to-rose-400"
                     }`}
                     style={{ width: `${f.score * 10}%` }}
                   />
@@ -339,9 +336,9 @@ export default function AIInsightsPage() {
         </div>
 
         {/* Risk Score */}
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 text-white shadow-lg shadow-rose-100">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-rose-500 to-orange-400 text-white shadow-lg shadow-rose-100">
               <Zap size={22} />
             </div>
             <div>
@@ -358,10 +355,10 @@ export default function AIInsightsPage() {
             <div
               className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
                 riskScore.level === "low"
-                  ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
+                  ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : riskScore.level === "medium"
-                    ? "bg-gradient-to-br from-amber-400 to-orange-400 shadow-amber-100"
-                    : "bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-100"
+                    ? "bg-linear-to-br from-amber-400 to-orange-400 shadow-amber-100"
+                    : "bg-linear-to-br from-rose-400 to-rose-600 shadow-rose-100"
               }`}
             >
               <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
@@ -404,9 +401,9 @@ export default function AIInsightsPage() {
       </section>
 
       {/* ── Emergency Fund Intelligence ───────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-400 text-white shadow-lg shadow-teal-100">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-teal-500 to-emerald-400 text-white shadow-lg shadow-teal-100">
             <PiggyBank size={22} />
           </div>
           <div>
@@ -423,12 +420,12 @@ export default function AIInsightsPage() {
             <div
               className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
                 emergencyFund.status === "excellent"
-                  ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
+                  ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : emergencyFund.status === "good"
-                    ? "bg-gradient-to-br from-blue-400 to-cyan-500 shadow-blue-100"
+                    ? "bg-linear-to-br from-blue-400 to-cyan-500 shadow-blue-100"
                     : emergencyFund.status === "low"
-                      ? "bg-gradient-to-br from-amber-400 to-orange-400 shadow-amber-100"
-                      : "bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-100"
+                      ? "bg-linear-to-br from-amber-400 to-orange-400 shadow-amber-100"
+                      : "bg-linear-to-br from-rose-400 to-rose-600 shadow-rose-100"
               }`}
             >
               <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
@@ -468,12 +465,12 @@ export default function AIInsightsPage() {
                 <div
                   className={`h-3 rounded-full transition-all ${
                     emergencyFund.status === "excellent"
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                      ? "bg-linear-to-r from-emerald-500 to-teal-400"
                       : emergencyFund.status === "good"
-                        ? "bg-gradient-to-r from-blue-500 to-cyan-400"
+                        ? "bg-linear-to-r from-blue-500 to-cyan-400"
                         : emergencyFund.status === "low"
-                          ? "bg-gradient-to-r from-amber-400 to-orange-400"
-                          : "bg-gradient-to-r from-rose-500 to-rose-400"
+                          ? "bg-linear-to-r from-amber-400 to-orange-400"
+                          : "bg-linear-to-r from-rose-500 to-rose-400"
                   }`}
                   style={{
                     width: `${Math.min(
@@ -548,9 +545,9 @@ export default function AIInsightsPage() {
 
       {/* ── Spending Anomalies ────────────────────────────────────────────── */}
       {anomalies.length > 0 && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 text-white shadow-lg shadow-orange-100">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-orange-400 to-rose-500 text-white shadow-lg shadow-orange-100">
               <Activity size={22} />
             </div>
             <div>
@@ -620,9 +617,9 @@ export default function AIInsightsPage() {
       )}
 
       {/* ── Monthly Forecast ──────────────────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
             <TrendingUp size={22} />
           </div>
           <div>
@@ -801,9 +798,9 @@ export default function AIInsightsPage() {
 
       {/* ── Goal Predictions ──────────────────────────────────────────────── */}
       {goalPredictions.length > 0 && (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-100">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-100">
               <Target size={22} />
             </div>
             <div>
@@ -854,10 +851,10 @@ export default function AIInsightsPage() {
                   <div
                     className={`h-2 rounded-full transition-all ${
                       p.status === "completed"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                        ? "bg-linear-to-r from-emerald-500 to-teal-400"
                         : p.status === "on-track"
-                          ? "bg-gradient-to-r from-blue-500 to-cyan-400"
-                          : "bg-gradient-to-r from-orange-400 to-amber-400"
+                          ? "bg-linear-to-r from-blue-500 to-cyan-400"
+                          : "bg-linear-to-r from-orange-400 to-amber-400"
                     }`}
                     style={{ width: `${p.progressPercent}%` }}
                   />
@@ -876,9 +873,9 @@ export default function AIInsightsPage() {
       )}
 
       {/* ── Smart Budget AI ───────────────────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-100">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-100">
             <BarChart2 size={22} />
           </div>
           <div>
@@ -1144,9 +1141,9 @@ export default function AIInsightsPage() {
       </section>
 
       {/* ── FIRE Calculator ───────────────────────────────────────────────── */}
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-lg shadow-orange-100">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-orange-500 to-rose-500 text-white shadow-lg shadow-orange-100">
             <Flame size={22} />
           </div>
           <div>
@@ -1167,14 +1164,14 @@ export default function AIInsightsPage() {
             <div
               className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
                 fire.status === "achieved"
-                  ? "bg-gradient-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
+                  ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : fire.status === "close"
-                    ? "bg-gradient-to-br from-blue-400 to-cyan-500 shadow-blue-100"
+                    ? "bg-linear-to-br from-blue-400 to-cyan-500 shadow-blue-100"
                     : fire.status === "near"
-                      ? "bg-gradient-to-br from-violet-400 to-indigo-500 shadow-violet-100"
+                      ? "bg-linear-to-br from-violet-400 to-indigo-500 shadow-violet-100"
                       : fire.status === "mid"
-                        ? "bg-gradient-to-br from-amber-400 to-orange-400 shadow-amber-100"
-                        : "bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-100"
+                        ? "bg-linear-to-br from-amber-400 to-orange-400 shadow-amber-100"
+                        : "bg-linear-to-br from-rose-400 to-rose-600 shadow-rose-100"
               }`}
             >
               <div className="flex size-full flex-col items-center justify-center rounded-full bg-white">
@@ -1251,14 +1248,14 @@ export default function AIInsightsPage() {
                 <div
                   className={`h-3 rounded-full transition-all ${
                     fire.status === "achieved"
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                      ? "bg-linear-to-r from-emerald-500 to-teal-400"
                       : fire.status === "close"
-                        ? "bg-gradient-to-r from-blue-500 to-cyan-400"
+                        ? "bg-linear-to-r from-blue-500 to-cyan-400"
                         : fire.status === "near"
-                          ? "bg-gradient-to-r from-violet-500 to-indigo-400"
+                          ? "bg-linear-to-r from-violet-500 to-indigo-400"
                           : fire.status === "mid"
-                            ? "bg-gradient-to-r from-amber-400 to-orange-400"
-                            : "bg-gradient-to-r from-rose-500 to-rose-400"
+                            ? "bg-linear-to-r from-amber-400 to-orange-400"
+                            : "bg-linear-to-r from-rose-500 to-rose-400"
                   }`}
                   style={{ width: `${fire.progressPercent}%` }}
                 />

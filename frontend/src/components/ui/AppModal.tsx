@@ -59,7 +59,7 @@ export default function AppModal({
       {/* Panel */}
       <div
         className={[
-          "relative max-h-[92dvh] w-full overflow-y-auto rounded-[2rem] border border-slate-200 bg-white shadow-2xl",
+          "relative max-h-[92dvh] w-full overflow-y-auto rounded-4xl border border-slate-200 bg-white shadow-2xl",
           SIZE_CLASS[size],
         ].join(" ")}
       >
@@ -67,7 +67,7 @@ export default function AppModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6 pb-5">
           <div className="flex items-center gap-3">
             {icon && (
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                 {icon}
               </div>
             )}

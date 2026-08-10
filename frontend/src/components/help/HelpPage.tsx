@@ -579,8 +579,8 @@ export default function HelpPage() {
       {/* ════════════════════════════════════════════════════════════════════
           SECTION 1 · Hero Header + AI Search
           ════════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-8 pt-7 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="relative bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-8 pt-7 sm:px-8">
           <div className="absolute right-6 top-6 opacity-10">
             <BookOpen size={120} className="text-blue-600" />
           </div>
@@ -642,8 +642,8 @@ export default function HelpPage() {
           SECTION 2 · Quick Start Flow
           ════════════════════════════════════════════════════════════════════ */}
       {!search && (
-        <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50/60 to-cyan-50/40 px-6 py-4">
+        <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 bg-linear-to-r from-blue-50/60 to-cyan-50/40 px-6 py-4">
             <div className="flex items-center gap-2">
               <Star size={14} className="text-blue-600" />
               <p className="text-sm font-black text-slate-800">
@@ -716,7 +716,7 @@ export default function HelpPage() {
                   key={s.step}
                   href={s.href}
                   className={[
-                    "group flex flex-col gap-4 rounded-[2rem] border p-5 transition-all hover:shadow-lg active:scale-[.98]",
+                    "group flex flex-col gap-4 rounded-4xl border p-5 transition-all hover:shadow-lg active:scale-[.98]",
                     s.light,
                     s.border,
                   ].join(" ")}
@@ -769,8 +769,8 @@ export default function HelpPage() {
           SECTION 4 · Setup Checklist
           ════════════════════════════════════════════════════════════════════ */}
       {!search && (
-        <section className="overflow-hidden rounded-[2rem] border border-emerald-200 bg-white shadow-sm">
-          <div className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50/60 to-white px-6 py-4">
+        <section className="overflow-hidden rounded-4xl border border-emerald-200 bg-white shadow-sm">
+          <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50/60 to-white px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -794,7 +794,7 @@ export default function HelpPage() {
             {/* Progress bar */}
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
+                className="h-full rounded-full bg-linear-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
                 style={{ width: checkPct + "%" }}
               />
             </div>
@@ -864,7 +864,7 @@ export default function HelpPage() {
         </div>
 
         {filteredGuides.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-200 py-16 text-center">
+          <div className="flex flex-col items-center justify-center rounded-4xl border border-dashed border-slate-200 py-16 text-center">
             <Search size={32} className="text-slate-300" />
             <p className="mt-3 text-sm font-bold text-slate-400">
               Không tìm thấy hướng dẫn phù hợp
@@ -885,7 +885,7 @@ export default function HelpPage() {
                 <div
                   key={guide.id}
                   className={[
-                    "overflow-hidden rounded-[2rem] border transition-all duration-200",
+                    "overflow-hidden rounded-4xl border transition-all duration-200",
                     open ? guide.accentBorder + " shadow-md" : "border-slate-200",
                   ].join(" ")}
                 >
@@ -1055,8 +1055,8 @@ export default function HelpPage() {
           SECTION 6 · Financial Glossary (Tooltip terms)
           ════════════════════════════════════════════════════════════════════ */}
       {!search && (
-        <section className="overflow-hidden rounded-[2rem] border border-indigo-200 bg-white shadow-sm">
-          <div className="border-b border-indigo-100 bg-gradient-to-r from-indigo-50/60 to-white px-6 py-4">
+        <section className="overflow-hidden rounded-4xl border border-indigo-200 bg-white shadow-sm">
+          <div className="border-b border-indigo-100 bg-linear-to-r from-indigo-50/60 to-white px-6 py-4">
             <div className="flex items-center gap-2">
               <Lightbulb size={14} className="text-indigo-600" />
               <p className="text-sm font-black text-slate-800">
@@ -1119,7 +1119,7 @@ export default function HelpPage() {
         </div>
 
         {filteredFaq.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-200 py-12 text-center">
+          <div className="flex flex-col items-center justify-center rounded-4xl border border-dashed border-slate-200 py-12 text-center">
             <p className="text-sm text-slate-400">Không có câu hỏi phù hợp với tìm kiếm.</p>
           </div>
         ) : (
@@ -1130,7 +1130,7 @@ export default function HelpPage() {
                 <div
                   key={faq.id}
                   className={[
-                    "overflow-hidden rounded-[2rem] border transition-all",
+                    "overflow-hidden rounded-4xl border transition-all",
                     open
                       ? "border-amber-300 shadow-sm"
                       : "border-slate-200 hover:border-amber-200",
@@ -1180,7 +1180,7 @@ export default function HelpPage() {
           SECTION 8 · Footer CTA
           ════════════════════════════════════════════════════════════════════ */}
       {!search && (
-        <section className="overflow-hidden rounded-[2rem] border border-blue-200 bg-gradient-to-br from-blue-600 via-blue-700 to-cyan-600 shadow-lg shadow-blue-200/60">
+        <section className="overflow-hidden rounded-4xl border border-blue-200 bg-linear-to-br from-blue-600 via-blue-700 to-cyan-600 shadow-lg shadow-blue-200/60">
           <div className="px-6 py-7 text-center sm:px-10">
             <p className="text-[11px] font-black uppercase tracking-widest text-blue-200">
               Sẵn sàng bắt đầu?

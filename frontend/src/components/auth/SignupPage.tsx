@@ -55,11 +55,11 @@ export default function SignupPage() {
   if (loading) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-sky-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-50 via-white to-sky-50 p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex size-16 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-200">
+          <div className="flex size-16 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-200">
             <PiggyBank size={32} />
           </div>
           <div className="text-center">
@@ -72,7 +72,7 @@ export default function SignupPage() {
 
         {/* Success state */}
         {success ? (
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm text-center">
+          <div className="rounded-4xl border border-slate-200 bg-white p-8 shadow-sm text-center">
             <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
               <CheckCircle size={32} />
             </div>
@@ -86,14 +86,14 @@ export default function SignupPage() {
             </p>
             <Link
               href="/login"
-              className="mt-6 inline-block rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100"
+              className="mt-6 inline-block rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100"
             >
               Về trang đăng nhập
             </Link>
           </div>
         ) : (
           /* Card */
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-8 shadow-sm">
             <h2 className="text-xl font-black text-slate-900">Tạo tài khoản</h2>
             <p className="mt-1 text-sm text-slate-500">
               Miễn phí, không cần thẻ tín dụng.
@@ -163,7 +163,7 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:opacity-90 disabled:opacity-60"
+                className="mt-2 w-full rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:opacity-90 disabled:opacity-60"
               >
                 {submitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
               </button>

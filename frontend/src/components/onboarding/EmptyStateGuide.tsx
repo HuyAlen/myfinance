@@ -75,7 +75,7 @@ export function EmptyStateGuide({
       {/* Icon */}
       <div
         className={[
-          "flex size-24 items-center justify-center rounded-[2rem] ring-8",
+          "flex size-24 items-center justify-center rounded-4xl ring-8",
           theme.icon,
           theme.ring,
         ].join(" ")}

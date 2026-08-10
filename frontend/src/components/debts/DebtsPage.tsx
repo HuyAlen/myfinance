@@ -427,8 +427,8 @@ export default function DebtsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-[2rem] border border-blue-100 shadow-sm">
-        <div className="bg-gradient-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
@@ -507,7 +507,7 @@ export default function DebtsPage() {
             {/* Debt Health Score */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-gradient-to-br p-4 shadow-sm " +
+                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
                 healthGrade.gradient
               }
             >
@@ -538,9 +538,9 @@ export default function DebtsPage() {
       {debts.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
           {/* LEFT: Master progress + tier breakdown */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
                 <Landmark size={17} />
               </div>
               <div>
@@ -683,7 +683,7 @@ export default function DebtsPage() {
           {/* RIGHT: Pie + highlights */}
           <div className="flex flex-col gap-5">
             {/* Pie chart */}
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-base font-black text-slate-900">
                 Phân bổ dư nợ
               </h2>
@@ -855,9 +855,9 @@ export default function DebtsPage() {
       {snowballOrder.length > 1 && (
         <section className="grid gap-5 xl:grid-cols-2">
           {/* Snowball */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                 <Zap size={17} />
               </div>
               <div>
@@ -904,9 +904,9 @@ export default function DebtsPage() {
           </div>
 
           {/* Avalanche */}
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-sm">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-rose-500 to-orange-500 text-white shadow-sm">
                 <TrendingDown size={17} />
               </div>
               <div>
@@ -979,7 +979,7 @@ export default function DebtsPage() {
               <div
                 key={debt.id}
                 className={
-                  "group rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
                   s.border
                 }
               >
@@ -988,7 +988,7 @@ export default function DebtsPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={
-                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm " +
+                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
                         s.iconGrad
                       }
                     >
@@ -1131,7 +1131,7 @@ export default function DebtsPage() {
 
           {/* Empty state */}
           {debts.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-emerald-100">
                 <TrendingUp size={24} className="text-emerald-500" />
               </div>
@@ -1157,8 +1157,8 @@ export default function DebtsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 px-0 pt-3 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem] max-h-[calc(var(--app-height,100dvh)-env(safe-area-inset-top)-0.75rem)] sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))]">
+        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 px-0 pt-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl max-h-[calc(var(--app-height,100dvh)-env(safe-area-inset-top)-0.75rem)] sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))]">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
@@ -1253,7 +1253,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className={"rounded-2xl bg-gradient-to-br p-4 shadow-sm " + gradient}>
+    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}

@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  Bot,
   ChartPie,
   CheckCircle2,
   PiggyBank,
@@ -43,7 +42,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Your Personal CFO",
     desc: "Ứng dụng quản lý tài chính thông minh giúp bạn theo dõi thu chi, quản lý ngân sách, đặt mục tiêu và nhận tư vấn AI cá nhân hoá.",
     icon: PiggyBank,
-    iconBg: "bg-gradient-to-br from-blue-600 to-cyan-500",
+    iconBg: "bg-linear-to-br from-blue-600 to-cyan-500",
     tip: "Chỉ cần 5 phút thiết lập là bạn có thể bắt đầu theo dõi tài chính ngay hôm nay.",
   },
   {
@@ -52,7 +51,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Bước 1 / 5",
     desc: "Bạn muốn khám phá ứng dụng ngay với dữ liệu mẫu, hay bắt đầu với dữ liệu thực của mình?",
     icon: Rocket,
-    iconBg: "bg-gradient-to-br from-emerald-500 to-teal-500",
+    iconBg: "bg-linear-to-br from-emerald-500 to-teal-500",
     isDemoStep: true,
     tip: "Dữ liệu mẫu giúp bạn hiểu cách hoạt động của app mà không cần nhập thủ công.",
   },
@@ -62,7 +61,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Bước 2 / 5",
     desc: "Ví tiền là nền tảng của MyFinance. Tạo các tài khoản ngân hàng, ví điện tử hoặc tiền mặt để theo dõi số dư tự động theo giao dịch.",
     icon: Wallet,
-    iconBg: "bg-gradient-to-br from-blue-500 to-indigo-600",
+    iconBg: "bg-linear-to-br from-blue-500 to-indigo-600",
     actions: [{ label: "Tạo ví ngay", href: "/wallets", primary: true }],
     tip: "Tạo ví cho từng tài khoản thực tế: MB Bank, Tiền mặt, MoMo...",
   },
@@ -72,7 +71,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Bước 3 / 5",
     desc: "Ghi chép mỗi khoản thu nhập và chi tiêu. Số dư ví tự động cập nhật và AI phân tích xu hướng dựa trên dữ liệu này.",
     icon: ReceiptText,
-    iconBg: "bg-gradient-to-br from-cyan-500 to-blue-500",
+    iconBg: "bg-linear-to-br from-cyan-500 to-blue-500",
     actions: [
       { label: "Thêm giao dịch", href: "/transactions", primary: true },
     ],
@@ -84,7 +83,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Bước 4 / 5",
     desc: "Đặt hạn mức chi tiêu theo danh mục mỗi tháng. App cảnh báo tự động khi bạn gần đạt giới hạn, giúp kiểm soát tài chính hiệu quả.",
     icon: ChartPie,
-    iconBg: "bg-gradient-to-br from-violet-500 to-purple-600",
+    iconBg: "bg-linear-to-br from-violet-500 to-purple-600",
     actions: [{ label: "Tạo ngân sách", href: "/budgets", primary: true }],
     tip: "Bắt đầu với 3 danh mục chi lớn nhất: Ăn uống, Đi lại, Giải trí.",
   },
@@ -94,7 +93,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Bước 5 / 5",
     desc: "Thiết lập mục tiêu tiết kiệm có deadline. AI tự động tính số tiền cần tiết kiệm mỗi tháng và dự báo ngày đạt được mục tiêu.",
     icon: Target,
-    iconBg: "bg-gradient-to-br from-rose-500 to-pink-600",
+    iconBg: "bg-linear-to-br from-rose-500 to-pink-600",
     actions: [{ label: "Tạo mục tiêu", href: "/goals", primary: true }],
     tip: "Mục tiêu đầu tiên nên là Quỹ khẩn cấp: 3 tháng chi tiêu sinh hoạt.",
   },
@@ -104,7 +103,7 @@ const STEPS: WizardStep[] = [
     subtitle: "Hoàn thành thiết lập",
     desc: "Bạn đã sẵn sàng! Trang tổng quan cho thấy toàn bộ tình hình tài chính trong một màn hình. Kiểm tra Health Score và AI Insights mỗi ngày.",
     icon: BarChart3,
-    iconBg: "bg-gradient-to-br from-emerald-500 to-cyan-500",
+    iconBg: "bg-linear-to-br from-emerald-500 to-cyan-500",
     actions: [
       { label: "Xem Dashboard", href: "/", primary: true },
       { label: "AI Insights", href: "/ai-insights" },
@@ -177,8 +176,8 @@ export default function WelcomeWizard() {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-slate-900/40">
+    <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-4xl bg-white shadow-2xl shadow-slate-900/40">
         {/* Skip button */}
         <button
           onClick={handleSkip}
@@ -195,7 +194,7 @@ export default function WelcomeWizard() {
             current.iconBg,
           ].join(" ")}
         >
-          <div className="flex size-24 items-center justify-center rounded-[2rem] bg-white/20 shadow-xl shadow-black/10">
+          <div className="flex size-24 items-center justify-center rounded-4xl bg-white/20 shadow-xl shadow-black/10">
             <Icon size={44} strokeWidth={1.75} className="text-white" />
           </div>
         </div>

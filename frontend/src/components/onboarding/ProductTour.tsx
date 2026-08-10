@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useOnboarding } from "./OnboardingProvider";
 
@@ -75,12 +75,40 @@ const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-const ACCENT_CLASSES: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  blue:    { bg: "bg-blue-600",    text: "text-blue-700",    border: "border-blue-400",    dot: "bg-blue-500" },
-  emerald: { bg: "bg-emerald-600", text: "text-emerald-700", border: "border-emerald-400", dot: "bg-emerald-500" },
-  violet:  { bg: "bg-violet-600",  text: "text-violet-700",  border: "border-violet-400",  dot: "bg-violet-500" },
-  rose:    { bg: "bg-rose-500",    text: "text-rose-700",    border: "border-rose-400",    dot: "bg-rose-500" },
-  fuchsia: { bg: "bg-fuchsia-600", text: "text-fuchsia-700", border: "border-fuchsia-400", dot: "bg-fuchsia-500" },
+const ACCENT_CLASSES: Record<
+  string,
+  { bg: string; text: string; border: string; dot: string }
+> = {
+  blue: {
+    bg: "bg-blue-600",
+    text: "text-blue-700",
+    border: "border-blue-400",
+    dot: "bg-blue-500",
+  },
+  emerald: {
+    bg: "bg-emerald-600",
+    text: "text-emerald-700",
+    border: "border-emerald-400",
+    dot: "bg-emerald-500",
+  },
+  violet: {
+    bg: "bg-violet-600",
+    text: "text-violet-700",
+    border: "border-violet-400",
+    dot: "bg-violet-500",
+  },
+  rose: {
+    bg: "bg-rose-500",
+    text: "text-rose-700",
+    border: "border-rose-400",
+    dot: "bg-rose-500",
+  },
+  fuchsia: {
+    bg: "bg-fuchsia-600",
+    text: "text-fuchsia-700",
+    border: "border-fuchsia-400",
+    dot: "bg-fuchsia-500",
+  },
 };
 
 // ─── ProductTour ──────────────────────────────────────────────────────────────
@@ -126,11 +154,11 @@ export default function ProductTour() {
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-[150] bg-slate-950/60 backdrop-blur-[2px]" />
+      <div className="fixed inset-0 z-150 bg-slate-950/60 backdrop-blur-[2px]" />
 
       {/* Tour Card — centered */}
-      <div className="fixed inset-0 z-[151] flex items-center justify-center p-4">
-        <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl shadow-slate-900/40">
+      <div className="fixed inset-0 z-151 flex items-center justify-center p-4">
+        <div className="relative w-full max-w-md overflow-hidden rounded-4xl bg-white shadow-2xl shadow-slate-900/40">
           {/* Skip */}
           <button
             onClick={handleSkip}
@@ -145,18 +173,30 @@ export default function ProductTour() {
 
           <div className="px-7 py-6 pt-5">
             {/* Step counter */}
-            <p className={["mb-1 text-[11px] font-black uppercase tracking-widest", accent.text].join(" ")}>
+            <p
+              className={[
+                "mb-1 text-[11px] font-black uppercase tracking-widest",
+                accent.text,
+              ].join(" ")}
+            >
               {step + 1} / {TOUR_STEPS.length}
             </p>
 
-            <h3 className="text-xl font-black text-slate-900">{current.title}</h3>
-            <p className="mt-2.5 text-sm leading-6 text-slate-600">{current.desc}</p>
+            <h3 className="text-xl font-black text-slate-900">
+              {current.title}
+            </h3>
+            <p className="mt-2.5 text-sm leading-6 text-slate-600">
+              {current.desc}
+            </p>
 
             {/* Progress bar */}
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100">
               <div
-                className={["h-full rounded-full transition-all duration-500", accent.bg].join(" ")}
-                style={{ width: ((step + 1) / TOUR_STEPS.length * 100) + "%" }}
+                className={[
+                  "h-full rounded-full transition-all duration-500",
+                  accent.bg,
+                ].join(" ")}
+                style={{ width: ((step + 1) / TOUR_STEPS.length) * 100 + "%" }}
               />
             </div>
 

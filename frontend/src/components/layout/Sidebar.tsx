@@ -100,7 +100,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         onClick={onClose}
         className="mb-6 flex items-center gap-3 px-2"
       >
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200/60">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-200/60">
           <PiggyBank size={24} />
         </div>
         <div>
@@ -160,7 +160,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       {/* ══ Footer: Sync Status ══════════════════════════════════════════════ */}
-      <div className="mt-3 rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-blue-50/40 px-4 py-3">
+      <div className="mt-3 rounded-2xl border border-slate-100 bg-linear-to-br from-slate-50 to-blue-50/40 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span
