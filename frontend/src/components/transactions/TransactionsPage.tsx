@@ -1057,10 +1057,15 @@ export default function TransactionsPage() {
   const displayRangeEnd = precedingCount + visibleCount;
 
   // Reset to page 1 whenever the month changes (also clears any stale
-  // selection from a different month's data set).
-  const prevSelectedMonthRef = useRef(selectedMonth);
-  if (prevSelectedMonthRef.current !== selectedMonth) {
-    prevSelectedMonthRef.current = selectedMonth;
+  // selection from a different month's data set). Tracked with useState
+  // (not useRef) for the "previous value" comparison: React's ref-safety
+  // lint rule disallows reading/writing ref.current during render, and
+  // calling setState conditionally during render is the React-documented
+  // alternative — it still resolves within the same render pass, with no
+  // extra commit versus an effect-based reset.
+  const [prevSelectedMonth, setPrevSelectedMonth] = useState(selectedMonth);
+  if (prevSelectedMonth !== selectedMonth) {
+    setPrevSelectedMonth(selectedMonth);
     setCurrentPage(0);
     setSelectedIds(new Set());
   }
@@ -1080,9 +1085,11 @@ export default function TransactionsPage() {
     sortKey,
     sortDir,
   ].join("|");
-  const prevFilterSortResetKeyRef = useRef(filterSortResetKey);
-  if (prevFilterSortResetKeyRef.current !== filterSortResetKey) {
-    prevFilterSortResetKeyRef.current = filterSortResetKey;
+  const [prevFilterSortResetKey, setPrevFilterSortResetKey] = useState(
+    filterSortResetKey,
+  );
+  if (prevFilterSortResetKey !== filterSortResetKey) {
+    setPrevFilterSortResetKey(filterSortResetKey);
     setCurrentPage(0);
   }
 

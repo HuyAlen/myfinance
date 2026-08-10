@@ -4,6 +4,8 @@ import type {
   CategoryPlanningGroup,
   FinancialGroup,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   SavingAccount,
@@ -546,18 +548,139 @@ export function getTotalSavings(savings: SavingAccount[] = []) {
   return savings.reduce((sum, item) => sum + item.balance, 0);
 }
 
+/**
+ * Net Forex capital contributed: money moved from a wallet into a Forex
+ * cash account, net of withdrawals and fees. This is a COST-BASIS figure
+ * (how much was put in), not the account's current value — the broker's
+ * own account equity (Balance ± running/open P&L, see `ForexAccount.
+ * currentEquity`) is the actual current asset value. Net capital is used
+ * to compute trading profit/loss (`currentEquity - netCapital`), and as a
+ * fallback asset value (see `getForexAssetValue`) for accounts where the
+ * user hasn't entered a current equity yet.
+ */
+export function getForexNetCapital(
+  forexCashTransactions: ForexCashTransaction[],
+) {
+  const totalDeposited = forexCashTransactions
+    .filter((transaction) => transaction.type === "deposit")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalWithdrawn = forexCashTransactions
+    .filter((transaction) => transaction.type === "withdrawal")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalFees = forexCashTransactions.reduce(
+    (sum, transaction) => sum + Math.max(0, transaction.fee ?? 0),
+    0,
+  );
+
+  return totalDeposited - totalWithdrawn - totalFees;
+}
+
+/** Net Forex capital contributed (see `getForexNetCapital`), per account. */
+export function getForexNetCapitalByAccount(
+  forexCashTransactions: ForexCashTransaction[],
+): Map<string, number> {
+  const byAccount = new Map<string, ForexCashTransaction[]>();
+  for (const transaction of forexCashTransactions) {
+    const list = byAccount.get(transaction.forexAccountId) ?? [];
+    list.push(transaction);
+    byAccount.set(transaction.forexAccountId, list);
+  }
+
+  const result = new Map<string, number>();
+  for (const [accountId, transactions] of byAccount) {
+    result.set(accountId, getForexNetCapital(transactions));
+  }
+  return result;
+}
+
+/**
+ * Forex asset value for net worth: each account's current equity (the real
+ * broker-reported account value, including running trading P&L) when the
+ * user has entered one, falling back to that account's net capital
+ * contributed for accounts where equity hasn't been entered yet — so a
+ * Forex account never silently drops out of net worth just because its
+ * live equity hasn't been recorded.
+ */
+export function getForexAssetValue(
+  forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">>,
+  forexCashTransactions: ForexCashTransaction[],
+): number {
+  const netCapitalByAccount = getForexNetCapitalByAccount(
+    forexCashTransactions,
+  );
+
+  return forexAccounts.reduce((sum, account) => {
+    const equity = account.currentEquity;
+    const hasEquity = typeof equity === "number" && Number.isFinite(equity);
+    return (
+      sum + (hasEquity ? equity : (netCapitalByAccount.get(account.id) ?? 0))
+    );
+  }, 0);
+}
+
+export interface NetWorthBreakdown {
+  cashAndWallets: number;
+  savings: number;
+  investments: number;
+  forex: number;
+  totalAssets: number;
+  totalDebt: number;
+  netWorth: number;
+}
+
+/**
+ * Canonical net worth breakdown — the ONLY place the assets-minus-liabilities
+ * equation should be implemented. Dashboard, Reports, and any future
+ * page/AI tool must call this instead of re-deriving net worth locally.
+ *
+ * Assets:
+ * - every wallet's balance, unconditionally (this matches every existing
+ *   consumer of wallet totals — including legacy "investment"-typed wallet
+ *   rows, which are additive here; no evidence was found that their balance
+ *   duplicates an `investments` table entry)
+ * - savings account balances
+ * - investment portfolio current value
+ * - Forex CURRENT ASSET VALUE (see `getForexAssetValue`, not net capital) —
+ *   optional, defaults to 0 for callers that don't track Forex, since it
+ *   isn't part of the core finance domain fetched by every page
+ *
+ * Liabilities:
+ * - total outstanding debt (`Debt.remainingAmount`)
+ */
+export function calculateNetWorth(input: {
+  wallets: Wallet[];
+  savings?: SavingAccount[];
+  investments: Investment[];
+  debts: Debt[];
+  /** Forex current asset value — see `getForexAssetValue`. */
+  forexAssetValue?: number;
+}): NetWorthBreakdown {
+  const cashAndWallets = getTotalAssets(input.wallets);
+  const savings = getTotalSavings(input.savings ?? []);
+  const investments = getTotalInvestmentValue(input.investments);
+  const forex = input.forexAssetValue ?? 0;
+  const totalDebt = getTotalDebt(input.debts);
+  const totalAssets = cashAndWallets + savings + investments + forex;
+  const netWorth = totalAssets - totalDebt;
+
+  return {
+    cashAndWallets,
+    savings,
+    investments,
+    forex,
+    totalAssets,
+    totalDebt,
+    netWorth,
+  };
+}
+
 export function getNetWorth(
   wallets: Wallet[],
   debts: Debt[],
   investments: Investment[] = [],
   savings: SavingAccount[] = [],
 ) {
-  return (
-    getTotalAssets(wallets) +
-    getTotalSavings(savings) +
-    getTotalInvestmentValue(investments) -
-    getTotalDebt(debts)
-  );
+  return calculateNetWorth({ wallets, debts, investments, savings }).netWorth;
 }
 
 export function getTotalIncome(transactions: Transaction[]) {
@@ -901,27 +1024,37 @@ export function calculateDashboardSummary(input: {
   transactions: Transaction[];
   categories?: Category[];
   goals: Goal[];
+  /** Forex current asset value (see `getForexAssetValue`); omit if not tracked. */
+  forexAssetValue?: number;
 }): DashboardSummary {
   const categories = input.categories ?? [];
 
   /**
-   * Snapshot data: current asset position.
-   * Do not derive net worth from transactions and do not apply cash-flow logic here.
+   * Snapshot data: current asset position. Delegates the actual
+   * assets-minus-liabilities equation to `calculateNetWorth` so this summary
+   * can never silently diverge from the canonical net worth calculation.
    */
-  const walletAssets = getTotalAssets(input.wallets);
+  const netWorthBreakdown = calculateNetWorth({
+    wallets: input.wallets,
+    savings: input.savings,
+    investments: input.investments,
+    debts: input.debts,
+    forexAssetValue: input.forexAssetValue,
+  });
+  const walletAssets = netWorthBreakdown.cashAndWallets;
   const liquidBalance = input.wallets
     .filter((wallet) => wallet.type !== "investment")
     .reduce((sum, wallet) => sum + wallet.balance, 0);
-  const savingAssets = getTotalSavings(input.savings ?? []);
-  const investmentAssets = getTotalInvestmentValue(input.investments);
+  const savingAssets = netWorthBreakdown.savings;
+  const investmentAssets = netWorthBreakdown.investments;
   const investedAmount = input.investments.reduce(
     (sum, item) => sum + item.investedAmount,
     0,
   );
   const investmentPL = investmentAssets - investedAmount;
-  const totalDebt = getTotalDebt(input.debts);
-  const totalAssets = walletAssets + savingAssets + investmentAssets;
-  const netWorth = totalAssets - totalDebt;
+  const totalDebt = netWorthBreakdown.totalDebt;
+  const totalAssets = netWorthBreakdown.totalAssets;
+  const netWorth = netWorthBreakdown.netWorth;
 
   /**
    * Flow data: period movement from the already filtered transactions.

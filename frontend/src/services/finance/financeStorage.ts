@@ -354,6 +354,7 @@ type ForexAccountDbRow = {
   status: ForexAccount["status"];
   opened_at?: string | null;
   notes?: string | null;
+  current_equity?: number | string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -375,6 +376,12 @@ type ForexCashTransactionDbRow = {
 };
 
 function fromForexAccountRow(row: ForexAccountDbRow): ForexAccount {
+  const equityRaw = row.current_equity;
+  const equityParsed =
+    equityRaw === null || equityRaw === undefined || equityRaw === ""
+      ? null
+      : Number(equityRaw);
+
   return {
     id: row.id,
     name: row.name,
@@ -384,6 +391,10 @@ function fromForexAccountRow(row: ForexAccountDbRow): ForexAccount {
     status: row.status,
     openedAt: row.opened_at ?? undefined,
     notes: row.notes ?? undefined,
+    currentEquity:
+      equityParsed !== null && Number.isFinite(equityParsed)
+        ? equityParsed
+        : null,
   };
 }
 

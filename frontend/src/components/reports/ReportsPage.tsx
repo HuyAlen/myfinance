@@ -41,6 +41,8 @@ import type {
   Budget,
   Category,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   Transaction,
@@ -51,6 +53,8 @@ import {
   getBudgets,
   getCategories,
   getDebts,
+  getForexAccounts,
+  getForexCashTransactions,
   getGoals,
   getInvestments,
   getTransactions,
@@ -58,12 +62,13 @@ import {
   initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
+  calculateNetWorth,
   formatVND,
   getDebtRatio,
+  getForexAssetValue,
   getGoalEffectiveCurrentAmount,
   getGoalScore,
   getTotalAssets,
-  getTotalDebt,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
@@ -465,6 +470,10 @@ export default function ReportsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [savings, setSavings] = useState<ReportSaving[]>([]);
+  const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
+  const [forexCashTransactions, setForexCashTransactions] = useState<
+    ForexCashTransaction[]
+  >([]);
 
   // Period filter state (preserved)
   const [periodMode, setPeriodMode] = useState<PeriodMode>("year");
@@ -483,8 +492,8 @@ export default function ReportsPage() {
   useEffect(() => {
     async function load() {
       await initFinanceDemoData();
-      const [w, inv, cat, txn, dbt, gls, bdg, savingResult] = await Promise.all(
-        [
+      const [w, inv, cat, txn, dbt, gls, bdg, fxAcc, fxTxn, savingResult] =
+        await Promise.all([
           getWallets(),
           getInvestments(),
           getCategories(),
@@ -492,14 +501,15 @@ export default function ReportsPage() {
           getDebts(),
           getGoals(),
           getBudgets(),
+          getForexAccounts(),
+          getForexCashTransactions(),
           supabase
             ? supabase
                 .from("savings")
                 .select("*")
                 .order("created_at", { ascending: false })
             : Promise.resolve({ data: [], error: null }),
-        ],
-      );
+        ]);
       setWallets(w);
       setInvestments(inv);
       setCategories(cat);
@@ -507,6 +517,8 @@ export default function ReportsPage() {
       setDebts(dbt);
       setGoals(gls);
       setBudgets(bdg);
+      setForexAccounts(fxAcc);
+      setForexCashTransactions(fxTxn);
       if (!savingResult.error) {
         setSavings(
           ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
@@ -565,18 +577,18 @@ export default function ReportsPage() {
     const availableAfterFutureAllocation = saving - futureAllocation;
     const savingRate =
       income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0;
-    const investmentAssets = investments.reduce(
-      (sum, investment) => sum + investment.currentValue,
-      0,
-    );
-    const walletAssets = getTotalAssets(wallets);
-    const savingAssets = savings.reduce(
-      (sum, saving) => sum + getSavingBalance(saving),
-      0,
-    );
-    const totalAssets = walletAssets + savingAssets + investmentAssets;
-    const totalDebt = getTotalDebt(debts);
-    const netWorth = totalAssets - totalDebt;
+    const netWorthBreakdown = calculateNetWorth({
+      wallets,
+      savings,
+      investments,
+      debts,
+      forexAssetValue: getForexAssetValue(forexAccounts, forexCashTransactions),
+    });
+    const investmentAssets = netWorthBreakdown.investments;
+    const savingAssets = netWorthBreakdown.savings;
+    const totalAssets = netWorthBreakdown.totalAssets;
+    const totalDebt = netWorthBreakdown.totalDebt;
+    const netWorth = netWorthBreakdown.netWorth;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
     const goalScore = getGoalScore(goals, transactions);
 
@@ -603,6 +615,8 @@ export default function ReportsPage() {
     wallets,
     investments,
     debts,
+    forexAccounts,
+    forexCashTransactions,
     goals,
     transactions,
     savings,

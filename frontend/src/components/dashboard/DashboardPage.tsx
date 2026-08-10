@@ -51,6 +51,8 @@ import {
   filterTransactionsByDateRange,
   formatVND,
   generateDashboardActions,
+  getForexAssetValue,
+  getForexNetCapital,
   getGoalEffectiveCurrentAmount,
   getGoalLinkedSavingAmount,
 } from "@/src/services/finance/financeCalculations";
@@ -988,29 +990,6 @@ export default function DashboardPage() {
     requestDashboardRefresh,
   );
 
-  // ── Core summary ──────────────────────────────────────────────────────────
-  const baseSummary = useMemo(
-    () =>
-      calculateDashboardSummary({
-        wallets: snapshotWallets,
-        savings,
-        investments: snapshotInvestments,
-        debts: snapshotDebts,
-        transactions: filteredTransactions,
-        categories,
-        goals: snapshotGoals,
-      }),
-    [
-      snapshotWallets,
-      savings,
-      snapshotInvestments,
-      snapshotDebts,
-      filteredTransactions,
-      categories,
-      snapshotGoals,
-    ],
-  );
-
   const savingsSnapshot = useMemo(() => {
     const totalSavings = savings.reduce((sum, item) => sum + item.balance, 0);
     const emergencyFund = savings
@@ -1035,7 +1014,17 @@ export default function DashboardPage() {
       (sum, transaction) => sum + Math.max(0, transaction.fee ?? 0),
       0,
     );
-    const netCapital = totalDeposited - totalWithdrawn - totalFees;
+    // Net capital contributed — a cost-basis figure used for the P&L/ROI
+    // metrics below, and as the canonical fallback asset value for any
+    // account without a manually-entered equity (see getForexAssetValue).
+    const netCapital = getForexNetCapital(forexCashTransactions);
+    // Net worth's actual Forex asset value: each account's current equity
+    // (its real broker-reported value) where entered, falling back to net
+    // capital otherwise — the figure `calculateNetWorth` expects as
+    // `forexAssetValue`. Trading profit/loss (below) is a separate,
+    // presentation-only metric derived FROM this, not part of net worth
+    // itself.
+    const assetValue = getForexAssetValue(forexAccounts, forexCashTransactions);
     const currentEquity = forexAccounts.reduce((sum, account) => {
       const record = account as unknown as Record<string, unknown>;
       const raw =
@@ -1058,6 +1047,7 @@ export default function DashboardPage() {
 
     return {
       balance: netCapital,
+      assetValue,
       totalDeposited,
       totalWithdrawn,
       totalFees,
@@ -1068,6 +1058,31 @@ export default function DashboardPage() {
       roi,
     };
   }, [forexAccounts, forexCashTransactions]);
+
+  // ── Core summary ──────────────────────────────────────────────────────────
+  const baseSummary = useMemo(
+    () =>
+      calculateDashboardSummary({
+        wallets: snapshotWallets,
+        savings,
+        investments: snapshotInvestments,
+        debts: snapshotDebts,
+        transactions: filteredTransactions,
+        categories,
+        goals: snapshotGoals,
+        forexAssetValue: forexSnapshot.assetValue,
+      }),
+    [
+      snapshotWallets,
+      savings,
+      snapshotInvestments,
+      snapshotDebts,
+      filteredTransactions,
+      categories,
+      snapshotGoals,
+      forexSnapshot.assetValue,
+    ],
+  );
 
   const goalMeta = useMemo<DashboardGoalMeta[]>(
     () =>
@@ -1154,22 +1169,9 @@ export default function DashboardPage() {
     );
   }, [periodFlowSummary.income, periodFutureAllocation.totalAmount]);
 
-  const netWorthWithSavings = useMemo(
-    () =>
-      walletLiquidity +
-      savingsSnapshot.totalSavings +
-      forexSnapshot.balance +
-      baseSummary.investmentAssets -
-      baseSummary.totalDebt,
-    [
-      walletLiquidity,
-      savingsSnapshot.totalSavings,
-      forexSnapshot.balance,
-      baseSummary.investmentAssets,
-      baseSummary.totalDebt,
-    ],
-  );
-
+  // `baseSummary.netWorth` already includes Forex (passed in as
+  // `forexAssetValue` above) via the canonical `calculateNetWorth` — no
+  // local net-worth arithmetic needed here anymore.
   const summary = useMemo(
     () => ({
       ...baseSummary,
@@ -1178,7 +1180,6 @@ export default function DashboardPage() {
       liquidBalance: walletLiquidity,
       forexCashBalance: forexSnapshot.balance,
       forexCashFees: forexSnapshot.totalFees,
-      netWorth: netWorthWithSavings,
       saving: periodFutureAllocation.totalAmount,
       savingRate: savingsRateFromSavings,
       goalScore: goalSnapshot.averageProgress,
@@ -1190,7 +1191,6 @@ export default function DashboardPage() {
       walletLiquidity,
       forexSnapshot.balance,
       forexSnapshot.totalFees,
-      netWorthWithSavings,
       periodFutureAllocation.totalAmount,
       savingsRateFromSavings,
       goalSnapshot.averageProgress,

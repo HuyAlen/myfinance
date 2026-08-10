@@ -176,6 +176,14 @@ export type ForexAccount = {
   status: ForexAccountStatus;
   openedAt?: string;
   notes?: string;
+  /**
+   * User-entered current account equity (Balance ± running/open P&L), as
+   * shown on the broker's own platform (e.g. MT4/MT5). This is the account's
+   * actual current value — distinct from net capital contributed (deposits
+   * − withdrawals − fees), which is a cost-basis figure. `null`/undefined
+   * when the user hasn't entered it yet.
+   */
+  currentEquity?: number | null;
 };
 
 export type ForexCashTransaction = {
