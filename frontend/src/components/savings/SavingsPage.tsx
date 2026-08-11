@@ -33,8 +33,9 @@ import type {
   Wallet as WalletType,
 } from "@/src/types/finance";
 import {
-  addTransaction,
-  deleteTransaction,
+  createSavingAccount,
+  createSavingMovement,
+  deleteSavingAccount,
   getWallets,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
@@ -1098,93 +1099,53 @@ export default function SavingsPage({
           return;
         }
 
-        const nextWallet: WalletType = {
-          ...initialWallet,
-          balance: initialWallet.balance - balance,
-        };
+        // Finance Engine v3: wallet debit, the new saving row, and its
+        // initial-deposit ledger row all commit or roll back together —
+        // see supabase/finance-engine-3-savings-atomic.sql. No client-side
+        // wallet arithmetic or manual multi-step undo is needed anymore.
+        const { data: movement, error } = await createSavingAccount({
+          id: crypto.randomUUID(),
+          name,
+          type: form.type,
+          balance,
+          walletId: initialWallet.id,
+          savingTransactionId: crypto.randomUUID(),
+          transactionDate: todayInputValue(),
+          interestRate: interestRate ?? null,
+          maturityDate: selectedConfig.showMaturityDate
+            ? form.maturityDate || null
+            : null,
+          notes: form.notes.trim() || null,
+        });
 
-        const walletResult = await persistWalletBalance(nextWallet);
-        if (walletResult.error) {
-          setIsPersisting(false);
-          setFormError(walletResult.error);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from("savings")
-          .insert(payload)
-          .select(
-            "id,user_id,name,type,balance,wallet_id,interest_rate,maturity_date,notes,created_at,updated_at",
-          )
-          .single();
-
-        if (error) {
-          await persistWalletBalance(initialWallet);
-          setWallets((current) =>
-            current.map((wallet) =>
-              wallet.id === initialWallet.id ? initialWallet : wallet,
-            ),
-          );
+        if (error || !movement) {
           setIsPersisting(false);
           showToast({
             type: "error",
-            message: error.message || "Không thể thêm khoản tiết kiệm.",
+            message: error || "Không thể thêm khoản tiết kiệm.",
           });
           return;
         }
 
-        const savedSaving = mapSavingRowToSaving(data as SavingRow);
+        const savedSaving = mapSavingRowToSaving(
+          movement.saving as SavingRow,
+        );
 
         setWallets((current) =>
           current.map((wallet) =>
-            wallet.id === nextWallet.id ? nextWallet : wallet,
+            wallet.id === movement.wallet.id ? movement.wallet : wallet,
           ),
         );
 
-        const { data: transactionData, error: transactionErrorResponse } =
-          await supabase
-            .from("saving_transactions")
-            .insert({
-              saving_id: savedSaving.id,
-              type: "deposit",
-              amount: balance,
-              wallet_id: initialWallet.id,
-              transaction_date: todayInputValue(),
-              note: "Số dư ban đầu khi tạo khoản tiết kiệm",
-            })
-            .select(
-              "id,saving_id,user_id,type,amount,wallet_id,transaction_date,note,created_at",
-            )
-            .single();
-
-        if (transactionErrorResponse) {
-          await persistWalletBalance(initialWallet);
-          setWallets((current) =>
-            current.map((wallet) =>
-              wallet.id === initialWallet.id ? initialWallet : wallet,
-            ),
-          );
-          setIsPersisting(false);
-          showToast({
-            type: "error",
-            message:
-              transactionErrorResponse.message ||
-              "Không thể lưu giao dịch tạo khoản tiết kiệm.",
-          });
-          return;
-        }
-
         setLocalSavings((current) => [savedSaving, ...current]);
 
-        if (transactionData) {
-          const savedTransaction = mapTransactionRowToTransaction(
-            transactionData as SavingTransactionRow,
-          );
-          setTransactionsBySavingId((current) => ({
-            ...current,
-            [savedSaving.id]: [savedTransaction],
-          }));
-        }
+        const savedTransaction = mapTransactionRowToTransaction(
+          movement.savingTransaction as SavingTransactionRow,
+        );
+        setTransactionsBySavingId((current) => ({
+          ...current,
+          [savedSaving.id]: [savedTransaction],
+        }));
       }
     } else {
       if (!editingSavingId && selectedInitialWallet) {
@@ -1299,6 +1260,91 @@ export default function SavingsPage({
       return;
     }
 
+    const transferTitle =
+      transactionForm.type === "deposit"
+        ? `Nạp vào tiết kiệm: ${selectedSaving.name}`
+        : transactionForm.type === "withdraw"
+          ? `Rút từ tiết kiệm: ${selectedSaving.name}`
+          : `Tất toán tiết kiệm: ${selectedSaving.name}`;
+
+    setIsPersisting(true);
+
+    if (supabase) {
+      // Finance Engine v3: wallet mutation, the main transactions ledger
+      // row, savings.balance mutation, and the saving_transactions ledger
+      // row all commit or roll back together — see
+      // supabase/finance-engine-3-savings-atomic.sql. No client-side wallet
+      // arithmetic or manual multi-step undo is needed anymore. Settlement
+      // always moves the account's authoritative server-side balance, not
+      // the client-supplied `amount`.
+      const { data: movement, error } = await createSavingMovement({
+        savingId: selectedSaving.id,
+        walletId: activeWallet.id,
+        type: transactionForm.type,
+        amount,
+        note: note || transferTitle,
+        transactionDate: todayInputValue(),
+        savingTransactionId: crypto.randomUUID(),
+        financeTransactionId: crypto.randomUUID(),
+      });
+
+      if (error || !movement) {
+        setIsPersisting(false);
+        setTransactionError(error || "Không thể lưu giao dịch tiết kiệm.");
+        return;
+      }
+
+      setWallets((current) => {
+        const nextWallets = current.map((wallet) =>
+          wallet.id === movement.wallet.id ? movement.wallet : wallet,
+        );
+        walletsRef.current = nextWallets;
+        return nextWallets;
+      });
+
+      const savedSaving = mapSavingRowToSaving(movement.saving as SavingRow);
+      const savedTransaction = mapTransactionRowToTransaction(
+        movement.savingTransaction as SavingTransactionRow,
+      );
+
+      setLocalSavings((current) =>
+        current.map((item) =>
+          item.id === selectedSaving.id ? savedSaving : item,
+        ),
+      );
+
+      setTransactionsBySavingId((current) => ({
+        ...current,
+        [selectedSaving.id]: [
+          savedTransaction,
+          ...(current[selectedSaving.id] ?? []),
+        ],
+      }));
+
+      setForm((current) => ({
+        ...current,
+        balance: formatCurrencyInputFromNumber(savedSaving.balance),
+      }));
+
+      setTransactionForm({
+        ...INITIAL_TRANSACTION_FORM,
+        walletId: selectedSaving.walletId ?? activeWallet.id,
+      });
+      setTransactionError("");
+      setIsPersisting(false);
+      showToast({
+        type: "success",
+        message:
+          transactionForm.type === "settlement"
+            ? "Đã tất toán khoản tiết kiệm trên Supabase."
+            : "Đã lưu giao dịch tiết kiệm vào Supabase.",
+      });
+      return;
+    }
+
+    // No Supabase configured (local/demo mode) — fall back to local-only
+    // state, same as the account-creation flow's non-Supabase branch. There
+    // is no RPC to call without a real backend.
     const signedAmount = transactionForm.type === "withdraw" ? -amount : amount;
     const nextBalance =
       transactionForm.type === "settlement"
@@ -1308,7 +1354,6 @@ export default function SavingsPage({
       transactionForm.type === "settlement"
         ? todayInputValue()
         : selectedSaving.maturityDate;
-
     const localTransaction: SavingTransaction = {
       id: `transaction-${Date.now()}`,
       savingId: selectedSaving.id,
@@ -1321,81 +1366,20 @@ export default function SavingsPage({
           ? "Tất toán khoản tiết kiệm"
           : getTransactionLabel(transactionForm.type)),
     };
-
-    // Savings transfer rule:
-    // - Deposit: money leaves the source wallet and enters the saving.
-    // - Withdraw/settlement: money enters the selected target wallet.
-    // The saving transaction log below is history only; it must not be used to
-    // recalculate wallet balances or applied again by the general transaction store.
     const nextWalletBalance =
       transactionForm.type === "deposit"
         ? activeWallet.balance - amount
         : activeWallet.balance + amount;
-
     const nextWallet: WalletType = {
       ...activeWallet,
       balance: nextWalletBalance,
     };
 
-    const transferKind =
-      transactionForm.type === "deposit"
-        ? "saving_deposit"
-        : transactionForm.type === "withdraw"
-          ? "saving_withdraw"
-          : "saving_close";
-    const transferTitle =
-      transactionForm.type === "deposit"
-        ? `Nạp vào tiết kiệm: ${selectedSaving.name}`
-        : transactionForm.type === "withdraw"
-          ? `Rút từ tiết kiệm: ${selectedSaving.name}`
-          : `Tất toán tiết kiệm: ${selectedSaving.name}`;
-    const financeTransactionId = crypto.randomUUID();
-    const transactionCreatedAt = new Date().toISOString();
-
-    setIsPersisting(true);
-
-    if (supabase) {
-      const isSavingDeposit = transactionForm.type === "deposit";
-      const financeTransactionPayload = {
-        id: financeTransactionId,
-        // Finance Engine v2 rule:
-        // Savings deposit / withdraw / settlement are asset movements.
-        // They must be stored as transfer transactions, not income or expense,
-        // so Transactions, Reports, Dashboard and Analytics never count them
-        // in Thu / Chi totals.
-        type: "transfer",
-        amount,
-        categoryId: "",
-        walletId: activeWallet.id,
-        note: transferTitle,
-        transferReference: `${transferKind}:${selectedSaving.id}:${transactionCreatedAt}`,
-        transferReferenceType: "saving",
-        sourceType: isSavingDeposit ? "wallet" : "saving",
-        destinationType: isSavingDeposit ? "saving" : "wallet",
-        // Keep snake_case keys as well because Supabase rows use snake_case
-        // while the app view model mostly uses camelCase.
-        transfer_reference_type: "saving",
-        source_type: isSavingDeposit ? "wallet" : "saving",
-        destination_type: isSavingDeposit ? "saving" : "wallet",
-        date: todayInputValue(),
-      } as Parameters<typeof addTransaction>[0] & Record<string, unknown>;
-
-      const financeTransactionResult = await addTransaction(
-        financeTransactionPayload,
-      );
-
-      if (financeTransactionResult.error) {
-        setIsPersisting(false);
-        setTransactionError(financeTransactionResult.error);
-        return;
-      }
-    } else {
-      const walletResult = await persistWalletBalance(nextWallet);
-      if (walletResult.error) {
-        setIsPersisting(false);
-        setTransactionError(walletResult.error);
-        return;
-      }
+    const walletResult = await persistWalletBalance(nextWallet);
+    if (walletResult.error) {
+      setIsPersisting(false);
+      setTransactionError(walletResult.error);
+      return;
     }
 
     setWallets((current) => {
@@ -1405,83 +1389,6 @@ export default function SavingsPage({
       walletsRef.current = nextWallets;
       return nextWallets;
     });
-
-    let savedTransaction = localTransaction;
-
-    if (supabase) {
-      const { data: transactionData, error: transactionErrorResponse } =
-        await supabase
-          .from("saving_transactions")
-          .insert({
-            saving_id: selectedSaving.id,
-            type: transactionForm.type,
-            amount,
-            wallet_id: activeWallet.id,
-            transaction_date: todayInputValue(),
-            note: localTransaction.note,
-          })
-          .select(
-            "id,saving_id,user_id,type,amount,wallet_id,transaction_date,note,created_at",
-          )
-          .single();
-
-      if (transactionErrorResponse) {
-        await deleteTransaction(financeTransactionId);
-        setWallets((current) => {
-          const nextWallets = current.map((wallet) =>
-            wallet.id === activeWallet.id ? activeWallet : wallet,
-          );
-          walletsRef.current = nextWallets;
-          return nextWallets;
-        });
-        setIsPersisting(false);
-        showToast({
-          type: "error",
-          message:
-            transactionErrorResponse.message ||
-            "Không thể lưu giao dịch tiết kiệm.",
-        });
-        return;
-      }
-
-      const { error: balanceError } = await supabase
-        .from("savings")
-        .update({
-          balance: nextBalance,
-          maturity_date: nextMaturityDate ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedSaving.id);
-
-      if (balanceError) {
-        if (transactionData?.id) {
-          await supabase
-            .from("saving_transactions")
-            .delete()
-            .eq("id", transactionData.id);
-        }
-        await deleteTransaction(financeTransactionId);
-        setWallets((current) => {
-          const nextWallets = current.map((wallet) =>
-            wallet.id === activeWallet.id ? activeWallet : wallet,
-          );
-          walletsRef.current = nextWallets;
-          return nextWallets;
-        });
-        setIsPersisting(false);
-        showToast({
-          type: "error",
-          message:
-            balanceError.message ||
-            "Đã lưu giao dịch nhưng chưa cập nhật được số dư.",
-        });
-        return;
-      }
-
-      savedTransaction = mapTransactionRowToTransaction(
-        transactionData as SavingTransactionRow,
-      );
-    }
 
     setLocalSavings((current) =>
       current.map((item) =>
@@ -1498,7 +1405,7 @@ export default function SavingsPage({
     setTransactionsBySavingId((current) => ({
       ...current,
       [selectedSaving.id]: [
-        savedTransaction,
+        localTransaction,
         ...(current[selectedSaving.id] ?? []),
       ],
     }));
@@ -1527,33 +1434,39 @@ export default function SavingsPage({
     if (!deleteTarget || isPersisting) return;
 
     const savingToDelete = deleteTarget;
+
+    // Deleting a saving does not credit any wallet back — its balance would
+    // otherwise vanish from the system. This is a fast, UX-only guard for
+    // immediate feedback (no round trip); deleteSavingAccount()'s RPC
+    // re-validates the same balance-is-zero rule server-side (MFS06) and is
+    // the actual authoritative check — see finance-engine-3-savings-atomic.sql.
+    if (savingToDelete.balance > 0) {
+      setDeleteTarget(null);
+      showToast({
+        type: "error",
+        message:
+          "Vui lòng rút hết hoặc tất toán khoản tiết kiệm trước khi xóa để tránh mất số dư.",
+      });
+      return;
+    }
+
     const relatedTransactions = transactionsBySavingId[savingToDelete.id] ?? [];
 
     setIsPersisting(true);
 
     try {
       if (supabase) {
-        const { error: transactionDeleteError } = await supabase
-          .from("saving_transactions")
-          .delete()
-          .eq("saving_id", savingToDelete.id);
+        // Finance Engine v3: the ledger delete and the account delete
+        // happen inside one atomic RPC call, which also re-validates the
+        // balance is exactly zero server-side (MFS06) — the authoritative
+        // check, independent of the client-side guard above. See
+        // supabase/finance-engine-3-savings-atomic.sql.
+        const { error: deleteError } = await deleteSavingAccount(
+          savingToDelete.id,
+        );
 
-        if (transactionDeleteError) {
-          throw new Error(
-            transactionDeleteError.message ||
-              "Không thể xóa lịch sử giao dịch tiết kiệm.",
-          );
-        }
-
-        const { error: savingDeleteError } = await supabase
-          .from("savings")
-          .delete()
-          .eq("id", savingToDelete.id);
-
-        if (savingDeleteError) {
-          throw new Error(
-            savingDeleteError.message || "Không thể xóa khoản tiết kiệm.",
-          );
+        if (deleteError) {
+          throw new Error(deleteError);
         }
       }
 

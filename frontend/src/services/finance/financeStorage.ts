@@ -1673,6 +1673,214 @@ export async function getForexCashWalletLinks(): Promise<
   }));
 }
 
+// ─── Finance Engine v3: Savings Atomic Money Movement ──────────────────────
+//
+// See supabase/finance-engine-3-savings-atomic.sql. Both RPCs return a
+// single row combining the updated saving/wallet/ledger state, so callers
+// never need to guess what the resulting balances are.
+
+export type SavingMovementType = "deposit" | "withdraw" | "settlement";
+
+export type SavingAccountRow = {
+  id: string;
+  user_id?: string | null;
+  name: string;
+  type: string;
+  balance: number;
+  wallet_id: string | null;
+  interest_rate: number | null;
+  maturity_date: string | null;
+  notes: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SavingTransactionRow = {
+  id: string;
+  saving_id: string;
+  user_id?: string | null;
+  type: string;
+  amount: number;
+  wallet_id?: string | null;
+  transaction_date: string;
+  note: string | null;
+  created_at?: string;
+};
+
+export type SavingMovementResult = {
+  saving: SavingAccountRow;
+  wallet: Wallet;
+  savingTransaction: SavingTransactionRow;
+};
+
+type SavingMovementRpcRow = {
+  saving: SavingAccountRow;
+  wallet: { id: string; name: string; type: Wallet["type"]; balance: number };
+  saving_transaction: SavingTransactionRow;
+};
+
+/**
+ * Maps the custom SQLSTATEs raised by create_saving_account/
+ * create_saving_movement (see supabase/finance-engine-3-savings-atomic.sql)
+ * to user-facing Vietnamese messages. Falls through to
+ * mapFinanceEngineError for MFE* codes surfaced by the nested
+ * create_finance_transaction call inside create_saving_movement.
+ */
+function mapSavingsEngineError(error: { code?: string; message: string }) {
+  switch (error.code) {
+    case "MFS01":
+      return ERR_NO_AUTH;
+    case "MFS02":
+      return "Số dư tiết kiệm không đủ để thực hiện thao tác này.";
+    case "MFS03":
+      return "Không tìm thấy khoản tiết kiệm hoặc ví liên quan.";
+    case "MFS04":
+      return "Dữ liệu giao dịch tiết kiệm không hợp lệ.";
+    case "MFS05":
+      return "Số dư ví không đủ để tạo khoản tiết kiệm.";
+    case "MFS06":
+      return "Khoản tiết kiệm vẫn còn số dư. Vui lòng rút hết hoặc tất toán trước khi xóa.";
+    default:
+      return mapFinanceEngineError(error);
+  }
+}
+
+function fromSavingMovementRpcRow(row: SavingMovementRpcRow): SavingMovementResult {
+  return {
+    saving: row.saving,
+    wallet: {
+      id: row.wallet.id,
+      name: row.wallet.name,
+      type: row.wallet.type,
+      balance: Number(row.wallet.balance),
+    },
+    savingTransaction: row.saving_transaction,
+  };
+}
+
+/**
+ * Atomically creates a new saving account funded by an initial deposit —
+ * wallet debit, saving row, and initial-deposit ledger row all commit or
+ * roll back together. Does not create a row in the main "transactions"
+ * table (matches existing product behavior — see the SQL migration header).
+ */
+export async function createSavingAccount(input: {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  walletId: string;
+  savingTransactionId: string;
+  transactionDate: string;
+  interestRate?: number | null;
+  maturityDate?: string | null;
+  notes?: string | null;
+}): Promise<{ data: SavingMovementResult | null; error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { data: null, error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase.rpc("create_saving_account", {
+    p_saving_id: input.id,
+    p_name: input.name,
+    p_type: input.type,
+    p_balance: input.balance,
+    p_wallet_id: input.walletId,
+    p_saving_transaction_id: input.savingTransactionId,
+    p_transaction_date: input.transactionDate,
+    p_interest_rate: input.interestRate ?? null,
+    p_maturity_date: input.maturityDate ?? null,
+    p_notes: input.notes ?? null,
+  });
+
+  if (error) {
+    console.error("[financeStorage] createSavingAccount:", error.message);
+    return { data: null, error: mapSavingsEngineError(error) };
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | SavingMovementRpcRow
+    | undefined;
+  if (!row) {
+    return { data: null, error: "Không nhận được phản hồi từ máy chủ." };
+  }
+
+  return { data: fromSavingMovementRpcRow(row), error: null };
+}
+
+/**
+ * Atomically records a deposit, withdrawal, or settlement on an EXISTING
+ * saving — wallet mutation, main "transactions" ledger row (via the nested
+ * create_finance_transaction call), savings.balance mutation, and the
+ * saving_transactions ledger row all commit or roll back together.
+ *
+ * For `type: "settlement"`, the amount actually moved is always the
+ * account's authoritative server-side balance, not `input.amount` — see the
+ * SQL migration header for why.
+ */
+export async function createSavingMovement(input: {
+  savingId: string;
+  walletId: string;
+  type: SavingMovementType;
+  amount: number;
+  note: string;
+  transactionDate: string;
+  savingTransactionId: string;
+  financeTransactionId: string;
+}): Promise<{ data: SavingMovementResult | null; error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { data: null, error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase.rpc("create_saving_movement", {
+    p_saving_id: input.savingId,
+    p_wallet_id: input.walletId,
+    p_type: input.type,
+    p_amount: input.amount,
+    p_note: input.note,
+    p_transaction_date: input.transactionDate,
+    p_saving_transaction_id: input.savingTransactionId,
+    p_finance_transaction_id: input.financeTransactionId,
+  });
+
+  if (error) {
+    console.error("[financeStorage] createSavingMovement:", error.message);
+    return { data: null, error: mapSavingsEngineError(error) };
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | SavingMovementRpcRow
+    | undefined;
+  if (!row) {
+    return { data: null, error: "Không nhận được phản hồi từ máy chủ." };
+  }
+
+  return { data: fromSavingMovementRpcRow(row), error: null };
+}
+
+/**
+ * Atomically deletes a saving account and its saving_transactions ledger —
+ * but only when the RPC's own server-side, locked read of its balance is
+ * exactly zero (MFS06 otherwise). This is the authoritative check; any
+ * client-side `balance > 0` guard is UX convenience only and must not be
+ * relied on for correctness.
+ */
+export async function deleteSavingAccount(
+  savingId: string,
+): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { error } = await supabase.rpc("delete_saving_account", {
+    p_saving_id: savingId,
+  });
+
+  if (error) {
+    console.error("[financeStorage] deleteSavingAccount:", error.message);
+    return { error: mapSavingsEngineError(error) };
+  }
+
+  return { error: null };
+}
+
 // ─── Category CRUD ────────────────────────────────────────────────────────────
 
 export async function addCategory(
