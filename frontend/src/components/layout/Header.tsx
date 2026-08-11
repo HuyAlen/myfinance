@@ -31,6 +31,7 @@ import {
   type DateFilterMode,
 } from "../layout/DateFilterProvider";
 import { signOut } from "@/src/lib/auth";
+import { calculateBudgetSpending } from "@/src/services/finance/financeCalculations";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 
 import {
@@ -220,15 +221,12 @@ function buildNotifications(data: AppData): NotificationItem[] {
   for (const budget of data.budgets.filter((b) => b.month === currentMonth)) {
     const cat = data.categories.find((c) => c.id === budget.categoryId);
     const label = cat?.name ?? "Danh mục";
-    const spent = data.transactions
-      .filter(
-        (t) =>
-          t.type === "expense" &&
-          t.categoryId === budget.categoryId &&
-          t.date.startsWith(budget.month),
-      )
-      .reduce((s, t) => s + t.amount, 0);
-    const pct = budget.limitAmount > 0 ? (spent / budget.limitAmount) * 100 : 0;
+    const spending = calculateBudgetSpending({
+      budget,
+      transactions: data.transactions,
+      categories: data.categories,
+    });
+    const pct = spending.usagePercent;
 
     if (pct >= 100) {
       out.push({

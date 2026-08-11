@@ -40,6 +40,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
+  calculateBudgetSpending,
   calculateRule503020,
   formatVND,
   getCategoryPlanningGroup,
@@ -379,34 +380,11 @@ export default function BudgetsPage() {
     [getCategoryGroup],
   );
 
-  // ── PRESERVED: getSpent ───────────────────────────────────────────────────
+  // ── Canonical: delegates to calculateBudgetSpending ───────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  function getSpent(categoryId: string, month: string) {
-    const group = getCategoryGroup(categoryId);
-
-    return transactions
-      .filter((item) => {
-        if (item.categoryId !== categoryId || !item.date.startsWith(month)) {
-          return false;
-        }
-
-        const transactionType = String(item.type);
-
-        if (group === "saving") {
-          return transactionType === "expense" || transactionType === "saving";
-        }
-
-        if (group === "investment") {
-          return (
-            transactionType === "expense" ||
-            transactionType === "saving" ||
-            transactionType === "investment"
-          );
-        }
-
-        return transactionType === "expense";
-      })
-      .reduce((sum, item) => sum + item.amount, 0);
+  function getSpent(budget: Budget) {
+    return calculateBudgetSpending({ budget, transactions, categories })
+      .spent;
   }
 
   // ── NEW: Smart Budget analytics ───────────────────────────────────────────
@@ -446,7 +424,7 @@ export default function BudgetsPage() {
       0,
     );
     const totalSpent = realExpenseBudgets.reduce(
-      (s, b) => s + getSpent(b.categoryId, b.month),
+      (s, b) => s + getSpent(b),
       0,
     );
     return {
@@ -499,7 +477,7 @@ export default function BudgetsPage() {
       const category = categoryById.get(budget.categoryId);
       const categoryName = category?.name ?? "Danh mục";
       const group = getCategoryPlanningGroup(category);
-      const spent = getSpent(budget.categoryId, budget.month);
+      const spent = getSpent(budget);
       const forecast = getBudgetForecast(
         budget.limitAmount,
         spent,
@@ -1679,7 +1657,7 @@ export default function BudgetsPage() {
         <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredBudgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
-            const spent = getSpent(budget.categoryId, budget.month);
+            const spent = getSpent(budget);
             const pct =
               budget.limitAmount > 0
                 ? Math.round((spent / budget.limitAmount) * 100)

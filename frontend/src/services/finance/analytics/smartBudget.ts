@@ -12,7 +12,10 @@
 
 import type { Budget, Category, Transaction } from "@/src/types/finance";
 
-import { getTotalIncome } from "@/src/services/finance/financeCalculations";
+import {
+  calculateBudgetSpending,
+  getTotalIncome,
+} from "@/src/services/finance/financeCalculations";
 
 import { groupByMonth, lastNMonths, linearRegression, mean } from "./shared";
 import type { InsightData } from "./types";
@@ -189,11 +192,18 @@ export function computeSmartBudget(
       );
       const budgetLimit = budget?.limitAmount ?? 0;
 
-      // Spending in current month
-      const currentTxs = byMonth.get(currentMonth) ?? [];
-      const actualSpend = currentTxs
-        .filter((t) => t.type === "expense" && t.categoryId === cat.id)
-        .reduce((s, t) => s + t.amount, 0);
+      // Spending in current month — canonical Budget Spending Engine, so a
+      // category's spend is computed identically here and on BudgetsPage.
+      const actualSpend = calculateBudgetSpending({
+        budget: budget ?? {
+          id: cat.id,
+          categoryId: cat.id,
+          month: currentMonth,
+          limitAmount: budgetLimit,
+        },
+        transactions,
+        categories,
+      }).spent;
 
       // 3-month historical spending for trend
       const lookbackSpend = months.slice(0, lookbackMonths).map((m) => {

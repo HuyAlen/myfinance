@@ -1,4 +1,11 @@
 import type { Database } from "@/src/lib/database.types";
+import type {
+  Budget,
+  Category,
+  CategoryPlanningGroup,
+  Transaction,
+} from "@/src/types/finance";
+import { calculateBudgetSpendingCollection } from "@/src/services/finance/financeCalculations";
 
 import type {
   AIFinanceToolContext,
@@ -96,6 +103,13 @@ type CategoryRow = {
   id: string;
   name: string;
   type: string;
+  // Canonical Budget Spending needs a category's planning group (see
+  // financeCalculations.getCategoryPlanningGroup). Persisted as
+  // `planning_group` on the categories table (financeStorage.ts's
+  // fromCategoryRow is the authoritative mapper) and already returned by
+  // this file's `select("*")` queries — just not read until now.
+  planning_group?: CategoryPlanningGroup | null;
+  planningGroup?: CategoryPlanningGroup | null;
 };
 
 function currentMonth() {
@@ -140,6 +154,53 @@ function transactionCategoryId(transaction: TransactionRow) {
 
 function transactionWalletId(transaction: TransactionRow) {
   return transaction.walletId ?? transaction.wallet_id ?? "";
+}
+
+// ─── Row → domain adapters (canonical Budget Spending only) ────────────────
+// Minimal, only populate what calculateBudgetSpending actually reads
+// (categoryId/date/type/amount, categoryId/name/type/planningGroup,
+// categoryId/month/limitAmount). No fabricated semantic values.
+
+export function toDomainTransaction(row: TransactionRow): Transaction {
+  return {
+    id: row.id,
+    type: row.type as Transaction["type"],
+    amount: Number(row.amount || 0),
+    categoryId: transactionCategoryId(row),
+    walletId: transactionWalletId(row),
+    note: row.note ?? "",
+    date: row.date,
+  };
+}
+
+export function toDomainCategory(row: CategoryRow): Category {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Category["type"],
+    planningGroup: row.planningGroup ?? row.planning_group ?? undefined,
+  };
+}
+
+export function toDomainBudget(row: BudgetRow): Budget {
+  return {
+    id: row.id,
+    categoryId: row.categoryId,
+    month: row.month,
+    limitAmount: Number(row.limitAmount || 0),
+  };
+}
+
+// Preserves get_budget_status's existing external response contract
+// ("over" | "near" | "on_track"), which never distinguished "no-budget"/
+// "no-spend" (a zero-limit budget is a rare edge case; both map to
+// "on_track", the closest match to the tool's pre-existing behavior).
+export function toToolStatusLabel(
+  status: ReturnType<typeof calculateBudgetSpendingCollection>[number]["status"],
+): "over" | "near" | "on_track" {
+  if (status === "over") return "over";
+  if (status === "near") return "near";
+  return "on_track";
 }
 
 function normalizeSearchText(value: unknown) {
@@ -617,7 +678,7 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
   async execute(context, args) {
     try {
       const month = args.month ?? currentMonth();
-      const [budgets, transactions, categories] = await Promise.all([
+      const [budgetRows, transactionRows, categoryRows] = await Promise.all([
         getRows<BudgetRow>(context, "budgets", (query) =>
           query.eq("month", month),
         ),
@@ -627,42 +688,29 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
         getRows<CategoryRow>(context, "categories"),
       ]);
 
+      const categories = categoryRows.map(toDomainCategory);
       const categoryMap = new Map(
         categories.map((item) => [item.id, item.name]),
       );
 
-      const spendingByCategory = new Map<string, number>();
-
-      for (const transaction of transactions) {
-        if (transaction.type !== "expense") continue;
-
-        const categoryId = transactionCategoryId(transaction);
-
-        spendingByCategory.set(
-          categoryId,
-          (spendingByCategory.get(categoryId) ?? 0) +
-            Number(transaction.amount || 0),
-        );
-      }
-
-      const status = budgets.map((budget) => {
-        const spent = spendingByCategory.get(budget.categoryId) ?? 0;
-        const limit = Number(budget.limitAmount || 0);
-        const usagePercent =
-          limit > 0 ? Math.round((spent / limit) * 1000) / 10 : 0;
-
-        return {
-          budgetId: budget.id,
-          categoryId: budget.categoryId,
-          categoryName: categoryMap.get(budget.categoryId) ?? "Unknown",
-          limit,
-          spent,
-          remaining: limit - spent,
-          usagePercent,
-          status:
-            spent > limit ? "over" : usagePercent >= 85 ? "near" : "on_track",
-        };
+      // Canonical Budget Spending Engine — see financeCalculations.ts.
+      // Do not recompute spent/remaining/usagePercent/over-budget here.
+      const spending = calculateBudgetSpendingCollection({
+        budgets: budgetRows.map(toDomainBudget),
+        transactions: transactionRows.map(toDomainTransaction),
+        categories,
       });
+
+      const status = spending.map((item) => ({
+        budgetId: item.budgetId,
+        categoryId: item.categoryId,
+        categoryName: categoryMap.get(item.categoryId) ?? "Unknown",
+        limit: item.limit,
+        spent: item.spent,
+        remaining: item.remaining,
+        usagePercent: item.usagePercent,
+        status: toToolStatusLabel(item.status),
+      }));
 
       return {
         ok: true,

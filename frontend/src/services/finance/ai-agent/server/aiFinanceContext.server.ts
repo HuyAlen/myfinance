@@ -1,7 +1,52 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/lib/database.types";
+import type { Budget, Category, CategoryPlanningGroup, Transaction } from "@/src/types/finance";
+import { calculateBudgetSpendingCollection } from "@/src/services/finance/financeCalculations";
 
 type Client = SupabaseClient<Database>;
+
+type CategoryRow = Database["public"]["Tables"]["categories"]["Row"] & {
+  // Canonical Budget Spending needs a category's planning group. Persisted
+  // as `planning_group` on the categories table (financeStorage.ts's
+  // fromCategoryRow is the authoritative mapper); the generated Database
+  // type here predates that column, but select("*") already returns it.
+  planning_group?: CategoryPlanningGroup | null;
+  planningGroup?: CategoryPlanningGroup | null;
+};
+
+export function toDomainCategory(row: CategoryRow): Category {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Category["type"],
+    planningGroup: row.planningGroup ?? row.planning_group ?? undefined,
+  };
+}
+
+export function toDomainTransaction(
+  row: Database["public"]["Tables"]["transactions"]["Row"],
+): Transaction {
+  return {
+    id: row.id,
+    type: row.type as Transaction["type"],
+    amount: row.amount,
+    categoryId: row.categoryId,
+    walletId: row.walletId,
+    note: row.note ?? "",
+    date: row.date,
+  };
+}
+
+export function toDomainBudget(
+  row: Database["public"]["Tables"]["budgets"]["Row"],
+): Budget {
+  return {
+    id: row.id,
+    categoryId: row.categoryId,
+    month: row.month,
+    limitAmount: row.limitAmount,
+  };
+}
 
 type FinanceContext = {
   generatedAt: string;
@@ -134,17 +179,21 @@ export async function buildServerFinanceContext(
     .slice(0, 8);
 
   const currentBudgets = budgets.filter((item) => item.month === currentMonth);
-  const budgetStatus = currentBudgets
-    .map((item) => {
-      const spent = expenseByCategory.get(item.categoryId) ?? 0;
-      const limit = Number(item.limitAmount) || 0;
-      return {
-        category: categoryById.get(item.categoryId) ?? "Khác",
-        limit,
-        spent,
-        usagePercent: limit > 0 ? Math.round((spent / limit) * 100) : 0,
-      };
-    })
+
+  // Canonical Budget Spending Engine — see financeCalculations.ts. Do not
+  // recompute spent/usagePercent from expenseByCategory here.
+  const budgetSpending = calculateBudgetSpendingCollection({
+    budgets: currentBudgets.map(toDomainBudget),
+    transactions: transactions.map(toDomainTransaction),
+    categories: categories.map(toDomainCategory),
+  });
+  const budgetStatus = budgetSpending
+    .map((item) => ({
+      category: categoryById.get(item.categoryId) ?? "Khác",
+      limit: item.limit,
+      spent: item.spent,
+      usagePercent: item.usagePercent,
+    }))
     .sort((a, b) => b.usagePercent - a.usagePercent)
     .slice(0, 10);
 

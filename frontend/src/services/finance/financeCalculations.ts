@@ -864,6 +864,133 @@ export function getDisposableCashFlow(
   );
 }
 
+// ─── Canonical Budget Spending Engine ──────────────────────────────────────
+//
+// One Budget row (categoryId + month + limitAmount) must produce the same
+// spent/remaining/usagePercent/over-budget result everywhere it is shown.
+// Transaction-type inclusion mirrors BudgetsPage's original getSpent(): a
+// budget on a "saving"/"investment" planning-group category also counts
+// actual saving/investment-typed transactions in that category, since those
+// represent real progress against that budget line, not just "expense" rows.
+// Ordinary wallet transfers and Savings Finance Engine transfers
+// (type === "transfer") are never matched by any branch below.
+
+export type BudgetSpendingStatus =
+  | "over"
+  | "near"
+  | "on-track"
+  | "no-budget"
+  | "no-spend";
+
+export type BudgetSpending = {
+  budgetId: string;
+  categoryId: string;
+  month: string;
+  limit: number;
+  spent: number;
+  remaining: number;
+  usagePercent: number;
+  isOverBudget: boolean;
+  overAmount: number;
+  status: BudgetSpendingStatus;
+};
+
+function matchesBudgetSpending(
+  transaction: Transaction,
+  budget: Budget,
+  planningGroup: CategoryPlanningGroup,
+): boolean {
+  if (
+    transaction.categoryId !== budget.categoryId ||
+    !transaction.date.startsWith(budget.month)
+  ) {
+    return false;
+  }
+
+  const transactionType = String(transaction.type);
+
+  if (planningGroup === "saving") {
+    return transactionType === "expense" || transactionType === "saving";
+  }
+
+  if (planningGroup === "investment") {
+    return (
+      transactionType === "expense" ||
+      transactionType === "saving" ||
+      transactionType === "investment"
+    );
+  }
+
+  return transactionType === "expense";
+}
+
+function deriveBudgetSpendingStatus(
+  spent: number,
+  limit: number,
+): BudgetSpendingStatus {
+  if (limit === 0) return spent === 0 ? "no-spend" : "no-budget";
+  if (spent > limit) return "over";
+  if (spent >= limit * 0.85) return "near";
+  if (spent === 0) return "no-spend";
+  return "on-track";
+}
+
+/**
+ * Canonical spend/remaining/usage/over-budget calculation for a single
+ * Budget row. Pure, deterministic, no React/Supabase dependency.
+ */
+export function calculateBudgetSpending(input: {
+  budget: Budget;
+  transactions: Transaction[];
+  categories: Category[];
+}): BudgetSpending {
+  const { budget, transactions, categories } = input;
+  const categoryById = buildCategoryMap(categories);
+  const planningGroup = getCategoryPlanningGroup(
+    categoryById.get(budget.categoryId),
+  );
+
+  const spent = transactions
+    .filter((transaction) =>
+      matchesBudgetSpending(transaction, budget, planningGroup),
+    )
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+  const limit = budget.limitAmount;
+  const remaining = limit - spent;
+  const usagePercent = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+  const isOverBudget = spent > limit;
+  const overAmount = Math.max(0, spent - limit);
+
+  return {
+    budgetId: budget.id,
+    categoryId: budget.categoryId,
+    month: budget.month,
+    limit,
+    spent,
+    remaining,
+    usagePercent,
+    isOverBudget,
+    overAmount,
+    status: deriveBudgetSpendingStatus(spent, limit),
+  };
+}
+
+/** Canonical spend calculation for every Budget row in the collection. */
+export function calculateBudgetSpendingCollection(input: {
+  budgets: Budget[];
+  transactions: Transaction[];
+  categories: Category[];
+}): BudgetSpending[] {
+  return input.budgets.map((budget) =>
+    calculateBudgetSpending({
+      budget,
+      transactions: input.transactions,
+      categories: input.categories,
+    }),
+  );
+}
+
 export function getAvailableAfterFutureAllocation(
   transactions: Transaction[],
   categories: Category[] = [],
@@ -2176,28 +2303,25 @@ export function generateDashboardActions(input: {
   const currentBudgets = input.budgets.filter(
     (budget) => budget.month === currentMonth,
   );
-  const currentMonthSpending = buildCategorySpendingData(
-    input.transactions.filter((transaction) =>
-      transaction.date.startsWith(currentMonth),
-    ),
-    input.categories,
-  );
-  const spendingByCategoryId = new Map(
-    currentMonthSpending.map((item) => [item.id, item.value]),
-  );
-  const overBudget = currentBudgets
-    .map((budget) => {
+  const currentBudgetSpending = calculateBudgetSpendingCollection({
+    budgets: currentBudgets,
+    transactions: input.transactions,
+    categories: input.categories,
+  });
+  const overBudget = currentBudgetSpending
+    .map((budgetSpending) => {
+      const budget = currentBudgets.find(
+        (item) => item.id === budgetSpending.budgetId,
+      )!;
       const category = input.categories.find(
         (item) => item.id === budget.categoryId,
       );
-      const spent = spendingByCategoryId.get(budget.categoryId) ?? 0;
-      const overAmount = spent - budget.limitAmount;
       const planningGroup = getCategoryPlanningGroup(category);
 
       return {
         budget,
-        spent,
-        overAmount,
+        spent: budgetSpending.spent,
+        overAmount: budgetSpending.overAmount,
         planningGroup,
         isControllable: planningGroup === "variable",
         categoryName: category?.name ?? "Khac",

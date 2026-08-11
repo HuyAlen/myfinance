@@ -17,6 +17,7 @@ import type {
 } from "@/src/types/finance";
 
 import {
+  calculateBudgetSpending,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -295,18 +296,12 @@ export function computeHealthScoreV2(
 
   // ── 10. Budget adherence ──────────────────────────────────────────────────
   if (budgets.length > 0) {
-    const currentMonth = new Date().toISOString().slice(0, 7);
     const adherentCount = budgets.filter((b) => {
-      const spent = transactions
-        .filter(
-          (t) =>
-            t.type === "expense" &&
-            t.categoryId === b.categoryId &&
-            t.date.startsWith(
-              b.month === currentMonth ? currentMonth : b.month,
-            ),
-        )
-        .reduce((s, t) => s + t.amount, 0);
+      const spent = calculateBudgetSpending({
+        budget: b,
+        transactions,
+        categories,
+      }).spent;
       return spent <= b.limitAmount;
     }).length;
     factors.push({
