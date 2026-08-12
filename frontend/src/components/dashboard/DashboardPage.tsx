@@ -55,7 +55,6 @@ import {
   getForexNetCapital,
   getGoalEffectiveCurrentAmount,
   getGoalLinkedSavingAmount,
-  getTotalAssets,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -1156,11 +1155,6 @@ export default function DashboardPage() {
     };
   }, [goalMeta]);
 
-  const walletLiquidity = useMemo(
-    () => getTotalAssets(snapshotWallets),
-    [snapshotWallets],
-  );
-
   const savingsRateFromSavings = useMemo(() => {
     if (periodFlowSummary.income <= 0) return 0;
 
@@ -1177,7 +1171,6 @@ export default function DashboardPage() {
       ...baseSummary,
       income: periodFlowSummary.income,
       expense: periodFlowSummary.expense,
-      liquidBalance: walletLiquidity,
       forexCashBalance: forexSnapshot.balance,
       forexCashFees: forexSnapshot.totalFees,
       saving: periodFutureAllocation.totalAmount,
@@ -1188,7 +1181,6 @@ export default function DashboardPage() {
       baseSummary,
       periodFlowSummary.income,
       periodFlowSummary.expense,
-      walletLiquidity,
       forexSnapshot.balance,
       forexSnapshot.totalFees,
       periodFutureAllocation.totalAmount,

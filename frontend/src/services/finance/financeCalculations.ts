@@ -536,6 +536,31 @@ export function getTotalAssets(wallets: Wallet[]) {
   return wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
 }
 
+/**
+ * Canonical spendable/liquid Wallet balance — cash, bank, and e-wallet
+ * balances, EXCLUDING the legacy "investment" `WalletType`.
+ *
+ * Product evidence for this definition (see WalletsPage.tsx): the Wallets
+ * domain itself only lets users create/manage `cash`/`bank`/`ewallet`
+ * accounts and explicitly documents all three as "liquid, transferable
+ * accounts" — "investment" is a legacy `WalletType` value hidden from that
+ * UI, kept only so old rows stay additive in Net Worth. Every current-state
+ * consumer of "how much immediately-spendable money does the user have"
+ * (Dashboard's `liquidBalance`, Risk's liquidity dimension, Forecast's
+ * opening cash) should use this instead of re-deriving its own wallet-type
+ * filter.
+ *
+ * Explicitly NOT included (these are current assets, not spendable Wallet
+ * cash — see canonical Net Worth): Savings accounts (some Saving types are
+ * locked, e.g. `term_deposit`/`certificate`), Investments, and Forex
+ * `currentEquity`.
+ */
+export function getSpendableWalletBalance(wallets: Wallet[]) {
+  return wallets
+    .filter((wallet) => wallet.type !== "investment")
+    .reduce((sum, wallet) => sum + wallet.balance, 0);
+}
+
 export function getTotalDebt(debts: Debt[]) {
   return debts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
 }
@@ -1169,9 +1194,7 @@ export function calculateDashboardSummary(input: {
     forexAssetValue: input.forexAssetValue,
   });
   const walletAssets = netWorthBreakdown.cashAndWallets;
-  const liquidBalance = input.wallets
-    .filter((wallet) => wallet.type !== "investment")
-    .reduce((sum, wallet) => sum + wallet.balance, 0);
+  const liquidBalance = getSpendableWalletBalance(input.wallets);
   const savingAssets = netWorthBreakdown.savings;
   const investmentAssets = netWorthBreakdown.investments;
   const investedAmount = input.investments.reduce(

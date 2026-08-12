@@ -10,7 +10,10 @@
 
 import type { Category, Transaction, Wallet } from "@/src/types/finance";
 
-import { getTotalExpense } from "@/src/services/finance/financeCalculations";
+import {
+  getSpendableWalletBalance,
+  getTotalExpense,
+} from "@/src/services/finance/financeCalculations";
 
 import { groupByMonth, lastNMonths, mean } from "./shared";
 import type { InsightData } from "./types";
@@ -22,7 +25,7 @@ export type EmergencyFundStatus = "critical" | "low" | "good" | "excellent";
 export type EmergencyFundAnalysis = {
   /** Rolling average monthly expense over the lookback window (VND). */
   monthlyAvgExpense: number;
-  /** Total balance in cash + bank wallets (liquid reserves). */
+  /** Canonical spendable Wallet balance — see `getSpendableWalletBalance`. */
   liquidCash: number;
   /** How many months of expenses the liquid reserves cover (1 decimal). */
   monthsCovered: number;
@@ -92,7 +95,8 @@ function fmtVND(value: number): string {
 /**
  * Analyses the emergency fund readiness.
  *
- * @param wallets   All user wallets; only cash + bank types count as liquid.
+ * @param wallets   All user wallets; canonical spendable types count as
+ *                  liquid — see `getSpendableWalletBalance`.
  * @param transactions  All transactions used to derive avg monthly expense.
  * @param lookbackMonths  Number of past months used for expense averaging (default 6).
  * @param targetMonths  Target months of coverage (default 6, rule-of-thumb standard).
@@ -113,10 +117,8 @@ export function computeEmergencyFund(
   );
   const monthlyAvgExpense = mean(monthlyExpenses);
 
-  // Liquid reserves = cash + bank wallets only
-  const liquidCash = wallets
-    .filter((w) => w.type === "cash" || w.type === "bank")
-    .reduce((s, w) => s + w.balance, 0);
+  // Canonical spendable Wallet balance (cash + bank + ewallet).
+  const liquidCash = getSpendableWalletBalance(wallets);
 
   const monthsCoveredRaw =
     monthlyAvgExpense > 0 ? liquidCash / monthlyAvgExpense : targetMonths;

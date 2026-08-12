@@ -24,6 +24,7 @@ import {
   getDebtRatio,
   getEmergencyMonths,
   getForexAssetValue,
+  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -108,9 +109,8 @@ export function computeHealthScoreV2(
   const totalDebt = netWorthBreakdown.totalDebt;
   const investmentValue = netWorthBreakdown.investments;
   const totalAssets = netWorthBreakdown.totalAssets;
-  const liquidCash = wallets
-    .filter((w) => w.type === "cash" || w.type === "bank")
-    .reduce((s, w) => s + w.balance, 0);
+  // Canonical spendable Wallet balance (cash + bank + ewallet).
+  const liquidCash = getSpendableWalletBalance(wallets);
 
   const factors: HealthScoreFactor[] = [];
 

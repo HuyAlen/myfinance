@@ -15,6 +15,7 @@ import {
   getEmergencyMonths,
   getSavingRate,
   getSavingScore,
+  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -485,6 +486,7 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
     ],
     returns: [
       "walletAssets",
+      "liquidAssets",
       "investmentAssets",
       "totalAssets",
       "totalDebt",
@@ -545,6 +547,11 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
       const totalDebt = netWorthBreakdown.totalDebt;
       const totalAssets = netWorthBreakdown.totalAssets;
       const netWorth = netWorthBreakdown.netWorth;
+      // Canonical spendable Wallet balance (cash + bank + ewallet) — NOT the
+      // same as `walletAssets` above, which also includes the legacy
+      // "investment" WalletType. Use this for any "how much liquidity/
+      // emergency-fund coverage" question, never `walletAssets`.
+      const liquidAssets = getSpendableWalletBalance(wallets.map(toDomainWallet));
 
       const month = currentMonth();
       const categories = categoryRows.map(toDomainCategory);
@@ -562,6 +569,7 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
         data: {
           month,
           walletAssets,
+          liquidAssets,
           investmentAssets,
           totalAssets,
           totalDebt,
@@ -1240,6 +1248,7 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
       cashFlow: number;
       savingRate: number;
       walletAssets: number;
+      liquidAssets: number;
     };
 
     // Canonical debt/saving scoring — see financeCalculations.ts. The
@@ -1252,9 +1261,12 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
       data.totalAssets > 0 ? data.totalDebt / data.totalAssets : 0;
 
     const monthlyExpense = Math.max(0, data.expense);
+    // `liquidAssets` (cash + bank + ewallet), NOT `walletAssets` — a legacy
+    // "investment"-typed wallet must not inflate reported emergency-fund
+    // coverage.
     const emergencyMonths =
       monthlyExpense > 0
-        ? getEmergencyMonths(data.walletAssets, monthlyExpense)
+        ? getEmergencyMonths(data.liquidAssets, monthlyExpense)
         : 6;
 
     const liquidityScore = Math.min(

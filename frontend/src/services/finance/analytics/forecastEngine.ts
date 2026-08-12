@@ -27,6 +27,7 @@ import type {
 
 import {
   calculateNetWorth,
+  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -176,13 +177,11 @@ export function computeFinancialForecast(
   forexAssetValue = 0,
 ): FinancialForecast {
   // ── Balance sheet snapshot ───────────────────────────────────────────────
-  // currentLiquidBalance is intentionally narrower than net worth: it is the
-  // forecast's own "spendable now" starting cash figure (cash/bank/ewallet
-  // wallets only), not a canonical metric to merge with total net worth.
-  const liquidTypes = new Set<string>(["cash", "bank", "ewallet"]);
-  const currentLiquidBalance = wallets
-    .filter((w) => liquidTypes.has(w.type))
-    .reduce((s, w) => s + w.balance, 0);
+  // currentLiquidBalance is the canonical spendable Wallet balance (see
+  // `getSpendableWalletBalance`) — intentionally narrower than net worth
+  // (excludes Savings/Investments/Forex), but the SAME concept Dashboard's
+  // `liquidBalance` and Risk's liquidity dimension use, not a separate one.
+  const currentLiquidBalance = getSpendableWalletBalance(wallets);
 
   // Current net worth is a base-state metric — delegate to the canonical
   // calculation so the forecast's starting point never diverges from

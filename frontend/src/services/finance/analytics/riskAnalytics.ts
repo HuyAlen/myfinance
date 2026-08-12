@@ -28,6 +28,7 @@ import type {
 import {
   calculateNetWorth,
   getDebtRatio,
+  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -150,11 +151,8 @@ export function computeRiskScore(
   const totalAssets = netWorthBreakdown.totalAssets;
   const totalDebt = netWorthBreakdown.totalDebt;
   const totalInvestmentValue = netWorthBreakdown.investments;
-  const liquidCash = wallets
-    .filter(
-      (w) => w.type === "cash" || w.type === "bank" || w.type === "ewallet",
-    )
-    .reduce((s, w) => s + w.balance, 0);
+  // Canonical spendable Wallet balance (cash + bank + ewallet).
+  const liquidCash = getSpendableWalletBalance(wallets);
 
   // ══════════════════════════════════════════════════════════════════════════
   // DIMENSION 1 — Debt Risk
@@ -199,7 +197,7 @@ export function computeRiskScore(
     (1 - Math.min(cashBufferMonths, 6) / 6) * 100,
   );
   const liquidityFactors = [
-    `Tiền mặt/ngân hàng: ${new Intl.NumberFormat("vi-VN").format(Math.round(liquidCash))} đ`,
+    `Tiền mặt/ngân hàng/ví điện tử: ${new Intl.NumberFormat("vi-VN").format(Math.round(liquidCash))} đ`,
     `Dự phòng: ${Math.round(cashBufferMonths * 10) / 10} tháng (mục tiêu ≥ 6)`,
   ];
 
