@@ -12,6 +12,10 @@ import type {
   Transaction,
   Wallet,
 } from "@/src/types/finance";
+import {
+  buildBudgetsHref,
+  buildGoalsHref,
+} from "@/src/lib/navigation/financeNavigation";
 
 export function formatVND(value: number) {
   const rounded = Math.round(Number.isFinite(value) ? value : 0);
@@ -2366,7 +2370,7 @@ export function generateDashboardActions(input: {
       body: `Da chi ${formatVND(overBudget.spent)} tren han muc ${formatVND(overBudget.budget.limitAmount)} trong thang nay. Nhom: ${getPlanningGroupLabel(overBudget.planningGroup)}.`,
       tone: "danger",
       ctaLabel: "Xem ngân sách",
-      ctaRoute: "/budgets",
+      ctaRoute: buildBudgetsHref({ budgetId: overBudget.budget.id }),
     });
   }
 
@@ -2410,7 +2414,7 @@ export function generateDashboardActions(input: {
           : `Moi dat ${slowGoal.percent}%. Can dong tien duong de uoc tinh thoi gian ve dich.`,
       tone: "warning",
       ctaLabel: "Xem mục tiêu",
-      ctaRoute: "/goals",
+      ctaRoute: buildGoalsHref({ goalId: slowGoal.goal.id }),
     });
   }
 

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { buildTransactionsHref } from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -12,6 +14,7 @@ import {
   Edit3,
   Landmark,
   Plus,
+  ReceiptText,
   Trash2,
   Wallet,
   X,
@@ -947,15 +950,24 @@ export default function WalletsPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openTransferForm(wallet.id)}
-                  disabled={spendableWallets.length < 2}
-                  className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <ArrowLeftRight size={13} />
-                  Chuyển tiền từ ví này
-                </button>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openTransferForm(wallet.id)}
+                    disabled={spendableWallets.length < 2}
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ArrowLeftRight size={13} />
+                    Chuyển tiền
+                  </button>
+                  <Link
+                    href={buildTransactionsHref({ walletId: wallet.id })}
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-100"
+                  >
+                    <ReceiptText size={13} />
+                    Giao dịch
+                  </Link>
+                </div>
               </div>
             );
           })}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { supabase } from "@/src/lib/supabase";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowUpRight,
@@ -311,6 +313,34 @@ export default function GoalsPage() {
   useQuickActionCreateIntent(openCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
+  // Contextual entity focus from Dashboard/Header (?goalId=...): scroll to
+  // and briefly highlight the matching card once it renders. A missing or
+  // already-deleted goalId is ignored — the page just loads normally.
+  const searchParams = useSearchParams();
+  const focusGoalId = parseFocusId(searchParams, "goalId");
+  const [highlightedGoalId, setHighlightedGoalId] = useState<string | null>(
+    null,
+  );
+  const focusedGoalIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focusGoalId || focusedGoalIdRef.current === focusGoalId) return;
+    const el = document.getElementById(`goal-card-${focusGoalId}`);
+    if (!el) return;
+
+    focusedGoalIdRef.current = focusGoalId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightTimer = window.setTimeout(
+      () => setHighlightedGoalId(focusGoalId),
+      0,
+    );
+    const clearTimer = window.setTimeout(() => setHighlightedGoalId(null), 2500);
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusGoalId, goalMeta]);
+
   function openEditForm(goal: Goal) {
     setForm({
       id: goal.id,
@@ -570,9 +600,13 @@ export default function GoalsPage() {
             return (
               <div
                 key={g.id}
+                id={`goal-card-${g.id}`}
                 className={
                   "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
-                  s.border
+                  s.border +
+                  (highlightedGoalId === g.id
+                    ? " ring-2 ring-blue-400 ring-offset-2"
+                    : "")
                 }
               >
                 {/* Header */}

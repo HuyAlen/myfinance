@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import {
+  hasTransactionsContext,
+  parseTransactionsContext,
+} from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -1278,6 +1283,34 @@ export default function TransactionsPage() {
   useQuickActionCreateIntent(openCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const appliedContextKeyRef = useRef<string | null>(null);
+
+  // Contextual drill-down from Budgets/Wallets/Dashboard/Header: seed the
+  // existing filter state from URL params once per distinct navigation.
+  // Params are intentionally left in the URL (not stripped) so a refresh or
+  // a copied link reproduces the same filtered view — see clearFilters()
+  // for how the URL is cleaned up once the user explicitly clears filters.
+  useEffect(() => {
+    if (!hasTransactionsContext(searchParams)) return;
+
+    const parsed = parseTransactionsContext(searchParams);
+    const key = JSON.stringify(parsed);
+    if (appliedContextKeyRef.current === key) return;
+    appliedContextKeyRef.current = key;
+
+    const timer = window.setTimeout(() => {
+      if (parsed.walletId) setWalletFilter(parsed.walletId);
+      if (parsed.categoryId) setCategoryFilter(parsed.categoryId);
+      if (parsed.dateFrom) setDateFrom(parsed.dateFrom);
+      if (parsed.dateTo) setDateTo(parsed.dateTo);
+      if (parsed.type) setTypeFilter(parsed.type);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
   function openEditForm(t: Transaction) {
     if (isForexUnifiedTransaction(t)) {
       toast({
@@ -1557,6 +1590,14 @@ export default function TransactionsPage() {
     setCategoryFilter("");
     setAmountMin("");
     setAmountMax("");
+
+    // Clearing filters that arrived via a contextual drill-down must also
+    // drop those params from the URL — otherwise a refresh would silently
+    // re-apply a filter the user just turned off.
+    if (hasTransactionsContext(searchParams)) {
+      appliedContextKeyRef.current = null;
+      router.replace(pathname, { scroll: false });
+    }
   }
 
   const hasActiveFilters = !!(

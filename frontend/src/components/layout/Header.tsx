@@ -32,6 +32,11 @@ import {
 } from "../layout/DateFilterProvider";
 import { signOut } from "@/src/lib/auth";
 import { calculateBudgetSpending } from "@/src/services/finance/financeCalculations";
+import {
+  buildBudgetsHref,
+  buildDebtsHref,
+  buildGoalsHref,
+} from "@/src/lib/navigation/financeNavigation";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 
 import {
@@ -233,7 +238,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
         id: "bover-" + budget.id,
         title: "Vượt ngân sách · " + label,
         body: "Đã chi " + Math.round(pct) + "% ngân sách tháng này.",
-        href: "/budgets",
+        href: buildBudgetsHref({ budgetId: budget.id }),
         tone: "warning",
         read: false,
       });
@@ -242,7 +247,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
         id: "bnear-" + budget.id,
         title: "Gần vượt ngân sách · " + label,
         body: "Đã dùng " + Math.round(pct) + "% giới hạn tháng này.",
-        href: "/budgets",
+        href: buildBudgetsHref({ budgetId: budget.id }),
         tone: "warning",
         read: false,
       });
@@ -256,7 +261,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
         id: "gdone-" + g.id,
         title: "Mục tiêu hoàn thành · " + g.name,
         body: "Chúc mừng! Bạn đã đạt được mục tiêu này.",
-        href: "/goals",
+        href: buildGoalsHref({ goalId: g.id }),
         tone: "success",
         read: false,
       });
@@ -267,7 +272,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
         body:
           Math.round((g.currentAmount / g.targetAmount) * 100) +
           "% hoàn thành — gần tới đích rồi!",
-        href: "/goals",
+        href: buildGoalsHref({ goalId: g.id }),
         tone: "success",
         read: false,
       });
@@ -286,7 +291,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
           "Mới hoàn trả " +
           Math.round(paidPct) +
           "%. Cân nhắc tăng tốc trả nợ.",
-        href: "/debts",
+        href: buildDebtsHref({ debtId: d.id }),
         tone: "warning",
         read: false,
       });

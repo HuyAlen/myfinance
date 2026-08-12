@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "../layout/DateFilterProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import {
+  buildTransactionsHref,
+  parseFocusId,
+} from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -895,6 +900,37 @@ export default function BudgetsPage() {
   useQuickActionCreateIntent(openCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
 
+  // Contextual entity focus from Dashboard/Header (?budgetId=...): scroll to
+  // and briefly highlight the matching card once it renders. A missing or
+  // already-deleted budgetId is ignored — the page just loads normally.
+  const searchParams = useSearchParams();
+  const focusBudgetId = parseFocusId(searchParams, "budgetId");
+  const [highlightedBudgetId, setHighlightedBudgetId] = useState<string | null>(
+    null,
+  );
+  const focusedBudgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focusBudgetId || focusedBudgetIdRef.current === focusBudgetId) return;
+    const el = document.getElementById(`budget-card-${focusBudgetId}`);
+    if (!el) return;
+
+    focusedBudgetIdRef.current = focusBudgetId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightTimer = window.setTimeout(
+      () => setHighlightedBudgetId(focusBudgetId),
+      0,
+    );
+    const clearTimer = window.setTimeout(
+      () => setHighlightedBudgetId(null),
+      2500,
+    );
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusBudgetId, filteredBudgets]);
+
   function openEditForm(budget: Budget) {
     setForm({
       id: budget.id,
@@ -1680,9 +1716,13 @@ export default function BudgetsPage() {
             return (
               <div
                 key={budget.id}
+                id={`budget-card-${budget.id}`}
                 className={
                   "group relative rounded-3xl border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 " +
-                  s.border
+                  s.border +
+                  (highlightedBudgetId === budget.id
+                    ? " ring-2 ring-blue-400 ring-offset-2"
+                    : "")
                 }
               >
                 <div className="flex items-start justify-between gap-3">
@@ -1716,6 +1756,16 @@ export default function BudgetsPage() {
                     </div>
                   </div>
                   <div className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
+                    <Link
+                      href={buildTransactionsHref({
+                        categoryId: budget.categoryId,
+                        month: budget.month,
+                      })}
+                      aria-label="Xem giao dịch"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
+                    >
+                      <ArrowUpRight size={13} />
+                    </Link>
                     <button
                       onClick={() => openEditForm(budget)}
                       aria-label="Sửa ngân sách"

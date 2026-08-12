@@ -1,10 +1,13 @@
+import { Suspense } from "react";
 import AppShell from "@/src/components/layout/AppShell";
 import DebtsPage from "@/src/components/debts/DebtsPage";
 
 export default function Page() {
   return (
     <AppShell>
-      <DebtsPage />
+      <Suspense fallback={null}>
+        <DebtsPage />
+      </Suspense>
     </AppShell>
   );
 }

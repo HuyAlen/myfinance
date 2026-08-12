@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -421,6 +423,34 @@ export default function DebtsPage() {
       }),
     [debtMeta],
   );
+
+  // Contextual entity focus from Header (?debtId=...): scroll to and briefly
+  // highlight the matching card once it renders. A missing or already-
+  // deleted debtId is ignored — the page just loads normally.
+  const searchParams = useSearchParams();
+  const focusDebtId = parseFocusId(searchParams, "debtId");
+  const [highlightedDebtId, setHighlightedDebtId] = useState<string | null>(
+    null,
+  );
+  const focusedDebtIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focusDebtId || focusedDebtIdRef.current === focusDebtId) return;
+    const el = document.getElementById(`debt-card-${focusDebtId}`);
+    if (!el) return;
+
+    focusedDebtIdRef.current = focusDebtId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightTimer = window.setTimeout(
+      () => setHighlightedDebtId(focusDebtId),
+      0,
+    );
+    const clearTimer = window.setTimeout(() => setHighlightedDebtId(null), 2500);
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusDebtId, sortedDebts]);
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
@@ -979,9 +1009,13 @@ export default function DebtsPage() {
             return (
               <div
                 key={debt.id}
+                id={`debt-card-${debt.id}`}
                 className={
                   "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
-                  s.border
+                  s.border +
+                  (highlightedDebtId === debt.id
+                    ? " ring-2 ring-blue-400 ring-offset-2"
+                    : "")
                 }
               >
                 {/* Card header */}
