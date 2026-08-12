@@ -5,9 +5,11 @@
  * Input: plain data arrays. No side effects. Unit-test-ready.
  */
 
-import type { Goal, Transaction } from "@/src/types/finance";
+import type { Category, Goal, Transaction } from "@/src/types/finance";
 
 import {
+  getGoalEffectiveCurrentAmount,
+  getGoalEffectiveProgress,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -51,13 +53,14 @@ export function predictGoalAchievement(
   goals: Goal[],
   transactions: Transaction[],
   lookbackMonths = 3,
+  categories: Category[] = [],
 ): GoalPrediction[] {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
 
   const monthlySavings = months.map((m) => {
     const txs = byMonth.get(m) ?? [];
-    return getTotalIncome(txs) - getTotalExpense(txs);
+    return getTotalIncome(txs) - getTotalExpense(txs, categories);
   });
 
   const avgMonthlySaving = mean(monthlySavings);
@@ -68,21 +71,19 @@ export function predictGoalAchievement(
       : 0;
 
   return goals.map((goal): GoalPrediction => {
-    const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
-    const progressPercent =
-      goal.targetAmount > 0
-        ? Math.min(
-            100,
-            Math.round((goal.currentAmount / goal.targetAmount) * 100),
-          )
-        : 0;
+    // Delegates to the canonical goal-progress helpers so FIRE/Goals/Reports
+    // never diverge on what counts as a goal's "effective" current amount
+    // (base amount + any linked saving-category transactions).
+    const currentAmount = getGoalEffectiveCurrentAmount({ goal, transactions });
+    const remaining = Math.max(0, goal.targetAmount - currentAmount);
+    const progressPercent = getGoalEffectiveProgress({ goal, transactions });
 
     if (progressPercent >= 100) {
       return {
         goalId: goal.id,
         goalName: goal.name,
         targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount,
+        currentAmount,
         remaining: 0,
         progressPercent: 100,
         monthlyContribution: 0,
@@ -97,7 +98,7 @@ export function predictGoalAchievement(
         goalId: goal.id,
         goalName: goal.name,
         targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount,
+        currentAmount,
         remaining,
         progressPercent,
         monthlyContribution: 0,

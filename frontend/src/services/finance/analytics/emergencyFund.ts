@@ -8,7 +8,7 @@
  * Input: plain data arrays. No side effects. Unit-test-ready.
  */
 
-import type { Transaction, Wallet } from "@/src/types/finance";
+import type { Category, Transaction, Wallet } from "@/src/types/finance";
 
 import { getTotalExpense } from "@/src/services/finance/financeCalculations";
 
@@ -102,13 +102,14 @@ export function computeEmergencyFund(
   transactions: Transaction[],
   lookbackMonths = 6,
   targetMonths = 6,
+  categories: Category[] = [],
 ): EmergencyFundAnalysis {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
 
   // Average monthly expense across the lookback window
   const monthlyExpenses = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
   const monthlyAvgExpense = mean(monthlyExpenses);
 

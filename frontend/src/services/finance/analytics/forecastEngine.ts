@@ -17,13 +17,16 @@
  */
 
 import type {
+  Category,
   Debt,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 
 import {
+  calculateNetWorth,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -157,6 +160,10 @@ function makeScenario(
  * @param investments   All investments (used for net worth calculation).
  * @param transactions  All transactions (used for historical series).
  * @param lookbackMonths  Number of past months to build the model (default 6).
+ * @param categories    Categories used to apply canonical real-expense
+ *                      semantics (excludes saving/investment allocations).
+ * @param savings       Saving accounts included in canonical net worth.
+ * @param forexAssetValue Forex current asset value (see `getForexAssetValue`).
  */
 export function computeFinancialForecast(
   wallets: Wallet[],
@@ -164,20 +171,29 @@ export function computeFinancialForecast(
   investments: Investment[],
   transactions: Transaction[],
   lookbackMonths = 6,
+  categories: Category[] = [],
+  savings: SavingAccount[] = [],
+  forexAssetValue = 0,
 ): FinancialForecast {
   // ── Balance sheet snapshot ───────────────────────────────────────────────
+  // currentLiquidBalance is intentionally narrower than net worth: it is the
+  // forecast's own "spendable now" starting cash figure (cash/bank/ewallet
+  // wallets only), not a canonical metric to merge with total net worth.
   const liquidTypes = new Set<string>(["cash", "bank", "ewallet"]);
   const currentLiquidBalance = wallets
     .filter((w) => liquidTypes.has(w.type))
     .reduce((s, w) => s + w.balance, 0);
 
-  const totalWalletBalance = wallets.reduce((s, w) => s + w.balance, 0);
-  const totalInvestmentValue = investments.reduce(
-    (s, inv) => s + inv.currentValue,
-    0,
-  );
-  const totalDebt = debts.reduce((s, d) => s + d.remainingAmount, 0);
-  const currentNetWorth = totalWalletBalance + totalInvestmentValue - totalDebt;
+  // Current net worth is a base-state metric — delegate to the canonical
+  // calculation so the forecast's starting point never diverges from
+  // Dashboard/Reports' current net worth.
+  const currentNetWorth = calculateNetWorth({
+    wallets,
+    investments,
+    debts,
+    savings,
+    forexAssetValue,
+  }).netWorth;
 
   // ── Historical series (oldest → newest for correct regression direction) ──
   const months = lastNMonths(lookbackMonths).reverse();
@@ -185,7 +201,7 @@ export function computeFinancialForecast(
 
   const incomeSeries = months.map((m) => getTotalIncome(byMonth.get(m) ?? []));
   const expenseSeries = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
 
   // ── OLS regression projections ────────────────────────────────────────────

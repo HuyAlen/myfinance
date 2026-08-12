@@ -69,7 +69,11 @@ import {
   getGoalEffectiveCurrentAmount,
   getGoalScore,
   getTotalAssets,
+  getTotalExpense,
   getTotalIncome,
+  isInvestmentAllocationTransaction,
+  isRealExpenseTransaction as isCanonicalRealExpenseTransaction,
+  isSavingAllocationTransaction,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
 import { computeRiskScore } from "@/src/services/finance/analytics/riskAnalytics";
@@ -316,14 +320,6 @@ function periodLabel(
   }
 }
 
-function normalizeVietnamese(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
-}
-
 function getCategoryOfTransaction(
   transaction: Transaction,
   categories: Category[],
@@ -331,59 +327,28 @@ function getCategoryOfTransaction(
   return categories.find((category) => category.id === transaction.categoryId);
 }
 
-function isSavingCategory(category?: Category): boolean {
-  if (!category) return false;
-  const planningGroup = String(category.planningGroup ?? "");
-  const name = normalizeVietnamese(category.name ?? "");
-
-  return (
-    planningGroup === "saving" ||
-    name.includes("tiet kiem") ||
-    name.includes("quy") ||
-    name.includes("du phong") ||
-    name.includes("tich luy")
-  );
-}
-
-function isInvestmentCategory(category?: Category): boolean {
-  if (!category) return false;
-  const planningGroup = String(category.planningGroup ?? "");
-  const name = normalizeVietnamese(category.name ?? "");
-
-  return (
-    planningGroup === "investment" ||
-    name.includes("dau tu") ||
-    name.includes("trading") ||
-    name.includes("forex") ||
-    name.includes("exness") ||
-    name.includes("crypto") ||
-    name.includes("vang") ||
-    name.includes("co phieu") ||
-    name.includes("chung khoan")
-  );
+// Category classification and "real expense"/saving/investment-allocation
+// semantics are canonical — see financeCalculations.ts. Do not reconstruct
+// them here; a local heuristic here previously drifted from the canonical
+// keyword/planningGroup rules used by Dashboard/Budgets/AI.
+function categoryMapOf(categories: Category[]): Map<string, Category> {
+  return new Map(categories.map((category) => [category.id, category]));
 }
 
 function isSavingTransaction(
   transaction: Transaction,
   categories: Category[],
 ): boolean {
-  const type = String(transaction.type);
-  return (
-    type === "saving" ||
-    (type === "expense" &&
-      isSavingCategory(getCategoryOfTransaction(transaction, categories)))
-  );
+  return isSavingAllocationTransaction(transaction, categoryMapOf(categories));
 }
 
 function isInvestmentTransaction(
   transaction: Transaction,
   categories: Category[],
 ): boolean {
-  const type = String(transaction.type);
-  return (
-    type === "investment" ||
-    (type === "expense" &&
-      isInvestmentCategory(getCategoryOfTransaction(transaction, categories)))
+  return isInvestmentAllocationTransaction(
+    transaction,
+    categoryMapOf(categories),
   );
 }
 
@@ -391,10 +356,9 @@ function isRealExpenseTransaction(
   transaction: Transaction,
   categories: Category[],
 ): boolean {
-  return (
-    String(transaction.type) === "expense" &&
-    !isSavingTransaction(transaction, categories) &&
-    !isInvestmentTransaction(transaction, categories)
+  return isCanonicalRealExpenseTransaction(
+    transaction,
+    categoryMapOf(categories),
   );
 }
 
@@ -406,11 +370,7 @@ function getRealExpenseTotal(
   transactions: Transaction[],
   categories: Category[],
 ): number {
-  return sumTransactions(
-    transactions.filter((transaction) =>
-      isRealExpenseTransaction(transaction, categories),
-    ),
-  );
+  return getTotalExpense(transactions, categories);
 }
 
 function getSavingCapitalTotal(

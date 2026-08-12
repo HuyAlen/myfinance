@@ -22,13 +22,12 @@ import type {
 } from "@/src/types/finance";
 
 import {
+  calculateNetWorth,
   formatVND,
   getDebtRatio,
   getGoalScore,
   getSavingRate,
   getSpendingByCategory,
-  getTotalAssets,
-  getTotalDebt,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -121,12 +120,17 @@ export type AdvisorInput = {
 // ─── Private Helpers ──────────────────────────────────────────────────────────
 
 function computeMetrics(input: AdvisorInput): AdvisorMetrics {
-  const { wallets, debts, transactions, categories, goals } = input;
+  const { wallets, debts, investments, transactions, categories, goals } =
+    input;
 
-  const totalAssets = getTotalAssets(wallets);
-  const totalDebt = getTotalDebt(debts);
+  // Delegates to the canonical net worth calculation so the debt ratio below
+  // is scoped to the same assets total as Dashboard/Reports (wallets +
+  // investments here — savings/Forex are not yet fetched for AI Insights).
+  const netWorthBreakdown = calculateNetWorth({ wallets, investments, debts });
+  const totalAssets = netWorthBreakdown.totalAssets;
+  const totalDebt = netWorthBreakdown.totalDebt;
   const income = getTotalIncome(transactions);
-  const expense = getTotalExpense(transactions);
+  const expense = getTotalExpense(transactions, categories);
   const saving = income - expense;
   const savingRate = getSavingRate(income, expense);
   const debtRatio = getDebtRatio(totalDebt, totalAssets);
@@ -340,14 +344,25 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
   } = input;
 
   const metrics = computeMetrics(input);
-  const emergency = computeEmergencyFund(wallets, transactions);
-  const fire = computeFireAnalysis(wallets, debts, investments, transactions);
+  const emergency = computeEmergencyFund(wallets, transactions, 6, 6, categories);
+  const fire = computeFireAnalysis(
+    wallets,
+    debts,
+    investments,
+    transactions,
+    6,
+    undefined,
+    undefined,
+    categories,
+  );
   const smartBudget = computeSmartBudget(transactions, categories, budgets);
   const financialForecast = computeFinancialForecast(
     wallets,
     debts,
     investments,
     transactions,
+    6,
+    categories,
   );
 
   return {
@@ -375,6 +390,8 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
       goals,
       transactions,
       investments,
+      3,
+      categories,
     ),
     emergencyFund: emergency,
     fire,
@@ -382,6 +399,6 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     financialForecast,
     anomalies: detectSpendingAnomalies(transactions, categories),
     forecast: computeMonthlyForecast(transactions),
-    goalPredictions: predictGoalAchievement(goals, transactions),
+    goalPredictions: predictGoalAchievement(goals, transactions, 3, categories),
   };
 }

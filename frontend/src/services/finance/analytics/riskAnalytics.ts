@@ -16,14 +16,18 @@
  */
 
 import type {
+  Category,
   Debt,
   Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 
 import {
+  calculateNetWorth,
+  getDebtRatio,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -107,6 +111,10 @@ function labelFor(level: RiskLevel): string {
  * @param transactions    All transactions.
  * @param investments     All investments (optional — defaults to []).
  * @param lookbackMonths  Historical window for trend metrics (default 3).
+ * @param categories      Categories used for canonical real-expense
+ *                        semantics (optional — defaults to []).
+ * @param savings         Saving accounts included in canonical net worth.
+ * @param forexAssetValue Forex current asset value (see `getForexAssetValue`).
  */
 export function computeRiskScore(
   wallets: Wallet[],
@@ -115,24 +123,33 @@ export function computeRiskScore(
   transactions: Transaction[],
   investments: Investment[] = [],
   lookbackMonths = 3,
+  categories: Category[] = [],
+  savings: SavingAccount[] = [],
+  forexAssetValue = 0,
 ): RiskScore {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
 
   const monthlyIncome = months.map((m) => getTotalIncome(byMonth.get(m) ?? []));
   const monthlyExpense = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
   const avgIncome = mean(monthlyIncome);
   const avgExpense = mean(monthlyExpense);
 
-  const totalWalletBalance = wallets.reduce((s, w) => s + w.balance, 0);
-  const totalInvestmentValue = investments.reduce(
-    (s, inv) => s + inv.currentValue,
-    0,
-  );
-  const totalAssets = totalWalletBalance + totalInvestmentValue;
-  const totalDebt = debts.reduce((s, d) => s + d.remainingAmount, 0);
+  // Delegates to the canonical net worth calculation — debt risk and
+  // investment-concentration risk must use the same assets/debt totals as
+  // Dashboard/Reports' current net worth, not a locally reconstructed one.
+  const netWorthBreakdown = calculateNetWorth({
+    wallets,
+    investments,
+    debts,
+    savings,
+    forexAssetValue,
+  });
+  const totalAssets = netWorthBreakdown.totalAssets;
+  const totalDebt = netWorthBreakdown.totalDebt;
+  const totalInvestmentValue = netWorthBreakdown.investments;
   const liquidCash = wallets
     .filter(
       (w) => w.type === "cash" || w.type === "bank" || w.type === "ewallet",
@@ -142,8 +159,7 @@ export function computeRiskScore(
   // ══════════════════════════════════════════════════════════════════════════
   // DIMENSION 1 — Debt Risk
   // ══════════════════════════════════════════════════════════════════════════
-  const debtRatio =
-    totalAssets > 0 ? totalDebt / totalAssets : totalDebt > 0 ? 1 : 0;
+  const debtRatio = getDebtRatio(totalDebt, totalAssets) / 100;
   // Monthly debt obligation proxy: assume 2% of remaining debt per month
   const estimatedMonthlyDebtService = totalDebt * 0.02;
   const debtServiceBurden =
@@ -241,7 +257,7 @@ export function computeRiskScore(
   // ══════════════════════════════════════════════════════════════════════════
   // DIMENSION 4 — Investment Risk
   // ══════════════════════════════════════════════════════════════════════════
-  const netWorth = totalAssets - totalDebt;
+  const netWorth = netWorthBreakdown.netWorth;
   // Concentration: what % of net worth is in investments
   const investmentConcentration =
     netWorth > 0 ? clamp((totalInvestmentValue / netWorth) * 100) : 0;

@@ -9,15 +9,21 @@ import type {
   Budget,
   Category,
   Debt,
+  ForexAccount,
   Goal,
   Investment,
   ForexCashTransaction,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 
 import {
   calculateBudgetSpending,
+  calculateNetWorth,
+  getDebtRatio,
+  getEmergencyMonths,
+  getForexAssetValue,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -73,26 +79,35 @@ export function computeHealthScoreV2(
   categories: Category[],
   lookbackMonths = 3,
   forexCashTransactions: ForexCashTransaction[] = [],
+  savings: SavingAccount[] = [],
+  forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">> = [],
 ): HealthScoreV2 {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
 
   const monthlyIncome = months.map((m) => getTotalIncome(byMonth.get(m) ?? []));
   const monthlyExpense = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
   const avgIncome = mean(monthlyIncome);
   const avgExpense = mean(monthlyExpense);
   const avgSaving = avgIncome - avgExpense;
 
-  const walletAssets = wallets.reduce((s, w) => s + w.balance, 0);
-  const forexCashBalance = forexCashTransactions.reduce((sum, transaction) => {
-    const amount = Math.max(0, Number(transaction.amount) || 0);
-    return sum + (transaction.type === "deposit" ? amount : -amount);
-  }, 0);
-  const totalDebt = debts.reduce((s, d) => s + d.remainingAmount, 0);
-  const investmentValue = investments.reduce((s, i) => s + i.currentValue, 0);
-  const totalAssets = walletAssets + investmentValue + forexCashBalance;
+  // Delegates to the canonical net worth calculation (including the
+  // canonical Forex current-asset-value handling — currentEquity with a
+  // net-capital fallback, never net-capital + P&L) instead of reconstructing
+  // assets locally.
+  const forexAssetValue = getForexAssetValue(forexAccounts, forexCashTransactions);
+  const netWorthBreakdown = calculateNetWorth({
+    wallets,
+    investments,
+    debts,
+    savings,
+    forexAssetValue,
+  });
+  const totalDebt = netWorthBreakdown.totalDebt;
+  const investmentValue = netWorthBreakdown.investments;
+  const totalAssets = netWorthBreakdown.totalAssets;
   const liquidCash = wallets
     .filter((w) => w.type === "cash" || w.type === "bank")
     .reduce((s, w) => s + w.balance, 0);
@@ -133,8 +148,7 @@ export function computeHealthScoreV2(
   });
 
   // ── 3. Debt ratio (total debt / total assets) ─────────────────────────────
-  const debtRatio =
-    totalAssets > 0 ? totalDebt / totalAssets : totalDebt > 0 ? 1 : 0;
+  const debtRatio = getDebtRatio(totalDebt, totalAssets) / 100;
   factors.push({
     label: "Tỷ lệ nợ",
     weight: 15,
@@ -154,7 +168,8 @@ export function computeHealthScoreV2(
   });
 
   // ── 4. Emergency fund (liquid cash ÷ avg monthly expense) ────────────────
-  const emergencyMonths = avgExpense > 0 ? liquidCash / avgExpense : 3;
+  const emergencyMonths =
+    avgExpense > 0 ? getEmergencyMonths(liquidCash, avgExpense) : 3;
   factors.push({
     label: "Quỹ khẩn cấp",
     weight: 10,

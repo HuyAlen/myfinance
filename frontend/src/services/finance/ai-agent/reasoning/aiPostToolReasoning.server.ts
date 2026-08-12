@@ -61,7 +61,12 @@ function walletFindings(input: {
 
   const highest = sorted[0];
   const lowest = sorted[sorted.length - 1];
-  const total = sorted.reduce((sum, wallet) => sum + wallet.balance, 0);
+  // get_wallets already computed this same total (see financeReadTools's
+  // getWalletsTool) — reuse it instead of re-summing the row array here.
+  const total =
+    typeof input.data.totalBalance === "number"
+      ? input.data.totalBalance
+      : sorted.reduce((sum, wallet) => sum + wallet.balance, 0);
   const findings: AIFinanceReasoningFinding[] = [];
 
   if (input.capabilities.includes("wallet_list")) {

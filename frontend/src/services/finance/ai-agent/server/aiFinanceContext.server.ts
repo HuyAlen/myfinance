@@ -1,7 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/src/lib/database.types";
-import type { Budget, Category, CategoryPlanningGroup, Transaction } from "@/src/types/finance";
-import { calculateBudgetSpendingCollection } from "@/src/services/finance/financeCalculations";
+import type {
+  Budget,
+  Category,
+  CategoryPlanningGroup,
+  Debt,
+  Investment,
+  Transaction,
+  Wallet,
+} from "@/src/types/finance";
+import {
+  calculateBudgetSpendingCollection,
+  calculateNetWorth,
+  getSavingRate,
+  getTotalExpense,
+  getTotalIncome,
+} from "@/src/services/finance/financeCalculations";
 
 type Client = SupabaseClient<Database>;
 
@@ -48,6 +62,40 @@ export function toDomainBudget(
   };
 }
 
+export function toDomainWallet(
+  row: Database["public"]["Tables"]["wallets"]["Row"],
+): Wallet {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Wallet["type"],
+    balance: row.balance,
+  };
+}
+
+export function toDomainDebt(
+  row: Database["public"]["Tables"]["debts"]["Row"],
+): Debt {
+  return {
+    id: row.id,
+    name: row.name,
+    totalAmount: row.totalAmount,
+    remainingAmount: row.remainingAmount,
+  };
+}
+
+export function toDomainInvestment(
+  row: Database["public"]["Tables"]["investments"]["Row"],
+): Investment {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Investment["type"],
+    currentValue: row.currentValue,
+    investedAmount: row.investedAmount,
+  };
+}
+
 type FinanceContext = {
   generatedAt: string;
   counts: {
@@ -89,10 +137,6 @@ type FinanceContext = {
 
 function monthKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function sum(values: number[]) {
-  return values.reduce((total, value) => total + (Number(value) || 0), 0);
 }
 
 export async function buildServerFinanceContext(
@@ -146,20 +190,17 @@ export async function buildServerFinanceContext(
   const investments = investmentsResult.data ?? [];
 
   const categoryById = new Map(categories.map((item) => [item.id, item.name]));
+  const domainCategories = categories.map(toDomainCategory);
   const monthTransactions = transactions.filter((item) =>
     String(item.date).startsWith(currentMonth),
   );
+  const domainMonthTransactions = monthTransactions.map(toDomainTransaction);
 
-  const income = sum(
-    monthTransactions
-      .filter((item) => item.type === "income")
-      .map((item) => item.amount),
-  );
-  const expense = sum(
-    monthTransactions
-      .filter((item) => item.type === "expense")
-      .map((item) => item.amount),
-  );
+  // Canonical income/expense — see financeCalculations.ts. `getTotalExpense`
+  // excludes saving/investment-planning-group transactions (real expense
+  // semantics), matching Dashboard/Reports.
+  const income = getTotalIncome(domainMonthTransactions);
+  const expense = getTotalExpense(domainMonthTransactions, domainCategories);
 
   const expenseByCategory = new Map<string, number>();
   for (const item of monthTransactions) {
@@ -197,9 +238,17 @@ export async function buildServerFinanceContext(
     .sort((a, b) => b.usagePercent - a.usagePercent)
     .slice(0, 10);
 
-  const walletBalance = sum(wallets.map((item) => item.balance));
-  const totalDebt = sum(debts.map((item) => item.remainingAmount));
-  const investmentValue = sum(investments.map((item) => item.currentValue));
+  // Canonical net worth — see financeCalculations.ts. Savings and Forex are
+  // not part of this AI context snapshot yet, so they default to 0 rather
+  // than being reconstructed here.
+  const netWorthBreakdown = calculateNetWorth({
+    wallets: wallets.map(toDomainWallet),
+    investments: investments.map(toDomainInvestment),
+    debts: debts.map(toDomainDebt),
+  });
+  const walletBalance = netWorthBreakdown.cashAndWallets;
+  const totalDebt = netWorthBreakdown.totalDebt;
+  const investmentValue = netWorthBreakdown.investments;
   const cashFlow = income - expense;
 
   return {
@@ -217,11 +266,11 @@ export async function buildServerFinanceContext(
       walletBalance,
       totalDebt,
       investmentValue,
-      netWorth: walletBalance + investmentValue - totalDebt,
+      netWorth: netWorthBreakdown.netWorth,
       currentMonthIncome: income,
       currentMonthExpense: expense,
       currentMonthCashFlow: cashFlow,
-      savingRate: income > 0 ? Math.round((cashFlow / income) * 1000) / 10 : 0,
+      savingRate: getSavingRate(income, expense),
     },
     topExpenseCategories,
     budgetStatus,

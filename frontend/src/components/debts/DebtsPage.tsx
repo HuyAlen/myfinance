@@ -34,6 +34,7 @@ import {
 import {
   formatVND,
   getTotalAssets,
+  getTotalDebt,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
@@ -160,7 +161,7 @@ export default function DebtsPage() {
   // ── PRESERVED: summary ────────────────────────────────────────────────────
   const summary = useMemo(() => {
     const totalAmount = debts.reduce((s, d) => s + d.totalAmount, 0);
-    const remainingAmount = debts.reduce((s, d) => s + d.remainingAmount, 0);
+    const remainingAmount = getTotalDebt(debts);
     const paidAmount = totalAmount - remainingAmount;
     const paidPercent =
       totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;

@@ -3,9 +3,21 @@ import type {
   Budget,
   Category,
   CategoryPlanningGroup,
+  Debt,
+  Investment,
   Transaction,
+  Wallet,
 } from "@/src/types/finance";
-import { calculateBudgetSpendingCollection } from "@/src/services/finance/financeCalculations";
+import {
+  calculateBudgetSpendingCollection,
+  calculateNetWorth,
+  getDebtScore,
+  getEmergencyMonths,
+  getSavingRate,
+  getSavingScore,
+  getTotalExpense,
+  getTotalIncome,
+} from "@/src/services/finance/financeCalculations";
 
 import type {
   AIFinanceToolContext,
@@ -179,6 +191,40 @@ export function toDomainCategory(row: CategoryRow): Category {
     name: row.name,
     type: row.type as Category["type"],
     planningGroup: row.planningGroup ?? row.planning_group ?? undefined,
+  };
+}
+
+export function toDomainWallet(row: WalletRow): Wallet {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Wallet["type"],
+    balance: Number(row.balance || 0),
+  };
+}
+
+// totalAmount is not selected by this tool's row queries and is not read by
+// any canonical calculation that consumes Debt (only `remainingAmount` is);
+// it is set to `remainingAmount` here purely to satisfy the domain type.
+export function toDomainDebt(row: DebtRow): Debt {
+  return {
+    id: row.id,
+    name: row.name,
+    totalAmount: Number(row.remainingAmount || 0),
+    remainingAmount: Number(row.remainingAmount || 0),
+  };
+}
+
+// investedAmount/type are not selected by this tool's row queries and are
+// not read by any canonical calculation that consumes Investment for net
+// worth (only `currentValue` is); defaulted here to satisfy the domain type.
+export function toDomainInvestment(row: InvestmentRow): Investment {
+  return {
+    id: row.id,
+    name: row.name,
+    type: "other",
+    investedAmount: 0,
+    currentValue: Number(row.currentValue || 0),
   };
 }
 
@@ -477,36 +523,39 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
   validate: parseEmptyArgs,
   async execute(context) {
     try {
-      const [wallets, transactions, debts, investments] = await Promise.all([
-        getRows<WalletRow>(context, "wallets"),
-        getRows<TransactionRow>(context, "transactions"),
-        getRows<DebtRow>(context, "debts"),
-        getRows<InvestmentRow>(context, "investments"),
-      ]);
+      const [wallets, transactions, debts, investments, categoryRows] =
+        await Promise.all([
+          getRows<WalletRow>(context, "wallets"),
+          getRows<TransactionRow>(context, "transactions"),
+          getRows<DebtRow>(context, "debts"),
+          getRows<InvestmentRow>(context, "investments"),
+          getRows<CategoryRow>(context, "categories"),
+        ]);
 
-      const walletAssets = wallets.reduce(
-        (sum, item) => sum + Number(item.balance || 0),
-        0,
-      );
-      const investmentAssets = investments.reduce(
-        (sum, item) => sum + Number(item.currentValue || 0),
-        0,
-      );
-      const totalDebt = debts.reduce(
-        (sum, item) => sum + Number(item.remainingAmount || 0),
-        0,
-      );
+      // Canonical net worth — see financeCalculations.ts. Savings and Forex
+      // are not part of this tool's row set yet, so they default to 0
+      // rather than being reconstructed here.
+      const netWorthBreakdown = calculateNetWorth({
+        wallets: wallets.map(toDomainWallet),
+        investments: investments.map(toDomainInvestment),
+        debts: debts.map(toDomainDebt),
+      });
+      const walletAssets = netWorthBreakdown.cashAndWallets;
+      const investmentAssets = netWorthBreakdown.investments;
+      const totalDebt = netWorthBreakdown.totalDebt;
+      const totalAssets = netWorthBreakdown.totalAssets;
+      const netWorth = netWorthBreakdown.netWorth;
 
       const month = currentMonth();
-      const monthlyTransactions = transactions.filter((item) =>
-        item.date.startsWith(month),
-      );
-      const income = monthlyTransactions
-        .filter((item) => item.type === "income")
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      const expense = monthlyTransactions
-        .filter((item) => item.type === "expense")
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const categories = categoryRows.map(toDomainCategory);
+      const monthlyTransactions = transactions
+        .filter((item) => item.date.startsWith(month))
+        .map(toDomainTransaction);
+      // Canonical income/expense — `getTotalExpense` excludes
+      // saving/investment-planning-group transactions (real expense
+      // semantics), matching Dashboard/Reports.
+      const income = getTotalIncome(monthlyTransactions);
+      const expense = getTotalExpense(monthlyTransactions, categories);
 
       return {
         ok: true,
@@ -514,16 +563,13 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
           month,
           walletAssets,
           investmentAssets,
-          totalAssets: walletAssets + investmentAssets,
+          totalAssets,
           totalDebt,
-          netWorth: walletAssets + investmentAssets - totalDebt,
+          netWorth,
           income,
           expense,
           cashFlow: income - expense,
-          savingRate:
-            income > 0
-              ? Math.round(((income - expense) / income) * 1000) / 10
-              : 0,
+          savingRate: getSavingRate(income, expense),
           counts: {
             wallets: wallets.length,
             transactions: transactions.length,
@@ -1196,30 +1242,20 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
       walletAssets: number;
     };
 
-    const savingScore =
-      data.savingRate >= 40
-        ? 100
-        : data.savingRate > 0
-          ? Math.round((data.savingRate / 40) * 100)
-          : 0;
-
+    // Canonical debt/saving scoring — see financeCalculations.ts. The
+    // liquidity-based composite score and its 0.4/0.3/0.3 weighting stay
+    // tool-specific (a simplified variant, not the canonical multi-factor
+    // getFinancialHealthScore, which also weighs goal progress).
+    const savingScore = getSavingScore(data.savingRate);
+    const debtScore = getDebtScore(data.totalDebt, data.totalAssets);
     const debtRatio =
       data.totalAssets > 0 ? data.totalDebt / data.totalAssets : 0;
 
-    const debtScore =
-      data.totalDebt <= 0
-        ? 100
-        : debtRatio <= 0.2
-          ? 90
-          : debtRatio <= 0.35
-            ? 75
-            : debtRatio <= 0.5
-              ? 55
-              : 25;
-
     const monthlyExpense = Math.max(0, data.expense);
     const emergencyMonths =
-      monthlyExpense > 0 ? data.walletAssets / monthlyExpense : 6;
+      monthlyExpense > 0
+        ? getEmergencyMonths(data.walletAssets, monthlyExpense)
+        : 6;
 
     const liquidityScore = Math.min(
       100,

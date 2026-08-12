@@ -55,6 +55,9 @@ import {
   getForexNetCapital,
   getGoalEffectiveCurrentAmount,
   getGoalLinkedSavingAmount,
+  getTotalAssets,
+  getTotalExpense,
+  getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 
 import type { DashboardActionIcon } from "@/src/services/finance/financeCalculations";
@@ -693,24 +696,21 @@ export default function DashboardPage() {
    * owned accounts.
    */
   const periodFlowSummary = useMemo(() => {
-    return filteredTransactions.reduce(
-      (result, transaction) => {
-        if (isInternalTransferTransaction(transaction)) return result;
-
-        const amount = Math.abs(Number(transaction.amount ?? 0));
-        if (!Number.isFinite(amount) || amount <= 0) return result;
-
-        if (transaction.type === "income") {
-          result.income += amount;
-        } else if (transaction.type === "expense") {
-          result.expense += amount;
-        }
-
-        return result;
-      },
-      { income: 0, expense: 0 },
+    // Canonical income/expense (financeCalculations.ts) — `getTotalExpense`
+    // excludes saving/investment-planning-group categories, matching
+    // Reports/AI. The Dashboard-specific transfer-note heuristic
+    // (`isInternalTransferTransaction`) still runs first since it also
+    // catches mislabeled transfer notes that canonical type-based filtering
+    // does not.
+    const nonTransferTransactions = filteredTransactions.filter(
+      (transaction) => !isInternalTransferTransaction(transaction),
     );
-  }, [filteredTransactions]);
+
+    return {
+      income: getTotalIncome(nonTransferTransactions),
+      expense: getTotalExpense(nonTransferTransactions, categories),
+    };
+  }, [filteredTransactions, categories]);
 
   const periodFutureAllocation = useMemo(() => {
     const savingAmount = Math.max(
@@ -1157,7 +1157,7 @@ export default function DashboardPage() {
   }, [goalMeta]);
 
   const walletLiquidity = useMemo(
-    () => snapshotWallets.reduce((sum, wallet) => sum + wallet.balance, 0),
+    () => getTotalAssets(snapshotWallets),
     [snapshotWallets],
   );
 

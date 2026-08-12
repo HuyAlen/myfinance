@@ -15,13 +15,16 @@
  */
 
 import type {
+  Category,
   Debt,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 
 import {
+  calculateNetWorth,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -195,6 +198,10 @@ function fmtVND(value: number): string {
  * @param lookbackMonths Months of transaction history to average (default 6).
  * @param annualReturn   Expected annual investment return (default 0.07 = 7%).
  * @param swr            Safe withdrawal rate (default 0.04 = 4%).
+ * @param categories     Categories used to apply canonical real-expense
+ *                       semantics (excludes saving/investment allocations).
+ * @param savings        Saving accounts included in canonical net worth.
+ * @param forexAssetValue Forex current asset value (see `getForexAssetValue`).
  */
 export function computeFireAnalysis(
   wallets: Wallet[],
@@ -204,19 +211,26 @@ export function computeFireAnalysis(
   lookbackMonths = 6,
   annualReturn = DEFAULT_ANNUAL_RETURN,
   swr = DEFAULT_SWR,
+  categories: Category[] = [],
+  savings: SavingAccount[] = [],
+  forexAssetValue = 0,
 ): FireAnalysis {
-  // ── Derive net worth ───────────────────────────────────────────────────────
-  const walletTotal = wallets.reduce((s, w) => s + w.balance, 0);
-  const investmentTotal = investments.reduce((s, i) => s + i.currentValue, 0);
-  const debtTotal = debts.reduce((s, d) => s + d.remainingAmount, 0);
-  const netWorth = walletTotal + investmentTotal - debtTotal;
+  // ── Derive net worth — delegates to the canonical calculation so FIRE can
+  // never silently diverge from Dashboard/Reports' current net worth. ───────
+  const netWorth = calculateNetWorth({
+    wallets,
+    investments,
+    debts,
+    savings,
+    forexAssetValue,
+  }).netWorth;
 
   // ── Derive avg monthly income, expense, contribution ──────────────────────
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
 
   const monthlyExpenses = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
   const monthlyIncomes = months.map((m) =>
     getTotalIncome(byMonth.get(m) ?? []),
