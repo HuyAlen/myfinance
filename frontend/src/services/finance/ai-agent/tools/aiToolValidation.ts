@@ -1,3 +1,5 @@
+import { isValidISODate, isValidYearMonth } from "@/src/lib/date/calendarDate";
+
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Tool arguments must be an object.");
@@ -26,7 +28,7 @@ export function parseOptionalMonthArgs(value: unknown): {
     return {};
   }
 
-  if (typeof month !== "string" || !/^\d{4}-\d{2}$/.test(month)) {
+  if (typeof month !== "string" || !isValidYearMonth(month)) {
     throw new Error("month must use YYYY-MM format.");
   }
 
@@ -175,7 +177,19 @@ function optionalDate(input: Record<string, unknown>, key: string) {
     return undefined;
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(value)) {
+  // Real-calendar-date validation — this value feeds a Supabase
+  // .gte/.lte("date", ...) boundary, so an impossible date such as
+  // "2026-02-31" must never pass through (see the HOTFIX report).
+  //
+  // Strict "YYYY-MM-DD" only, no timestamp suffix: the tool's own schema
+  // documents `from`/`to` as "date in YYYY-MM-DD format" (no ISO-timestamp
+  // wording anywhere), `transactions.date` is a plain `text` column that is
+  // never populated with a time component, and the preset resolver
+  // (resolveSearchDatePreset/formatCalendar) only ever produces bare
+  // YYYY-MM-DD. The previous shape regex's `(?:T.*)?` suffix was incidental
+  // permissiveness from an unrelated commit, not a documented or
+  // exercised contract — see the optionalDate compatibility check report.
+  if (!isValidISODate(value)) {
     throw new Error(`${key} must use ISO date format YYYY-MM-DD.`);
   }
 

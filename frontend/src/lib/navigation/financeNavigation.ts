@@ -12,75 +12,23 @@
  * up with dangling `?walletId=&categoryId=`. Every parser is defensive:
  * unknown/invalid params are ignored rather than thrown on, so a stale or
  * hand-edited URL can never crash a destination page.
+ *
+ * Calendar-date validation/expansion (isValidYearMonth, isValidISODate,
+ * getMonthDateRange) is NOT implemented here — it lives in the generic,
+ * navigation-free `src/lib/date/calendarDate.ts` and is re-exported below
+ * so existing imports of this module keep working. AI read tools
+ * (financeReadTools.server.ts) need the exact same month/date math for
+ * Supabase query boundaries and import it from that shared module directly
+ * rather than from this navigation-specific one — see the HOTFIX report.
  */
 
-const YEAR_MONTH_SHAPE = /^(\d{4})-(\d{2})$/;
-const ISO_DATE_SHAPE = /^(\d{4})-(\d{2})-(\d{2})$/;
+export {
+  getMonthDateRange,
+  isValidISODate,
+  isValidYearMonth,
+} from "@/src/lib/date/calendarDate";
 
-/**
- * Semantic "YYYY-MM" validation — shape AND a real calendar month (01-12).
- * No year-range restriction is imposed; none existed in the domain before
- * this patch, so none is invented here.
- */
-export function isValidYearMonth(value: string): boolean {
-  const match = YEAR_MONTH_SHAPE.exec(value);
-  if (!match) return false;
-
-  const month = Number(match[2]);
-  return month >= 1 && month <= 12;
-}
-
-/**
- * Number of calendar days in `month` (1-12) of `year`, using explicit UTC
- * construction so the result never shifts with the host's local timezone.
- * `Date.UTC(year, month, 0)` is "day 0 of the (0-indexed) `month`-th month",
- * i.e. the last day of the 1-indexed `month` passed in — correct for every
- * month including December (rolls into next year's January index 12,
- * landing back on Dec 31 of `year`) and leap-year Februaries.
- */
-function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-/**
- * Semantic ISO date ("YYYY-MM-DD") validation — shape, a real calendar
- * month, AND a day that actually exists in that year/month (correct
- * Gregorian leap-year handling via `daysInMonth`, not JS Date's silent
- * month-rollover normalization).
- */
-export function isValidISODate(value: string): boolean {
-  const match = ISO_DATE_SHAPE.exec(value);
-  if (!match) return false;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-
-  if (month < 1 || month > 12) return false;
-  if (day < 1 || day > 31) return false;
-
-  return day <= daysInMonth(year, month);
-}
-
-/**
- * Expands a valid "YYYY-MM" into its actual calendar start/end dates —
- * e.g. "2026-02" -> {dateFrom: "2026-02-01", dateTo: "2026-02-28"},
- * "2028-02" -> {..., dateTo: "2028-02-29"}. Returns `undefined` for an
- * invalid month, matching this module's "ignore invalid context" contract.
- */
-export function getMonthDateRange(
-  month: string,
-): { dateFrom: string; dateTo: string } | undefined {
-  if (!isValidYearMonth(month)) return undefined;
-
-  const [yearStr, monthStr] = month.split("-");
-  const lastDay = daysInMonth(Number(yearStr), Number(monthStr));
-
-  return {
-    dateFrom: `${month}-01`,
-    dateTo: `${month}-${String(lastDay).padStart(2, "0")}`,
-  };
-}
+import { getMonthDateRange, isValidISODate } from "@/src/lib/date/calendarDate";
 
 function buildQuery(params: Record<string, string | undefined | null>) {
   const search = new URLSearchParams();

@@ -19,6 +19,7 @@ import {
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
+import { getMonthDateRange } from "@/src/lib/date/calendarDate";
 
 import type {
   AIFinanceToolContext,
@@ -732,12 +733,22 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
   async execute(context, args) {
     try {
       const month = args.month ?? currentMonth();
+      // `month` is already validated as a real calendar month by
+      // parseOptionalMonthArgs (isValidYearMonth) or is our own
+      // currentMonth() — getMonthDateRange must succeed here. The explicit
+      // check still guards against a real calendar date boundary ever being
+      // fabricated (e.g. the previous "YYYY-MM-31" bug) reaching Supabase.
+      const monthRange = getMonthDateRange(month);
+      if (!monthRange) {
+        throw new Error("month must use YYYY-MM format.");
+      }
+
       const [budgetRows, transactionRows, categoryRows] = await Promise.all([
         getRows<BudgetRow>(context, "budgets", (query) =>
           query.eq("month", month),
         ),
         getRows<TransactionRow>(context, "transactions", (query) =>
-          query.gte("date", `${month}-01`).lte("date", `${month}-31`),
+          query.gte("date", monthRange.dateFrom).lte("date", monthRange.dateTo),
         ),
         getRows<CategoryRow>(context, "categories"),
       ]);
