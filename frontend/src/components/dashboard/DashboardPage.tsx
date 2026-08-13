@@ -760,8 +760,59 @@ export default function DashboardPage() {
 
   const reloadData = useCallback(async () => {
     markInstant("dashboard:reload:start");
+    const fetchRange = getDashboardFetchRange(selectedYear);
+
+    // PRIMARY group: every dataset `calculateDashboardSummary` needs for the
+    // above-the-fold KPI cards (Net Worth, income/expense, liquidity,
+    // goalScore). `isDashboardReady` is released as soon as this group
+    // resolves — it never waits on the SECONDARY group below.
+    //
+    // Forex cash transactions MUST stay primary: `getForexAssetValue`
+    // (called below via `forexSnapshot.assetValue`, which feeds
+    // `calculateDashboardSummary`'s `forexAssetValue`) falls back to the net
+    // deposits-withdrawals-fees of this ledger for any Forex account
+    // without a manually-entered `currentEquity`. Deferring it would let
+    // Net Worth paint with that fallback silently missing, then jump once
+    // the ledger arrives — see the PERF-1 Forex correctness patch.
+    const primaryPromise = Promise.all([
+      getWallets(),
+      getInvestments(),
+      getForexAccounts(),
+      supabase
+        ? supabase.from("forex_accounts").select("id,current_equity")
+        : Promise.resolve({ data: [], error: null }),
+      getForexCashTransactions(),
+      getCategories(),
+      getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
+      getDebts(),
+      getGoals(),
+      supabase
+        ? supabase
+            .from("savings")
+            .select("*")
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    // SECONDARY group: feeds only supplementary content (period saving/
+    // investment allocation, Budget recommendation card) — neither is read
+    // by `calculateDashboardSummary`. Started concurrently with PRIMARY
+    // (not after it) so it isn't a waterfall, but its own resolution/
+    // failure never gates or fails the primary KPIs.
+    const secondaryPromise = Promise.all([
+      getBudgets(),
+      supabase
+        ? supabase
+            .from("saving_transactions")
+            .select(
+              "id,saving_id,type,amount,transaction_date,created_at,note",
+            )
+            .order("transaction_date", { ascending: false })
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
     try {
-      const fetchRange = getDashboardFetchRange(selectedYear);
       const [
         w,
         inv,
@@ -772,41 +823,12 @@ export default function DashboardPage() {
         txn,
         dbt,
         gls,
-        bdg,
         savingRows,
-        savingTxnRows,
-      ] = await Promise.all([
-        getWallets(),
-        getInvestments(),
-        getForexAccounts(),
-        supabase
-          ? supabase.from("forex_accounts").select("id,current_equity")
-          : Promise.resolve({ data: [], error: null }),
-        getForexCashTransactions(),
-        getCategories(),
-        getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
-        getDebts(),
-        getGoals(),
-        getBudgets(),
-        supabase
-          ? supabase
-              .from("savings")
-              .select("*")
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-        supabase
-          ? supabase
-              .from("saving_transactions")
-              .select(
-                "id,saving_id,type,amount,transaction_date,created_at,note",
-              )
-              .order("transaction_date", { ascending: false })
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+      ] = await primaryPromise;
 
       setWallets(w ?? []);
       setInvestments(inv ?? []);
+      setForexCashTransactions(forexTxn ?? []);
 
       const equityByAccountId = new Map<string, number | null>();
       if (!forexEquityRows.error) {
@@ -839,12 +861,10 @@ export default function DashboardPage() {
           currentEquity: equityByAccountId.get(account.id) ?? null,
         })),
       );
-      setForexCashTransactions(forexTxn ?? []);
       setCategories(cat ?? []);
       setTransactions(txn ?? []);
       setDebts(dbt ?? []);
       setGoals(gls ?? []);
-      setBudgets(bdg ?? []);
 
       if (!savingRows.error) {
         setSavings(
@@ -858,20 +878,6 @@ export default function DashboardPage() {
           savingRows.error,
         );
         setSavings([]);
-      }
-
-      if (!savingTxnRows.error) {
-        setSavingTransactions(
-          ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
-            mapSavingTransactionRow,
-          ),
-        );
-      } else {
-        console.error(
-          "[DashboardPage] Failed to load saving transactions",
-          savingTxnRows.error,
-        );
-        setSavingTransactions([]);
       }
 
       // Release the dashboard only after every source used by the KPI cards
@@ -897,6 +903,32 @@ export default function DashboardPage() {
         "dashboard:reload:end",
         { status: "error" },
       );
+    }
+
+    // Secondary content resolves and paints independently — a slow or
+    // failed secondary fetch never blocks or fails the primary KPIs above.
+    try {
+      const [bdg, savingTxnRows] = await secondaryPromise;
+
+      setBudgets(bdg ?? []);
+
+      if (!savingTxnRows.error) {
+        setSavingTransactions(
+          ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
+            mapSavingTransactionRow,
+          ),
+        );
+      } else {
+        console.error(
+          "[DashboardPage] Failed to load saving transactions",
+          savingTxnRows.error,
+        );
+        setSavingTransactions([]);
+      }
+    } catch (error) {
+      console.error("[DashboardPage] secondary reloadData failed", error);
+      // Keep the last-known secondary snapshot on transient failure, same
+      // policy as the primary group above.
     }
   }, [selectedYear]);
 
