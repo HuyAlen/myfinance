@@ -9,6 +9,10 @@ import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { formatCompactVND } from "./dashboardFormat";
 import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
+import {
+  isHeroReady,
+  shouldMarkReady,
+} from "@/src/lib/dashboard/dashboardReadiness";
 
 import {
   AlertTriangle,
@@ -674,7 +678,60 @@ export default function DashboardPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  // Each readiness flag below covers exactly the dependencies its own
+  // consumer(s) mathematically need — audited field-by-field, not assumed
+  // from which fetch group a value happens to be spread from:
+  //
+  //   cashFlowReady        transactions + categories
+  //                        → periodFlowSummary (income/expense), "Dòng tiền ròng"
+  //   goalsReady           goals + transactions + savings
+  //                        → goalMeta/goalSnapshot, "Mục tiêu"
+  //   emergencyFundReady   savings + transactions + categories
+  //                        → savingsSnapshot.emergencyFund / summary.monthlyExpense
+  //                          (monthlyExpense is baseSummary's own field, but it is
+  //                          mathematically getMonthlyExpenseEstimate(transactions,
+  //                          categories) — it does NOT depend on wallets/
+  //                          investments/debts/Forex, so gating this card on the
+  //                          full asset bundle would be an over-broad, not just
+  //                          over-narrow, dependency), "Quỹ khẩn cấp"
+  //   savingInvestmentReady transactions + categories + savings + Forex ledger
+  //                        + the SECONDARY saving_transactions ledger
+  //                        → savingsRateFromSavings/periodFutureAllocation +
+  //                          savingsSnapshot.totalSavings, "Tiết kiệm & Đầu tư".
+  //                          This one genuinely depends on secondary data, so it
+  //                          is allowed to become ready only once that resolves
+  //                          too — never before, per the mandatory first-paint
+  //                          invariant (no incomplete allocation%).
+  //   forexReady           forex accounts + current_equity + Forex ledger
+  //                        → forexSnapshot, "Forex" card
+  //   isDashboardReady      wallets + investments + debts + savings + complete
+  //                        Forex asset value — the canonical Net Worth asset/
+  //                        liability bundle (`calculateDashboardSummary`'s
+  //                        netWorth/totalAssets/totalDebt/liquidBalance/
+  //                        debtRatio fields). Gates the Hero-adjacent
+  //                        `hasNoDebt` badge and the `dashboard_critical_ready`
+  //                        metric. Does NOT need transactions/categories/goals —
+  //                        none of the fields it gates read them.
   const [isDashboardReady, setIsDashboardReady] = useState(false);
+  const [cashFlowReady, setCashFlowReady] = useState(false);
+  const [goalsReady, setGoalsReady] = useState(false);
+  const [emergencyFundReady, setEmergencyFundReady] = useState(false);
+  const [savingInvestmentReady, setSavingInvestmentReady] = useState(false);
+  const [forexReady, setForexReady] = useState(false);
+
+  // Tracks whether each readiness domain has EVER completed a successful
+  // load. A rejected fetch on the very first load must NOT flip its ready
+  // flag — that would let an initial empty/zero state render as if it were
+  // a real, loaded value (see the PERF-2 correctness patch). Once a domain
+  // has loaded successfully at least once, a later failure keeps showing
+  // the last-known-good snapshot and readiness stays true, matching the
+  // existing "never flash 0 on a transient refresh failure" policy.
+  const hasLoadedCashFlowRef = useRef(false);
+  const hasLoadedGoalsRef = useRef(false);
+  const hasLoadedEmergencyFundRef = useRef(false);
+  const hasLoadedSavingInvestmentRef = useRef(false);
+  const hasLoadedForexRef = useRef(false);
+  const hasLoadedNetWorthRef = useRef(false);
   const { dateRange, selectedYear } = useDateFilter();
 
   const filteredTransactions = useMemo(
@@ -762,75 +819,292 @@ export default function DashboardPage() {
     markInstant("dashboard:reload:start");
     const fetchRange = getDashboardFetchRange(selectedYear);
 
-    // PRIMARY group: every dataset `calculateDashboardSummary` needs for the
-    // above-the-fold KPI cards (Net Worth, income/expense, liquidity,
-    // goalScore). `isDashboardReady` is released as soon as this group
-    // resolves — it never waits on the SECONDARY group below.
-    //
-    // Forex cash transactions MUST stay primary: `getForexAssetValue`
-    // (called below via `forexSnapshot.assetValue`, which feeds
-    // `calculateDashboardSummary`'s `forexAssetValue`) falls back to the net
-    // deposits-withdrawals-fees of this ledger for any Forex account
-    // without a manually-entered `currentEquity`. Deferring it would let
-    // Net Worth paint with that fallback silently missing, then jump once
-    // the ledger arrives — see the PERF-1 Forex correctness patch.
-    const primaryPromise = Promise.all([
-      getWallets(),
-      getInvestments(),
-      getForexAccounts(),
-      supabase
-        ? supabase.from("forex_accounts").select("id,current_equity")
-        : Promise.resolve({ data: [], error: null }),
-      getForexCashTransactions(),
-      getCategories(),
-      getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
-      getDebts(),
-      getGoals(),
-      supabase
-        ? supabase
-            .from("savings")
-            .select("*")
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    // Every dataset is fetched exactly ONCE per reload cycle via these named
+    // promises, all started concurrently below. Each readiness group further
+    // down awaits only the subset it actually needs — a shared dataset
+    // (e.g. `transactions`, `savings`) is awaited by more than one group,
+    // but never fetched twice.
+    const walletsPromise = getWallets();
+    const investmentsPromise = getInvestments();
+    const forexAccountsPromise = getForexAccounts();
+    const forexEquityPromise = supabase
+      ? supabase.from("forex_accounts").select("id,current_equity")
+      : Promise.resolve({ data: [], error: null });
+    // Forex cash transactions feed both the canonical Net Worth fallback
+    // (getForexAssetValue falls back to this ledger's net deposits-
+    // withdrawals-fees for any account without a manually-entered
+    // currentEquity — see the PERF-1 Forex correctness patch, unchanged
+    // here) and the narrower Forex-card-only readiness group below.
+    const forexLedgerPromise = getForexCashTransactions();
+    const categoriesPromise = getCategories();
+    const transactionsPromise = getTransactionsInRange(
+      fetchRange.startDate,
+      fetchRange.endDate,
+    );
+    const debtsPromise = getDebts();
+    const goalsPromise = getGoals();
+    const savingsPromise = supabase
+      ? supabase
+          .from("savings")
+          .select("*")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null });
+    // SECONDARY in startup priority (never blocks Net Worth/Cash Flow/
+    // Goals/Emergency Fund/Forex), but "Tiết kiệm & Đầu tư" genuinely needs
+    // this ledger for a correct allocation % — see savingInvestmentGroup.
+    const savingTransactionsPromise = supabase
+      ? supabase
+          .from("saving_transactions")
+          .select("id,saving_id,type,amount,transaction_date,created_at,note")
+          .order("transaction_date", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null });
+    const budgetsPromise = getBudgets();
 
-    // SECONDARY group: feeds only supplementary content (period saving/
-    // investment allocation, Budget recommendation card) — neither is read
-    // by `calculateDashboardSummary`. Started concurrently with PRIMARY
-    // (not after it) so it isn't a waterfall, but its own resolution/
-    // failure never gates or fails the primary KPIs.
-    const secondaryPromise = Promise.all([
-      getBudgets(),
-      supabase
-        ? supabase
-            .from("saving_transactions")
-            .select(
-              "id,saving_id,type,amount,transaction_date,created_at,note",
-            )
-            .order("transaction_date", { ascending: false })
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    // Returns true on success. On a Supabase-level error (not a thrown
+    // exception — the query resolved, just with `.error` set), the
+    // previous `savings` state is left untouched rather than cleared to
+    // `[]`, so a later reload failure can never overwrite a prior
+    // successful snapshot with a fake empty one. Callers use the returned
+    // boolean to decide whether their own readiness flag may flip.
+    function applySavingsResult(savingRows: {
+      data: unknown;
+      error: { message: string } | null;
+    }): boolean {
+      if (!savingRows.error) {
+        setSavings(
+          ((savingRows.data ?? []) as SavingRow[]).map(
+            mapSavingRowToSavingAccount,
+          ),
+        );
+        return true;
+      } else {
+        console.error(
+          "[DashboardPage] Failed to load savings",
+          savingRows.error,
+        );
+        return false;
+      }
+    }
 
+    // CASH FLOW group — `periodFlowSummary` (income/expense, "Dòng tiền
+    // ròng") is computed purely from transactions+categories.
+    const cashFlowGroupPromise = (async () => {
+      try {
+        const [txn, cat] = await Promise.all([
+          transactionsPromise,
+          categoriesPromise,
+        ]);
+        setTransactions(txn ?? []);
+        setCategories(cat ?? []);
+        setCashFlowReady(true);
+        hasLoadedCashFlowRef.current = true;
+      } catch (error) {
+        console.error("[DashboardPage] cash-flow reload failed", error);
+        // A first-load failure with no prior successful snapshot must NOT
+        // flip readiness — that would let the initial empty state render
+        // as if it were a real, loaded income/expense of 0. A later
+        // (post-success) failure keeps the last-known-good snapshot and
+        // readiness stays true, matching the app's existing "never flash
+        // 0 on a transient refresh failure" policy.
+        if (hasLoadedCashFlowRef.current) setCashFlowReady(true);
+      }
+    })();
+
+    // GOALS group — goal progress (`goalMeta`/`goalSnapshot`, "Mục tiêu")
+    // needs goals + transactions + savings, never investments/debts/Forex.
+    const goalsGroupPromise = (async () => {
+      try {
+        const [gls, txn, savingRows] = await Promise.all([
+          goalsPromise,
+          transactionsPromise,
+          savingsPromise,
+        ]);
+        setGoals(gls ?? []);
+        setTransactions(txn ?? []);
+        const savingsOk = applySavingsResult(
+          savingRows as { data: unknown; error: { message: string } | null },
+        );
+        if (shouldMarkReady(savingsOk, hasLoadedGoalsRef.current)) {
+          setGoalsReady(true);
+          hasLoadedGoalsRef.current = true;
+        }
+      } catch (error) {
+        console.error("[DashboardPage] goals reload failed", error);
+        if (hasLoadedGoalsRef.current) setGoalsReady(true);
+      }
+    })();
+
+    // EMERGENCY FUND group — `savingsSnapshot.emergencyFund` (savings) and
+    // `summary.monthlyExpense` (mathematically `getMonthlyExpenseEstimate`
+    // over transactions+categories, even though it's read off the bundled
+    // `baseSummary` object) are this card's ONLY real inputs — no
+    // wallets/investments/debts/Forex are read anywhere in its formula.
+    const emergencyFundGroupPromise = (async () => {
+      try {
+        const [savingRows, txn, cat] = await Promise.all([
+          savingsPromise,
+          transactionsPromise,
+          categoriesPromise,
+        ]);
+        const savingsOk = applySavingsResult(
+          savingRows as { data: unknown; error: { message: string } | null },
+        );
+        setTransactions(txn ?? []);
+        setCategories(cat ?? []);
+        if (shouldMarkReady(savingsOk, hasLoadedEmergencyFundRef.current)) {
+          setEmergencyFundReady(true);
+          hasLoadedEmergencyFundRef.current = true;
+        }
+      } catch (error) {
+        console.error("[DashboardPage] emergency-fund reload failed", error);
+        if (hasLoadedEmergencyFundRef.current) setEmergencyFundReady(true);
+      }
+    })();
+
+    // SAVING/INVESTMENT group — `savingsRateFromSavings`/`periodFutureAllocation`
+    // ("Tiết kiệm & Đầu tư") needs income (transactions+categories), the
+    // Forex ledger, `savings.totalSavings`, AND the SECONDARY
+    // saving_transactions ledger. This card is intentionally allowed to
+    // become ready only once every one of those — including the secondary
+    // dataset — resolves, per the mandatory first-paint invariant: it must
+    // never show an allocation % computed with a missing ledger.
+    const savingInvestmentGroupPromise = (async () => {
+      try {
+        const [txn, cat, forexTxn, savingRows, savingTxnRows] =
+          await Promise.all([
+            transactionsPromise,
+            categoriesPromise,
+            forexLedgerPromise,
+            savingsPromise,
+            savingTransactionsPromise,
+          ]);
+        setTransactions(txn ?? []);
+        setCategories(cat ?? []);
+        setForexCashTransactions(forexTxn ?? []);
+        const savingsOk = applySavingsResult(
+          savingRows as { data: unknown; error: { message: string } | null },
+        );
+        let ledgerOk = true;
+        if (!savingTxnRows.error) {
+          setSavingTransactions(
+            ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
+              mapSavingTransactionRow,
+            ),
+          );
+        } else {
+          console.error(
+            "[DashboardPage] Failed to load saving transactions",
+            savingTxnRows.error,
+          );
+          ledgerOk = false;
+          // Leave the previous `savingTransactions` snapshot untouched —
+          // never overwrite a prior successful load with a fake empty one.
+        }
+        if (
+          shouldMarkReady(
+            savingsOk && ledgerOk,
+            hasLoadedSavingInvestmentRef.current,
+          )
+        ) {
+          setSavingInvestmentReady(true);
+          hasLoadedSavingInvestmentRef.current = true;
+        }
+      } catch (error) {
+        console.error(
+          "[DashboardPage] saving/investment reload failed",
+          error,
+        );
+        if (hasLoadedSavingInvestmentRef.current) {
+          setSavingInvestmentReady(true);
+        }
+      }
+    })();
+
+    // FOREX group — `forexSnapshot` ("Forex" card) needs Forex accounts +
+    // current_equity + the Forex ledger only, never wallets/investments/
+    // debts/savings.
+    const forexGroupPromise = (async () => {
+      try {
+        const [forexAcc, forexEquityRows, forexTxn] = await Promise.all([
+          forexAccountsPromise,
+          forexEquityPromise,
+          forexLedgerPromise,
+        ]);
+
+        const equityByAccountId = new Map<string, number | null>();
+        let equityOk = true;
+        if (!forexEquityRows.error) {
+          (
+            (forexEquityRows.data ?? []) as Array<{
+              id: string;
+              current_equity: number | string | null;
+            }>
+          ).forEach((row) => {
+            const parsed =
+              row.current_equity === null || row.current_equity === undefined
+                ? null
+                : Number(row.current_equity);
+
+            equityByAccountId.set(
+              row.id,
+              parsed !== null && Number.isFinite(parsed) ? parsed : null,
+            );
+          });
+        } else {
+          console.error(
+            "[DashboardPage] Failed to load Forex Equity",
+            forexEquityRows.error,
+          );
+          // A fetch failure is not the same as "no account has equity" —
+          // treating it as such would silently push every account onto the
+          // net-capital fallback path even for ones with real equity on
+          // file. Don't apply the (empty) equity map on a genuine failure.
+          equityOk = false;
+        }
+
+        if (shouldMarkReady(equityOk, hasLoadedForexRef.current)) {
+          setForexAccounts(
+            (forexAcc ?? []).map((account) => ({
+              ...account,
+              currentEquity: equityByAccountId.get(account.id) ?? null,
+            })),
+          );
+          setForexCashTransactions(forexTxn ?? []);
+          setForexReady(true);
+          hasLoadedForexRef.current = true;
+        }
+      } catch (error) {
+        console.error("[DashboardPage] forex reload failed", error);
+        if (hasLoadedForexRef.current) setForexReady(true);
+      }
+    })();
+
+    // NET WORTH group — the full canonical asset/liability bundle behind
+    // `calculateDashboardSummary`'s netWorth/totalAssets/totalDebt/
+    // liquidBalance/debtRatio fields (Hero section, `hasNoDebt`). Waits for
+    // literally everything those fields read: wallets, investments, debts,
+    // savings, and the complete Forex asset value (accounts+equity+ledger).
+    // Never render an incomplete Net Worth — unchanged invariant from
+    // PERF-1.
     try {
-      const [
-        w,
-        inv,
-        forexAcc,
-        forexEquityRows,
-        forexTxn,
-        cat,
-        txn,
-        dbt,
-        gls,
-        savingRows,
-      ] = await primaryPromise;
+      const [w, inv, forexAcc, forexEquityRows, forexTxn, dbt, savingRows] =
+        await Promise.all([
+          walletsPromise,
+          investmentsPromise,
+          forexAccountsPromise,
+          forexEquityPromise,
+          forexLedgerPromise,
+          debtsPromise,
+          savingsPromise,
+        ]);
 
       setWallets(w ?? []);
       setInvestments(inv ?? []);
       setForexCashTransactions(forexTxn ?? []);
 
       const equityByAccountId = new Map<string, number | null>();
+      let equityOk = true;
       if (!forexEquityRows.error) {
         (
           (forexEquityRows.data ?? []) as Array<{
@@ -853,50 +1127,48 @@ export default function DashboardPage() {
           "[DashboardPage] Failed to load Forex Equity",
           forexEquityRows.error,
         );
+        // A fetch failure is not the same as "no account has equity" — see
+        // the identical guard in the FOREX group above. Net Worth's Forex
+        // contribution must not silently fall back to net capital for an
+        // account whose equity genuinely failed to load.
+        equityOk = false;
       }
 
-      setForexAccounts(
-        (forexAcc ?? []).map((account) => ({
-          ...account,
-          currentEquity: equityByAccountId.get(account.id) ?? null,
-        })),
-      );
-      setCategories(cat ?? []);
-      setTransactions(txn ?? []);
       setDebts(dbt ?? []);
-      setGoals(gls ?? []);
-
-      if (!savingRows.error) {
-        setSavings(
-          ((savingRows.data ?? []) as SavingRow[]).map(
-            mapSavingRowToSavingAccount,
-          ),
-        );
-      } else {
-        console.error(
-          "[DashboardPage] Failed to load savings",
-          savingRows.error,
-        );
-        setSavings([]);
-      }
-
-      // Release the dashboard only after every source used by the KPI cards
-      // has been resolved. This prevents transient 0 values while transactions
-      // are still loading on real iPhone Safari.
-      setIsDashboardReady(true);
-      measureAndReport(
-        "dashboard_snapshot",
-        "dashboard:reload:start",
-        "dashboard:reload:end",
-        { status: "success" },
+      const savingsOk = applySavingsResult(
+        savingRows as { data: unknown; error: { message: string } | null },
       );
+
+      if (
+        shouldMarkReady(equityOk && savingsOk, hasLoadedNetWorthRef.current)
+      ) {
+        setForexAccounts(
+          (forexAcc ?? []).map((account) => ({
+            ...account,
+            currentEquity: equityByAccountId.get(account.id) ?? null,
+          })),
+        );
+        setIsDashboardReady(true);
+        hasLoadedNetWorthRef.current = true;
+        measureAndReport(
+          "dashboard_snapshot",
+          "dashboard:reload:start",
+          "dashboard:reload:end",
+          { status: "success" },
+        );
+      }
     } catch (error) {
       console.error("[DashboardPage] reloadData failed", error);
 
-      // Keep the last successful snapshot during transient network/realtime
-      // failures. Clearing every array here caused the net-cash-flow KPI to
-      // flash 0 before the slower transaction request finished again.
-      setIsDashboardReady(true);
+      // A first-load failure with no prior successful Net Worth snapshot
+      // must NOT flip isDashboardReady — that would let the Hero section's
+      // already-unconditional render show a fabricated 0 Net Worth as if
+      // it were real. A later failure (after at least one success) keeps
+      // the last-known-good snapshot and readiness stays true — clearing
+      // every array here caused the net-cash-flow KPI to flash 0 before
+      // the slower transaction request finished again (pre-existing fix,
+      // preserved).
+      if (hasLoadedNetWorthRef.current) setIsDashboardReady(true);
       measureAndReport(
         "dashboard_snapshot",
         "dashboard:reload:start",
@@ -905,30 +1177,26 @@ export default function DashboardPage() {
       );
     }
 
-    // Secondary content resolves and paints independently — a slow or
-    // failed secondary fetch never blocks or fails the primary KPIs above.
+    await Promise.all([
+      cashFlowGroupPromise,
+      goalsGroupPromise,
+      emergencyFundGroupPromise,
+      savingInvestmentGroupPromise,
+      forexGroupPromise,
+    ]);
+
+    // Secondary content (Budget recommendation) resolves and paints
+    // independently — a slow or failed secondary fetch never blocks or
+    // fails any primary KPI, including the saving/investment group above
+    // (which awaits `savingTransactionsPromise` directly, not this budgets
+    // fetch).
     try {
-      const [bdg, savingTxnRows] = await secondaryPromise;
-
+      const bdg = await budgetsPromise;
       setBudgets(bdg ?? []);
-
-      if (!savingTxnRows.error) {
-        setSavingTransactions(
-          ((savingTxnRows.data ?? []) as SavingTransactionRow[]).map(
-            mapSavingTransactionRow,
-          ),
-        );
-      } else {
-        console.error(
-          "[DashboardPage] Failed to load saving transactions",
-          savingTxnRows.error,
-        );
-        setSavingTransactions([]);
-      }
     } catch (error) {
       console.error("[DashboardPage] secondary reloadData failed", error);
       // Keep the last-known secondary snapshot on transient failure, same
-      // policy as the primary group above.
+      // policy as every other group above.
     }
   }, [selectedYear]);
 
@@ -1874,9 +2142,28 @@ export default function DashboardPage() {
           ctaRoute: action.ctaRoute,
         }));
 
-  const hasNoDebt = summary.debtRatio <= 0;
+  // Gated on isDashboardReady: `summary.debtRatio` defaults to 0 before the
+  // Net Worth asset/liability bundle has loaded (empty wallets/debts), which
+  // would otherwise render this badge's "no debt" claim before debts are
+  // actually known to be zero.
+  const hasNoDebt = isDashboardReady && summary.debtRatio <= 0;
+
+  // Hero readiness = union of every Hero-visible field's real dependencies.
+  // Net Worth/liquidity/investments/debt/Forex-capital (the headline +
+  // HeroMinis) all come from the canonical Net Worth bundle
+  // (isDashboardReady); the "Dòng tiền dương/âm" cash-flow badge next to
+  // the headline is `netCashFlow` = periodFlowSummary's income/expense
+  // (cashFlowReady — transactions+categories). No new query: this is a
+  // pure composition of the two existing flags, not a new fetch group.
+  const heroReady = isHeroReady(isDashboardReady, cashFlowReady);
 
   // ── Compact operating KPIs ───────────────────────────────────────────────
+  // `ready` is per-card: only "Dòng tiền ròng" (periodFlowSummary — pure
+  // transactions+categories) and "Mục tiêu" (goalMeta — goals+transactions+
+  // savings) have a real dependency set narrower than the full canonical
+  // Net Worth bundle, so only those two get an earlier readiness flag. The
+  // other three read bundled `baseSummary`/Forex-ledger fields and must
+  // still wait for `isDashboardReady`, unchanged from before PERF-2.
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
@@ -1884,6 +2171,7 @@ export default function DashboardPage() {
       note: `Thu ${formatCompactVND(summary.income)} · Chi ${formatCompactVND(summary.expense)}`,
       tone: netCashFlow >= 0 ? "good" : "danger",
       icon: TrendingUp,
+      ready: cashFlowReady,
     },
     {
       title: "Tiết kiệm & Đầu tư",
@@ -1891,6 +2179,7 @@ export default function DashboardPage() {
       note: `${formatCompactVND(savingsSnapshot.totalSavings)} đã tích lũy`,
       tone: summary.savingRate >= 20 ? "good" : "warning",
       icon: PiggyBank,
+      ready: savingInvestmentReady,
     },
     {
       title: "Quỹ khẩn cấp",
@@ -1901,6 +2190,7 @@ export default function DashboardPage() {
           : "Mục tiêu tối thiểu 3 tháng",
       tone: emergencyMonthsExact >= 3 ? "good" : "danger",
       icon: ShieldCheck,
+      ready: emergencyFundReady,
     },
     {
       title: "Forex",
@@ -1919,6 +2209,7 @@ export default function DashboardPage() {
             ? "good"
             : "danger",
       icon: Landmark,
+      ready: forexReady,
     },
     {
       title: "Mục tiêu",
@@ -1926,6 +2217,7 @@ export default function DashboardPage() {
       note: `${goalSnapshot.trackedCount} mục tiêu đang theo dõi`,
       tone: summary.goalScore >= 50 ? "good" : "warning",
       icon: Target,
+      ready: goalsReady,
     },
   ] as const;
 
@@ -2330,16 +2622,25 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-end gap-3">
-            <p
-              className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
-              title={formatVND(summary.netWorth)}
-            >
-              {formatVND(summary.netWorth)}
-            </p>
-            <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-              {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-              {formatVND(netCashFlow)}
-            </span>
+            {heroReady ? (
+              <>
+                <p
+                  className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
+                  title={formatVND(summary.netWorth)}
+                >
+                  {formatVND(summary.netWorth)}
+                </p>
+                <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                  {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
+                  {formatVND(netCashFlow)}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="h-9 w-48 animate-pulse rounded-lg bg-slate-200/80 sm:h-11 sm:w-64" />
+                <div className="mb-1 h-6 w-32 animate-pulse rounded-full bg-slate-100" />
+              </>
+            )}
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
@@ -2348,30 +2649,35 @@ export default function DashboardPage() {
               label="Thanh khoản"
               value={formatVND(summary.liquidBalance)}
               valueClass="text-blue-600"
+              isLoading={!heroReady}
             />
             <HeroMini
               icon={<PiggyBank size={16} />}
               label="Tiết kiệm"
               value={formatVND(savingsSnapshot.totalSavings)}
               valueClass="text-cyan-600"
+              isLoading={!heroReady}
             />
             <HeroMini
               icon={<Landmark size={16} />}
               label="Vốn Forex"
               value={formatVND(forexSnapshot.balance)}
               valueClass="text-violet-600"
+              isLoading={!heroReady}
             />
             <HeroMini
               icon={<Briefcase size={16} />}
               label="Đầu tư khác"
               value={formatVND(summary.investmentAssets)}
               valueClass="text-emerald-600"
+              isLoading={!heroReady}
             />
             <HeroMini
               icon={<CreditCard size={16} />}
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
               valueClass="text-rose-500"
+              isLoading={!heroReady}
             />
           </div>
 
@@ -2411,7 +2717,7 @@ export default function DashboardPage() {
       <section>
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
           {kpiCards.map((item) => (
-            <KpiCard key={item.title} {...item} isLoading={!isDashboardReady} />
+            <KpiCard key={item.title} {...item} isLoading={!item.ready} />
           ))}
         </div>
       </section>
@@ -2846,11 +3152,13 @@ function HeroMini({
   label,
   value,
   valueClass,
+  isLoading = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   valueClass: string;
+  isLoading?: boolean;
 }) {
   return (
     <div className="min-w-0 rounded-2xl border border-white/70 bg-white/95/85 px-2.5 py-3 shadow-sm transition-all duration-200 hover:shadow-md backdrop-blur">
@@ -2863,12 +3171,16 @@ function HeroMini({
           <p className="truncate text-[9px] font-semibold leading-3.5 text-slate-600 xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
-          <p
-            className={`mt-0.5 whitespace-nowrap text-[clamp(8px,2.35vw,13px)] font-black leading-4 tracking-[-0.045em] tabular-nums ${valueClass}`}
-            title={value}
-          >
-            {value}
-          </p>
+          {isLoading ? (
+            <div className="mt-1 h-3.5 w-16 animate-pulse rounded-md bg-slate-200/80" />
+          ) : (
+            <p
+              className={`mt-0.5 whitespace-nowrap text-[clamp(8px,2.35vw,13px)] font-black leading-4 tracking-[-0.045em] tabular-nums ${valueClass}`}
+              title={value}
+            >
+              {value}
+            </p>
+          )}
         </div>
       </div>
     </div>
