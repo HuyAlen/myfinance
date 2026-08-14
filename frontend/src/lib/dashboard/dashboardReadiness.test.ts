@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   beginPeriodGeneration,
+  isBudgetAttentionReady,
   isHeroReady,
   isNewPeriodContext,
   isPeriodSnapshotCurrent,
@@ -77,6 +78,56 @@ describe("isHeroReady", () => {
     const netWorthReady = shouldMarkReady(false, true); // failed this cycle, succeeded before
     const cashFlowReady = shouldMarkReady(false, false); // never succeeded
     expect(isHeroReady(netWorthReady, cashFlowReady)).toBe(false);
+  });
+});
+
+/**
+ * UI-DASH-2 Budget Attention Readiness Correctness patch: Budget Attention
+ * is ready only when BOTH the budgets dataset has ever loaded AND the
+ * accepted transaction/category snapshot belongs to the current period
+ * (cashFlowReady). Neither alone is sufficient — this is the exact same
+ * "AND of two independent dependency groups" shape as isHeroReady, reused
+ * deliberately rather than reinvented.
+ */
+describe("isBudgetAttentionReady", () => {
+  it("budgets not yet loaded, cashFlow not ready: not ready", () => {
+    expect(isBudgetAttentionReady(false, false)).toBe(false);
+  });
+
+  it("budgets loaded, cashFlow not ready (e.g. a pending year switch): not ready — must not show stale/wrong-period budget health", () => {
+    expect(isBudgetAttentionReady(true, false)).toBe(false);
+  });
+
+  it("cashFlow ready, budgets not yet loaded: not ready — must not render a fake 'no budgets' before the fetch settles", () => {
+    expect(isBudgetAttentionReady(false, true)).toBe(false);
+  });
+
+  it("both ready: Budget Attention ready", () => {
+    expect(isBudgetAttentionReady(true, true)).toBe(true);
+  });
+
+  it("end-to-end: budgets settle with a genuine empty collection — ready, and the empty result is legitimate, not a stale placeholder", () => {
+    const budgetsLoaded = shouldMarkReady(true, false); // succeeded this cycle, value happens to be []
+    const cashFlowReady = shouldMarkReady(true, false);
+    expect(isBudgetAttentionReady(budgetsLoaded, cashFlowReady)).toBe(true);
+  });
+
+  it("end-to-end: initial load, nothing has resolved yet — not ready, no fabricated no-budget state", () => {
+    const budgetsLoaded = shouldMarkReady(false, false);
+    const cashFlowReady = shouldMarkReady(false, false);
+    expect(isBudgetAttentionReady(budgetsLoaded, cashFlowReady)).toBe(false);
+  });
+
+  it("end-to-end: cross-year pending — cashFlowReady has been reset by the context change even though budgets (snapshot, unaffected by year switches) stayed loaded", () => {
+    const budgetsLoaded = shouldMarkReady(false, true); // budgets: unrelated fetch cycle, but has succeeded before
+    const cashFlowReady = shouldMarkReady(false, false); // reset to false by isNewPeriodContext, not yet re-succeeded
+    expect(isBudgetAttentionReady(budgetsLoaded, cashFlowReady)).toBe(false);
+  });
+
+  it("end-to-end: same-context later failure — cashFlowReady preserves last-known-good, Budget Attention stays ready", () => {
+    const budgetsLoaded = shouldMarkReady(true, true);
+    const cashFlowReady = shouldMarkReady(false, true); // failed this cycle, but succeeded before in the SAME context
+    expect(isBudgetAttentionReady(budgetsLoaded, cashFlowReady)).toBe(true);
   });
 });
 
@@ -454,5 +505,173 @@ describe("period-loader orchestration (simulates reloadData/reloadPeriod)", () =
       isPeriodSnapshotCurrent(loader.loadedYearRef.current, 2025),
     ).toBe(true);
     expect(loader.state.cashFlowReady).toBe(true);
+  });
+});
+
+/**
+ * UI-DASH-2 Budget Attention Readiness Correctness patch: end-to-end
+ * orchestration proving `isBudgetAttentionReady` behaves correctly across
+ * every required timeline — initial pending, cross-year pending/success/
+ * failure, and same-context last-known-good — driven by the SAME
+ * unmodified PERF-2/PERF-3 primitives the real DashboardPage.tsx uses
+ * (isNewPeriodContext, beginPeriodGeneration/isStalePeriodGeneration,
+ * shouldMarkReady). This is what proves cashFlowReady's existing
+ * correctness is inherited "for free" rather than re-derived.
+ */
+describe("isBudgetAttentionReady orchestration (simulates reloadData/reloadPeriod + the budgets fetch)", () => {
+  function makeBudgetAttentionSimulation() {
+    const periodGenerationRef: PeriodGenerationRef = { current: 0 };
+    const loadedPeriodYearRef: { current: number | null } = { current: null };
+    const hasLoadedCashFlowRef = { current: false };
+    const hasLoadedBudgetsRef = { current: false };
+    let cashFlowReady = false;
+    let budgetsLoaded = false;
+
+    function fetchBudgets(outcome: "success" | "failure") {
+      if (outcome === "success") {
+        hasLoadedBudgetsRef.current = true;
+        budgetsLoaded = true;
+      } else if (hasLoadedBudgetsRef.current) {
+        budgetsLoaded = true;
+      }
+    }
+
+    function startPeriod(year: number) {
+      const generation = beginPeriodGeneration(periodGenerationRef);
+      if (isNewPeriodContext(loadedPeriodYearRef.current, year)) {
+        hasLoadedCashFlowRef.current = false;
+        cashFlowReady = false;
+      }
+      return {
+        resolve(outcome: "success" | "failure") {
+          if (isStalePeriodGeneration(periodGenerationRef, generation)) {
+            return { applied: false as const, stale: true as const };
+          }
+          if (outcome === "success") {
+            loadedPeriodYearRef.current = year;
+            if (shouldMarkReady(true, hasLoadedCashFlowRef.current)) {
+              cashFlowReady = true;
+              hasLoadedCashFlowRef.current = true;
+            }
+            return { applied: true as const, stale: false as const };
+          }
+          if (hasLoadedCashFlowRef.current) cashFlowReady = true;
+          return { applied: false as const, stale: false as const };
+        },
+      };
+    }
+
+    return {
+      fetchBudgets,
+      startPeriod,
+      get ready() {
+        return isBudgetAttentionReady(budgetsLoaded, cashFlowReady);
+      },
+      get budgetsLoaded() {
+        return budgetsLoaded;
+      },
+      get cashFlowReady() {
+        return cashFlowReady;
+      },
+    };
+  }
+
+  it("initial pending: neither budgets nor the period have resolved — not ready, no fabricated no-budget state", () => {
+    const sim = makeBudgetAttentionSimulation();
+    expect(sim.ready).toBe(false);
+  });
+
+  it("initial success with a legitimate empty budget collection: ready — empty is not the same as pending", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success"); // resolves to [] — still a real success
+    sim.startPeriod(2026).resolve("success");
+    expect(sim.ready).toBe(true);
+  });
+
+  it("budgets settle before the period does: still not ready until the period also resolves", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    expect(sim.ready).toBe(false);
+    sim.startPeriod(2026).resolve("success");
+    expect(sim.ready).toBe(true);
+  });
+
+  it("cross-year pending: not ready even though budgets (snapshot, unaffected by year switches) already loaded", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2026).resolve("success");
+    expect(sim.ready).toBe(true);
+
+    sim.startPeriod(2025); // starts, does not resolve yet
+    expect(sim.ready).toBe(false);
+    expect(sim.budgetsLoaded).toBe(true); // budgets themselves are untouched by the year switch
+  });
+
+  it("cross-year success: ready again once the new period resolves, reflecting the new year", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2026).resolve("success");
+    const period2025 = sim.startPeriod(2025);
+    expect(sim.ready).toBe(false);
+    period2025.resolve("success");
+    expect(sim.ready).toBe(true);
+  });
+
+  it("cross-year failure: stays not ready — the old year's Budget Attention must never masquerade as the new year's", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2026).resolve("success");
+    expect(sim.ready).toBe(true);
+
+    const period2025 = sim.startPeriod(2025);
+    period2025.resolve("failure");
+    expect(sim.ready).toBe(false);
+    expect(sim.cashFlowReady).toBe(false);
+  });
+
+  it("rapid year switch: a stale (superseded) resolution cannot certify readiness for the wrong year", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2026).resolve("success");
+
+    const period2025 = sim.startPeriod(2025);
+    const period2024 = sim.startPeriod(2024); // supersedes 2025
+
+    const result2024 = period2024.resolve("success");
+    expect(result2024.applied).toBe(true);
+    expect(sim.ready).toBe(true);
+
+    const result2025 = period2025.resolve("success"); // resolves late, now stale
+    expect(result2025.stale).toBe(true);
+    expect(sim.ready).toBe(true); // unaffected by the stale resolution
+  });
+
+  it("same-context later failure: last-known-good is preserved, matching PERF-2 semantics — Budget Attention stays ready", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2025).resolve("success");
+    expect(sim.ready).toBe(true);
+
+    const retry = sim.startPeriod(2025); // same year — a same-context retry, not a switch
+    retry.resolve("failure");
+    expect(sim.ready).toBe(true);
+  });
+
+  it("budgets fetch failure with no prior success: not ready, independent of period state", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.startPeriod(2026).resolve("success");
+    sim.fetchBudgets("failure");
+    expect(sim.budgetsLoaded).toBe(false);
+    expect(sim.ready).toBe(false);
+  });
+
+  it("budgets fetch failure AFTER a prior success: last-known-good preserved for the budgets side too", () => {
+    const sim = makeBudgetAttentionSimulation();
+    sim.fetchBudgets("success");
+    sim.startPeriod(2026).resolve("success");
+    expect(sim.ready).toBe(true);
+
+    sim.fetchBudgets("failure"); // a later, same-context budgets refresh fails
+    expect(sim.ready).toBe(true);
   });
 });

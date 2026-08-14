@@ -26,6 +26,7 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     hero: "Tài sản ròng",
     actionCenter: "Ưu tiên tài chính",
     operatingKpis: "{/* Operating KPIs */}",
+    budgetAttention: "{/* Budget attention */}",
     monthlyProgress: "{/* Monthly progress */}",
     cashFlowAndStructure: "{/* Cash flow and structure */}",
     upcomingAndTopSpending: 'title="Sắp đến hạn trong 30 ngày"',
@@ -67,6 +68,7 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
 
     for (const name of [
       "operatingKpis",
+      "budgetAttention",
       "monthlyProgress",
       "cashFlowAndStructure",
       "upcomingAndTopSpending",
@@ -80,8 +82,9 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     }
   });
 
-  it("Operating KPIs and Monthly Progress (HIGH priority) appear before the MEDIUM/LOW informational sections", () => {
+  it("Operating KPIs, Budget Attention, and Monthly Progress (HIGH priority) appear before the MEDIUM/LOW informational sections", () => {
     const kpisIndex = indexOfMarker(markers.operatingKpis);
+    const budgetAttentionIndex = indexOfMarker(markers.budgetAttention);
     const monthlyProgressIndex = indexOfMarker(markers.monthlyProgress);
     const cashFlowIndex = indexOfMarker(markers.cashFlowAndStructure);
 
@@ -92,9 +95,19 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     ] as const) {
       const target = indexOfMarker(markers[name]);
       expect(kpisIndex).toBeLessThan(target);
+      expect(budgetAttentionIndex).toBeLessThan(target);
       expect(monthlyProgressIndex).toBeLessThan(target);
       expect(cashFlowIndex).toBeLessThan(target);
     }
+  });
+
+  it("Budget Attention (UI-DASH-2) sits between Operating KPIs and Monthly Progress, per the sprint's preferred placement", () => {
+    expect(indexOfMarker(markers.operatingKpis)).toBeLessThan(
+      indexOfMarker(markers.budgetAttention),
+    );
+    expect(indexOfMarker(markers.budgetAttention)).toBeLessThan(
+      indexOfMarker(markers.monthlyProgress),
+    );
   });
 
   it("Today's Summary (LOW/supporting priority) no longer leads the Dashboard — it is the last major section", () => {

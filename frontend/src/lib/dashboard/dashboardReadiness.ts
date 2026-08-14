@@ -40,6 +40,40 @@ export function isHeroReady(
 }
 
 /**
+ * UI-DASH-2 Budget Attention Readiness Correctness patch.
+ *
+ * The Budget Attention card derives from two distinct dependency classes:
+ * `budgets` (snapshot-like — globally fetched once, then client-side
+ * filtered by month; never refetched on a year switch) and
+ * `transactions`+`categories` for the selected period (already exactly
+ * `cashFlowReady`'s own dependency set — see the big readiness-flag
+ * comment block in DashboardPage.tsx). Rather than inventing a second
+ * transactions/categories readiness signal, this reuses `cashFlowReady`
+ * as-is: it already correctly resets to false on a genuine year-context
+ * change (PERF-3's `invalidatePeriodReadinessForNewContext`) and correctly
+ * preserves last-known-good on a same-context retry failure (PERF-2's
+ * `shouldMarkReady`) — Budget Attention inherits both properties for free
+ * by depending on it, instead of duplicating that logic.
+ *
+ * `budgetsLoaded` is the one genuinely new piece: has the budgets dataset
+ * itself ever completed a successful load this session? `budgets.length
+ * === 0` is NOT a substitute for this — it is also true before the very
+ * first fetch resolves, and a real empty result must render a legitimate
+ * "no budgets" state, not be indistinguishable from "not loaded yet".
+ *
+ * Budgets remain intentionally secondary/non-blocking (PERF-1): this
+ * predicate governs ONLY whether the Budget Attention surface itself may
+ * render — it is never consulted by isHeroReady, isDashboardReady, or any
+ * other Dashboard readiness computation.
+ */
+export function isBudgetAttentionReady(
+  budgetsLoaded: boolean,
+  cashFlowReady: boolean,
+): boolean {
+  return budgetsLoaded && cashFlowReady;
+}
+
+/**
  * PERF-3: classifies whether a period (year-scoped) reload targets a
  * different context than the one currently reflected in state.
  *

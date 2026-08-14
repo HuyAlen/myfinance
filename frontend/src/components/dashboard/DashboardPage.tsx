@@ -21,11 +21,14 @@ import {
 } from "@/src/lib/performance/dashboardPerfDebug";
 import {
   beginPeriodGeneration,
+  isBudgetAttentionReady,
   isHeroReady,
   isNewPeriodContext,
   isStalePeriodGeneration,
   shouldMarkReady,
 } from "@/src/lib/dashboard/dashboardReadiness";
+import { buildDashboardBudgetAttention } from "@/src/lib/dashboard/dashboardBudgetAttention";
+import { buildBudgetsHref } from "@/src/lib/navigation/financeNavigation";
 
 import {
   AlertTriangle,
@@ -731,6 +734,14 @@ export default function DashboardPage() {
   const [emergencyFundReady, setEmergencyFundReady] = useState(false);
   const [savingInvestmentReady, setSavingInvestmentReady] = useState(false);
   const [forexReady, setForexReady] = useState(false);
+  // UI-DASH-2: has the budgets dataset itself (snapshot-like — global,
+  // never refetched on a year switch) ever completed a successful load
+  // this session? `budgets.length === 0` cannot answer this — it's also
+  // true before the first fetch resolves. Consulted ONLY by
+  // isBudgetAttentionReady below; never part of isHeroReady/
+  // isDashboardReady/cashFlowReady — budgets stay secondary/non-blocking
+  // per PERF-1.
+  const [budgetsLoaded, setBudgetsLoaded] = useState(false);
 
   // Tracks whether each readiness domain has EVER completed a successful
   // load. A rejected fetch on the very first load must NOT flip its ready
@@ -744,6 +755,7 @@ export default function DashboardPage() {
   const hasLoadedEmergencyFundRef = useRef(false);
   const hasLoadedSavingInvestmentRef = useRef(false);
   const hasLoadedForexRef = useRef(false);
+  const hasLoadedBudgetsRef = useRef(false);
   const hasLoadedNetWorthRef = useRef(false);
 
   // PERF-3: which year's transactions are currently sitting in `transactions`
@@ -1473,10 +1485,19 @@ export default function DashboardPage() {
     try {
       const bdg = await budgetsPromise;
       setBudgets(bdg ?? []);
+      // UI-DASH-2: a genuine successful resolve — including a legitimate
+      // empty array — is what "loaded" means. Never inferred from
+      // `budgets.length`, which is indistinguishable from "not fetched
+      // yet" while this promise is still pending.
+      hasLoadedBudgetsRef.current = true;
+      setBudgetsLoaded(true);
     } catch (error) {
       console.error("[DashboardPage] secondary reloadData failed", error);
       // Keep the last-known secondary snapshot on transient failure, same
-      // policy as every other group above.
+      // policy as every other group above. A first-load failure with no
+      // prior success must NOT flip budgetsLoaded — see the identical
+      // invariant for every other PERF-2 readiness flag above.
+      if (hasLoadedBudgetsRef.current) setBudgetsLoaded(true);
     }
   }, [selectedYear, invalidatePeriodReadinessForNewContext]);
 
@@ -2678,11 +2699,19 @@ export default function DashboardPage() {
     return { income, expense, saving, net: income - expense };
   }, [transactions, savingTransactions]);
 
+  // UI-DASH-2: shared with the new Budget Attention card below so the two
+  // never drift onto different months for the same selected period — both
+  // read this same key rather than each recomputing their own.
+  const dashboardMonthKey = useMemo(
+    () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
+    [selectedYear, selectedMonth],
+  );
+
   const monthlyPulse = useMemo(() => {
     const now = new Date();
     const year = selectedYear;
     const monthIndex = selectedMonth - 1;
-    const monthKey = `${year}-${String(selectedMonth).padStart(2, "0")}`;
+    const monthKey = dashboardMonthKey;
     const daysInMonth = new Date(year, selectedMonth, 0).getDate();
     const isCurrentMonth =
       now.getFullYear() === year && now.getMonth() === monthIndex;
@@ -2738,7 +2767,38 @@ export default function DashboardPage() {
       budgetUsage,
       projectedBudgetUsage,
     };
-  }, [budgets, selectedMonth, selectedYear, transactions]);
+  }, [budgets, dashboardMonthKey, selectedMonth, selectedYear, transactions]);
+
+  // UI-DASH-2 Budget Attention: the same active-month budgets Tiến độ
+  // tháng already uses (`dashboardMonthKey`, matching `monthlyPulse`'s own
+  // filtering exactly) — Monthly Progress answers "how fast is total
+  // spending moving", this answers "which category budgets need
+  // attention". Reuses the canonical calculateBudgetSpendingCollection via
+  // buildDashboardBudgetAttention; no independent spend calculation.
+  const budgetAttentionMonthBudgets = useMemo(
+    () => budgets.filter((budget) => budget.month.startsWith(dashboardMonthKey)),
+    [budgets, dashboardMonthKey],
+  );
+
+  const budgetAttention = useMemo(
+    () =>
+      buildDashboardBudgetAttention({
+        budgets: budgetAttentionMonthBudgets,
+        categories,
+        transactions,
+      }),
+    [budgetAttentionMonthBudgets, categories, transactions],
+  );
+
+  // UI-DASH-2 readiness correctness: ready only once the budgets dataset
+  // has ever loaded AND the accepted transaction/category snapshot
+  // belongs to the current period (cashFlowReady — reused as-is, not
+  // duplicated; see isBudgetAttentionReady's own doc comment). Not part
+  // of isHeroReady/isDashboardReady — budgets stay non-critical-path.
+  const budgetAttentionReady = isBudgetAttentionReady(
+    budgetsLoaded,
+    cashFlowReady,
+  );
 
   const upcomingMoneyEvents = useMemo(() => {
     const today = new Date();
@@ -3033,6 +3093,159 @@ export default function DashboardPage() {
           {kpiCards.map((item) => (
             <KpiCard key={item.title} {...item} isLoading={!item.ready} />
           ))}
+        </div>
+      </section>
+
+      {/* UI-DASH-2: Budget Attention — closes the Dashboard's only P0
+          information gap identified in the audit ("which budget is
+          actually in trouble", not just the aggregate % Tiến độ tháng
+          already shows below). Uses the SAME active-month budget subset
+          (`dashboardMonthKey`) and the canonical
+          calculateBudgetSpendingCollection engine via
+          buildDashboardBudgetAttention — no independent spend
+          calculation, no new query (budgets/categories/transactions are
+          already fetched by reloadData). Secondary in the existing
+          load-priority sense: budgets were never part of the critical
+          path (PERF-1) and remain so.
+          Gated on budgetAttentionReady (budgets ever loaded AND
+          cashFlowReady — see the Readiness Correctness patch): before
+          that, `budgets`/`transactions` may still be an unresolved
+          initial `[]` or a still-held prior year's snapshot, and rendering
+          straight off them could show a fake "no budgets" or a fake
+          healthy/zero result for the wrong period. This gate is
+          presentation-only for this one surface — it is never consulted
+          by isHeroReady/isDashboardReady, so budgets remain
+          non-critical-path. */}
+      {/* Budget attention */}
+      <section>
+        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                Ngân sách
+              </p>
+              <h2 className="mt-2 text-xl font-black text-slate-900">
+                Tình trạng ngân sách
+              </h2>
+            </div>
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <Wallet size={18} />
+            </div>
+          </div>
+
+          {!budgetAttentionReady ? (
+            <div className="mt-4 space-y-3">
+              <div className="h-7 w-40 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-11 animate-pulse rounded-xl bg-slate-100" />
+            </div>
+          ) : budgetAttention.totalBudgets === 0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+              <p className="text-sm font-black text-slate-700">
+                {budgets.length === 0
+                  ? "Chưa có ngân sách nào"
+                  : `Chưa có ngân sách cho tháng ${selectedMonth}/${selectedYear}`}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Thiết lập ngân sách theo danh mục để Dashboard theo dõi hạn
+                mức chi tiêu.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push(buildBudgetsHref())}
+                className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
+              >
+                Thiết lập ngân sách
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-black ${
+                    budgetAttention.overBudgetCount > 0
+                      ? "bg-rose-50 text-rose-700"
+                      : budgetAttention.warningCount > 0
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {budgetAttention.overBudgetCount > 0
+                    ? `${budgetAttention.overBudgetCount}/${budgetAttention.totalBudgets} ngân sách vượt hạn mức`
+                    : budgetAttention.warningCount > 0
+                      ? `${budgetAttention.warningCount}/${budgetAttention.totalBudgets} ngân sách sắp chạm giới hạn`
+                      : `${budgetAttention.totalBudgets}/${budgetAttention.totalBudgets} ngân sách đang trong hạn mức`}
+                </span>
+              </div>
+
+              {budgetAttention.overBudgetItems.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {budgetAttention.overBudgetItems.map((item) => (
+                    <button
+                      key={item.budgetId}
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          buildBudgetsHref({ budgetId: item.budgetId }),
+                        )
+                      }
+                      className="w-full rounded-2xl bg-slate-50/80 p-3 text-left transition-all duration-200 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 truncate text-sm font-bold text-slate-700">
+                          {item.categoryName}
+                        </span>
+                        <span className="shrink-0 text-xs font-black text-rose-500">
+                          Vượt ngân sách
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Đã chi {formatVND(item.spent)} /{" "}
+                        {formatVND(item.limit)} · vượt{" "}
+                        {formatVND(item.overAmount)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                budgetAttention.topWarning && (
+                  <div className="mt-3 rounded-2xl bg-slate-50/80 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-bold text-slate-700">
+                        {budgetAttention.topWarning.categoryName}
+                      </span>
+                      <span className="shrink-0 text-xs font-black text-amber-600">
+                        Sắp đạt giới hạn
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Đã chi {formatVND(budgetAttention.topWarning.spent)} /{" "}
+                      {formatVND(budgetAttention.topWarning.limit)} ·{" "}
+                      {budgetAttention.topWarning.usagePercent}%
+                    </p>
+                  </div>
+                )
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    budgetAttention.overBudgetItems.length > 1
+                      ? buildBudgetsHref()
+                      : budgetAttention.worstOffender
+                        ? buildBudgetsHref({
+                            budgetId: budgetAttention.worstOffender.budgetId,
+                          })
+                        : buildBudgetsHref(),
+                  )
+                }
+                className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
+              >
+                Xem ngân sách
+              </button>
+            </>
+          )}
         </div>
       </section>
 
