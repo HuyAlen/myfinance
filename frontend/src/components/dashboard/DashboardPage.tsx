@@ -10,7 +10,10 @@ import { formatCompactVND } from "./dashboardFormat";
 import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
 import {
+  beginPeriodGeneration,
   isHeroReady,
+  isNewPeriodContext,
+  isStalePeriodGeneration,
   shouldMarkReady,
 } from "@/src/lib/dashboard/dashboardReadiness";
 
@@ -732,7 +735,35 @@ export default function DashboardPage() {
   const hasLoadedSavingInvestmentRef = useRef(false);
   const hasLoadedForexRef = useRef(false);
   const hasLoadedNetWorthRef = useRef(false);
+
+  // PERF-3: which year's transactions are currently sitting in `transactions`
+  // state, and a monotonic id used to detect a stale (superseded) period
+  // fetch resolving after a newer one — see reloadPeriod below. Snapshot
+  // data (wallets/investments/Forex/debts/goals/savings/budgets) has no
+  // equivalent notion of "context" because its queries never depend on
+  // selectedYear in the first place.
+  const loadedPeriodYearRef = useRef<number | null>(null);
+  const periodRequestIdRef = useRef(0);
   const { dateRange, selectedYear } = useDateFilter();
+
+  // A genuine year switch means the `transactions` currently in state (and
+  // thus the period-dependent readiness flags built on top of them) belong
+  // to a different context than what the user now wants to see. The
+  // "last-known-good snapshot" semantics of shouldMarkReady are correct for
+  // a same-year retry failure, but MUST NOT apply across a year change —
+  // otherwise a failed 2024 fetch would keep displaying 2023's numbers
+  // labeled as if they were 2024's. Resetting these refs/flags forces the
+  // next successful fetch to be the one that re-establishes readiness.
+  const invalidatePeriodReadinessForNewContext = useCallback(() => {
+    hasLoadedCashFlowRef.current = false;
+    hasLoadedGoalsRef.current = false;
+    hasLoadedEmergencyFundRef.current = false;
+    hasLoadedSavingInvestmentRef.current = false;
+    setCashFlowReady(false);
+    setGoalsReady(false);
+    setEmergencyFundReady(false);
+    setSavingInvestmentReady(false);
+  }, []);
 
   const filteredTransactions = useMemo(
     () => filterTransactionsByDateRange(transactions, dateRange),
@@ -819,6 +850,18 @@ export default function DashboardPage() {
     markInstant("dashboard:reload:start");
     const fetchRange = getDashboardFetchRange(selectedYear);
 
+    // This full reload (mount / Realtime / manual refresh) always fetches
+    // transactions for whatever year is currently selected, so it is itself
+    // a period fetch — it must participate in the same context/race
+    // protection as a pure year-switch (reloadPeriod below), otherwise a
+    // full reload in flight during a rapid year switch could overwrite
+    // newer period data with stale results, or an old year's "last known
+    // good" flag could survive into a new year's failure.
+    const periodGeneration = beginPeriodGeneration(periodRequestIdRef);
+    if (isNewPeriodContext(loadedPeriodYearRef.current, selectedYear)) {
+      invalidatePeriodReadinessForNewContext();
+    }
+
     // Every dataset is fetched exactly ONCE per reload cycle via these named
     // promises, all started concurrently below. Each readiness group further
     // down awaits only the subset it actually needs — a shared dataset
@@ -895,11 +938,17 @@ export default function DashboardPage() {
           transactionsPromise,
           categoriesPromise,
         ]);
+        // A newer period fetch (a subsequent year switch) may have already
+        // superseded this one — never let a slower, older response
+        // overwrite a newer year's state.
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
+        loadedPeriodYearRef.current = selectedYear;
         setCashFlowReady(true);
         hasLoadedCashFlowRef.current = true;
       } catch (error) {
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         console.error("[DashboardPage] cash-flow reload failed", error);
         // A first-load failure with no prior successful snapshot must NOT
         // flip readiness — that would let the initial empty state render
@@ -920,8 +969,10 @@ export default function DashboardPage() {
           transactionsPromise,
           savingsPromise,
         ]);
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         setGoals(gls ?? []);
         setTransactions(txn ?? []);
+        loadedPeriodYearRef.current = selectedYear;
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
@@ -930,6 +981,7 @@ export default function DashboardPage() {
           hasLoadedGoalsRef.current = true;
         }
       } catch (error) {
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         console.error("[DashboardPage] goals reload failed", error);
         if (hasLoadedGoalsRef.current) setGoalsReady(true);
       }
@@ -947,16 +999,19 @@ export default function DashboardPage() {
           transactionsPromise,
           categoriesPromise,
         ]);
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
+        loadedPeriodYearRef.current = selectedYear;
         if (shouldMarkReady(savingsOk, hasLoadedEmergencyFundRef.current)) {
           setEmergencyFundReady(true);
           hasLoadedEmergencyFundRef.current = true;
         }
       } catch (error) {
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         console.error("[DashboardPage] emergency-fund reload failed", error);
         if (hasLoadedEmergencyFundRef.current) setEmergencyFundReady(true);
       }
@@ -979,9 +1034,11 @@ export default function DashboardPage() {
             savingsPromise,
             savingTransactionsPromise,
           ]);
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
         setForexCashTransactions(forexTxn ?? []);
+        loadedPeriodYearRef.current = selectedYear;
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
@@ -1011,6 +1068,7 @@ export default function DashboardPage() {
           hasLoadedSavingInvestmentRef.current = true;
         }
       } catch (error) {
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         console.error(
           "[DashboardPage] saving/investment reload failed",
           error,
@@ -1198,7 +1256,71 @@ export default function DashboardPage() {
       // Keep the last-known secondary snapshot on transient failure, same
       // policy as every other group above.
     }
-  }, [selectedYear]);
+  }, [selectedYear, invalidatePeriodReadinessForNewContext]);
+
+  // PERF-3: fires ONLY on a selectedYear change (see the effect below), not
+  // on mount/Realtime/manual refresh — those go through the full
+  // reloadData above. The only network query that genuinely depends on
+  // selectedYear is getTransactionsInRange(fetchRange); every other
+  // Dashboard dataset (wallets, investments, Forex, categories, debts,
+  // goals, savings, saving_transactions, budgets) is year-independent
+  // snapshot data already sitting in state from the last full reload, so
+  // changing the reporting year must not refetch it. The four period-
+  // dependent readiness flags (cashFlow/goals/emergencyFund/
+  // savingInvestment) are recomputed from the new transactions plus the
+  // existing snapshot state; the two snapshot-only flags (isDashboardReady,
+  // forexReady) are left untouched — a year switch never invalidates them.
+  const reloadPeriod = useCallback(async (year: number) => {
+    const periodGeneration = beginPeriodGeneration(periodRequestIdRef);
+
+    if (isNewPeriodContext(loadedPeriodYearRef.current, year)) {
+      invalidatePeriodReadinessForNewContext();
+    }
+
+    const fetchRange = getDashboardFetchRange(year);
+    try {
+      const txn = await getTransactionsInRange(
+        fetchRange.startDate,
+        fetchRange.endDate,
+      );
+      // A faster, more recent year switch may have already superseded this
+      // request — never let an older, slower response win a race and
+      // overwrite the newer year's data.
+      if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+
+      setTransactions(txn ?? []);
+      loadedPeriodYearRef.current = year;
+
+      if (shouldMarkReady(true, hasLoadedCashFlowRef.current)) {
+        setCashFlowReady(true);
+        hasLoadedCashFlowRef.current = true;
+      }
+      if (shouldMarkReady(true, hasLoadedGoalsRef.current)) {
+        setGoalsReady(true);
+        hasLoadedGoalsRef.current = true;
+      }
+      if (shouldMarkReady(true, hasLoadedEmergencyFundRef.current)) {
+        setEmergencyFundReady(true);
+        hasLoadedEmergencyFundRef.current = true;
+      }
+      if (shouldMarkReady(true, hasLoadedSavingInvestmentRef.current)) {
+        setSavingInvestmentReady(true);
+        hasLoadedSavingInvestmentRef.current = true;
+      }
+    } catch (error) {
+      if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+      console.error("[DashboardPage] period reload failed", error);
+      // Same last-known-good policy as reloadData's groups: a same-context
+      // retry failure keeps showing the previous successful load; a
+      // failure with no prior success for THIS year (isNewPeriodContext
+      // already reset the refs above) stays not-ready rather than
+      // fabricating a zero.
+      if (hasLoadedCashFlowRef.current) setCashFlowReady(true);
+      if (hasLoadedGoalsRef.current) setGoalsReady(true);
+      if (hasLoadedEmergencyFundRef.current) setEmergencyFundReady(true);
+      if (hasLoadedSavingInvestmentRef.current) setSavingInvestmentReady(true);
+    }
+  }, [invalidatePeriodReadinessForNewContext]);
 
   // Guards against overlapping Dashboard reloads: if a caller asks for a
   // refresh while one is already running (e.g. a realtime event arriving
@@ -1248,11 +1370,35 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Mount-only full reload (snapshot + the initial year's period data).
+  // Deliberately NOT keyed on `runReload`'s identity — runReload changes
+  // identity whenever selectedYear changes (it wraps reloadData, which
+  // depends on selectedYear), and re-running the FULL reload on every year
+  // change is exactly the PERF-3 regression being fixed. A ref holds the
+  // latest runReload so this effect can still call the current version
+  // without re-firing when selectedYear changes.
+  const runReloadRef = useRef(runReload);
+  useEffect(() => {
+    runReloadRef.current = runReload;
+  }, [runReload]);
   useEffect(() => {
     void (async () => {
-      await runReload();
+      await runReloadRef.current();
     })();
-  }, [runReload]);
+  }, []);
+
+  // PERF-3: a pure year switch reloads only the period data (transactions)
+  // via reloadPeriod, reusing the already-valid snapshot rather than
+  // repeating the mount effect's full reload. Skips the very first render
+  // — the mount effect above already covers the initial selectedYear.
+  const hasHandledInitialYearRef = useRef(false);
+  useEffect(() => {
+    if (!hasHandledInitialYearRef.current) {
+      hasHandledInitialYearRef.current = true;
+      return;
+    }
+    void reloadPeriod(selectedYear);
+  }, [selectedYear, reloadPeriod]);
 
   // Fires once, the first time isDashboardReady flips true: an rAF after the
   // commit approximates when the above-the-fold KPI values actually painted,
@@ -2562,7 +2708,13 @@ export default function DashboardPage() {
           subtitle="Top danh mục trong tháng hiện tại để nhận diện nơi cần tối ưu"
         >
           <div className="mt-4 space-y-3">
-            {topSpendingCategories.length === 0 ? (
+            {!cashFlowReady ? (
+              <>
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+              </>
+            ) : topSpendingCategories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
                 Chưa có chi tiêu trong tháng này.
               </div>
@@ -2695,20 +2847,37 @@ export default function DashboardPage() {
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                   So với kỳ trước
                 </p>
-                <p
-                  className={`text-sm font-black ${
-                    netWorthChartStats.changeFromPrevious >= 0
-                      ? "text-emerald-600"
-                      : "text-rose-500"
-                  }`}
-                >
-                  {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
-                  {formatVND(netWorthChartStats.changeFromPrevious)}
-                </p>
+                {heroReady ? (
+                  <p
+                    className={`text-sm font-black ${
+                      netWorthChartStats.changeFromPrevious >= 0
+                        ? "text-emerald-600"
+                        : "text-rose-500"
+                    }`}
+                  >
+                    {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
+                    {formatVND(netWorthChartStats.changeFromPrevious)}
+                  </p>
+                ) : (
+                  <div className="ml-auto h-5 w-20 animate-pulse rounded bg-slate-200/80" />
+                )}
               </div>
             </div>
 
-            <NetWorthTrendChart trend={netWorthTrend} />
+            {/* netWorthTrend/netWorthChartStats are derived from `transactions`,
+                a period (year-scoped) dataset — heroReady already requires
+                cashFlowReady, which is the exact "transactions belong to the
+                currently selected year" signal (see dashboardReadiness.ts's
+                isNewPeriodContext/PERF-3), so it doubles as this chart's
+                period-context gate with no new state. Without this gate, a
+                still-held prior year's transactions could render as if they
+                were the newly selected year's net worth trend before the new
+                period fetch resolves. */}
+            {heroReady ? (
+              <NetWorthTrendChart trend={netWorthTrend} />
+            ) : (
+              <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+            )}
           </div>
         </div>
       </section>
@@ -2728,25 +2897,44 @@ export default function DashboardPage() {
           title="Dòng tiền trong kỳ"
           subtitle="Thu nhập, chi tiêu và phần tiền còn lại theo bộ lọc thời gian"
         >
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <MiniStat
-              label="Thu nhập"
-              value={formatVND(summary.income)}
-              color="text-emerald-600"
-            />
-            <MiniStat
-              label="Chi tiêu"
-              value={formatVND(summary.expense)}
-              color="text-rose-500"
-            />
-            <MiniStat
-              label="Còn lại"
-              value={formatVND(netCashFlow)}
-              color={netCashFlow >= 0 ? "text-blue-600" : "text-rose-500"}
-            />
-          </div>
+          {/* summary.income/expense, cashFlowData, and allocation5030 are all
+              derived from `transactions`, a period (year-scoped) dataset —
+              gate on cashFlowReady (the existing "transactions belong to the
+              currently selected year" signal) so a still-held prior year's
+              transactions cannot render as this year's cash flow while a
+              year switch's period fetch is still pending. */}
+          {cashFlowReady ? (
+            <>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <MiniStat
+                  label="Thu nhập"
+                  value={formatVND(summary.income)}
+                  color="text-emerald-600"
+                />
+                <MiniStat
+                  label="Chi tiêu"
+                  value={formatVND(summary.expense)}
+                  color="text-rose-500"
+                />
+                <MiniStat
+                  label="Còn lại"
+                  value={formatVND(netCashFlow)}
+                  color={netCashFlow >= 0 ? "text-blue-600" : "text-rose-500"}
+                />
+              </div>
 
-          <CashFlowChart data={cashFlowData} />
+              <CashFlowChart data={cashFlowData} />
+            </>
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              </div>
+              <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+            </>
+          )}
 
           <div className="mt-5 rounded-2xl bg-slate-50/80 p-4">
             <p className="text-sm font-black text-slate-900">
@@ -2756,32 +2944,40 @@ export default function DashboardPage() {
               So sánh phân bổ thu nhập theo quy tắc 50% Thiết yếu · 30% Mong
               muốn · 20% Tiết kiệm & Đầu tư.
             </p>
-            <div className="mt-4">
-              <AllocationRow
-                kind="needs"
-                label="Thiết yếu"
-                actual={allocation5030.needs}
-                target={50}
-                amount={allocation5030.needsAmount}
-                color="bg-blue-500"
-              />
-              <AllocationRow
-                kind="wants"
-                label="Mong muốn"
-                actual={allocation5030.wants}
-                target={30}
-                amount={allocation5030.wantsAmount}
-                color="bg-violet-500"
-              />
-              <AllocationRow
-                kind="savings"
-                label="Tiết kiệm & Đầu tư"
-                actual={allocation5030.savings}
-                target={20}
-                amount={allocation5030.savingsAmount}
-                color="bg-emerald-500"
-              />
-            </div>
+            {cashFlowReady ? (
+              <div className="mt-4">
+                <AllocationRow
+                  kind="needs"
+                  label="Thiết yếu"
+                  actual={allocation5030.needs}
+                  target={50}
+                  amount={allocation5030.needsAmount}
+                  color="bg-blue-500"
+                />
+                <AllocationRow
+                  kind="wants"
+                  label="Mong muốn"
+                  actual={allocation5030.wants}
+                  target={30}
+                  amount={allocation5030.wantsAmount}
+                  color="bg-violet-500"
+                />
+                <AllocationRow
+                  kind="savings"
+                  label="Tiết kiệm & Đầu tư"
+                  actual={allocation5030.savings}
+                  target={20}
+                  amount={allocation5030.savingsAmount}
+                  color="bg-emerald-500"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
+              </div>
+            )}
           </div>
         </Panel>
 

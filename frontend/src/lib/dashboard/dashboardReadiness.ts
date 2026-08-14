@@ -38,3 +38,95 @@ export function isHeroReady(
 ): boolean {
   return netWorthReady && cashFlowReady;
 }
+
+/**
+ * PERF-3: classifies whether a period (year-scoped) reload targets a
+ * different context than the one currently reflected in state.
+ *
+ * `loadedYear` is the year whose transactions are currently in state
+ * (`null` before the first successful period load ever completes).
+ * `requestedYear` is the year about to be fetched.
+ *
+ * This is deliberately narrow: it does not decide what to DO about a
+ * context change (that's DashboardPage's invalidation logic) — it only
+ * answers "is this the same context as what's already loaded, or a
+ * different one?" A `null` loadedYear is never a context change (there is
+ * nothing yet to mismatch against) — only two non-null, different years
+ * are.
+ */
+export function isNewPeriodContext(
+  loadedYear: number | null,
+  requestedYear: number,
+): boolean {
+  return loadedYear !== null && loadedYear !== requestedYear;
+}
+
+/**
+ * PERF-3 final period-surface correctness patch.
+ *
+ * The positive form of `isNewPeriodContext`: is the transaction snapshot
+ * currently in state actually valid for the currently selected year? Any
+ * visible surface that derives from `transactions` (Cash Flow KPI,
+ * netWorthTrend/netWorthChartStats, the Cash Flow panel, the 50/30/20
+ * split, top-spending categories, etc.) must render nothing but a loading
+ * state whenever this is false — otherwise a still-held prior year's
+ * transactions could be presented as if they belonged to the newly
+ * selected year, which is exactly as invalid as a genuinely failed fetch
+ * (see the PERF-3 acceptance criteria: "old period data cannot appear as
+ * valid new-period KPI data").
+ *
+ * DashboardPage does not read this directly during render — doing so
+ * would mean reading `loadedPeriodYearRef.current` (a ref) at render time,
+ * which is not guaranteed to trigger a re-render. Instead it relies on
+ * `cashFlowReady`, a piece of React state that reloadData/reloadPeriod
+ * already maintain to be true if-and-only-if this predicate holds (see
+ * dashboardReadiness.test.ts's orchestration simulation, which asserts the
+ * two never diverge across every PERF-3 race scenario). This helper exists
+ * to make that equivalence explicit and independently testable.
+ */
+export function isPeriodSnapshotCurrent(
+  loadedYear: number | null,
+  requestedYear: number,
+): boolean {
+  return loadedYear !== null && loadedYear === requestedYear;
+}
+
+/**
+ * PERF-3 race-generation guard.
+ *
+ * A "logical period operation" is one call to reloadData (the full
+ * snapshot+period reload) or one call to reloadPeriod (a pure year
+ * switch). Each such call must claim exactly ONE generation id — every
+ * branch it spawns (DashboardPage's four period-dependent readiness
+ * groups: cashFlow/goals/emergencyFund/savingInvestment) shares that same
+ * id, rather than each branch minting its own. Sharing one id per logical
+ * operation is what lets an in-flight OLDER operation's branches all
+ * agree they've been superseded the moment a NEWER operation starts,
+ * instead of some branches from the old operation incorrectly surviving
+ * because they happened to claim a "later" id than a sibling branch from
+ * the same call.
+ *
+ * `generationRef` is a plain mutable counter (a React ref in practice,
+ * but this module stays framework-free) — callers own its storage.
+ */
+export type PeriodGenerationRef = { current: number };
+
+/** Claims a new generation for one logical period operation. Call this
+ * exactly once per reloadData/reloadPeriod invocation, before spawning any
+ * of its branches, and have every branch capture the returned id. */
+export function beginPeriodGeneration(
+  generationRef: PeriodGenerationRef,
+): number {
+  generationRef.current += 1;
+  return generationRef.current;
+}
+
+/** True once a newer logical period operation has started after this
+ * branch captured its generation id — the branch's result must then be
+ * discarded as a no-op rather than applied to state. */
+export function isStalePeriodGeneration(
+  generationRef: PeriodGenerationRef,
+  capturedGeneration: number,
+): boolean {
+  return generationRef.current !== capturedGeneration;
+}
