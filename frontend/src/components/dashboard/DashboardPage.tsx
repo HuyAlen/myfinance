@@ -2830,210 +2830,11 @@ export default function DashboardPage() {
 
   return (
     <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
-      {/* MyFinance v2 command center */}
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
-          <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
-          <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
-
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
-                Tổng quan tài chính
-              </p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                Tổng quan hôm nay
-              </h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
-              </p>
-            </div>
-          </div>
-
-          <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <DailyMetric
-              label="Thu hôm nay"
-              value={formatVND(todaySnapshot.income)}
-              tone="good"
-            />
-            <DailyMetric
-              label="Chi hôm nay"
-              value={formatVND(todaySnapshot.expense)}
-              tone="danger"
-            />
-            <DailyMetric
-              label="Đã tiết kiệm"
-              value={formatVND(todaySnapshot.saving)}
-              tone="saving"
-            />
-            <DailyMetric
-              label="Ròng hôm nay"
-              value={`${todaySnapshot.net >= 0 ? "+" : ""}${formatVND(todaySnapshot.net)}`}
-              tone={todaySnapshot.net >= 0 ? "good" : "danger"}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                Tiến độ tháng
-              </p>
-              <h2 className="mt-2 text-xl font-black text-slate-900">
-                Tiến độ tháng {monthlyPulse.month}
-              </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Ngày {monthlyPulse.elapsedDays}/{monthlyPulse.daysInMonth}
-              </p>
-            </div>
-            <CalendarClock className="text-blue-600" size={24} />
-          </div>
-
-          <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
-              style={{ width: `${Math.min(monthlyPulse.progress, 100)}%` }}
-            />
-          </div>
-          <div className="mt-2 flex justify-between text-xs font-bold text-slate-500">
-            <span>{monthlyPulse.progress}% thời gian</span>
-            <span>
-              {monthlyPulse.daysInMonth - monthlyPulse.elapsedDays} ngày còn lại
-            </span>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <MiniStat
-              label="Đã chi"
-              value={formatVND(monthlyPulse.expense)}
-              color="text-rose-500"
-            />
-            <MiniStat
-              label="Dự báo cuối tháng"
-              value={formatVND(monthlyPulse.projectedExpense)}
-              color="text-blue-600"
-            />
-            <MiniStat
-              label="Dùng ngân sách"
-              value={
-                monthlyPulse.budgetLimit > 0
-                  ? `${monthlyPulse.budgetUsage}%`
-                  : "Chưa lập"
-              }
-              color={
-                monthlyPulse.budgetUsage > 100
-                  ? "text-rose-500"
-                  : "text-emerald-600"
-              }
-            />
-            <MiniStat
-              label="Dự báo ngân sách"
-              value={
-                monthlyPulse.budgetLimit > 0
-                  ? `${monthlyPulse.projectedBudgetUsage}%`
-                  : "—"
-              }
-              color={
-                monthlyPulse.projectedBudgetUsage > 100
-                  ? "text-rose-500"
-                  : "text-emerald-600"
-              }
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="grid items-start gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <Panel
-          title="Sắp đến hạn trong 30 ngày"
-          subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
-        >
-          <div className="mt-4 space-y-2">
-            {upcomingMoneyEvents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
-                <ReceiptText className="mx-auto text-slate-300" size={24} />
-                <p className="mt-2 text-sm font-black text-slate-700">
-                  Chưa có khoản định kỳ sắp tới
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Bật giao dịch định kỳ và đặt ngày chạy tiếp theo để theo dõi
-                  tại đây.
-                </p>
-              </div>
-            ) : (
-              upcomingMoneyEvents.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {item.title}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {item.date.toLocaleDateString("vi-VN")} ·{" "}
-                      {item.categoryName}
-                    </p>
-                  </div>
-                  <p
-                    className={`shrink-0 text-sm font-black ${item.type === "income" ? "text-emerald-600" : "text-rose-500"}`}
-                  >
-                    {item.type === "income" ? "+" : "−"}
-                    {formatVND(item.amount)}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </Panel>
-
-        <Panel
-          title="Danh mục chi tiêu lớn nhất"
-          subtitle="Top danh mục trong tháng hiện tại để nhận diện nơi cần tối ưu"
-        >
-          <div className="mt-4 space-y-3">
-            {!cashFlowReady ? (
-              <>
-                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
-              </>
-            ) : topSpendingCategories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
-                Chưa có chi tiêu trong tháng này.
-              </div>
-            ) : (
-              topSpendingCategories.map((item, index) => {
-                const maxAmount = topSpendingCategories[0]?.amount || 1;
-                const width = Math.max(
-                  8,
-                  Math.round((item.amount / maxAmount) * 100),
-                );
-                return (
-                  <div key={item.categoryId}>
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="min-w-0 truncate font-bold text-slate-700">
-                        {index + 1}. {item.name}
-                      </span>
-                      <span className="shrink-0 font-black text-slate-900">
-                        {formatVND(item.amount)}
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500"
-                        style={{ width: `${width}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Panel>
-      </section>
-
+      {/* UI-DASH-1: financial position leads the page — Hero communicates
+          Net Worth first, before any lower-priority informational content
+          (see the audit that motivated this reorder). Content, readiness
+          gating, and instrumentation below are unchanged; only its position
+          in the page moved. */}
       {/* Executive overview */}
       <section className="overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
         <div className="bg-linear-to-br from-blue-50/80 via-white to-sky-50/80 p-4 sm:p-7">
@@ -3167,12 +2968,147 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* UI-DASH-1: "what should I do next" moved up next to financial
+          position — was previously the last section on the page. Content,
+          conditional rendering, and CTA behavior are unchanged. */}
+      {/* Action center */}
+      <section className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+              <Bot size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-slate-900">
+                Ưu tiên tài chính
+              </h2>
+              <p className="text-sm text-slate-600">
+                Các hành động nên làm tiếp theo dựa trên dữ liệu hiện tại.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasNoDebt && (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                ✓ Không có nợ phải trả
+              </span>
+            )}
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+              Tối đa 3 việc quan trọng
+            </span>
+          </div>
+        </div>
+
+        {priorityActions.length > 0 ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            {priorityActions.map((action, index) => (
+              <ActionCard
+                key={`${action.title}-${index}`}
+                rank={index + 1}
+                icon={action.icon}
+                title={action.title}
+                body={action.body}
+                tone={action.tone}
+                ctaLabel={action.ctaLabel}
+                ctaRoute={action.ctaRoute}
+                onNavigate={router.push}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-center sm:p-5">
+            <p className="text-sm font-black text-emerald-700">
+              Tài chính đang trong trạng thái ổn định.
+            </p>
+            <p className="mt-1 text-xs text-emerald-700/80">
+              Không có việc khẩn cấp cần xử lý.
+            </p>
+          </div>
+        )}
+      </section>
+
       {/* Operating KPIs */}
       <section>
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
           {kpiCards.map((item) => (
             <KpiCard key={item.title} {...item} isLoading={!item.ready} />
           ))}
+        </div>
+      </section>
+
+      {/* UI-DASH-1: monthly progress is HIGH priority per the audit (it
+          already connects calendar progress to budget usage, not just a
+          calendar widget) — moved up from the bottom half of the page.
+          Content and calculation (`monthlyPulse`) unchanged. */}
+      {/* Monthly progress */}
+      <section>
+        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                Tiến độ tháng
+              </p>
+              <h2 className="mt-2 text-xl font-black text-slate-900">
+                Tiến độ tháng {monthlyPulse.month}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Ngày {monthlyPulse.elapsedDays}/{monthlyPulse.daysInMonth}
+              </p>
+            </div>
+            <CalendarClock className="text-blue-600" size={24} />
+          </div>
+
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-linear-to-r from-blue-500 to-cyan-400"
+              style={{ width: `${Math.min(monthlyPulse.progress, 100)}%` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-xs font-bold text-slate-500">
+            <span>{monthlyPulse.progress}% thời gian</span>
+            <span>
+              {monthlyPulse.daysInMonth - monthlyPulse.elapsedDays} ngày còn lại
+            </span>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <MiniStat
+              label="Đã chi"
+              value={formatVND(monthlyPulse.expense)}
+              color="text-rose-500"
+            />
+            <MiniStat
+              label="Dự báo cuối tháng"
+              value={formatVND(monthlyPulse.projectedExpense)}
+              color="text-blue-600"
+            />
+            <MiniStat
+              label="Dùng ngân sách"
+              value={
+                monthlyPulse.budgetLimit > 0
+                  ? `${monthlyPulse.budgetUsage}%`
+                  : "Chưa lập"
+              }
+              color={
+                monthlyPulse.budgetUsage > 100
+                  ? "text-rose-500"
+                  : "text-emerald-600"
+              }
+            />
+            <MiniStat
+              label="Dự báo ngân sách"
+              value={
+                monthlyPulse.budgetLimit > 0
+                  ? `${monthlyPulse.projectedBudgetUsage}%`
+                  : "—"
+              }
+              color={
+                monthlyPulse.projectedBudgetUsage > 100
+                  ? "text-rose-500"
+                  : "text-emerald-600"
+              }
+            />
+          </div>
         </div>
       </section>
 
@@ -3314,6 +3250,101 @@ export default function DashboardPage() {
                 </p>
               </div>
             ))}
+          </div>
+        </Panel>
+      </section>
+
+      {/* UI-DASH-1: moved down from leading the page — upcoming recurring
+          items and top spending categories are useful context (MEDIUM
+          priority) but not the primary Dashboard job. Content, readiness
+          gating (cashFlowReady on top spending), and empty states
+          unchanged. */}
+      <section className="grid items-start gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Panel
+          title="Sắp đến hạn trong 30 ngày"
+          subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
+        >
+          <div className="mt-4 space-y-2">
+            {upcomingMoneyEvents.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
+                <ReceiptText className="mx-auto text-slate-300" size={24} />
+                <p className="mt-2 text-sm font-black text-slate-700">
+                  Chưa có khoản định kỳ sắp tới
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Bật giao dịch định kỳ và đặt ngày chạy tiếp theo để theo dõi
+                  tại đây.
+                </p>
+              </div>
+            ) : (
+              upcomingMoneyEvents.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-900">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {item.date.toLocaleDateString("vi-VN")} ·{" "}
+                      {item.categoryName}
+                    </p>
+                  </div>
+                  <p
+                    className={`shrink-0 text-sm font-black ${item.type === "income" ? "text-emerald-600" : "text-rose-500"}`}
+                  >
+                    {item.type === "income" ? "+" : "−"}
+                    {formatVND(item.amount)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Danh mục chi tiêu lớn nhất"
+          subtitle="Top danh mục trong tháng hiện tại để nhận diện nơi cần tối ưu"
+        >
+          <div className="mt-4 space-y-3">
+            {!cashFlowReady ? (
+              <>
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-9 animate-pulse rounded-xl bg-slate-100" />
+              </>
+            ) : topSpendingCategories.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
+                Chưa có chi tiêu trong tháng này.
+              </div>
+            ) : (
+              topSpendingCategories.map((item, index) => {
+                const maxAmount = topSpendingCategories[0]?.amount || 1;
+                const width = Math.max(
+                  8,
+                  Math.round((item.amount / maxAmount) * 100),
+                );
+                return (
+                  <div key={item.categoryId}>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate font-bold text-slate-700">
+                        {index + 1}. {item.name}
+                      </span>
+                      <span className="shrink-0 font-black text-slate-900">
+                        {formatVND(item.amount)}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </Panel>
       </section>
@@ -3516,60 +3547,52 @@ export default function DashboardPage() {
         </Panel>
       </section>
 
-      {/* Action center */}
-      <section className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
-              <Bot size={20} />
-            </div>
+      {/* UI-DASH-1: today's daily pulse is LOW/supporting priority per the
+          audit (a single day's numbers rarely change a decision) — moved
+          from leading the page to the end. Content/semantics unchanged. */}
+      {/* Today's summary */}
+      <section>
+        <div className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
+          <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
+
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-900">
-                Ưu tiên tài chính
-              </h2>
-              <p className="text-sm text-slate-600">
-                Các hành động nên làm tiếp theo dựa trên dữ liệu hiện tại.
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+                Tổng quan tài chính
+              </p>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                Tổng quan hôm nay
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {hasNoDebt && (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                ✓ Không có nợ phải trả
-              </span>
-            )}
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-              Tối đa 3 việc quan trọng
-            </span>
+
+          <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <DailyMetric
+              label="Thu hôm nay"
+              value={formatVND(todaySnapshot.income)}
+              tone="good"
+            />
+            <DailyMetric
+              label="Chi hôm nay"
+              value={formatVND(todaySnapshot.expense)}
+              tone="danger"
+            />
+            <DailyMetric
+              label="Đã tiết kiệm"
+              value={formatVND(todaySnapshot.saving)}
+              tone="saving"
+            />
+            <DailyMetric
+              label="Ròng hôm nay"
+              value={`${todaySnapshot.net >= 0 ? "+" : ""}${formatVND(todaySnapshot.net)}`}
+              tone={todaySnapshot.net >= 0 ? "good" : "danger"}
+            />
           </div>
         </div>
-
-        {priorityActions.length > 0 ? (
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            {priorityActions.map((action, index) => (
-              <ActionCard
-                key={`${action.title}-${index}`}
-                rank={index + 1}
-                icon={action.icon}
-                title={action.title}
-                body={action.body}
-                tone={action.tone}
-                ctaLabel={action.ctaLabel}
-                ctaRoute={action.ctaRoute}
-                onNavigate={router.push}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-center sm:p-5">
-            <p className="text-sm font-black text-emerald-700">
-              Tài chính đang trong trạng thái ổn định.
-            </p>
-            <p className="mt-1 text-xs text-emerald-700/80">
-              Không có việc khẩn cấp cần xử lý.
-            </p>
-          </div>
-        )}
       </section>
     </div>
   );
