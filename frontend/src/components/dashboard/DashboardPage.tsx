@@ -10,6 +10,16 @@ import { formatCompactVND } from "./dashboardFormat";
 import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
 import {
+  dashboardPerfNow,
+  emitDashboardMilestone,
+  logDashboardOperationStart,
+  measureDashboardQuery,
+  nextDashboardOperationId,
+  supabaseResultStatus,
+  type DashboardOperationContext,
+  type DashboardOperationTrigger,
+} from "@/src/lib/performance/dashboardPerfDebug";
+import {
   beginPeriodGeneration,
   isHeroReady,
   isNewPeriodContext,
@@ -746,6 +756,30 @@ export default function DashboardPage() {
   const periodRequestIdRef = useRef(0);
   const { dateRange, selectedYear } = useDateFilter();
 
+  // PERF-4 Hero Milestone Operation Semantics patch: dashboard_hero_ready
+  // is emitted operation-locally (inside reloadData/reloadPeriod, right
+  // next to the other milestones — see below), not from a
+  // useEffect([isDashboardReady, cashFlowReady]). The previous effect-based
+  // version missed Realtime reloads whenever both flags were ALREADY true
+  // (React bails out of re-rendering — and therefore never reruns the
+  // effect — when a state setter is called with a value equal to the
+  // current one), so a same-context Realtime operation that genuinely
+  // re-validated Hero's dependencies could complete without ever emitting
+  // the milestone for its own operation id.
+  //
+  // reloadPeriod never touches Net Worth (it's snapshot-only, unaffected
+  // by a year switch — see PERF-3), so it needs to know whether Net Worth
+  // is CURRENTLY valid without depending on which operation last set it.
+  // Reading `isDashboardReady` directly inside reloadPeriod's closure
+  // would be stale forever (reloadPeriod's identity never changes after
+  // first render), so this ref mirrors the live value instead — the
+  // mirroring effect below causes no additional render of its own; it
+  // only records a value that already changed for other reasons.
+  const isDashboardReadyRef = useRef(isDashboardReady);
+  useEffect(() => {
+    isDashboardReadyRef.current = isDashboardReady;
+  }, [isDashboardReady]);
+
   // A genuine year switch means the `transactions` currently in state (and
   // thus the period-dependent readiness flags built on top of them) belong
   // to a different context than what the user now wants to see. The
@@ -846,9 +880,100 @@ export default function DashboardPage() {
   const snapshotDebts = debts;
   const snapshotGoals = goals;
 
-  const reloadData = useCallback(async () => {
+  const reloadData = useCallback(async (trigger: DashboardOperationTrigger) => {
     markInstant("dashboard:reload:start");
     const fetchRange = getDashboardFetchRange(selectedYear);
+
+    // PERF-4: this logical operation's id/trigger, shared via closure by
+    // every query wrapper and milestone emission below — one operation id
+    // per reloadData call, never per query/group (see dashboardPerfDebug's
+    // module docs). Purely observational: does not affect fetch count,
+    // ordering, or any PERF-2/PERF-3 readiness/race behavior.
+    const operationId = nextDashboardOperationId("full");
+    const ctx: DashboardOperationContext = { operationId, trigger };
+    const operationStartedAt = dashboardPerfNow();
+    logDashboardOperationStart(ctx, selectedYear);
+    // Local, per-call dedup state for the milestones that can be reached
+    // from more than one of this call's independent async branches
+    // (period-ready from any of the four period groups below;
+    // snapshot-ready/hero-ready from the Net Worth, Forex, and Cash Flow
+    // groups settling independently) — plain closures, not refs, since a
+    // fresh instance is exactly what "once per logical operation" requires
+    // and each reloadData call gets its own via normal JS scoping.
+    let periodReadyEmitted = false;
+    let cashFlowReadyEmitted = false;
+    let networthReadyEmitted = false;
+    let networthSettled = false;
+    let forexSettled = false;
+    let snapshotReadyEmitted = false;
+    // Hero eligibility for THIS operation requires a FRESH success this
+    // cycle for BOTH of its dependencies, and that success must belong to
+    // THIS operation specifically — not merely "the flag stayed true via
+    // last-known-good", and not a different concurrent operation's
+    // success. Both `networthFreshlyValidated` and `cashFlowFreshlyValidated`
+    // are plain locals, freshly initialized to `false` on every reloadData
+    // call by ordinary JS scoping — no other operation (a concurrent
+    // reloadData, or a concurrent reloadPeriod triggered by a year switch)
+    // can read or write them. A concurrent reloadPeriod validating Cash
+    // Flow for the current year does NOT count as THIS full operation
+    // having validated its own Cash Flow — if this operation's own period
+    // work is stale (superseded — see the isStalePeriodGeneration guard in
+    // the Cash Flow group below) or fails, `cashFlowFreshlyValidated` stays
+    // false for THIS operation regardless of what any other operation did.
+    let networthFreshlyValidated = false;
+    let cashFlowFreshlyValidated = false;
+    let heroReadyEmitted = false;
+    function maybeMarkHeroReady() {
+      if (
+        heroReadyEmitted ||
+        !networthFreshlyValidated ||
+        !cashFlowFreshlyValidated
+      ) {
+        return;
+      }
+      heroReadyEmitted = true;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_hero_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
+    }
+    function markPeriodReadyOnce() {
+      if (periodReadyEmitted) return;
+      periodReadyEmitted = true;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_period_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
+    }
+    function markCashFlowReadyOnce() {
+      if (cashFlowReadyEmitted) return;
+      cashFlowReadyEmitted = true;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_cashflow_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
+    }
+    function markNetWorthReadyOnce() {
+      if (networthReadyEmitted) return;
+      networthReadyEmitted = true;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_networth_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
+    }
+    function maybeMarkSnapshotReady() {
+      if (snapshotReadyEmitted || !networthSettled || !forexSettled) return;
+      snapshotReadyEmitted = true;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_snapshot_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
+    }
 
     // This full reload (mount / Realtime / manual refresh) always fetches
     // transactions for whatever year is currently selected, so it is itself
@@ -866,43 +991,97 @@ export default function DashboardPage() {
     // promises, all started concurrently below. Each readiness group further
     // down awaits only the subset it actually needs — a shared dataset
     // (e.g. `transactions`, `savings`) is awaited by more than one group,
-    // but never fetched twice.
-    const walletsPromise = getWallets();
-    const investmentsPromise = getInvestments();
-    const forexAccountsPromise = getForexAccounts();
-    const forexEquityPromise = supabase
-      ? supabase.from("forex_accounts").select("id,current_equity")
-      : Promise.resolve({ data: [], error: null });
+    // but never fetched twice. measureDashboardQuery only measures timing
+    // (a no-op passthrough when diagnostics are disabled) — it calls the
+    // underlying query function exactly once, synchronously, so fetch
+    // count/ordering/concurrency are unchanged.
+    const walletsPromise = measureDashboardQuery("wallets", ctx, () =>
+      getWallets(),
+    );
+    const investmentsPromise = measureDashboardQuery("investments", ctx, () =>
+      getInvestments(),
+    );
+    const forexAccountsPromise = measureDashboardQuery(
+      "forex_accounts",
+      ctx,
+      () => getForexAccounts(),
+    );
+    const forexEquityPromise = measureDashboardQuery(
+      "forex_equity",
+      ctx,
+      () =>
+        Promise.resolve(
+          supabase
+            ? supabase.from("forex_accounts").select("id,current_equity")
+            : Promise.resolve({ data: [], error: null }),
+        ),
+      // This direct Supabase call resolves { data, error } on failure
+      // rather than rejecting — classify a fulfilled error result as
+      // "error" telemetry instead of "success" (PERF-4 correctness patch).
+      { getStatus: supabaseResultStatus },
+    );
     // Forex cash transactions feed both the canonical Net Worth fallback
     // (getForexAssetValue falls back to this ledger's net deposits-
     // withdrawals-fees for any account without a manually-entered
     // currentEquity — see the PERF-1 Forex correctness patch, unchanged
     // here) and the narrower Forex-card-only readiness group below.
-    const forexLedgerPromise = getForexCashTransactions();
-    const categoriesPromise = getCategories();
-    const transactionsPromise = getTransactionsInRange(
-      fetchRange.startDate,
-      fetchRange.endDate,
+    const forexLedgerPromise = measureDashboardQuery(
+      "forex_ledger",
+      ctx,
+      () => getForexCashTransactions(),
     );
-    const debtsPromise = getDebts();
-    const goalsPromise = getGoals();
-    const savingsPromise = supabase
-      ? supabase
-          .from("savings")
-          .select("*")
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null });
+    const categoriesPromise = measureDashboardQuery("categories", ctx, () =>
+      getCategories(),
+    );
+    const transactionsPromise = measureDashboardQuery(
+      "transactions",
+      ctx,
+      () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
+      {
+        isStale: () => isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+      },
+    );
+    const debtsPromise = measureDashboardQuery("debts", ctx, () => getDebts());
+    const goalsPromise = measureDashboardQuery("goals", ctx, () => getGoals());
+    const savingsPromise = measureDashboardQuery(
+      "savings",
+      ctx,
+      () =>
+        Promise.resolve(
+          supabase
+            ? supabase
+                .from("savings")
+                .select("*")
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ),
+      // Same fulfilled-{data,error} shape as forex_equity above.
+      { getStatus: supabaseResultStatus },
+    );
     // SECONDARY in startup priority (never blocks Net Worth/Cash Flow/
     // Goals/Emergency Fund/Forex), but "Tiết kiệm & Đầu tư" genuinely needs
     // this ledger for a correct allocation % — see savingInvestmentGroup.
-    const savingTransactionsPromise = supabase
-      ? supabase
-          .from("saving_transactions")
-          .select("id,saving_id,type,amount,transaction_date,created_at,note")
-          .order("transaction_date", { ascending: false })
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null });
-    const budgetsPromise = getBudgets();
+    const savingTransactionsPromise = measureDashboardQuery(
+      "saving_transactions",
+      ctx,
+      () =>
+        Promise.resolve(
+          supabase
+            ? supabase
+                .from("saving_transactions")
+                .select(
+                  "id,saving_id,type,amount,transaction_date,created_at,note",
+                )
+                .order("transaction_date", { ascending: false })
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ),
+      // Same fulfilled-{data,error} shape as forex_equity above.
+      { getStatus: supabaseResultStatus },
+    );
+    const budgetsPromise = measureDashboardQuery("budgets", ctx, () =>
+      getBudgets(),
+    );
 
     // Returns true on success. On a Supabase-level error (not a thrown
     // exception — the query resolved, just with `.error` set), the
@@ -945,8 +1124,16 @@ export default function DashboardPage() {
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        markPeriodReadyOnce();
         setCashFlowReady(true);
         hasLoadedCashFlowRef.current = true;
+        markCashFlowReadyOnce();
+        // A FRESH success this cycle, for THIS operation's own Cash Flow
+        // work specifically — eligible to contribute to this operation's
+        // own dashboard_hero_ready (see maybeMarkHeroReady). This local
+        // flag can never be set by a concurrent reloadPeriod.
+        cashFlowFreshlyValidated = true;
+        maybeMarkHeroReady();
       } catch (error) {
         if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         console.error("[DashboardPage] cash-flow reload failed", error);
@@ -955,8 +1142,14 @@ export default function DashboardPage() {
         // as if it were a real, loaded income/expense of 0. A later
         // (post-success) failure keeps the last-known-good snapshot and
         // readiness stays true, matching the app's existing "never flash
-        // 0 on a transient refresh failure" policy.
-        if (hasLoadedCashFlowRef.current) setCashFlowReady(true);
+        // 0 on a transient refresh failure" policy. It is last-known-good,
+        // NOT a fresh revalidation — this operation must NOT claim
+        // dashboard_hero_ready on the strength of it, even though the UI
+        // stays usable (see PERF-4 Hero Milestone Operation Semantics).
+        if (hasLoadedCashFlowRef.current) {
+          setCashFlowReady(true);
+          markCashFlowReadyOnce();
+        }
       }
     })();
 
@@ -973,6 +1166,7 @@ export default function DashboardPage() {
         setGoals(gls ?? []);
         setTransactions(txn ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        markPeriodReadyOnce();
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
@@ -1006,6 +1200,7 @@ export default function DashboardPage() {
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        markPeriodReadyOnce();
         if (shouldMarkReady(savingsOk, hasLoadedEmergencyFundRef.current)) {
           setEmergencyFundReady(true);
           hasLoadedEmergencyFundRef.current = true;
@@ -1039,6 +1234,7 @@ export default function DashboardPage() {
         setCategories(cat ?? []);
         setForexCashTransactions(forexTxn ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        markPeriodReadyOnce();
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
@@ -1131,10 +1327,16 @@ export default function DashboardPage() {
           setForexCashTransactions(forexTxn ?? []);
           setForexReady(true);
           hasLoadedForexRef.current = true;
+          forexSettled = true;
+          maybeMarkSnapshotReady();
         }
       } catch (error) {
         console.error("[DashboardPage] forex reload failed", error);
-        if (hasLoadedForexRef.current) setForexReady(true);
+        if (hasLoadedForexRef.current) {
+          setForexReady(true);
+          forexSettled = true;
+          maybeMarkSnapshotReady();
+        }
       }
     })();
 
@@ -1208,6 +1410,19 @@ export default function DashboardPage() {
         );
         setIsDashboardReady(true);
         hasLoadedNetWorthRef.current = true;
+        networthSettled = true;
+        markNetWorthReadyOnce();
+        maybeMarkSnapshotReady();
+        if (equityOk && savingsOk) {
+          // A FRESH success this cycle (not a last-known-good preserve) —
+          // eligible to contribute to this operation's own
+          // dashboard_hero_ready. `shouldMarkReady` above can also be true
+          // via hasLoadedNetWorthRef alone when equityOk/savingsOk are
+          // false (this cycle's fetch actually failed) — that path must
+          // NOT count as revalidation, hence the extra check here.
+          networthFreshlyValidated = true;
+          maybeMarkHeroReady();
+        }
         measureAndReport(
           "dashboard_snapshot",
           "dashboard:reload:start",
@@ -1225,8 +1440,15 @@ export default function DashboardPage() {
       // the last-known-good snapshot and readiness stays true — clearing
       // every array here caused the net-cash-flow KPI to flash 0 before
       // the slower transaction request finished again (pre-existing fix,
-      // preserved).
-      if (hasLoadedNetWorthRef.current) setIsDashboardReady(true);
+      // preserved). This is last-known-good, NOT a fresh revalidation —
+      // networthFreshlyValidated intentionally stays false here (see PERF-4
+      // Hero Milestone Operation Semantics).
+      if (hasLoadedNetWorthRef.current) {
+        setIsDashboardReady(true);
+        networthSettled = true;
+        markNetWorthReadyOnce();
+        maybeMarkSnapshotReady();
+      }
       measureAndReport(
         "dashboard_snapshot",
         "dashboard:reload:start",
@@ -1271,6 +1493,15 @@ export default function DashboardPage() {
   // existing snapshot state; the two snapshot-only flags (isDashboardReady,
   // forexReady) are left untouched — a year switch never invalidates them.
   const reloadPeriod = useCallback(async (year: number) => {
+    // PERF-4: this is always a "year_change" logical operation — reloadPeriod
+    // has exactly one caller (the selectedYear-change effect below). One
+    // operation id, purely observational — see reloadData's identical
+    // comment above.
+    const operationId = nextDashboardOperationId("period");
+    const ctx: DashboardOperationContext = { operationId, trigger: "year_change" };
+    const operationStartedAt = dashboardPerfNow();
+    logDashboardOperationStart(ctx, year);
+
     const periodGeneration = beginPeriodGeneration(periodRequestIdRef);
 
     if (isNewPeriodContext(loadedPeriodYearRef.current, year)) {
@@ -1279,9 +1510,13 @@ export default function DashboardPage() {
 
     const fetchRange = getDashboardFetchRange(year);
     try {
-      const txn = await getTransactionsInRange(
-        fetchRange.startDate,
-        fetchRange.endDate,
+      const txn = await measureDashboardQuery(
+        "transactions",
+        ctx,
+        () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
+        {
+          isStale: () => isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+        },
       );
       // A faster, more recent year switch may have already superseded this
       // request — never let an older, slower response win a race and
@@ -1290,10 +1525,43 @@ export default function DashboardPage() {
 
       setTransactions(txn ?? []);
       loadedPeriodYearRef.current = year;
+      emitDashboardMilestone(
+        ctx,
+        "dashboard_period_ready",
+        dashboardPerfNow() - operationStartedAt,
+      );
 
       if (shouldMarkReady(true, hasLoadedCashFlowRef.current)) {
         setCashFlowReady(true);
         hasLoadedCashFlowRef.current = true;
+        emitDashboardMilestone(
+          ctx,
+          "dashboard_cashflow_ready",
+          dashboardPerfNow() - operationStartedAt,
+        );
+      }
+      // Reaching here means the fetch above genuinely succeeded fresh and
+      // is still current (non-stale) — a real revalidation of THIS period
+      // operation's own (and only) Hero-relevant dependency, Cash Flow.
+      // This freshness is intentionally NOT written anywhere a concurrent
+      // full operation could read it — a period operation may reuse the
+      // current snapshot's Net Worth validity (see isDashboardReadyRef
+      // immediately below), but the reverse must never happen: this
+      // operation's own Cash Flow success must never be usable as
+      // evidence that a DIFFERENT (full) operation validated ITS OWN Cash
+      // Flow — see the PERF-4 Hero Freshness Ownership patch.
+      //
+      // reloadPeriod never touches Net Worth (snapshot-only, unaffected by
+      // a year switch — PERF-3), so it reuses the CURRENT snapshot state
+      // via the ref mirror rather than requiring its own operation to have
+      // refetched it — see isDashboardReadyRef's declaration for why a
+      // direct closure read would be stale.
+      if (isDashboardReadyRef.current) {
+        emitDashboardMilestone(
+          ctx,
+          "dashboard_hero_ready",
+          dashboardPerfNow() - operationStartedAt,
+        );
       }
       if (shouldMarkReady(true, hasLoadedGoalsRef.current)) {
         setGoalsReady(true);
@@ -1315,7 +1583,14 @@ export default function DashboardPage() {
       // failure with no prior success for THIS year (isNewPeriodContext
       // already reset the refs above) stays not-ready rather than
       // fabricating a zero.
-      if (hasLoadedCashFlowRef.current) setCashFlowReady(true);
+      if (hasLoadedCashFlowRef.current) {
+        setCashFlowReady(true);
+        emitDashboardMilestone(
+          ctx,
+          "dashboard_cashflow_ready",
+          dashboardPerfNow() - operationStartedAt,
+        );
+      }
       if (hasLoadedGoalsRef.current) setGoalsReady(true);
       if (hasLoadedEmergencyFundRef.current) setEmergencyFundReady(true);
       if (hasLoadedSavingInvestmentRef.current) setSavingInvestmentReady(true);
@@ -1330,21 +1605,31 @@ export default function DashboardPage() {
   // writes without ever running two overlapping query sets.
   const isReloadingRef = useRef(false);
   const hasPendingReloadRef = useRef(false);
-  const runReload = useCallback(async () => {
-    if (isReloadingRef.current) {
-      hasPendingReloadRef.current = true;
-      return;
-    }
-    isReloadingRef.current = true;
-    try {
-      do {
-        hasPendingReloadRef.current = false;
-        await reloadData();
-      } while (hasPendingReloadRef.current);
-    } finally {
-      isReloadingRef.current = false;
-    }
-  }, [reloadData]);
+  // PERF-4: which trigger caused the currently-pending trailing reload, if
+  // any — purely for observability labeling; the do-while overlap guard
+  // itself is unchanged from PERF-2.
+  const pendingReloadTriggerRef = useRef<DashboardOperationTrigger>("realtime");
+  const runReload = useCallback(
+    async (trigger: DashboardOperationTrigger) => {
+      if (isReloadingRef.current) {
+        hasPendingReloadRef.current = true;
+        pendingReloadTriggerRef.current = trigger;
+        return;
+      }
+      isReloadingRef.current = true;
+      try {
+        let currentTrigger = trigger;
+        do {
+          hasPendingReloadRef.current = false;
+          await reloadData(currentTrigger);
+          currentTrigger = pendingReloadTriggerRef.current;
+        } while (hasPendingReloadRef.current);
+      } finally {
+        isReloadingRef.current = false;
+      }
+    },
+    [reloadData],
+  );
 
   // Realtime-only entry point: coalesces bursts of postgres_changes events
   // that land within a short window (one multi-table write can fire several
@@ -1358,7 +1643,7 @@ export default function DashboardPage() {
     }
     realtimeRefreshTimerRef.current = window.setTimeout(() => {
       realtimeRefreshTimerRef.current = null;
-      void runReload();
+      void runReload("realtime");
     }, REALTIME_REFRESH_DEBOUNCE_MS);
   }, [runReload]);
 
@@ -1383,7 +1668,7 @@ export default function DashboardPage() {
   }, [runReload]);
   useEffect(() => {
     void (async () => {
-      await runReloadRef.current();
+      await runReloadRef.current("initial");
     })();
   }, []);
 
