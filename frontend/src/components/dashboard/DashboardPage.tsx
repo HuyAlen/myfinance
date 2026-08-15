@@ -28,7 +28,18 @@ import {
   shouldMarkReady,
 } from "@/src/lib/dashboard/dashboardReadiness";
 import { buildDashboardBudgetAttention } from "@/src/lib/dashboard/dashboardBudgetAttention";
-import { buildBudgetsHref } from "@/src/lib/navigation/financeNavigation";
+import {
+  composeIssueIdentity,
+  deriveAggregateIssueKind,
+  selectDashboardPriorityActions,
+  type DashboardActionCandidate,
+} from "@/src/lib/dashboard/dashboardActionPriority";
+import {
+  buildBudgetsHref,
+  buildGoalsHref,
+  buildSavingsHref,
+  buildTransactionsHref,
+} from "@/src/lib/navigation/financeNavigation";
 
 import {
   AlertTriangle,
@@ -2521,15 +2532,24 @@ export default function DashboardPage() {
     budget: <AlertTriangle size={18} />,
   };
 
-  const v3AdvisorActions = useMemo(() => {
-    const actions: {
-      icon: React.ReactNode;
-      title: string;
-      body: string;
-      tone: "danger" | "warning" | "good";
-      ctaLabel?: string;
-      ctaRoute?: string;
-    }[] = [];
+  // UI-DASH-3: `domain` (not a rendered icon) so this can be merged with
+  // `aiActions` through the shared, source-agnostic
+  // `selectDashboardPriorityActions` policy below — the actual icon is
+  // resolved once, at final render assembly, via `actionIcons[domain]`.
+  // Semantic Issue Identity patch: each action is given an EXPLICIT
+  // `issueKind` describing WHAT financial condition it reports —
+  // "emergency-fund", "goals-progress", "saving-rate" — never derived
+  // from its ctaRoute. This is what lets this "saving rate is great"
+  // action correctly dedupe against `aiActions`' "saving rate still
+  // needs work" action even though the two point at different pages
+  // (/goals vs /transactions) — they're the same underlying observation,
+  // reported by two sources, and must never both appear together.
+  const v3AdvisorActions = useMemo((): DashboardActionCandidate[] => {
+    const actions: Array<
+      Omit<DashboardActionCandidate, "issueKey" | "isContextual"> & {
+        issueKind: string;
+      }
+    > = [];
 
     const emergencyTarget = (summary.monthlyExpense || summary.expense) * 3;
     const emergencyGap = Math.max(
@@ -2539,7 +2559,8 @@ export default function DashboardPage() {
 
     if (emergencyMonthsExact < 3) {
       actions.push({
-        icon: <Zap size={18} />,
+        domain: "emergency",
+        issueKind: "emergency-fund",
         title: "Ưu tiên tạo quỹ khẩn cấp",
         body: `Hiện tại bạn có khoảng ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu. Mục tiêu tối thiểu là 3 tháng, cần bổ sung khoảng ${formatVND(emergencyGap)}.`,
         tone: emergencyMonthsExact < 1 ? "danger" : "warning",
@@ -2550,7 +2571,11 @@ export default function DashboardPage() {
 
     if (goals.length > 0 && healthMetrics.goalScore < 30) {
       actions.push({
-        icon: <Target size={18} />,
+        domain: "goal",
+        // Aggregate ("average across ALL goals"), never entity-specific —
+        // stays distinct from aiActions' specific behind-schedule goal
+        // action (which composes "goals-progress:<goalId>").
+        issueKind: "goals-progress",
         title: "Mục tiêu tài chính đang chậm",
         body: `${goals.length} mục tiêu hiện đạt trung bình ${summary.goalScore}%. Hãy chọn 1 mục tiêu ưu tiên và đặt khoản góp cố định hàng tháng.`,
         tone: "warning",
@@ -2561,7 +2586,8 @@ export default function DashboardPage() {
 
     if (summary.savingRate >= 30) {
       actions.push({
-        icon: <PiggyBank size={18} />,
+        domain: "savings",
+        issueKind: "saving-rate",
         title: "Tỷ lệ tiết kiệm & đầu tư rất tốt",
         body: `Bạn đang phân bổ ${summary.savingRate}% thu nhập cho tiết kiệm & đầu tư, cao hơn mốc 20%. Có thể tiếp tục ưu tiên quỹ khẩn cấp hoặc đầu tư dài hạn.`,
         tone: "good",
@@ -2570,7 +2596,10 @@ export default function DashboardPage() {
       });
     }
 
-    return actions.slice(0, 3);
+    return actions.map(({ issueKind, ...action }) => ({
+      ...action,
+      ...composeIssueIdentity(issueKind, action.ctaRoute),
+    }));
   }, [
     emergencyMonthsExact,
     goals.length,
@@ -2582,17 +2611,50 @@ export default function DashboardPage() {
     summary.savingRate,
   ]);
 
-  const priorityActions =
-    v3AdvisorActions.length > 0
-      ? v3AdvisorActions
-      : aiActions.slice(0, 3).map((action) => ({
-          icon: actionIcons[action.icon],
-          title: action.title,
-          body: action.body,
-          tone: action.tone,
-          ctaLabel: action.ctaLabel,
-          ctaRoute: action.ctaRoute,
-        }));
+  // UI-DASH-3 Action Center merge policy: consider candidates from BOTH
+  // sources instead of picking one source wholesale (the prior bug — see
+  // dashboardActionPriority.ts). `aiActions` already carries contextual
+  // ctaRoutes (buildBudgetsHref/buildGoalsHref) for two of its action
+  // types; this only decides which candidates win, it never builds a URL.
+  // `aiActions`' semantic issueKind is derived from its domain (that
+  // generator doesn't expose a structured "what condition is this" field)
+  // via `deriveAggregateIssueKind`, then composed with any entity id the
+  // same way v3's explicit kinds are — so both sources land on identical
+  // issueKeys for the SAME real issue (emergency fund, saving rate),
+  // while two DIFFERENT entities (two distinct over-budget categories,
+  // two distinct behind-schedule goals) never collapse into one just
+  // because they share a domain.
+  const priorityActionCandidates = useMemo(
+    () =>
+      selectDashboardPriorityActions([
+        ...v3AdvisorActions,
+        ...aiActions.map((action): DashboardActionCandidate => {
+          const domain = action.icon;
+          return {
+            domain,
+            title: action.title,
+            body: action.body,
+            tone: action.tone,
+            ctaLabel: action.ctaLabel,
+            ctaRoute: action.ctaRoute,
+            ...composeIssueIdentity(
+              deriveAggregateIssueKind(domain),
+              action.ctaRoute,
+            ),
+          };
+        }),
+      ]),
+    [v3AdvisorActions, aiActions],
+  );
+
+  const priorityActions = priorityActionCandidates.map((candidate) => ({
+    icon: actionIcons[candidate.domain],
+    title: candidate.title,
+    body: candidate.body,
+    tone: candidate.tone,
+    ctaLabel: candidate.ctaLabel,
+    ctaRoute: candidate.ctaRoute,
+  }));
 
   // Gated on isDashboardReady: `summary.debtRatio` defaults to 0 before the
   // Net Worth asset/liability bundle has loaded (empty wallets/debts), which
@@ -2616,6 +2678,16 @@ export default function DashboardPage() {
   // Net Worth bundle, so only those two get an earlier readiness flag. The
   // other three read bundled `baseSummary`/Forex-ledger fields and must
   // still wait for `isDashboardReady`, unchanged from before PERF-2.
+  // UI-DASH-2: shared with the Budget Attention card below so the two never
+  // drift onto different months for the same selected period — both read
+  // this same key rather than each recomputing their own. Hoisted above
+  // kpiCards (UI-DASH-3) so the Cash Flow KPI's contextual Transactions
+  // link can reuse it too.
+  const dashboardMonthKey = useMemo(
+    () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
+    [selectedYear, selectedMonth],
+  );
+
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
@@ -2624,6 +2696,9 @@ export default function DashboardPage() {
       tone: netCashFlow >= 0 ? "good" : "danger",
       icon: TrendingUp,
       ready: cashFlowReady,
+      // Period metric (periodFlowSummary) — carries the selected Dashboard
+      // period, not today's date, to Transactions.
+      href: buildTransactionsHref({ month: dashboardMonthKey }),
     },
     {
       title: "Tiết kiệm & Đầu tư",
@@ -2632,6 +2707,11 @@ export default function DashboardPage() {
       tone: summary.savingRate >= 20 ? "good" : "warning",
       icon: PiggyBank,
       ready: savingInvestmentReady,
+      // UI-DASH-3: deliberately left non-clickable — this rate spans two
+      // domains (Savings + Investments) with no single owning page and no
+      // combined Transactions filter (`type` only accepts one value), so
+      // there is no unambiguous destination to send the user to.
+      href: undefined as string | undefined,
     },
     {
       title: "Quỹ khẩn cấp",
@@ -2643,6 +2723,13 @@ export default function DashboardPage() {
       tone: emergencyMonthsExact >= 3 ? "good" : "danger",
       icon: ShieldCheck,
       ready: emergencyFundReady,
+      // Snapshot metric (savingsSnapshot.emergencyFund aggregates
+      // `type === "emergency_fund"` savings accounts) — Savings is the
+      // page that actually owns these accounts, not Goals. No single
+      // account to focus (this is a sum across accounts), so this goes to
+      // the collection-level Savings page, and never carries the selected
+      // period (a snapshot balance isn't a period-scoped value).
+      href: buildSavingsHref(),
     },
     {
       title: "Forex",
@@ -2662,6 +2749,10 @@ export default function DashboardPage() {
             : "danger",
       icon: Landmark,
       ready: forexReady,
+      // No navigation builder exists for Investments (and the destination
+      // page reads no URL params at all today) — same bare route already
+      // used by the Forex panel's own CTA below.
+      href: "/investments",
     },
     {
       title: "Mục tiêu",
@@ -2670,6 +2761,9 @@ export default function DashboardPage() {
       tone: summary.goalScore >= 50 ? "good" : "warning",
       icon: Target,
       ready: goalsReady,
+      // Aggregate across all goals, not one — collection-level, not
+      // entity-focused.
+      href: buildGoalsHref(),
     },
   ] as const;
 
@@ -2698,14 +2792,6 @@ export default function DashboardPage() {
       .reduce((sum, transaction) => sum + transaction.amount, 0);
     return { income, expense, saving, net: income - expense };
   }, [transactions, savingTransactions]);
-
-  // UI-DASH-2: shared with the new Budget Attention card below so the two
-  // never drift onto different months for the same selected period — both
-  // read this same key rather than each recomputing their own.
-  const dashboardMonthKey = useMemo(
-    () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
-    [selectedYear, selectedMonth],
-  );
 
   const monthlyPulse = useMemo(() => {
     const now = new Date();
@@ -3091,7 +3177,12 @@ export default function DashboardPage() {
       <section>
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
           {kpiCards.map((item) => (
-            <KpiCard key={item.title} {...item} isLoading={!item.ready} />
+            <KpiCard
+              key={item.title}
+              {...item}
+              isLoading={!item.ready}
+              onClick={item.href ? () => router.push(item.href!) : undefined}
+            />
           ))}
         </div>
       </section>
@@ -3650,9 +3741,13 @@ export default function DashboardPage() {
               </div>
             ) : (
               goalRows.slice(0, 3).map((goal) => (
-                <div
+                <button
                   key={goal.id}
-                  className="min-w-0 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 sm:p-4"
+                  type="button"
+                  onClick={() =>
+                    router.push(buildGoalsHref({ goalId: goal.id }))
+                  }
+                  className="w-full min-w-0 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 text-left transition-all duration-200 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4"
                 >
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <p className="min-w-0 truncate text-sm font-black text-slate-900">
@@ -3672,13 +3767,13 @@ export default function DashboardPage() {
                       style={{ width: `${goal.percent}%` }}
                     />
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
           <button
             type="button"
-            onClick={() => router.push("/goals")}
+            onClick={() => router.push(buildGoalsHref())}
             className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
@@ -3750,7 +3845,9 @@ export default function DashboardPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/transactions")}
+            onClick={() =>
+              router.push(buildTransactionsHref({ month: dashboardMonthKey }))
+            }
             className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
@@ -3911,6 +4008,7 @@ function KpiCard({
   icon: Icon,
   tone,
   isLoading = false,
+  onClick,
 }: {
   title: string;
   value: string;
@@ -3918,6 +4016,11 @@ function KpiCard({
   icon: React.ElementType;
   tone: "good" | "warning" | "danger" | "neutral";
   isLoading?: boolean;
+  /** UI-DASH-3: when present, the whole card becomes a single semantic
+   * interactive element. Omit (or pass undefined) to keep the card
+   * non-interactive — some KPIs legitimately have no unambiguous
+   * destination (see kpiCards' own per-card comments). */
+  onClick?: () => void;
 }) {
   const toneStyles = {
     good: {
@@ -3943,36 +4046,53 @@ function KpiCard({
   } as const;
   const styles = toneStyles[tone];
 
+  const content = (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-slate-600">{title}</p>
+        {isLoading ? (
+          <>
+            <div className="mt-2 h-5 w-20 animate-pulse rounded-lg bg-slate-200/80" />
+            <div className="mt-2 h-3 w-28 animate-pulse rounded-md bg-slate-100" />
+          </>
+        ) : (
+          <>
+            <p
+              className={`mt-2 whitespace-nowrap text-[clamp(15px,4vw,20px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
+              title={value}
+            >
+              {value}
+            </p>
+            <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
+          </>
+        )}
+      </div>
+      <div
+        className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}
+      >
+        <Icon size={18} />
+      </div>
+    </div>
+  );
+
+  if (onClick && !isLoading) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Xem chi tiết: ${title}`}
+        className={`min-w-52 cursor-pointer overflow-hidden rounded-2xl border bg-white/95 p-3.5 text-left shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
   return (
     <div
       className={`min-w-52 overflow-hidden rounded-2xl border bg-white/95 p-3.5 shadow-sm transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-slate-600">{title}</p>
-          {isLoading ? (
-            <>
-              <div className="mt-2 h-5 w-20 animate-pulse rounded-lg bg-slate-200/80" />
-              <div className="mt-2 h-3 w-28 animate-pulse rounded-md bg-slate-100" />
-            </>
-          ) : (
-            <>
-              <p
-                className={`mt-2 whitespace-nowrap text-[clamp(15px,4vw,20px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
-                title={value}
-              >
-                {value}
-              </p>
-              <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
-            </>
-          )}
-        </div>
-        <div
-          className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}
-        >
-          <Icon size={18} />
-        </div>
-      </div>
+      {content}
     </div>
   );
 }
