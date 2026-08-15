@@ -3,6 +3,7 @@ import {
   beginPeriodGeneration,
   isBudgetAttentionReady,
   isHeroReady,
+  isMonthlyProgressReady,
   isNewPeriodContext,
   isPeriodSnapshotCurrent,
   isStalePeriodGeneration,
@@ -128,6 +129,43 @@ describe("isBudgetAttentionReady", () => {
     const budgetsLoaded = shouldMarkReady(true, true);
     const cashFlowReady = shouldMarkReady(false, true); // failed this cycle, but succeeded before in the SAME context
     expect(isBudgetAttentionReady(budgetsLoaded, cashFlowReady)).toBe(true);
+  });
+});
+
+/**
+ * DASH-POLISH-1 Monthly Progress readiness — shares isBudgetAttentionReady's
+ * exact formula (cashFlowReady && budgetsLoaded) since both features
+ * coincidentally depend on the same two signals, but is its own named
+ * function so the two features are never accidentally coupled by
+ * reference (see isMonthlyProgressReady's own doc comment).
+ */
+describe("isMonthlyProgressReady", () => {
+  it("cashFlow not ready, budgets not loaded: not ready", () => {
+    expect(isMonthlyProgressReady(false, false)).toBe(false);
+  });
+
+  it("cashFlow ready, budgets not yet loaded: not ready — must not render a fake 0%/0đ before budgets settle", () => {
+    expect(isMonthlyProgressReady(true, false)).toBe(false);
+  });
+
+  it("budgets loaded, cashFlow not ready (e.g. a pending year switch): not ready — must not show stale/wrong-period spend", () => {
+    expect(isMonthlyProgressReady(false, true)).toBe(false);
+  });
+
+  it("both ready: Monthly Progress ready", () => {
+    expect(isMonthlyProgressReady(true, true)).toBe(true);
+  });
+
+  it("end-to-end: cross-year pending — cashFlowReady reset by the context change even though budgets (unaffected by year switches) stayed loaded", () => {
+    const budgetsLoaded = shouldMarkReady(false, true);
+    const cashFlowReady = shouldMarkReady(false, false);
+    expect(isMonthlyProgressReady(cashFlowReady, budgetsLoaded)).toBe(false);
+  });
+
+  it("end-to-end: same-context later failure — cashFlowReady preserves last-known-good, Monthly Progress stays ready", () => {
+    const budgetsLoaded = shouldMarkReady(true, true);
+    const cashFlowReady = shouldMarkReady(false, true);
+    expect(isMonthlyProgressReady(cashFlowReady, budgetsLoaded)).toBe(true);
   });
 });
 

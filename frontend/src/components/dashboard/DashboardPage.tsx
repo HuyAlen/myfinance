@@ -23,6 +23,7 @@ import {
   beginPeriodGeneration,
   isBudgetAttentionReady,
   isHeroReady,
+  isMonthlyProgressReady,
   isNewPeriodContext,
   isStalePeriodGeneration,
   shouldMarkReady,
@@ -838,6 +839,27 @@ export default function DashboardPage() {
     [budgets, dateRange],
   );
 
+  // DASH-POLISH-1: the ONE accepted period transaction subset for the
+  // selected range — the Dashboard-specific transfer-note heuristic
+  // (`isInternalTransferTransaction`) runs here, once, since it also
+  // catches mislabeled transfer notes that canonical type-based filtering
+  // does not. Every consumer that needs "this period's real income-moving
+  // transactions" (periodFlowSummary, Financial Structure) reads from
+  // this SAME derived collection, so they can never disagree about which
+  // transactions are internal transfers — previously
+  // `calculateFinancialStructureSummary` was called with the raw
+  // `filteredTransactions` instead, so a transaction this heuristic
+  // caught could still inflate Financial Structure's income/expense (and
+  // every ratio derived from them) while being correctly excluded from
+  // the Cash Flow/Saving Rate KPIs one section above it.
+  const nonTransferFilteredTransactions = useMemo(
+    () =>
+      filteredTransactions.filter(
+        (transaction) => !isInternalTransferTransaction(transaction),
+      ),
+    [filteredTransactions],
+  );
+
   /**
    * Canonical period flow.
    *
@@ -848,19 +870,12 @@ export default function DashboardPage() {
   const periodFlowSummary = useMemo(() => {
     // Canonical income/expense (financeCalculations.ts) — `getTotalExpense`
     // excludes saving/investment-planning-group categories, matching
-    // Reports/AI. The Dashboard-specific transfer-note heuristic
-    // (`isInternalTransferTransaction`) still runs first since it also
-    // catches mislabeled transfer notes that canonical type-based filtering
-    // does not.
-    const nonTransferTransactions = filteredTransactions.filter(
-      (transaction) => !isInternalTransferTransaction(transaction),
-    );
-
+    // Reports/AI.
     return {
-      income: getTotalIncome(nonTransferTransactions),
-      expense: getTotalExpense(nonTransferTransactions, categories),
+      income: getTotalIncome(nonTransferFilteredTransactions),
+      expense: getTotalExpense(nonTransferFilteredTransactions, categories),
     };
-  }, [filteredTransactions, categories]);
+  }, [nonTransferFilteredTransactions, categories]);
 
   const periodFutureAllocation = useMemo(() => {
     const savingAmount = Math.max(
@@ -2142,10 +2157,11 @@ export default function DashboardPage() {
 
   // ── 50/30/20 ─────────────────────────────────────────────────────────────
   const allocation5030 = useMemo(() => {
+    // DASH-POLISH-1: reuses the shared nonTransferFilteredTransactions
+    // collection instead of re-applying the same isInternalTransferTransaction
+    // filter independently — same result, one source of truth.
     const allocation = calculateRule503020({
-      transactions: filteredTransactions.filter(
-        (transaction) => !isInternalTransferTransaction(transaction),
-      ),
+      transactions: nonTransferFilteredTransactions,
       categories,
       income: summary.income,
     });
@@ -2166,7 +2182,7 @@ export default function DashboardPage() {
       unclassifiedAmount: allocation.unclassifiedAmount,
     };
   }, [
-    filteredTransactions,
+    nonTransferFilteredTransactions,
     categories,
     periodFutureAllocation.totalAmount,
     summary.income,
@@ -2231,13 +2247,21 @@ export default function DashboardPage() {
   }, [savingsSnapshot.emergencyFund, summary.monthlyExpense]);
 
   // ── V11.1 Financial Structure ───────────────────────────────────────────
+  // DASH-POLISH-1: reuses `nonTransferFilteredTransactions` — the SAME
+  // accepted transaction set periodFlowSummary uses — instead of the raw
+  // `filteredTransactions`, so income/expense/fixedCost/variableCost (and
+  // every ratio calculateFinancialStructureSummary derives from them)
+  // can no longer disagree with the Cash Flow/Saving Rate KPIs over
+  // whether a given transaction is an internal transfer. No formula
+  // inside calculateFinancialStructureSummary changed — only which
+  // already-filtered transaction collection it receives.
   const financialStructure = useMemo(
     () =>
       calculateFinancialStructureSummary({
-        transactions: filteredTransactions,
+        transactions: nonTransferFilteredTransactions,
         categories,
       }),
-    [filteredTransactions, categories],
+    [nonTransferFilteredTransactions, categories],
   );
 
   const financialStructureAdjusted = useMemo(() => {
@@ -2344,6 +2368,19 @@ export default function DashboardPage() {
     ],
     [financialStructureAdjusted],
   );
+
+  // DASH-POLISH-1: Financial Structure's 4 cards have two different real
+  // dependency subsets — "Chi phí cố định"/"Chi phí biến đổi" only need
+  // transactions+categories (financialStructure, post-fix now on the same
+  // accepted transaction set as cashFlowReady's own dependency), while
+  // "Tiết kiệm & Đầu tư"/"Tỷ trọng đầu tư" additionally read
+  // periodFutureAllocation's savingAmount/investmentAmount, which is
+  // gated by savingInvestmentReady. Rather than splitting the panel into
+  // 2 ready + 2 loading cards simultaneously, this gates the whole panel
+  // on the union of both — savingInvestmentReady never becomes true
+  // before cashFlowReady's own dependencies resolve, so this is a safe,
+  // no-premature-render superset, not a new independent readiness state.
+  const financialStructureReady = cashFlowReady && savingInvestmentReady;
 
   // ── Goal rows: use the same source-of-truth logic as GoalsPage ───────────
   const goalRows = useMemo(() => goalMeta, [goalMeta]);
@@ -3010,6 +3047,16 @@ export default function DashboardPage() {
     };
   }, [budgets, dashboardMonthKey, selectedMonth, selectedYear, transactions]);
 
+  // DASH-POLISH-1: gates only monthlyPulse's transaction/budget-dependent
+  // fields (spend, projected spend, budget usage, projected budget usage)
+  // — its calendar fields (elapsedDays/daysInMonth/progress) are pure date
+  // arithmetic with no fetch dependency and remain always visible. See
+  // isMonthlyProgressReady's own doc comment for the dependency reasoning.
+  const monthlyProgressReady = isMonthlyProgressReady(
+    cashFlowReady,
+    budgetsLoaded,
+  );
+
   // UI-DASH-2 Budget Attention: the same active-month budgets Tiến độ
   // tháng already uses (`dashboardMonthKey`, matching `monthlyPulse`'s own
   // filtering exactly) — Monthly Progress answers "how fast is total
@@ -3530,44 +3577,59 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <MiniStat
-              label="Đã chi"
-              value={formatVND(monthlyPulse.expense)}
-              color="text-rose-500"
-            />
-            <MiniStat
-              label="Dự báo cuối tháng"
-              value={formatVND(monthlyPulse.projectedExpense)}
-              color="text-blue-600"
-            />
-            <MiniStat
-              label="Dùng ngân sách"
-              value={
-                monthlyPulse.budgetLimit > 0
-                  ? `${monthlyPulse.budgetUsage}%`
-                  : "Chưa lập"
-              }
-              color={
-                monthlyPulse.budgetUsage > 100
-                  ? "text-rose-500"
-                  : "text-emerald-600"
-              }
-            />
-            <MiniStat
-              label="Dự báo ngân sách"
-              value={
-                monthlyPulse.budgetLimit > 0
-                  ? `${monthlyPulse.projectedBudgetUsage}%`
-                  : "—"
-              }
-              color={
-                monthlyPulse.projectedBudgetUsage > 100
-                  ? "text-rose-500"
-                  : "text-emerald-600"
-              }
-            />
-          </div>
+          {/* DASH-POLISH-1: monthlyPulse's expense/budget fields depend on
+              transactions + budgets for the selected period — gated on
+              monthlyProgressReady so a pre-fetch/mid-year-switch render
+              cannot show "0đ"/"0%" indistinguishable from a legitimate
+              zero. The calendar fields above (elapsed days/progress %)
+              have no such dependency and stay always visible. */}
+          {monthlyProgressReady ? (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <MiniStat
+                label="Đã chi"
+                value={formatVND(monthlyPulse.expense)}
+                color="text-rose-500"
+              />
+              <MiniStat
+                label="Dự báo cuối tháng"
+                value={formatVND(monthlyPulse.projectedExpense)}
+                color="text-blue-600"
+              />
+              <MiniStat
+                label="Dùng ngân sách"
+                value={
+                  monthlyPulse.budgetLimit > 0
+                    ? `${monthlyPulse.budgetUsage}%`
+                    : "Chưa lập"
+                }
+                color={
+                  monthlyPulse.budgetUsage > 100
+                    ? "text-rose-500"
+                    : "text-emerald-600"
+                }
+              />
+              <MiniStat
+                label="Dự báo ngân sách"
+                value={
+                  monthlyPulse.budgetLimit > 0
+                    ? `${monthlyPulse.projectedBudgetUsage}%`
+                    : "—"
+                }
+                color={
+                  monthlyPulse.projectedBudgetUsage > 100
+                    ? "text-rose-500"
+                    : "text-emerald-600"
+                }
+              />
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+            </div>
+          )}
         </div>
       </section>
 
@@ -3665,51 +3727,67 @@ export default function DashboardPage() {
           title="Cấu trúc tài chính"
           subtitle="4 chỉ số cốt lõi giúp kiểm soát chất lượng dòng tiền"
         >
-          <div className="mt-4 min-w-0 space-y-3">
-            {financialStructureCards.map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      {item.title}
+          {/* DASH-POLISH-1: gated on financialStructureReady (union of
+              cashFlowReady + savingInvestmentReady — see that memo's own
+              comment) so a pre-fetch/mid-year-switch render cannot show
+              validated-looking percentages derived from a still-default
+              or stale-period transaction/allocation set. */}
+          {financialStructureReady ? (
+            <div className="mt-4 min-w-0 space-y-3">
+              {financialStructureCards.map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-900">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {item.amount}
+                      </p>
+                    </div>
+                    <p
+                      className={`text-xl font-black ${
+                        item.tone === "good"
+                          ? "text-emerald-600"
+                          : item.tone === "warning"
+                            ? "text-amber-500"
+                            : "text-rose-500"
+                      }`}
+                    >
+                      {item.value}
                     </p>
-                    <p className="mt-1 text-xs text-slate-600">{item.amount}</p>
                   </div>
-                  <p
-                    className={`text-xl font-black ${
-                      item.tone === "good"
-                        ? "text-emerald-600"
-                        : item.tone === "warning"
-                          ? "text-amber-500"
-                          : "text-rose-500"
-                    }`}
-                  >
-                    {item.value}
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
+                    <div
+                      className={`h-full rounded-full ${
+                        item.tone === "good"
+                          ? "bg-emerald-500"
+                          : item.tone === "warning"
+                            ? "bg-amber-400"
+                            : "bg-rose-500"
+                      }`}
+                      style={{
+                        width: `${Math.max(4, Math.min(item.bar, 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-slate-600">
+                    {item.note}
                   </p>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
-                  <div
-                    className={`h-full rounded-full ${
-                      item.tone === "good"
-                        ? "bg-emerald-500"
-                        : item.tone === "warning"
-                          ? "bg-amber-400"
-                          : "bg-rose-500"
-                    }`}
-                    style={{
-                      width: `${Math.max(4, Math.min(item.bar, 100))}%`,
-                    }}
-                  />
-                </div>
-                <p className="mt-2 text-xs font-semibold text-slate-600">
-                  {item.note}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+            </div>
+          )}
         </Panel>
       </section>
 

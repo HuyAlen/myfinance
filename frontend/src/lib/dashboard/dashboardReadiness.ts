@@ -74,6 +74,42 @@ export function isBudgetAttentionReady(
 }
 
 /**
+ * DASH-POLISH-1 Monthly Progress readiness.
+ *
+ * Monthly Progress's calendar fields (elapsed days, days-in-month, time
+ * progress %) are pure date arithmetic with no fetch dependency and are
+ * safe to render immediately. Its spend/budget fields are not: "Đã chi"/
+ * "Dự báo cuối tháng" depend on the selected period's `transactions`, and
+ * "Dùng ngân sách"/"Dự báo ngân sách" additionally depend on `budgets`.
+ * Before this patch, none of those four fields were gated at all, so a
+ * pre-fetch/mid-year-switch render could show "0đ"/"0%" indistinguishable
+ * from a legitimate zero — the same class of bug the Budget Attention
+ * Readiness Correctness patch fixed, left un-extended here.
+ *
+ * The union of real dependencies is exactly `cashFlowReady` (the existing
+ * "transactions belong to the currently selected period" signal — Monthly
+ * Progress's own expense math doesn't strictly need `categories`, but no
+ * narrower "transactions-only" flag exists, and reusing `cashFlowReady` as
+ * that signal is the same precedented choice Budget Attention already
+ * made) `&&` `budgetsLoaded` (has the budgets dataset itself ever
+ * completed a successful load this session — `budgets.length === 0` is
+ * NOT a substitute, see `isBudgetAttentionReady`'s own doc comment).
+ *
+ * This happens to share `isBudgetAttentionReady`'s exact formula, but is
+ * kept as its own named function rather than an alias: Budget Attention
+ * and Monthly Progress are separate Dashboard features with separate
+ * dependency contracts that only coincide today — aliasing one to the
+ * other would silently couple them, so a future change to either
+ * feature's real dependencies wouldn't need to touch the other.
+ */
+export function isMonthlyProgressReady(
+  cashFlowReady: boolean,
+  budgetsLoaded: boolean,
+): boolean {
+  return cashFlowReady && budgetsLoaded;
+}
+
+/**
  * PERF-3: classifies whether a period (year-scoped) reload targets a
  * different context than the one currently reflected in state.
  *
