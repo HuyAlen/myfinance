@@ -2221,6 +2221,18 @@ export function generateDashboardActions(input: {
   savings?: SavingAccount[];
   categories: Category[];
   summary?: DashboardSummary;
+  /**
+   * FINANCE-CORRECTNESS-1: "YYYY-MM" — the budget-evaluation period the
+   * caller wants advised on. Required, not optional-with-a-wall-clock-
+   * fallback: this function has exactly one production caller
+   * (DashboardPage), which always already knows its own selected period
+   * (`dashboardMonthKey`) — there is no legitimate case where this
+   * function should guess. A `monthKey` that matches no budget's `month`
+   * (malformed, or a real month with no configured budgets) safely
+   * yields no budget action; it must never fall back to evaluating a
+   * different month.
+   */
+  monthKey: string;
 }): DashboardAction[] {
   const summary =
     input.summary ??
@@ -2326,18 +2338,23 @@ export function generateDashboardActions(input: {
     });
   }
 
-  const currentMonth = getLastMonthKeys(1)[0];
-  const currentBudgets = input.budgets.filter(
-    (budget) => budget.month === currentMonth,
+  // FINANCE-CORRECTNESS-1: evaluate the CALLER's selected period, never
+  // wall-clock "now" — budget.month is compared against input.monthKey
+  // directly (a plain string match), so a monthKey with no matching
+  // budgets (malformed, or a real month nobody configured a budget for)
+  // safely yields budgetsForMonth = [] and no action below, rather than
+  // silently substituting another month's data.
+  const budgetsForMonth = input.budgets.filter(
+    (budget) => budget.month === input.monthKey,
   );
-  const currentBudgetSpending = calculateBudgetSpendingCollection({
-    budgets: currentBudgets,
+  const budgetSpendingForMonth = calculateBudgetSpendingCollection({
+    budgets: budgetsForMonth,
     transactions: input.transactions,
     categories: input.categories,
   });
-  const overBudget = currentBudgetSpending
+  const overBudget = budgetSpendingForMonth
     .map((budgetSpending) => {
-      const budget = currentBudgets.find(
+      const budget = budgetsForMonth.find(
         (item) => item.id === budgetSpending.budgetId,
       )!;
       const category = input.categories.find(

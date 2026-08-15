@@ -2539,7 +2539,24 @@ export default function DashboardPage() {
     emergencyMonthsExact,
   ]);
 
+  // UI-DASH-2: shared with the Budget Attention card below so the two never
+  // drift onto different months for the same selected period — both read
+  // this same key rather than each recomputing their own. Hoisted above
+  // kpiCards (UI-DASH-3) and aiActions (FINANCE-CORRECTNESS-1) so both can
+  // reuse it too.
+  const dashboardMonthKey = useMemo(
+    () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
+    [selectedYear, selectedMonth],
+  );
+
   // ── AI actions ────────────────────────────────────────────────────────────
+  // FINANCE-CORRECTNESS-1: explicitly passes dashboardMonthKey (the same
+  // selected-period key Budget Attention/Monthly Progress already use) so
+  // the over-budget advisor action evaluates the Dashboard's SELECTED
+  // month, not generateDashboardActions' own former internal wall-clock
+  // "current month" guess — that guess could silently disagree with every
+  // other period-aware Dashboard surface whenever selectedYear/selectedMonth
+  // isn't the real current month.
   const aiActions = useMemo(
     () =>
       generateDashboardActions({
@@ -2551,6 +2568,7 @@ export default function DashboardPage() {
         investments: snapshotInvestments,
         categories,
         summary,
+        monthKey: dashboardMonthKey,
       }),
     [
       filteredTransactions,
@@ -2561,6 +2579,7 @@ export default function DashboardPage() {
       snapshotInvestments,
       categories,
       summary,
+      dashboardMonthKey,
     ],
   );
   const actionIcons: Record<DashboardActionIcon, React.ReactNode> = {
@@ -2721,16 +2740,6 @@ export default function DashboardPage() {
   // Net Worth bundle, so only those two get an earlier readiness flag. The
   // other three read bundled `baseSummary`/Forex-ledger fields and must
   // still wait for `isDashboardReady`, unchanged from before PERF-2.
-  // UI-DASH-2: shared with the Budget Attention card below so the two never
-  // drift onto different months for the same selected period — both read
-  // this same key rather than each recomputing their own. Hoisted above
-  // kpiCards (UI-DASH-3) so the Cash Flow KPI's contextual Transactions
-  // link can reuse it too.
-  const dashboardMonthKey = useMemo(
-    () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
-    [selectedYear, selectedMonth],
-  );
-
   // UI-DASH-4 Period Comparison Layer.
   //
   // Scoped to `filterMode === "month"` only — the dominant/default mode,
