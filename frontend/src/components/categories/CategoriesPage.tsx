@@ -265,14 +265,24 @@ export default function CategoriesPage() {
   const { toast } = useToast();
 
   const reloadData = useCallback(async () => {
-    const [categoryData, transactionData, walletData] = await Promise.all([
-      getCategories(),
-      getTransactions(),
-      getWallets(),
-    ]);
-    setCategories(categoryData);
-    setTransactions(transactionData);
-    setWallets(walletData);
+    // FINANCE-DATA-1: getCategories/getTransactions/getWallets now reject
+    // on a genuine query failure instead of silently resolving to [] —
+    // caught here so every caller (mount, realtime, post-submit/delete
+    // refresh) never sees an unhandled rejection. State setters only run
+    // after a successful resolve, so a caught failure leaves the
+    // previously-loaded categories/transactions/wallets on screen.
+    try {
+      const [categoryData, transactionData, walletData] = await Promise.all([
+        getCategories(),
+        getTransactions(),
+        getWallets(),
+      ]);
+      setCategories(categoryData);
+      setTransactions(transactionData);
+      setWallets(walletData);
+    } catch (error) {
+      console.error("[CategoriesPage] reloadData failed:", error);
+    }
   }, []);
 
   useEffect(() => {

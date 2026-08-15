@@ -701,6 +701,16 @@ export default function TransactionsPage() {
     console.info(message);
   }, []);
 
+  // FINANCE-DATA-1: getTransactionsInRange/getCategories/getWallets now
+  // reject on a genuine query failure instead of silently resolving to []
+  // — Promise.allSettled always reaches this point regardless, so each
+  // branch is only applied to state when it actually FULFILLED. Previously
+  // a rejected branch defaulted to [] and was applied unconditionally,
+  // which would have overwritten a previously-loaded good value with an
+  // empty one on failure (already latent for the two Forex calls, which
+  // could already reject before this patch; now also reachable for
+  // transactions/categories/wallets). Fixed uniformly across all five
+  // branches: only set state on fulfillment, always log on rejection.
   const reloadData = useCallback(async () => {
     const { startDate, endDate } = getSelectedMonthRange(selectedMonth);
     const [
@@ -717,30 +727,27 @@ export default function TransactionsPage() {
       getWallets(),
     ]);
 
-    const txns = txnsResult.status === "fulfilled" ? txnsResult.value : [];
-    const forexAcc =
-      forexAccountsResult.status === "fulfilled"
-        ? forexAccountsResult.value
-        : [];
-    const forexTxns =
-      forexTxnsResult.status === "fulfilled" ? forexTxnsResult.value : [];
-    const cats = catsResult.status === "fulfilled" ? catsResult.value : [];
-    const wlts =
-      walletsResult.status === "fulfilled" ? walletsResult.value : [];
-
-    if (txnsResult.status === "rejected") {
+    if (txnsResult.status === "fulfilled") {
+      setTransactions(txnsResult.value);
+    } else {
       console.error(
         "[TransactionsPage] Failed to load transactions",
         txnsResult.reason,
       );
     }
-    if (forexAccountsResult.status === "rejected") {
+
+    if (forexAccountsResult.status === "fulfilled") {
+      setForexAccounts(forexAccountsResult.value);
+    } else {
       console.error(
         "[TransactionsPage] Failed to load Forex accounts",
         forexAccountsResult.reason,
       );
     }
-    if (forexTxnsResult.status === "rejected") {
+
+    if (forexTxnsResult.status === "fulfilled") {
+      setForexCashTransactions(forexTxnsResult.value);
+    } else {
       console.error(
         "[TransactionsPage] Failed to load Forex cash transactions",
         forexTxnsResult.reason,
@@ -751,11 +758,23 @@ export default function TransactionsPage() {
       });
     }
 
-    setTransactions(txns);
-    setForexAccounts(forexAcc);
-    setForexCashTransactions(forexTxns);
-    setCategories(cats);
-    setWallets(wlts);
+    if (catsResult.status === "fulfilled") {
+      setCategories(catsResult.value);
+    } else {
+      console.error(
+        "[TransactionsPage] Failed to load categories",
+        catsResult.reason,
+      );
+    }
+
+    if (walletsResult.status === "fulfilled") {
+      setWallets(walletsResult.value);
+    } else {
+      console.error(
+        "[TransactionsPage] Failed to load wallets",
+        walletsResult.reason,
+      );
+    }
   }, [selectedMonth, toast]);
 
   // ── Reload coordinator ──────────────────────────────────────────────────

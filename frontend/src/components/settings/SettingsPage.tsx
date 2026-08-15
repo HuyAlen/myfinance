@@ -182,24 +182,33 @@ export default function SettingsPage() {
   const aiMaxTokensNumber = Number(aiMaxTokens || "4096");
 
   // ── Data loading ───────────────────────────────────────────────────────────
+  // FINANCE-DATA-1: these readers now reject on a genuine query failure
+  // instead of silently resolving to [] — caught here so every caller
+  // (mount, and the post-reset/post-clear refresh in handleResetDemo/
+  // handleClearAll below) never sees an unhandled rejection and their
+  // confirm dialog can still close after the reset/clear itself already
+  // succeeded.
   const reloadStats = useCallback(async () => {
-    const [wallets, categories, transactions, debts, goals] = await Promise.all(
-      [
-        getWallets(),
-        getCategories(),
-        getTransactions(),
-        getDebts(),
-        getGoals(),
-      ],
-    );
+    try {
+      const [wallets, categories, transactions, debts, goals] =
+        await Promise.all([
+          getWallets(),
+          getCategories(),
+          getTransactions(),
+          getDebts(),
+          getGoals(),
+        ]);
 
-    setStats({
-      wallets: wallets.length,
-      categories: categories.length,
-      transactions: transactions.length,
-      debts: debts.length,
-      goals: goals.length,
-    });
+      setStats({
+        wallets: wallets.length,
+        categories: categories.length,
+        transactions: transactions.length,
+        debts: debts.length,
+        goals: goals.length,
+      });
+    } catch (error) {
+      console.error("[SettingsPage] reloadStats failed:", error);
+    }
   }, []);
 
   useEffect(() => {
@@ -320,44 +329,54 @@ export default function SettingsPage() {
   }
 
   async function handleExportJson() {
-    const [
-      wallets,
-      categories,
-      transactions,
-      debts,
-      goals,
-      budgets,
-      investments,
-    ] = await Promise.all([
-      getWallets(),
-      getCategories(),
-      getTransactions(),
-      getDebts(),
-      getGoals(),
-      getBudgets(),
-      getInvestments(),
-    ]);
-    const data = {
-      pf_wallets: wallets,
-      pf_categories: categories,
-      pf_transactions: transactions,
-      pf_debts: debts,
-      pf_goals: goals,
-      pf_budgets: budgets,
-      pf_investments: investments,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download =
-      "personal-finance-backup-" +
-      new Date().toISOString().slice(0, 10) +
-      ".json";
-    link.click();
-    URL.revokeObjectURL(url);
+    // FINANCE-DATA-1: these readers now reject on a genuine query failure
+    // instead of silently resolving to [] — unlike the reload helpers
+    // above, an export has no prior state to fall back on, so a failure
+    // here must actually tell the user via the existing toast mechanism
+    // rather than silently producing an incomplete/empty backup file.
+    try {
+      const [
+        wallets,
+        categories,
+        transactions,
+        debts,
+        goals,
+        budgets,
+        investments,
+      ] = await Promise.all([
+        getWallets(),
+        getCategories(),
+        getTransactions(),
+        getDebts(),
+        getGoals(),
+        getBudgets(),
+        getInvestments(),
+      ]);
+      const data = {
+        pf_wallets: wallets,
+        pf_categories: categories,
+        pf_transactions: transactions,
+        pf_debts: debts,
+        pf_goals: goals,
+        pf_budgets: budgets,
+        pf_investments: investments,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download =
+        "personal-finance-backup-" +
+        new Date().toISOString().slice(0, 10) +
+        ".json";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("[SettingsPage] handleExportJson failed:", error);
+      toast({ variant: "error", message: "Không thể xuất dữ liệu. Vui lòng thử lại." });
+    }
   }
 
   function handleImportJson(event: React.ChangeEvent<HTMLInputElement>) {

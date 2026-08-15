@@ -134,21 +134,31 @@ export default function DebtsPage() {
   const { toast } = useToast();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
+  // FINANCE-DATA-1: getDebts/getWallets/getTransactions now reject on a
+  // genuine query failure instead of silently resolving to [] — caught
+  // here so every caller (mount, realtime, post-submit/post-delete
+  // refresh) never sees an unhandled rejection. State setters only run
+  // after a successful resolve, so a caught failure leaves the
+  // previously-loaded debts/totals on screen.
   async function reloadData() {
-    const [d, w, t] = await Promise.all([
-      getDebts(),
-      getWallets(),
-      getTransactions(),
-    ]);
-    setDebts(d);
-    setTotalAssets(getTotalAssets(w));
-    // Last-12-months income for debt-to-income
-    const now = new Date();
-    const cutoff = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-      .toISOString()
-      .slice(0, 10);
-    const recent = t.filter((tx) => tx.date >= cutoff);
-    setAnnualIncome(getTotalIncome(recent));
+    try {
+      const [d, w, t] = await Promise.all([
+        getDebts(),
+        getWallets(),
+        getTransactions(),
+      ]);
+      setDebts(d);
+      setTotalAssets(getTotalAssets(w));
+      // Last-12-months income for debt-to-income
+      const now = new Date();
+      const cutoff = new Date(now.getFullYear() - 1, now.getMonth(), 1)
+        .toISOString()
+        .slice(0, 10);
+      const recent = t.filter((tx) => tx.date >= cutoff);
+      setAnnualIncome(getTotalIncome(recent));
+    } catch (error) {
+      console.error("[DebtsPage] reloadData failed:", error);
+    }
   }
 
   useEffect(() => {

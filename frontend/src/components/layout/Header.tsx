@@ -480,41 +480,50 @@ export default function Header({
 
     runWhenIdle(() => {
       void (async () => {
-        const [
-          transactions,
-          wallets,
-          categories,
-          goals,
-          budgets,
-          debts,
-          investments,
-        ] = await Promise.all([
-          getTransactions(),
-          getWallets(),
-          getCategories(),
-          getGoals(),
-          getBudgets(),
-          getDebts(),
-          getInvestments(),
-        ]);
-        const data: AppData = {
-          transactions,
-          wallets,
-          categories,
-          goals,
-          budgets,
-          debts,
-          investments,
-        };
-        setAppData(data);
+        // FINANCE-DATA-1: these readers now reject on a genuine query
+        // failure instead of silently resolving to [] — caught here so a
+        // failure never becomes an unhandled rejection. Leaves the search
+        // index/notification bell simply un-populated until the next
+        // successful idle load rather than crashing.
+        try {
+          const [
+            transactions,
+            wallets,
+            categories,
+            goals,
+            budgets,
+            debts,
+            investments,
+          ] = await Promise.all([
+            getTransactions(),
+            getWallets(),
+            getCategories(),
+            getGoals(),
+            getBudgets(),
+            getDebts(),
+            getInvestments(),
+          ]);
+          const data: AppData = {
+            transactions,
+            wallets,
+            categories,
+            goals,
+            budgets,
+            debts,
+            investments,
+          };
+          setAppData(data);
 
-        const readIds = readNotificationIds();
-        setNotifList(
-          buildNotifications(data).map((notification) => ({
-            ...notification,
-            read: readIds.has(notification.id),
-          })),
-        );
+          const readIds = readNotificationIds();
+          setNotifList(
+            buildNotifications(data).map((notification) => ({
+              ...notification,
+              read: readIds.has(notification.id),
+            })),
+          );
+        } catch (error) {
+          console.error("[Header] idle data load failed:", error);
+        }
       })();
     });
   }, []);

@@ -186,25 +186,37 @@ export default function GoalsPage() {
   const { toast } = useToast();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
+  // FINANCE-DATA-1: getGoals/getTransactions now reject on a genuine query
+  // failure instead of silently resolving to [] — caught here so every
+  // caller (mount, realtime, post-submit/post-delete refresh via
+  // handleSubmit/handleDelete below) never sees an unhandled rejection and
+  // the form/confirm dialog can still close after a mutation that itself
+  // already succeeded. State setters only run after a successful resolve,
+  // so a caught failure leaves the previously-loaded goals/transactions on
+  // screen.
   async function reloadData() {
-    const [nextGoals, nextTransactions, savingRows] = await Promise.all([
-      getGoals(),
-      getTransactions(),
-      supabase
-        .from("savings")
-        .select("id,name,type,balance,interest_rate,maturity_date,notes")
-        .order("created_at", { ascending: false }),
-    ]);
+    try {
+      const [nextGoals, nextTransactions, savingRows] = await Promise.all([
+        getGoals(),
+        getTransactions(),
+        supabase
+          .from("savings")
+          .select("id,name,type,balance,interest_rate,maturity_date,notes")
+          .order("created_at", { ascending: false }),
+      ]);
 
-    setGoals(nextGoals);
-    setTransactions(nextTransactions);
+      setGoals(nextGoals);
+      setTransactions(nextTransactions);
 
-    if (!savingRows.error) {
-      setSavings(
-        ((savingRows.data ?? []) as SavingRow[]).map(
-          mapSavingRowToSavingAccount,
-        ),
-      );
+      if (!savingRows.error) {
+        setSavings(
+          ((savingRows.data ?? []) as SavingRow[]).map(
+            mapSavingRowToSavingAccount,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("[GoalsPage] reloadData failed:", error);
     }
   }
 

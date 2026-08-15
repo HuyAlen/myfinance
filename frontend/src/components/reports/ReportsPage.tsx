@@ -450,39 +450,47 @@ export default function ReportsPage() {
   const [reportTab, setReportTab] = useState<ReportTab>("overview");
 
   useEffect(() => {
+    // FINANCE-DATA-1: these readers now reject on a genuine query failure
+    // instead of silently resolving to [] — caught here so a failure never
+    // becomes an unhandled rejection. Leaves the report page at its default
+    // (empty) state rather than crashing; a page refresh retries.
     async function load() {
-      await initFinanceDemoData();
-      const [w, inv, cat, txn, dbt, gls, bdg, fxAcc, fxTxn, savingResult] =
-        await Promise.all([
-          getWallets(),
-          getInvestments(),
-          getCategories(),
-          getTransactions(),
-          getDebts(),
-          getGoals(),
-          getBudgets(),
-          getForexAccounts(),
-          getForexCashTransactions(),
-          supabase
-            ? supabase
-                .from("savings")
-                .select("*")
-                .order("created_at", { ascending: false })
-            : Promise.resolve({ data: [], error: null }),
-        ]);
-      setWallets(w);
-      setInvestments(inv);
-      setCategories(cat);
-      setTransactions(txn);
-      setDebts(dbt);
-      setGoals(gls);
-      setBudgets(bdg);
-      setForexAccounts(fxAcc);
-      setForexCashTransactions(fxTxn);
-      if (!savingResult.error) {
-        setSavings(
-          ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
-        );
+      try {
+        await initFinanceDemoData();
+        const [w, inv, cat, txn, dbt, gls, bdg, fxAcc, fxTxn, savingResult] =
+          await Promise.all([
+            getWallets(),
+            getInvestments(),
+            getCategories(),
+            getTransactions(),
+            getDebts(),
+            getGoals(),
+            getBudgets(),
+            getForexAccounts(),
+            getForexCashTransactions(),
+            supabase
+              ? supabase
+                  .from("savings")
+                  .select("*")
+                  .order("created_at", { ascending: false })
+              : Promise.resolve({ data: [], error: null }),
+          ]);
+        setWallets(w);
+        setInvestments(inv);
+        setCategories(cat);
+        setTransactions(txn);
+        setDebts(dbt);
+        setGoals(gls);
+        setBudgets(bdg);
+        setForexAccounts(fxAcc);
+        setForexCashTransactions(fxTxn);
+        if (!savingResult.error) {
+          setSavings(
+            ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
+          );
+        }
+      } catch (error) {
+        console.error("[ReportsPage] load failed:", error);
       }
     }
     load();

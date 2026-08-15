@@ -1196,10 +1196,21 @@ export default function SavingsPage({
     let isMounted = true;
 
     async function refreshSelectedWalletBalance() {
-      const walletRows = await getWallets();
-      if (!isMounted) return;
+      // FINANCE-DATA-1: getWallets now rejects on a genuine query failure
+      // instead of silently resolving to [] — caught here so the edit
+      // form's wallet balance just stays at its last-known value instead
+      // of throwing an unhandled rejection.
+      try {
+        const walletRows = await getWallets();
+        if (!isMounted) return;
 
-      setWallets(walletRows);
+        setWallets(walletRows);
+      } catch (error) {
+        console.error(
+          "[SavingsPage] refreshSelectedWalletBalance failed:",
+          error,
+        );
+      }
     }
 
     void refreshSelectedWalletBalance();

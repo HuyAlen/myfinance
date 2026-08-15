@@ -205,31 +205,42 @@ export default function WalletsPage() {
   // follow the actual current calendar month (not a user-selectable prop),
   // so reloadData never needs to change identity across renders.
   const reloadData = useCallback(async () => {
-    const { startDate, endDate } = getCurrentMonthRange();
-    const [w, monthTxns, txnLinks, forexLinks] = await Promise.all([
-      getWallets(),
-      getTransactionsInRange(startDate, endDate),
-      getTransactionWalletLinks(),
-      getForexCashWalletLinks(),
-    ]);
+    // FINANCE-DATA-1: getWallets/getTransactionsInRange/etc. now reject on
+    // a genuine query failure instead of silently resolving to [] — this
+    // try/catch keeps that rejection from becoming an unhandled promise
+    // rejection at every caller (mount effect, realtime refresh). Every
+    // state setter below only runs after a successful resolve, so a
+    // caught failure simply leaves the previously-loaded wallets/counts
+    // on screen instead of clearing them to an empty list.
+    try {
+      const { startDate, endDate } = getCurrentMonthRange();
+      const [w, monthTxns, txnLinks, forexLinks] = await Promise.all([
+        getWallets(),
+        getTransactionsInRange(startDate, endDate),
+        getTransactionWalletLinks(),
+        getForexCashWalletLinks(),
+      ]);
 
-    const counts = new Map<string, number>();
-    for (const link of txnLinks) {
-      counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-      if (link.transferToWalletId) {
-        counts.set(
-          link.transferToWalletId,
-          (counts.get(link.transferToWalletId) ?? 0) + 1,
-        );
+      const counts = new Map<string, number>();
+      for (const link of txnLinks) {
+        counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+        if (link.transferToWalletId) {
+          counts.set(
+            link.transferToWalletId,
+            (counts.get(link.transferToWalletId) ?? 0) + 1,
+          );
+        }
       }
-    }
-    for (const link of forexLinks) {
-      counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-    }
+      for (const link of forexLinks) {
+        counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+      }
 
-    setWallets(w);
-    setCurrentMonthTransactions(monthTxns);
-    setWalletLinkCounts(counts);
+      setWallets(w);
+      setCurrentMonthTransactions(monthTxns);
+      setWalletLinkCounts(counts);
+    } catch (error) {
+      console.error("[WalletsPage] reloadData failed:", error);
+    }
   }, []);
 
   // ── Reload coordinator ──────────────────────────────────────────────────

@@ -278,40 +278,51 @@ export default function BudgetsPage() {
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
-    const [b, c, t, savingsResult, investmentsResult] = await Promise.all([
-      getBudgets(),
-      getCategories(),
-      getTransactions(),
-      supabase
-        .from("saving_transactions")
-        .select("type,amount,transaction_date"),
-      supabase
-        .from("forex_cash_transactions")
-        .select("type,amount,transaction_date"),
-    ]);
+    // FINANCE-DATA-1: getBudgets/getCategories/getTransactions now reject
+    // on a genuine query failure instead of silently resolving to [] —
+    // caught here so every caller (mount, realtime, the two raw
+    // postgres_changes handlers below) never sees an unhandled rejection.
+    // State setters only run after a successful resolve, so a caught
+    // failure leaves the previously-loaded budgets/categories/transactions
+    // on screen.
+    try {
+      const [b, c, t, savingsResult, investmentsResult] = await Promise.all([
+        getBudgets(),
+        getCategories(),
+        getTransactions(),
+        supabase
+          .from("saving_transactions")
+          .select("type,amount,transaction_date"),
+        supabase
+          .from("forex_cash_transactions")
+          .select("type,amount,transaction_date"),
+      ]);
 
-    setBudgets(b);
-    setCategories(c);
-    setTransactions(t);
+      setBudgets(b);
+      setCategories(c);
+      setTransactions(t);
 
-    if (!savingsResult.error) {
-      setSavingsModuleTransactions(
-        (savingsResult.data ?? []).map((row) => ({
-          type: row.type as SavingsModuleTransaction["type"],
-          amount: Number(row.amount ?? 0),
-          transactionDate: String(row.transaction_date ?? ""),
-        })),
-      );
-    }
+      if (!savingsResult.error) {
+        setSavingsModuleTransactions(
+          (savingsResult.data ?? []).map((row) => ({
+            type: row.type as SavingsModuleTransaction["type"],
+            amount: Number(row.amount ?? 0),
+            transactionDate: String(row.transaction_date ?? ""),
+          })),
+        );
+      }
 
-    if (!investmentsResult.error) {
-      setInvestmentModuleTransactions(
-        (investmentsResult.data ?? []).map((row) => ({
-          type: row.type as InvestmentModuleTransaction["type"],
-          amount: Number(row.amount ?? 0),
-          transactionDate: String(row.transaction_date ?? ""),
-        })),
-      );
+      if (!investmentsResult.error) {
+        setInvestmentModuleTransactions(
+          (investmentsResult.data ?? []).map((row) => ({
+            type: row.type as InvestmentModuleTransaction["type"],
+            amount: Number(row.amount ?? 0),
+            transactionDate: String(row.transaction_date ?? ""),
+          })),
+        );
+      }
+    } catch (error) {
+      console.error("[BudgetsPage] reloadData failed:", error);
     }
   }, []);
 

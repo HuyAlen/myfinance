@@ -73,31 +73,38 @@ export default function AIInsightsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
 
   useEffect(() => {
+    // FINANCE-DATA-1: these readers now reject on a genuine query failure
+    // instead of silently resolving to [] — caught here so a failure never
+    // becomes an unhandled rejection.
     async function load() {
-      const [
-        wallets,
-        categories,
-        transactions,
-        debts,
-        goals,
-        investments,
-        budgets,
-      ] = await Promise.all([
-        getWallets(),
-        getCategories(),
-        getTransactions(),
-        getDebts(),
-        getGoals(),
-        getInvestments(),
-        getBudgets(),
-      ]);
-      setWallets(wallets);
-      setCategories(categories);
-      setTransactions(transactions);
-      setDebts(debts);
-      setGoals(goals);
-      setInvestments(investments);
-      setBudgets(budgets);
+      try {
+        const [
+          wallets,
+          categories,
+          transactions,
+          debts,
+          goals,
+          investments,
+          budgets,
+        ] = await Promise.all([
+          getWallets(),
+          getCategories(),
+          getTransactions(),
+          getDebts(),
+          getGoals(),
+          getInvestments(),
+          getBudgets(),
+        ]);
+        setWallets(wallets);
+        setCategories(categories);
+        setTransactions(transactions);
+        setDebts(debts);
+        setGoals(goals);
+        setInvestments(investments);
+        setBudgets(budgets);
+      } catch (error) {
+        console.error("[AIInsightsPage] load failed:", error);
+      }
     }
     load();
   }, []);

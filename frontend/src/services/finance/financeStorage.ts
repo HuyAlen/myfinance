@@ -618,7 +618,10 @@ export async function getWallets(): Promise<Wallet[]> {
     .from("wallets")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getWallets:", error.message);
+  if (error) {
+    console.error("[financeStorage] getWallets:", error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []) as Wallet[];
 }
 
@@ -629,7 +632,10 @@ export async function getCategories(): Promise<Category[]> {
     .from("categories")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getCategories:", error.message);
+  if (error) {
+    console.error("[financeStorage] getCategories:", error.message);
+    throw new Error(error.message);
+  }
   return ((data ?? []) as CategoryDbRow[])
     .filter((row) => !isLegacyFutureAllocationCategoryId(row.id))
     .map(fromCategoryRow);
@@ -643,7 +649,10 @@ export async function getTransactions(): Promise<Transaction[]> {
     .select("*")
     .eq("user_id", userId)
     .order("date", { ascending: false });
-  if (error) console.error("[financeStorage] getTransactions:", error.message);
+  if (error) {
+    console.error("[financeStorage] getTransactions:", error.message);
+    throw new Error(error.message);
+  }
   return ((data ?? []) as TransactionDbRow[])
     .filter((row) => !isLegacyFutureAllocationCategoryId(row.categoryId))
     .map(fromTransactionRow);
@@ -668,8 +677,10 @@ export async function getTransactionsInRange(
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: false });
-  if (error)
+  if (error) {
     console.error("[financeStorage] getTransactionsInRange:", error.message);
+    throw new Error(error.message);
+  }
   return ((data ?? []) as TransactionDbRow[])
     .filter((row) => !isLegacyFutureAllocationCategoryId(row.categoryId))
     .map(fromTransactionRow);
@@ -682,7 +693,10 @@ export async function getDebts(): Promise<Debt[]> {
     .from("debts")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getDebts:", error.message);
+  if (error) {
+    console.error("[financeStorage] getDebts:", error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []) as Debt[];
 }
 
@@ -693,7 +707,10 @@ export async function getGoals(): Promise<Goal[]> {
     .from("goals")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getGoals:", error.message);
+  if (error) {
+    console.error("[financeStorage] getGoals:", error.message);
+    throw new Error(error.message);
+  }
   return ((data ?? []) as GoalDbRow[]).map((row) => {
     const goal = fromGoalRow(row);
     return {
@@ -712,7 +729,10 @@ export async function getBudgets(): Promise<Budget[]> {
     .from("budgets")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getBudgets:", error.message);
+  if (error) {
+    console.error("[financeStorage] getBudgets:", error.message);
+    throw new Error(error.message);
+  }
   return ((data ?? []) as Budget[]).filter(
     (budget) => !isLegacyFutureAllocationCategoryId(budget.categoryId),
   );
@@ -725,7 +745,10 @@ export async function getInvestments(): Promise<Investment[]> {
     .from("investments")
     .select("*")
     .eq("user_id", userId);
-  if (error) console.error("[financeStorage] getInvestments:", error.message);
+  if (error) {
+    console.error("[financeStorage] getInvestments:", error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []) as Investment[];
 }
 
@@ -1645,7 +1668,7 @@ export async function getTransactionWalletLinks(): Promise<
 
   if (error) {
     console.error("[financeStorage] getTransactionWalletLinks:", error.message);
-    return [];
+    throw new Error(error.message);
   }
 
   return (data ?? []) as { walletId: string; transferToWalletId: string | null }[];
@@ -1665,7 +1688,7 @@ export async function getForexCashWalletLinks(): Promise<
 
   if (error) {
     console.error("[financeStorage] getForexCashWalletLinks:", error.message);
-    return [];
+    throw new Error(error.message);
   }
 
   return ((data ?? []) as { wallet_id: string }[]).map((row) => ({
