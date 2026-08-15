@@ -35,6 +35,12 @@ import {
   type DashboardActionCandidate,
 } from "@/src/lib/dashboard/dashboardActionPriority";
 import {
+  buildDashboardComparison,
+  isComparisonWindowLoaded,
+  resolveMonthComparisonWindow,
+  type DashboardComparison,
+} from "@/src/lib/dashboard/dashboardPeriodComparison";
+import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -777,7 +783,7 @@ export default function DashboardPage() {
   // selectedYear in the first place.
   const loadedPeriodYearRef = useRef<number | null>(null);
   const periodRequestIdRef = useRef(0);
-  const { dateRange, selectedYear } = useDateFilter();
+  const { dateRange, selectedYear, filterMode } = useDateFilter();
 
   // PERF-4 Hero Milestone Operation Semantics patch: dashboard_hero_ready
   // is emitted operation-locally (inside reloadData/reloadPeriod, right
@@ -2688,6 +2694,143 @@ export default function DashboardPage() {
     [selectedYear, selectedMonth],
   );
 
+  // UI-DASH-4 Period Comparison Layer.
+  //
+  // Scoped to `filterMode === "month"` only — the dominant/default mode,
+  // and the only one this sprint's product brief specifies like-for-like
+  // semantics for. Quarter/year/custom stay unavailable rather than
+  // shipping under-tested previous-quarter/previous-year elapsed-window
+  // arithmetic (see dashboardPeriodComparison.ts's module doc).
+  //
+  // Zero new queries: `loadedRangeStartDate` reuses the EXACT existing
+  // `getDashboardFetchRange(selectedYear)` call already made for the
+  // actual fetch (PERF-3) — this is a second read of an already-pure,
+  // already-computed value, not a new formula. If the previous month's
+  // window falls before that boundary (the January → prior-December
+  // case), the comparison is unavailable rather than triggering a fetch.
+  //
+  // Current/previous use the IDENTICAL canonical pipeline already
+  // powering `periodFlowSummary`/`savingsRateFromSavings` above
+  // (isInternalTransferTransaction → getTotalIncome/getTotalExpense;
+  // getNetSavingAllocation/getNetInvestmentAllocation → clampScore) — just
+  // invoked against the previous window's dates instead of `dateRange`.
+  const loadedRangeStartDate = useMemo(
+    () => getDashboardFetchRange(selectedYear).startDate,
+    [selectedYear],
+  );
+
+  const periodComparison = useMemo((): {
+    cashFlow: DashboardComparison;
+    savingRate: DashboardComparison;
+  } => {
+    const unavailable = {
+      cashFlow: { available: false as const },
+      savingRate: { available: false as const },
+    };
+
+    if (filterMode !== "month") return unavailable;
+
+    const today = toLocalDateKey(new Date());
+    let previous: { startDate: string; endDate: string };
+    try {
+      previous = resolveMonthComparisonWindow(dateRange, today).previous;
+    } catch {
+      // dateRange isn't a month-start range yet (e.g. mid-transition
+      // while switching filter modes) — no comparison this render.
+      return unavailable;
+    }
+
+    if (!isComparisonWindowLoaded(previous, loadedRangeStartDate)) {
+      return unavailable;
+    }
+
+    const previousTransactions = filterTransactionsByDateRange(
+      transactions,
+      previous,
+    );
+    const previousNonTransfer = previousTransactions.filter(
+      (transaction) => !isInternalTransferTransaction(transaction),
+    );
+    const previousIncome = getTotalIncome(previousNonTransfer);
+    const previousExpense = getTotalExpense(previousNonTransfer, categories);
+    const previousNetCashFlow = previousIncome - previousExpense;
+
+    const previousSavingAmount = Math.max(
+      0,
+      getNetSavingAllocation(
+        savingTransactions,
+        previous.startDate,
+        previous.endDate,
+      ),
+    );
+    const previousInvestmentAmount = Math.max(
+      0,
+      getNetInvestmentAllocation(
+        forexCashTransactions,
+        previous.startDate,
+        previous.endDate,
+      ),
+    );
+    const previousSavingRate =
+      previousIncome > 0
+        ? clampScore(
+            ((previousSavingAmount + previousInvestmentAmount) /
+              previousIncome) *
+              100,
+          )
+        : 0;
+
+    return {
+      cashFlow: buildDashboardComparison(netCashFlow, previousNetCashFlow),
+      savingRate: buildDashboardComparison(
+        summary.savingRate,
+        previousSavingRate,
+      ),
+    };
+  }, [
+    filterMode,
+    dateRange,
+    loadedRangeStartDate,
+    transactions,
+    categories,
+    savingTransactions,
+    forexCashTransactions,
+    netCashFlow,
+    summary.savingRate,
+  ]);
+
+  function formatComparisonLabel(
+    comparison: DashboardComparison,
+    formatDelta: (magnitude: number) => string,
+  ): string | undefined {
+    if (!comparison.available) return undefined;
+    if (comparison.direction === "flat") return "Không đổi so với kỳ trước";
+    const sign = comparison.delta > 0 ? "+" : "-";
+    return `${sign}${formatDelta(Math.abs(comparison.delta))} so với kỳ trước`;
+  }
+
+  const cashFlowComparisonLabel = formatComparisonLabel(
+    periodComparison.cashFlow,
+    (magnitude) => formatVND(magnitude),
+  );
+  const savingRateComparisonLabel = formatComparisonLabel(
+    periodComparison.savingRate,
+    (magnitude) => `${formatOneDecimal(magnitude)} điểm %`,
+  );
+
+  // Metric-specific interpretation, not a universal "up = green" rule
+  // (§31): both Cash Flow and Saving Rate happen to treat a higher value
+  // as an improvement, but that judgment is made HERE, per metric — not
+  // inside the generic comparison helper.
+  function comparisonTone(
+    comparison: DashboardComparison,
+  ): "good" | "danger" | "neutral" {
+    if (!comparison.available) return "neutral";
+    if (comparison.direction === "up") return "good";
+    if (comparison.direction === "down") return "danger";
+    return "neutral";
+  }
+
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
@@ -2699,6 +2842,12 @@ export default function DashboardPage() {
       // Period metric (periodFlowSummary) — carries the selected Dashboard
       // period, not today's date, to Transactions.
       href: buildTransactionsHref({ month: dashboardMonthKey }),
+      comparison: cashFlowComparisonLabel
+        ? {
+            label: cashFlowComparisonLabel,
+            tone: comparisonTone(periodComparison.cashFlow),
+          }
+        : undefined,
     },
     {
       title: "Tiết kiệm & Đầu tư",
@@ -2712,6 +2861,12 @@ export default function DashboardPage() {
       // combined Transactions filter (`type` only accepts one value), so
       // there is no unambiguous destination to send the user to.
       href: undefined as string | undefined,
+      comparison: savingRateComparisonLabel
+        ? {
+            label: savingRateComparisonLabel,
+            tone: comparisonTone(periodComparison.savingRate),
+          }
+        : undefined,
     },
     {
       title: "Quỹ khẩn cấp",
@@ -4009,6 +4164,7 @@ function KpiCard({
   tone,
   isLoading = false,
   onClick,
+  comparison,
 }: {
   title: string;
   value: string;
@@ -4021,6 +4177,12 @@ function KpiCard({
    * non-interactive — some KPIs legitimately have no unambiguous
    * destination (see kpiCards' own per-card comments). */
   onClick?: () => void;
+  /** UI-DASH-4: an already-formatted, already-toned previous-period
+   * comparison line (e.g. "+1.250.000 đ so với kỳ trước"). KpiCard only
+   * renders what it's given — the comparison finance/date logic lives in
+   * DashboardPage's periodComparison memo, never here. Omitted entirely
+   * (not even a skeleton) when no comparison is available/ready. */
+  comparison?: { label: string; tone: "good" | "warning" | "danger" | "neutral" };
 }) {
   const toneStyles = {
     good: {
@@ -4064,6 +4226,13 @@ function KpiCard({
               {value}
             </p>
             <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
+            {comparison && (
+              <p
+                className={`mt-1 truncate text-[11px] font-bold ${toneStyles[comparison.tone].value}`}
+              >
+                {comparison.label}
+              </p>
+            )}
           </>
         )}
       </div>
