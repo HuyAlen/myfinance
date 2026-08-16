@@ -31,12 +31,60 @@ export function shouldMarkReady(
  * the cash-flow group (`cashFlowReady`, feeding the badge's income/
  * expense). This is a pure composition of two already-existing flags —
  * it does not represent a new fetch group or a new financial calculation.
+ *
+ * PERF-4B superseded this as DashboardPage's actual Hero render gate: the
+ * headline and the 5 asset-category buckets only ever read from the Net
+ * Worth bundle (`calculateNetWorth` takes no transactions/categories
+ * argument), so gating them on `cashFlowReady` too was an unnecessary,
+ * over-broad dependency that could hold the page's single largest,
+ * first-seen element in skeleton purely because an unrelated
+ * transactions/categories fetch hadn't resolved yet. DashboardPage now
+ * gates the headline/buckets on `netWorthReady` alone, the badge on
+ * `cashFlowReady` alone, and the comparison/chart (which genuinely need
+ * both, plus `savingInvestmentReady`) on `isNetWorthTrendReady` below.
+ * `isHeroReady` itself is kept — unchanged, still correctly testing the
+ * exact "both dependencies ready" composition it always has — because it
+ * remains a valid, independently meaningful predicate; it is simply no
+ * longer consulted by DashboardPage.tsx's render path.
  */
 export function isHeroReady(
   netWorthReady: boolean,
   cashFlowReady: boolean,
 ): boolean {
   return netWorthReady && cashFlowReady;
+}
+
+/**
+ * PERF-4B Dashboard Critical Path Reduction patch.
+ *
+ * The Net Worth period-over-period comparison ("So với kỳ trước") and the
+ * NetWorthTrendChart are both derived from the exact same
+ * netWorthTrend/netWorthChartStats computation in DashboardPage.tsx, which
+ * reconstructs each of the last 12 months' net worth by reversing that
+ * month's `transactions` AND `savingTransactions` impact off the CURRENT
+ * net-worth snapshot. So both surfaces genuinely need all three:
+ *   - `netWorthReady` (`isDashboardReady`) — the current snapshot itself
+ *     (`summary.netWorth`) the trend reverses backward from;
+ *   - `cashFlowReady` — the `transactions` half of each month's reversal;
+ *   - `savingInvestmentReady` — the `savingTransactions` half. This one was
+ *     previously missing from the Hero's chart gate (`isHeroReady` does not
+ *     include it), meaning the chart could render while `savingTransactions`
+ *     was still its initial `[]`, silently omitting every real
+ *     saving/withdrawal reversal from the reconstructed past-month values —
+ *     a correctness-adjacent gap the PERF-4 audit flagged as F-6.
+ * Comparison and chart are intentionally given ONE shared gate, not two:
+ * they are not merely coincidentally identical formulas (unlike, say,
+ * isBudgetAttentionReady vs isMonthlyProgressReady) — they are two
+ * rendered views of the literal same underlying array, so splitting them
+ * into separately-named-but-identical predicates would add a boolean with
+ * no independent meaning.
+ */
+export function isNetWorthTrendReady(
+  netWorthReady: boolean,
+  cashFlowReady: boolean,
+  savingInvestmentReady: boolean,
+): boolean {
+  return netWorthReady && cashFlowReady && savingInvestmentReady;
 }
 
 /**

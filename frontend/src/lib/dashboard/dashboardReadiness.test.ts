@@ -5,6 +5,7 @@ import {
   isBudgetAttentionReady,
   isHeroReady,
   isMonthlyProgressReady,
+  isNetWorthTrendReady,
   isNewPeriodContext,
   isPeriodSnapshotCurrent,
   isStalePeriodGeneration,
@@ -80,6 +81,55 @@ describe("isHeroReady", () => {
     const netWorthReady = shouldMarkReady(false, true); // failed this cycle, succeeded before
     const cashFlowReady = shouldMarkReady(false, false); // never succeeded
     expect(isHeroReady(netWorthReady, cashFlowReady)).toBe(false);
+  });
+});
+
+/**
+ * PERF-4B Dashboard Critical Path Reduction patch: the Net Worth comparison
+ * delta and NetWorthTrendChart both reduce over `transactions` AND
+ * `savingTransactions` on top of the current Net Worth snapshot, so they
+ * require all three readiness domains — unlike the Hero headline/asset
+ * buckets, which need only `netWorthReady` (see DashboardPage.tsx's own
+ * headline/HeroMini gating, now `isDashboardReady` directly instead of
+ * `isHeroReady`).
+ */
+describe("isNetWorthTrendReady", () => {
+  it("net worth ready, cash flow NOT ready: not ready", () => {
+    expect(isNetWorthTrendReady(true, false, true)).toBe(false);
+  });
+
+  it("net worth ready, cash flow ready, saving-investment NOT ready: not ready — this is PERF-4 finding F-6, the chart must not render before the saving-transactions ledger loads", () => {
+    expect(isNetWorthTrendReady(true, true, false)).toBe(false);
+  });
+
+  it("net worth NOT ready alone: not ready — there is no snapshot to reverse the trend backward from", () => {
+    expect(isNetWorthTrendReady(false, true, true)).toBe(false);
+  });
+
+  it("all three ready: ready", () => {
+    expect(isNetWorthTrendReady(true, true, true)).toBe(true);
+  });
+
+  it("nothing ready: not ready", () => {
+    expect(isNetWorthTrendReady(false, false, false)).toBe(false);
+  });
+
+  it("end-to-end: same-context later failure on saving-investment preserves last-known-good, chart stays ready", () => {
+    const netWorthReady = shouldMarkReady(true, true);
+    const cashFlowReady = shouldMarkReady(true, true);
+    const savingInvestmentReady = shouldMarkReady(false, true); // failed this cycle, succeeded before
+    expect(
+      isNetWorthTrendReady(netWorthReady, cashFlowReady, savingInvestmentReady),
+    ).toBe(true);
+  });
+
+  it("end-to-end: initial load, saving-investment has never succeeded — not ready, no fabricated trend omitting real saving reversals", () => {
+    const netWorthReady = shouldMarkReady(true, false);
+    const cashFlowReady = shouldMarkReady(true, false);
+    const savingInvestmentReady = shouldMarkReady(false, false);
+    expect(
+      isNetWorthTrendReady(netWorthReady, cashFlowReady, savingInvestmentReady),
+    ).toBe(false);
   });
 });
 

@@ -109,10 +109,14 @@ describe("DashboardPage Budget Attention wiring (UI-DASH-2)", () => {
     expect(sectionSource).toContain("budgetAttention.worstOffender");
   });
 
-  it("budget readiness is never folded into Hero/Net Worth/Cash Flow readiness — isHeroReady's own call site is untouched", () => {
-    expect(source).toContain(
-      "const heroReady = isHeroReady(isDashboardReady, cashFlowReady);",
+  it("budget readiness is never folded into Hero/Net Worth/Cash Flow readiness — PERF-4B's netWorthTrendReady call site does not reference budgetsLoaded", () => {
+    const start = source.indexOf(
+      "const netWorthTrendReady = isNetWorthTrendReady(",
     );
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf(");", start);
+    const callSource = source.slice(start, end);
+    expect(callSource).not.toContain("budgetsLoaded");
   });
 
   // UI-DASH-2 Show All Over-Budget Items patch additions below.

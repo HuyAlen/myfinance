@@ -23,8 +23,8 @@ import {
   beginPeriodGeneration,
   isActionCenterReady,
   isBudgetAttentionReady,
-  isHeroReady,
   isMonthlyProgressReady,
+  isNetWorthTrendReady,
   isNewPeriodContext,
   isStalePeriodGeneration,
   shouldMarkReady,
@@ -697,6 +697,21 @@ export default function DashboardPage() {
   const hasReportedCriticalReadyRef = useRef(false);
   useEffect(() => {
     mountedAtRef.current = performance.now();
+  }, []);
+  // PERF-4B: warm the recharts chunk concurrently with the finance queries
+  // below, instead of only starting the JS fetch once a chart's own
+  // readiness gate first renders it. `dynamic()`'s own internal `import()`
+  // call (fired the first time <NetWorthTrendChart>/<CashFlowChart> is
+  // actually rendered) resolves against the SAME module-cache entry this
+  // starts — ES module dynamic imports for an identical specifier are
+  // cached, not re-fetched, so this cannot create a second chart instance
+  // or double-request the chunk. Fire-and-forget: no state is set, no
+  // finance/network data call is made, and nothing here is awaited before
+  // the query-firing effect further down runs — the two proceed in
+  // parallel, not as a waterfall.
+  useEffect(() => {
+    void import("./NetWorthTrendChart");
+    void import("./CashFlowChart");
   }, []);
   const [wallets, setWallets] = useState<WalletType[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -2725,14 +2740,28 @@ export default function DashboardPage() {
   // actually known to be zero.
   const hasNoDebt = isDashboardReady && summary.debtRatio <= 0;
 
-  // Hero readiness = union of every Hero-visible field's real dependencies.
-  // Net Worth/liquidity/investments/debt/Forex-capital (the headline +
-  // HeroMinis) all come from the canonical Net Worth bundle
-  // (isDashboardReady); the "Dòng tiền dương/âm" cash-flow badge next to
-  // the headline is `netCashFlow` = periodFlowSummary's income/expense
-  // (cashFlowReady — transactions+categories). No new query: this is a
-  // pure composition of the two existing flags, not a new fetch group.
-  const heroReady = isHeroReady(isDashboardReady, cashFlowReady);
+  // PERF-4B: the Hero is no longer one all-or-nothing gate. Each visible
+  // field now uses exactly the readiness flag(s) its own data actually
+  // depends on, instead of the union of every Hero field's dependencies:
+  //   - the Net Worth headline + the 5 HeroMinis — `isDashboardReady`
+  //     alone. `calculateNetWorth` takes no transactions/categories
+  //     argument, so these never needed cashFlowReady; gating them on it
+  //     anyway held the page's single largest, first-seen element in
+  //     skeleton for no data reason whenever the transactions/categories
+  //     fetch happened to be slower than the Net Worth bundle.
+  //   - the "Dòng tiền dương/âm" badge — `cashFlowReady` alone (unchanged
+  //     dependency: `netCashFlow` is periodFlowSummary's income/expense).
+  //   - the comparison delta + NetWorthTrendChart — `netWorthTrendReady`
+  //     below (isDashboardReady && cashFlowReady && savingInvestmentReady),
+  //     since netWorthTrend/netWorthChartStats reduce over BOTH
+  //     `transactions` and `savingTransactions` on top of the current
+  //     snapshot. No new query for any of this — same three existing
+  //     flags, recomposed per field instead of unioned for the whole Hero.
+  const netWorthTrendReady = isNetWorthTrendReady(
+    isDashboardReady,
+    cashFlowReady,
+    savingInvestmentReady,
+  );
 
   // ── Compact operating KPIs ───────────────────────────────────────────────
   // `ready` is per-card: only "Dòng tiền ròng" (periodFlowSummary — pure
@@ -3237,24 +3266,29 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap items-end gap-3">
-            {heroReady ? (
-              <>
-                <p
-                  className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
-                  title={formatVND(summary.netWorth)}
-                >
-                  {formatVND(summary.netWorth)}
-                </p>
-                <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                  {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-                  {formatVND(netCashFlow)}
-                </span>
-              </>
+            {/* PERF-4B: headline is gated on isDashboardReady alone —
+                calculateNetWorth has no transactions/categories dependency,
+                so it must not wait on the separate cash-flow badge below. */}
+            {isDashboardReady ? (
+              <p
+                className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
+                title={formatVND(summary.netWorth)}
+              >
+                {formatVND(summary.netWorth)}
+              </p>
             ) : (
-              <>
-                <div className="h-9 w-48 animate-pulse rounded-lg bg-slate-200/80 sm:h-11 sm:w-64" />
-                <div className="mb-1 h-6 w-32 animate-pulse rounded-full bg-slate-100" />
-              </>
+              <div className="h-9 w-48 animate-pulse rounded-lg bg-slate-200/80 sm:h-11 sm:w-64" />
+            )}
+            {/* PERF-4B: badge is gated on cashFlowReady alone — netCashFlow
+                is periodFlowSummary's income/expense, independent of the
+                headline's Net Worth bundle. */}
+            {cashFlowReady ? (
+              <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
+                {formatVND(netCashFlow)}
+              </span>
+            ) : (
+              <div className="mb-1 h-6 w-32 animate-pulse rounded-full bg-slate-100" />
             )}
           </div>
 
@@ -3264,35 +3298,35 @@ export default function DashboardPage() {
               label="Thanh khoản"
               value={formatVND(summary.liquidBalance)}
               valueClass="text-blue-600"
-              isLoading={!heroReady}
+              isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<PiggyBank size={16} />}
               label="Tiết kiệm"
               value={formatVND(savingsSnapshot.totalSavings)}
               valueClass="text-cyan-600"
-              isLoading={!heroReady}
+              isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Landmark size={16} />}
               label="Vốn Forex"
               value={formatVND(forexSnapshot.balance)}
               valueClass="text-violet-600"
-              isLoading={!heroReady}
+              isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Briefcase size={16} />}
               label="Đầu tư khác"
               value={formatVND(summary.investmentAssets)}
               valueClass="text-emerald-600"
-              isLoading={!heroReady}
+              isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<CreditCard size={16} />}
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
               valueClass="text-rose-500"
-              isLoading={!heroReady}
+              isLoading={!isDashboardReady}
             />
           </div>
 
@@ -3310,7 +3344,7 @@ export default function DashboardPage() {
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                   So với kỳ trước
                 </p>
-                {heroReady ? (
+                {netWorthTrendReady ? (
                   <p
                     className={`text-sm font-black ${
                       netWorthChartStats.changeFromPrevious >= 0
@@ -3327,16 +3361,20 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* netWorthTrend/netWorthChartStats are derived from `transactions`,
-                a period (year-scoped) dataset — heroReady already requires
-                cashFlowReady, which is the exact "transactions belong to the
-                currently selected year" signal (see dashboardReadiness.ts's
-                isNewPeriodContext/PERF-3), so it doubles as this chart's
-                period-context gate with no new state. Without this gate, a
-                still-held prior year's transactions could render as if they
-                were the newly selected year's net worth trend before the new
-                period fetch resolves. */}
-            {heroReady ? (
+            {/* netWorthTrend/netWorthChartStats are derived from the current
+                Net Worth snapshot (isDashboardReady) reversed backward by
+                `transactions` (cashFlowReady, and — PERF-3 — also the exact
+                "transactions belong to the currently selected year" signal,
+                so this doubles as the chart's period-context gate with no
+                new state) AND `savingTransactions` (savingInvestmentReady —
+                PERF-4B: previously missing from this gate, so the chart
+                could render before the saving-transactions ledger loaded
+                and silently omit real saving/withdrawal reversals from the
+                reconstructed past-month values). Without this full gate, a
+                still-held prior year's transactions, or a not-yet-loaded
+                saving ledger, could render as if they were already part of
+                a valid net worth trend before their own fetch resolves. */}
+            {netWorthTrendReady ? (
               <NetWorthTrendChart trend={netWorthTrend} />
             ) : (
               <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
