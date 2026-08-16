@@ -2868,7 +2868,7 @@ export default function TransactionsPage() {
             <form
               id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-hidden px-4 py-2.5 sm:overflow-y-auto sm:px-6 sm:py-4 sm:pb-5"
+              className="min-h-0 flex-1 overflow-y-auto px-4 py-2.5 sm:px-6 sm:py-4 sm:pb-5"
             >
               {/* Type selector — premium segmented control */}
               <div className="mb-2">
