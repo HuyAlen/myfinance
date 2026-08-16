@@ -488,6 +488,17 @@ export default function ReportsPage() {
                   .order("created_at", { ascending: false })
               : Promise.resolve({ data: [], error: null }),
           ]);
+
+        // FINANCE-DATA-1C: this raw "savings" read is a mandatory
+        // dependency of this load cycle too — savings-derived report
+        // sections treat `savings` as validated data, so a failed read
+        // here must not be treated as a successful load (which previously
+        // left `savings` at its stale/initial [] while clearing
+        // reportsLoadError to null).
+        if (savingResult.error) {
+          throw savingResult.error;
+        }
+
         setWallets(w);
         setInvestments(inv);
         setCategories(cat);
@@ -497,11 +508,9 @@ export default function ReportsPage() {
         setBudgets(bdg);
         setForexAccounts(fxAcc);
         setForexCashTransactions(fxTxn);
-        if (!savingResult.error) {
-          setSavings(
-            ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
-          );
-        }
+        setSavings(
+          ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
+        );
         setReportsLoadError(null);
       } catch (error) {
         console.error("[ReportsPage] load failed:", error);

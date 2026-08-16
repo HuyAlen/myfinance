@@ -78,4 +78,47 @@ describe("ReportsPage withholds the whole report body until first load succeeds 
       expect(rest.indexOf(hook)).toBe(-1);
     }
   });
+
+  // FINANCE-DATA-1C: load() also bundles a raw supabase.from("savings")
+  // read alongside the nine hardened financeStorage readers. The Final
+  // Re-Audit found its `.error` was checked only to guard the setSavings
+  // call — no logging, no propagation — while reportsLoadError was
+  // cleared unconditionally right after, so savings-derived report
+  // sections could silently show stale/empty data while the whole report
+  // body asserted a successful load. These tests prove the raw read is
+  // now validated the same way as every other dependency — by throwing —
+  // before any state for this load cycle is committed.
+  describe("FINANCE-DATA-1C: raw savings sub-query failure semantics", () => {
+    const start = source.indexOf("async function load() {");
+    const end = source.indexOf("load();", start);
+    const fnSource = source.slice(start, end);
+
+    it("throws on a failed raw savings read instead of silently guarding the setter", () => {
+      expect(fnSource).toContain("if (savingResult.error) {");
+      const checkIdx = fnSource.indexOf("if (savingResult.error) {");
+      const throwRegion = fnSource.slice(checkIdx, checkIdx + 120);
+      expect(throwRegion).toContain("throw savingResult.error;");
+      expect(fnSource).not.toContain("if (!savingResult.error)");
+    });
+
+    it("validates the savings dependency before committing ANY of the ten arrays for this load cycle (atomic load)", () => {
+      const checkIdx = fnSource.indexOf("if (savingResult.error) {");
+      expect(checkIdx).toBeGreaterThan(-1);
+      for (const setter of [
+        "setWallets(w)",
+        "setInvestments(inv)",
+        "setCategories(cat)",
+        "setTransactions(txn)",
+        "setDebts(dbt)",
+        "setGoals(gls)",
+        "setBudgets(bdg)",
+        "setForexAccounts(fxAcc)",
+        "setForexCashTransactions(fxTxn)",
+        "setSavings(",
+        "setReportsLoadError(null)",
+      ]) {
+        expect(fnSource.indexOf(setter)).toBeGreaterThan(checkIdx);
+      }
+    });
+  });
 });

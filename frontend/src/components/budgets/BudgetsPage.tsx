@@ -307,29 +307,37 @@ export default function BudgetsPage() {
           .select("type,amount,transaction_date"),
       ]);
 
+      // FINANCE-DATA-1C: both raw reads are mandatory dependencies of this
+      // load cycle — moduleFutureAllocation (feeding calculateRule503020's
+      // 50/30/20 output) treats their arrays as validated, so a failure
+      // here must not be treated as a successful load (which previously
+      // left the affected array at its stale/initial [] — a false ₫0
+      // saved/invested this month — while clearing budgetsLoadError to
+      // null).
+      if (savingsResult.error) {
+        throw savingsResult.error;
+      }
+      if (investmentsResult.error) {
+        throw investmentsResult.error;
+      }
+
       setBudgets(b);
       setCategories(c);
       setTransactions(t);
-
-      if (!savingsResult.error) {
-        setSavingsModuleTransactions(
-          (savingsResult.data ?? []).map((row) => ({
-            type: row.type as SavingsModuleTransaction["type"],
-            amount: Number(row.amount ?? 0),
-            transactionDate: String(row.transaction_date ?? ""),
-          })),
-        );
-      }
-
-      if (!investmentsResult.error) {
-        setInvestmentModuleTransactions(
-          (investmentsResult.data ?? []).map((row) => ({
-            type: row.type as InvestmentModuleTransaction["type"],
-            amount: Number(row.amount ?? 0),
-            transactionDate: String(row.transaction_date ?? ""),
-          })),
-        );
-      }
+      setSavingsModuleTransactions(
+        (savingsResult.data ?? []).map((row) => ({
+          type: row.type as SavingsModuleTransaction["type"],
+          amount: Number(row.amount ?? 0),
+          transactionDate: String(row.transaction_date ?? ""),
+        })),
+      );
+      setInvestmentModuleTransactions(
+        (investmentsResult.data ?? []).map((row) => ({
+          type: row.type as InvestmentModuleTransaction["type"],
+          amount: Number(row.amount ?? 0),
+          transactionDate: String(row.transaction_date ?? ""),
+        })),
+      );
       setBudgetsLoadError(null);
     } catch (error) {
       console.error("[BudgetsPage] reloadData failed:", error);

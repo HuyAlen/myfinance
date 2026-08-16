@@ -211,16 +211,22 @@ export default function GoalsPage() {
           .order("created_at", { ascending: false }),
       ]);
 
+      // FINANCE-DATA-1C: this raw "savings" read is a mandatory dependency
+      // of this load cycle too — selectedSavingsAmount/selectedTotal treat
+      // `savings` as validated data, so a failed read here must not be
+      // treated as a successful load (which previously left `savings` at
+      // its stale/initial [] while clearing goalsLoadError to null).
+      if (savingRows.error) {
+        throw savingRows.error;
+      }
+
       setGoals(nextGoals);
       setTransactions(nextTransactions);
-
-      if (!savingRows.error) {
-        setSavings(
-          ((savingRows.data ?? []) as SavingRow[]).map(
-            mapSavingRowToSavingAccount,
-          ),
-        );
-      }
+      setSavings(
+        ((savingRows.data ?? []) as SavingRow[]).map(
+          mapSavingRowToSavingAccount,
+        ),
+      );
       setGoalsLoadError(null);
     } catch (error) {
       console.error("[GoalsPage] reloadData failed:", error);
