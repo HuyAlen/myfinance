@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useState } from "react";
+
 export type PendingConfirm = {
   title?: string;
   message?: string;
@@ -19,7 +21,29 @@ export default function ConfirmDialog({
   action,
   onCancel,
 }: ConfirmDialogProps) {
+  // TXN-FLOW-1: every caller (delete, bulk-delete, and any other confirm
+  // flow across the app) shares this one dialog, so the re-entry guard
+  // belongs here rather than duplicated per caller. `isConfirming` is
+  // reset by the same click handler that set it — right after
+  // action.onConfirm() settles and onCancel() closes the dialog — so no
+  // effect is needed to keep it in sync with `action` changing.
+  const [isConfirming, setIsConfirming] = useState(false);
+  const isConfirmingRef = useRef(false);
+
   if (!action) return null;
+
+  async function handleConfirm() {
+    if (isConfirmingRef.current) return;
+    isConfirmingRef.current = true;
+    setIsConfirming(true);
+    try {
+      await action!.onConfirm();
+    } finally {
+      isConfirmingRef.current = false;
+      setIsConfirming(false);
+      onCancel();
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/40 p-4">
@@ -36,20 +60,19 @@ export default function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-600"
+            disabled={isConfirming}
+            className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {action.cancelText || "Hủy"}
           </button>
 
           <button
             type="button"
-            onClick={async () => {
-              await action.onConfirm();
-              onCancel();
-            }}
-            className="rounded-2xl bg-rose-500 px-5 py-3 font-semibold text-white shadow-lg shadow-rose-200"
+            onClick={handleConfirm}
+            disabled={isConfirming}
+            className="rounded-2xl bg-rose-500 px-5 py-3 font-semibold text-white shadow-lg shadow-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {action.confirmText || "Xác nhận"}
+            {isConfirming ? "Đang xử lý..." : action.confirmText || "Xác nhận"}
           </button>
         </div>
       </div>

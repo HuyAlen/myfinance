@@ -15,6 +15,10 @@ import {
   normalizeTransactionNote,
 } from "@/src/lib/transactions/transactionClassification";
 import { resolveTransactionsEffectiveRange } from "@/src/lib/transactions/transactionsPeriod";
+import {
+  isSessionStillCurrent,
+  isSubmittingThisSession,
+} from "@/src/lib/transactions/mutationSession";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -616,6 +620,41 @@ export default function TransactionsPage() {
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
+
+  // TXN-FLOW-1: `formSessionRef`/`formSessionState` fingerprint each
+  // distinct Create/Edit modal opening — bumped only by openCreateForm/
+  // openEditForm below, never by Cancel/Close (closing without opening
+  // something new isn't a new session; a still-in-flight submit for the
+  // just-closed form is safe to let finish normally). `handleSubmit`
+  // captures the session at commit time and, once its backend result
+  // comes back, compares it against the CURRENT session to decide whether
+  // it may still touch the modal's UI — this is what prevents a stale
+  // Form A completion from closing/resetting a newer Form B.
+  //
+  // `submittingSessionRef`/`submittingSessionState` track which session
+  // (if any) currently has a submit in flight, keyed by session rather
+  // than a single shared boolean — so a still-pending Form A submit never
+  // blocks an independently-opened Form B from submitting its own, unrelated
+  // mutation. `isSubmitting` (derived below) is true only when the
+  // CURRENTLY DISPLAYED session is the one with a submit in flight, which
+  // is what the Save button's disabled/loading state should reflect.
+  const formSessionRef = useRef(0);
+  const [formSessionState, setFormSessionState] = useState(0);
+  const submittingSessionRef = useRef<number | null>(null);
+  const [submittingSessionState, setSubmittingSessionState] = useState<
+    number | null
+  >(null);
+  const isSubmitting = isSubmittingThisSession(
+    submittingSessionState,
+    formSessionState,
+  );
+
+  function beginNewFormSession() {
+    const next = formSessionRef.current + 1;
+    formSessionRef.current = next;
+    setFormSessionState(next);
+    return next;
+  }
   const [toastState, setToastState] = useState<ToastPayload | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -1254,6 +1293,7 @@ export default function TransactionsPage() {
       walletId: wallets[0]?.id ?? "",
     });
     setSaveError(null);
+    beginNewFormSession();
     setIsFormOpen(true);
   }
 
@@ -1312,6 +1352,7 @@ export default function TransactionsPage() {
       recurrence: t.recurrence ?? "monthly",
     });
     setSaveError(null);
+    beginNewFormSession();
     setIsFormOpen(true);
   }
 
@@ -1373,6 +1414,12 @@ export default function TransactionsPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    // TXN-FLOW-1: checked synchronously (a ref, not state) so two clicks
+    // landing before React re-renders the disabled Save button still can't
+    // both cross this line — only the first ever proceeds.
+    if (isSubmittingThisSession(submittingSessionRef.current, formSessionRef.current))
+      return;
+
     const amount = Number(form.amount);
     if (!amount || amount <= 0) {
       setSaveError("Vui lòng nhập số tiền hợp lệ");
@@ -1458,48 +1505,93 @@ export default function TransactionsPage() {
       ? transactions.find((item) => item.id === form.id)
       : undefined;
 
-    let balanceResult:
-      | { error: string | null; previousWallets: Wallet[] }
-      | undefined;
+    // TXN-FLOW-1: from here on this submit "crosses the mutation boundary".
+    // `submittedSession` is this call's form-session fingerprint, captured
+    // before any await — if a NEWER form (Create/Edit) opens before this
+    // submit's backend result comes back, formSessionRef.current will have
+    // moved on, and every step below treats its own result as stale: a
+    // genuine backend write still gets reflected via runReload() (that
+    // part is real and safe to show regardless of which form is open now),
+    // but a stale result must never close/reset the newer form or show a
+    // toast/error that could be misread as belonging to it.
+    const submittedSession = formSessionRef.current;
+    submittingSessionRef.current = submittedSession;
+    setSubmittingSessionState(submittedSession);
 
-    if (isWalletTransferForm) {
-      balanceResult = form.id
-        ? await replaceTransferWalletBalance(oldTransaction, transaction)
-        : await applyTransferWalletBalance(transaction, 1);
-      if (balanceResult.error) {
-        setSaveError(balanceResult.error);
-        toast({ variant: "error", message: balanceResult.error });
+    try {
+      let balanceResult:
+        | { error: string | null; previousWallets: Wallet[] }
+        | undefined;
+
+      if (isWalletTransferForm) {
+        balanceResult = form.id
+          ? await replaceTransferWalletBalance(oldTransaction, transaction)
+          : await applyTransferWalletBalance(transaction, 1);
+        if (balanceResult.error) {
+          if (isSessionStillCurrent(submittedSession, formSessionRef.current)) {
+            setSaveError(balanceResult.error);
+            toast({ variant: "error", message: balanceResult.error });
+          } else {
+            console.error(
+              "[TransactionsPage] stale submit's balance check failed:",
+              balanceResult.error,
+            );
+          }
+          return;
+        }
+      }
+
+      const { error } = form.id
+        ? await updateTransaction(transaction)
+        : await addTransaction(transaction);
+      if (error) {
+        if (isWalletTransferForm) {
+          await restoreWalletSnapshots(balanceResult?.previousWallets);
+        }
+        if (isSessionStillCurrent(submittedSession, formSessionRef.current)) {
+          setSaveError(error);
+          toast({ variant: "error", message: error });
+        } else {
+          console.error("[TransactionsPage] stale submit failed:", error);
+        }
         return;
       }
-    }
 
-    const { error } = form.id
-      ? await updateTransaction(transaction)
-      : await addTransaction(transaction);
-    if (error) {
-      if (isWalletTransferForm) {
-        await restoreWalletSnapshots(balanceResult?.previousWallets);
+      // The write genuinely reached the backend — always refresh
+      // authoritative data, even if this submit's own form session is now
+      // stale (a real change happened and must not be left stale-hidden).
+      await runReload();
+
+      if (!isSessionStillCurrent(submittedSession, formSessionRef.current)) {
+        // Stale success: a newer form is open now. Do not touch its UI or
+        // show a success toast that could be misread as describing it.
+        return;
       }
-      setSaveError(error);
-      toast({ variant: "error", message: error });
-      return;
+
+      // A newly created transaction sorts to the top only under the default
+      // newest-first view — jump to page 1 there so the user sees it without
+      // extra clicks. Leave the page alone under any other sort/filter, since
+      // we can't assume where the new row landed.
+      if (!form.id && sortKey === "date" && sortDir === "desc") {
+        setCurrentPage(0);
+      }
+      toast({
+        variant: "success",
+        message: form.id
+          ? "Đã cập nhật giao dịch thành công."
+          : "Đã thêm giao dịch thành công.",
+      });
+      setIsFormOpen(false);
+      setForm(createEmptyForm());
+    } finally {
+      // Only release the in-flight flag if it's still ours — a stale
+      // completion must never clear a NEWER session's own legitimately
+      // in-flight submit.
+      if (submittingSessionRef.current === submittedSession) {
+        submittingSessionRef.current = null;
+        setSubmittingSessionState(null);
+      }
     }
-    await runReload();
-    // A newly created transaction sorts to the top only under the default
-    // newest-first view — jump to page 1 there so the user sees it without
-    // extra clicks. Leave the page alone under any other sort/filter, since
-    // we can't assume where the new row landed.
-    if (!form.id && sortKey === "date" && sortDir === "desc") {
-      setCurrentPage(0);
-    }
-    toast({
-      variant: "success",
-      message: form.id
-        ? "Đã cập nhật giao dịch thành công."
-        : "Đã thêm giao dịch thành công.",
-    });
-    setIsFormOpen(false);
-    setForm(createEmptyForm());
   }
 
   function handleDelete(id: string) {
@@ -3093,8 +3185,9 @@ export default function TransactionsPage() {
                 <button
                   type="submit"
                   form="transaction-form"
+                  disabled={isSubmitting}
                   className={
-                    "min-h-10 flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] " +
+                    "min-h-10 flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg transition-all active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 " +
                     modalAccent.bg +
                     " " +
                     modalAccent.bgHover +
@@ -3102,11 +3195,13 @@ export default function TransactionsPage() {
                     modalAccent.shadow
                   }
                 >
-                  {form.id
-                    ? "Lưu thay đổi"
-                    : form.type === "transfer"
-                      ? "Chuyển tiền"
-                      : "Thêm giao dịch"}
+                  {isSubmitting
+                    ? "Đang lưu..."
+                    : form.id
+                      ? "Lưu thay đổi"
+                      : form.type === "transfer"
+                        ? "Chuyển tiền"
+                        : "Thêm giao dịch"}
                 </button>
               </div>
             </div>
