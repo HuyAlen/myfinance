@@ -466,6 +466,14 @@ export default function SavingsPage({
 }: SavingsPageProps) {
   const [localSavings, setLocalSavings] = useState<SavingWithWallet[]>(savings);
   const [wallets, setWallets] = useState<WalletType[]>([]);
+  // FINANCE-DATA-1B: selectedWalletBalance below falls back to 0 when the
+  // wallet lookup misses. If that miss is because the wallet load actually
+  // FAILED (rather than the wallet genuinely not existing), showing "0 đ"
+  // reads as an authoritative current balance — set on load failure so the
+  // balance UI can show a neutral message instead, and cleared on success.
+  const [walletsLoadError, setWalletsLoadError] = useState<string | null>(
+    null,
+  );
   const walletsRef = useRef<WalletType[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<SavingsFilter>("all");
@@ -730,9 +738,13 @@ export default function SavingsPage({
   ]);
 
   const isEditing = editingSavingId !== null;
+  // A failed wallet load means this lookup miss is unknown, not a real
+  // zero balance — don't let 0 stand in as an authoritative balance.
+  const hasUnknownWalletBalance = !selectedInitialWallet && !!walletsLoadError;
   const selectedWalletBalance = selectedInitialWallet?.balance ?? 0;
   const isInitialDepositTooHigh =
     !isEditing &&
+    !hasUnknownWalletBalance &&
     form.walletId.length > 0 &&
     previewPrincipal > 0 &&
     previewPrincipal > selectedWalletBalance;
@@ -775,6 +787,7 @@ export default function SavingsPage({
         if (!isMounted) return;
 
         setWallets(walletRows);
+        setWalletsLoadError(null);
         setTransactionForm((current) =>
           current.walletId || !walletRows[0]?.id
             ? current
@@ -798,6 +811,9 @@ export default function SavingsPage({
       } catch (error) {
         if (!isMounted) return;
 
+        setWalletsLoadError(
+          "Không thể tải số dư ví. Vui lòng tải lại trang.",
+        );
         showToast({
           type: "error",
           message:
@@ -1205,10 +1221,16 @@ export default function SavingsPage({
         if (!isMounted) return;
 
         setWallets(walletRows);
+        setWalletsLoadError(null);
       } catch (error) {
+        if (!isMounted) return;
+
         console.error(
           "[SavingsPage] refreshSelectedWalletBalance failed:",
           error,
+        );
+        setWalletsLoadError(
+          "Không thể tải số dư ví. Vui lòng tải lại trang.",
         );
       }
     }
@@ -2606,7 +2628,9 @@ export default function SavingsPage({
                           Số dư ví hiện tại
                         </p>
                         <p className="mt-1 text-sm font-black text-slate-950">
-                          {formatCurrency(selectedWalletBalance)}
+                          {hasUnknownWalletBalance
+                            ? "Không thể tải số dư"
+                            : formatCurrency(selectedWalletBalance)}
                         </p>
                       </div>
                       {!isEditing ? (

@@ -85,6 +85,12 @@ export default function SettingsPage() {
     debts: 0,
     goals: 0,
   });
+  // FINANCE-DATA-1B: stat pills render these counts unconditionally, so an
+  // initial reloadStats() failure must not show "0" as if it were a real
+  // count. isLoadingStats stays true until the first attempt (success or
+  // failure) settles; statsLoadError marks that attempt as failed.
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsLoadError, setStatsLoadError] = useState<string | null>(null);
 
   // Preferences
   const [lang, setLang] = useState("vi");
@@ -206,8 +212,12 @@ export default function SettingsPage() {
         debts: debts.length,
         goals: goals.length,
       });
+      setStatsLoadError(null);
     } catch (error) {
       console.error("[SettingsPage] reloadStats failed:", error);
+      setStatsLoadError("Không thể tải số liệu. Vui lòng tải lại trang.");
+    } finally {
+      setIsLoadingStats(false);
     }
   }, []);
 
@@ -672,7 +682,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
               >
                 <span className="text-lg font-black text-blue-700">
-                  {s.value}
+                  {isLoadingStats ? "…" : statsLoadError ? "–" : s.value}
                 </span>
                 <span className="text-xs font-semibold text-slate-500">
                   {s.label}
@@ -1577,7 +1587,7 @@ export default function SettingsPage() {
                       className="rounded-2xl bg-slate-50 px-3 py-2.5 text-center"
                     >
                       <p className="text-xl font-black text-blue-700">
-                        {s.value}
+                        {isLoadingStats ? "…" : statsLoadError ? "–" : s.value}
                       </p>
                       <p className="text-[10px] text-slate-400">{s.label}</p>
                     </div>

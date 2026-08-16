@@ -422,6 +422,19 @@ function getRealSpendingByCategory(
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ReportsPage() {
+  // FINANCE-DATA-1B: every KPI/chart on this page (net worth, income,
+  // expense, allocation pies, ...) is derived from the ten arrays below,
+  // all starting at []/0-equivalent — indistinguishable from "genuinely
+  // no data yet" if the very first load actually FAILED (these readers
+  // now reject instead of silently resolving []). Rather than gate every
+  // individual chart/number, the whole report body renders only after
+  // the first load has succeeded; until then, one page-level
+  // loading/error placeholder takes its place — see the early return
+  // right before "─── RENDER ───" below.
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
+  const [reportsLoadError, setReportsLoadError] = useState<string | null>(
+    null,
+  );
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -489,8 +502,14 @@ export default function ReportsPage() {
             ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
           );
         }
+        setReportsLoadError(null);
       } catch (error) {
         console.error("[ReportsPage] load failed:", error);
+        setReportsLoadError(
+          "Không thể tải dữ liệu báo cáo. Vui lòng tải lại trang.",
+        );
+      } finally {
+        setIsLoadingReports(false);
       }
     }
     load();
@@ -1030,6 +1049,34 @@ export default function ReportsPage() {
   };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
+  // FINANCE-DATA-1B: the entire report body below is derived from the ten
+  // arrays loaded above. Rather than gate every individual chart/KPI, the
+  // whole body is withheld until the first load has succeeded at least
+  // once — an initial failure must never render as "0 income / 0 expense /
+  // no data" everywhere. A later refresh failure just keeps this same
+  // gate (isLoadingReports never resets after the first attempt), so the
+  // last-known-good report stays visible rather than being blanked again.
+  if (isLoadingReports) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center">
+        <FileText className="mb-4 h-10 w-10 text-slate-400" />
+        <h3 className="text-lg font-bold text-slate-600">
+          Đang tải dữ liệu báo cáo...
+        </h3>
+      </div>
+    );
+  }
+  if (reportsLoadError) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center">
+        <FileText className="mb-4 h-10 w-10 text-rose-400" />
+        <h3 className="text-lg font-bold text-rose-600">
+          Không thể tải dữ liệu báo cáo
+        </h3>
+        <p className="mt-1 text-sm text-rose-400">{reportsLoadError}</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-5 overflow-x-hidden md:space-y-6 print:space-y-4">
       {/* ══════════════════════════════════════════════════════════════════

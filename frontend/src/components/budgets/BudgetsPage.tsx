@@ -259,6 +259,15 @@ function getStabilityScore(
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  // FINANCE-DATA-1B: `budgets` starts at [] the same as a genuine
+  // zero-budget account. "Chưa có ngân sách nào" is a real financial
+  // conclusion, so it must not render before a load has actually
+  // SUCCEEDED at least once — otherwise an initial read failure would
+  // look identical to "you haven't set up any budgets."
+  const [isLoadingBudgets, setIsLoadingBudgets] = useState(true);
+  const [budgetsLoadError, setBudgetsLoadError] = useState<string | null>(
+    null,
+  );
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [savingsModuleTransactions, setSavingsModuleTransactions] = useState<
@@ -321,8 +330,14 @@ export default function BudgetsPage() {
           })),
         );
       }
+      setBudgetsLoadError(null);
     } catch (error) {
       console.error("[BudgetsPage] reloadData failed:", error);
+      setBudgetsLoadError(
+        "Không thể tải dữ liệu ngân sách. Vui lòng tải lại trang.",
+      );
+    } finally {
+      setIsLoadingBudgets(false);
     }
   }, []);
 
@@ -1876,49 +1891,82 @@ export default function BudgetsPage() {
             );
           })}
 
-          {/* Empty state */}
-          {filteredBudgets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-6 text-center sm:rounded-4xl sm:p-12 md:col-span-2 xl:col-span-3">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
-                <ChartPie size={24} className="text-blue-400" />
+          {/* FINANCE-DATA-1B: "Chưa có ngân sách nào" is a real financial
+              conclusion — it must not render while we're still loading, or
+              worse, when the initial load actually FAILED (getBudgets now
+              rejects instead of silently resolving []). */}
+          {filteredBudgets.length === 0 && isLoadingBudgets && (
+            <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-6 text-center sm:rounded-4xl sm:p-12 md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
+                <ChartPie size={24} className="text-slate-400" />
               </div>
               <h3 className="mt-4 text-base font-black text-slate-700">
-                {budgets.length > 0
-                  ? "Không có ngân sách tháng " + activeMonth
-                  : "Chưa có ngân sách nào"}
+                Đang tải dữ liệu ngân sách...
               </h3>
-              <p className="mt-2 text-sm text-slate-400">
-                {budgets.length > 0
-                  ? canClonePreviousBudget
-                    ? `Sao chép nhanh ngân sách tháng ${previousMonth}, hoặc tạo ngân sách mới.`
-                    : "Chọn tháng khác hoặc tạo ngân sách mới."
-                  : "Bắt đầu bằng cách tạo ngân sách đầu tiên."}
-              </p>
-              <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
-                <button
-                  onClick={openCreateForm}
-                  className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
-                >
-                  <Plus size={15} />
-                  Tạo ngân sách
-                </button>
-
-                {canClonePreviousBudget && (
-                  <button
-                    type="button"
-                    onClick={handleClonePreviousBudget}
-                    disabled={isCloningPrevious}
-                    className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <ChartPie size={15} />
-                    {isCloningPrevious
-                      ? "Đang sao chép..."
-                      : `Sao chép tháng ${previousMonth}`}
-                  </button>
-                )}
-              </div>
             </div>
           )}
+
+          {filteredBudgets.length === 0 &&
+            !isLoadingBudgets &&
+            budgetsLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-6 text-center sm:rounded-4xl sm:p-12 md:col-span-2 xl:col-span-3">
+                <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
+                  <ChartPie size={24} className="text-rose-400" />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-700">
+                  Không thể tải dữ liệu ngân sách
+                </h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  {budgetsLoadError}
+                </p>
+              </div>
+            )}
+
+          {/* Empty state */}
+          {filteredBudgets.length === 0 &&
+            !isLoadingBudgets &&
+            !budgetsLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-6 text-center sm:rounded-4xl sm:p-12 md:col-span-2 xl:col-span-3">
+                <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
+                  <ChartPie size={24} className="text-blue-400" />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-700">
+                  {budgets.length > 0
+                    ? "Không có ngân sách tháng " + activeMonth
+                    : "Chưa có ngân sách nào"}
+                </h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  {budgets.length > 0
+                    ? canClonePreviousBudget
+                      ? `Sao chép nhanh ngân sách tháng ${previousMonth}, hoặc tạo ngân sách mới.`
+                      : "Chọn tháng khác hoặc tạo ngân sách mới."
+                    : "Bắt đầu bằng cách tạo ngân sách đầu tiên."}
+                </p>
+                <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
+                  <button
+                    onClick={openCreateForm}
+                    className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
+                  >
+                    <Plus size={15} />
+                    Tạo ngân sách
+                  </button>
+
+                  {canClonePreviousBudget && (
+                    <button
+                      type="button"
+                      onClick={handleClonePreviousBudget}
+                      disabled={isCloningPrevious}
+                      className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <ChartPie size={15} />
+                      {isCloningPrevious
+                        ? "Đang sao chép..."
+                        : `Sao chép tháng ${previousMonth}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
         </div>
       </section>
 

@@ -64,6 +64,16 @@ const INSIGHT_ICON_MAP: Record<InsightIconType, React.ReactNode> = {
 };
 
 export default function AIInsightsPage() {
+  // FINANCE-DATA-1B: every insight/score/section below is derived from
+  // the seven arrays loaded here, all starting at [] — indistinguishable
+  // from "genuinely no data" if the very first load actually FAILED.
+  // Rather than gate every individual section, the whole body renders
+  // only after the first load has succeeded once; see the early return
+  // right before "return (" below.
+  const [isLoadingInsights, setIsLoadingInsights] = useState(true);
+  const [insightsLoadError, setInsightsLoadError] = useState<string | null>(
+    null,
+  );
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -102,8 +112,14 @@ export default function AIInsightsPage() {
         setGoals(goals);
         setInvestments(investments);
         setBudgets(budgets);
+        setInsightsLoadError(null);
       } catch (error) {
         console.error("[AIInsightsPage] load failed:", error);
+        setInsightsLoadError(
+          "Không thể tải dữ liệu phân tích. Vui lòng tải lại trang.",
+        );
+      } finally {
+        setIsLoadingInsights(false);
       }
     }
     load();
@@ -145,6 +161,32 @@ export default function AIInsightsPage() {
     ...d,
     icon: INSIGHT_ICON_MAP[d.iconType],
   }));
+
+  // FINANCE-DATA-1B: withhold the whole analysis body until the first load
+  // has succeeded at least once. A later refresh failure keeps this same
+  // gate from re-triggering (isLoadingInsights never resets after the
+  // first attempt), so a last-known-good analysis stays visible.
+  if (isLoadingInsights) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center">
+        <Brain className="mb-4 h-10 w-10 text-slate-400" />
+        <h3 className="text-lg font-bold text-slate-600">
+          Đang tải dữ liệu phân tích...
+        </h3>
+      </div>
+    );
+  }
+  if (insightsLoadError) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center">
+        <Brain className="mb-4 h-10 w-10 text-rose-400" />
+        <h3 className="text-lg font-bold text-rose-600">
+          Không thể tải dữ liệu phân tích
+        </h3>
+        <p className="mt-1 text-sm text-rose-400">{insightsLoadError}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

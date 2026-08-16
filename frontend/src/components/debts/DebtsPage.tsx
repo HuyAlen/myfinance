@@ -123,6 +123,13 @@ const PIE_COLORS = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DebtsPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
+  // FINANCE-DATA-1B: "Bạn đang tự do tài chính" (you are debt-free) is a
+  // real financial conclusion drawn from `debts.length === 0` — it must
+  // not render before a load has actually SUCCEEDED, since an initial
+  // read failure (getDebts now rejects instead of silently resolving [])
+  // would otherwise look identical to a genuinely debt-free account.
+  const [isLoadingDebts, setIsLoadingDebts] = useState(true);
+  const [debtsLoadError, setDebtsLoadError] = useState<string | null>(null);
   const [totalAssets, setTotalAssets] = useState(0);
   const [annualIncome, setAnnualIncome] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -156,8 +163,12 @@ export default function DebtsPage() {
         .slice(0, 10);
       const recent = t.filter((tx) => tx.date >= cutoff);
       setAnnualIncome(getTotalIncome(recent));
+      setDebtsLoadError(null);
     } catch (error) {
       console.error("[DebtsPage] reloadData failed:", error);
+      setDebtsLoadError("Không thể tải dữ liệu khoản nợ. Vui lòng tải lại trang.");
+    } finally {
+      setIsLoadingDebts(false);
     }
   }
 
@@ -1174,8 +1185,36 @@ export default function DebtsPage() {
             );
           })}
 
+          {/* FINANCE-DATA-1B: "Không có khoản nợ nào! Bạn đang tự do tài
+              chính" is an active financial conclusion — it must not
+              render while loading, or (much worse) when the initial load
+              actually FAILED, since that would tell the user they're
+              debt-free when we simply don't know. */}
+          {debts.length === 0 && isLoadingDebts && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
+                <TrendingUp size={24} className="text-slate-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Đang tải dữ liệu khoản nợ...
+              </h3>
+            </div>
+          )}
+
+          {debts.length === 0 && !isLoadingDebts && debtsLoadError && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
+                <TrendingUp size={24} className="text-rose-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Không thể tải dữ liệu khoản nợ
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">{debtsLoadError}</p>
+            </div>
+          )}
+
           {/* Empty state */}
-          {debts.length === 0 && (
+          {debts.length === 0 && !isLoadingDebts && !debtsLoadError && (
             <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-emerald-100">
                 <TrendingUp size={24} className="text-emerald-500" />

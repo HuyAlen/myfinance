@@ -652,6 +652,17 @@ export default function TransactionsPage() {
   >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  // FINANCE-DATA-1B: "Chưa có giao dịch" is a legitimate-empty-ledger
+  // claim — it must not render before the transactions fetch has actually
+  // SUCCEEDED at least once. `isLoadingTransactions` only ever tracks the
+  // very FIRST load (flips false once, never reset on a later month
+  // switch/realtime refresh) since the existing Promise.allSettled
+  // fulfilled-only logic already preserves last-known-good data on any
+  // later failure — this only guards the initial mount race.
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const [transactionsLoadError, setTransactionsLoadError] = useState<
+    string | null
+  >(null);
 
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>("all");
@@ -729,12 +740,17 @@ export default function TransactionsPage() {
 
     if (txnsResult.status === "fulfilled") {
       setTransactions(txnsResult.value);
+      setTransactionsLoadError(null);
     } else {
       console.error(
         "[TransactionsPage] Failed to load transactions",
         txnsResult.reason,
       );
+      setTransactionsLoadError(
+        "Không thể tải giao dịch. Vui lòng tải lại trang.",
+      );
     }
+    setIsLoadingTransactions(false);
 
     if (forexAccountsResult.status === "fulfilled") {
       setForexAccounts(forexAccountsResult.value);
@@ -2575,6 +2591,8 @@ export default function TransactionsPage() {
                   hasFilters={hasActiveFilters}
                   onClear={clearFilters}
                   onAdd={openCreateForm}
+                  isLoading={isLoadingTransactions}
+                  loadError={transactionsLoadError}
                 />
               )}
             </div>
@@ -2587,6 +2605,8 @@ export default function TransactionsPage() {
                 hasFilters={hasActiveFilters}
                 onClear={clearFilters}
                 onAdd={openCreateForm}
+                isLoading={isLoadingTransactions}
+                loadError={transactionsLoadError}
               />
             )}
             {visibleGroups.map(({ date, txns }) => {
@@ -3397,11 +3417,48 @@ function EmptyState({
   hasFilters,
   onClear,
   onAdd,
+  isLoading = false,
+  loadError = null,
 }: {
   hasFilters: boolean;
   onClear: () => void;
   onAdd: () => void;
+  /** FINANCE-DATA-1B: when the transactions fetch hasn't succeeded yet
+   * (still loading, or the initial attempt failed), this must not render
+   * "Chưa có giao dịch" — that's a legitimate-empty-ledger claim, not
+   * what "we don't know yet" means. */
+  isLoading?: boolean;
+  loadError?: string | null;
 }) {
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex size-20 items-center justify-center rounded-4xl bg-slate-50 shadow-inner">
+          <ArrowDownRight size={28} className="text-slate-300" />
+        </div>
+        <h3 className="mt-5 text-base font-black text-slate-700">
+          Đang tải giao dịch...
+        </h3>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex size-20 items-center justify-center rounded-4xl bg-rose-50 shadow-inner">
+          <ArrowDownRight size={28} className="text-rose-400" />
+        </div>
+        <h3 className="mt-5 text-base font-black text-slate-700">
+          Không thể tải giao dịch
+        </h3>
+        <p className="mt-2 max-w-60 text-sm leading-6 text-slate-400">
+          {loadError}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="flex size-20 items-center justify-center rounded-4xl bg-blue-50 shadow-inner">

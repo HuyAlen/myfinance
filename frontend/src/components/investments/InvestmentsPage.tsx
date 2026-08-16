@@ -895,7 +895,21 @@ export default function InvestmentsPage() {
             </div>
           ) : null}
 
-          {!isLoading && accounts.length === 0 ? (
+          {/* FINANCE-DATA-1B: an initial load failure (loadError set, no
+              accounts ever loaded) must not fall into the "add your first
+              account" empty state below — that's a legitimate-zero claim,
+              not what "we couldn't load your data" means. */}
+          {!isLoading && loadError && accounts.length === 0 ? (
+            <div className="col-span-full flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-rose-50/40 p-8 text-center">
+              <Landmark size={24} className="text-rose-500" />
+              <p className="mt-4 text-lg font-black text-rose-700">
+                Không thể tải dữ liệu Forex
+              </p>
+              <p className="mt-1 text-sm text-slate-500">{loadError}</p>
+            </div>
+          ) : null}
+
+          {!isLoading && !loadError && accounts.length === 0 ? (
             <button
               type="button"
               onClick={openCreateAccount}

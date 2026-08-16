@@ -247,6 +247,14 @@ function getTypeFromGroup(group: CategoryGroup): CategoryType {
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  // FINANCE-DATA-1B: "Không tìm thấy danh mục" must not render before a
+  // load has actually SUCCEEDED at least once — an initial read failure
+  // (getCategories now rejects instead of silently resolving []) would
+  // otherwise look identical to a genuinely category-less account.
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [categoriesLoadError, setCategoriesLoadError] = useState<
+    string | null
+  >(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -280,8 +288,14 @@ export default function CategoriesPage() {
       setCategories(categoryData);
       setTransactions(transactionData);
       setWallets(walletData);
+      setCategoriesLoadError(null);
     } catch (error) {
       console.error("[CategoriesPage] reloadData failed:", error);
+      setCategoriesLoadError(
+        "Không thể tải dữ liệu danh mục. Vui lòng tải lại trang.",
+      );
+    } finally {
+      setIsLoadingCategories(false);
     }
   }, []);
 
@@ -846,26 +860,57 @@ export default function CategoriesPage() {
             );
           })}
 
-          {filteredCategories.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
-              <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
+          {/* FINANCE-DATA-1B: an initial read failure must not present as
+              "Không tìm thấy danh mục" with a misleading "clear filter" CTA. */}
+          {filteredCategories.length === 0 && isLoadingCategories && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-400">
                 <Folder size={22} />
               </div>
-              <h3 className="mt-4 text-base font-black text-slate-800">
-                Không tìm thấy danh mục
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Đang tải dữ liệu danh mục...
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Thử đổi từ khóa hoặc xóa bộ lọc hiện tại.
-              </p>
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="mt-4 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-              >
-                Xóa bộ lọc
-              </button>
             </div>
           )}
+
+          {filteredCategories.length === 0 &&
+            !isLoadingCategories &&
+            categoriesLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+                <div className="flex size-14 items-center justify-center rounded-3xl bg-rose-100 text-rose-500">
+                  <Folder size={22} />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-700">
+                  Không thể tải dữ liệu danh mục
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {categoriesLoadError}
+                </p>
+              </div>
+            )}
+
+          {filteredCategories.length === 0 &&
+            !isLoadingCategories &&
+            !categoriesLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+                <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
+                  <Folder size={22} />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-800">
+                  Không tìm thấy danh mục
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Thử đổi từ khóa hoặc xóa bộ lọc hiện tại.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-4 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  Xóa bộ lọc
+                </button>
+              </div>
+            )}
         </div>
       </section>
 

@@ -175,6 +175,12 @@ const getSupabaseSavingAmountForGoal = (
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  // FINANCE-DATA-1B: "Chưa có mục tiêu nào" must not render before a load
+  // has actually SUCCEEDED — an initial read failure (getGoals now
+  // rejects instead of silently resolving []) would otherwise look
+  // identical to a genuinely goal-less account.
+  const [isLoadingGoals, setIsLoadingGoals] = useState(true);
+  const [goalsLoadError, setGoalsLoadError] = useState<string | null>(null);
   const [savings, setSavings] = useState<SavingAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -215,8 +221,12 @@ export default function GoalsPage() {
           ),
         );
       }
+      setGoalsLoadError(null);
     } catch (error) {
       console.error("[GoalsPage] reloadData failed:", error);
+      setGoalsLoadError("Không thể tải dữ liệu mục tiêu. Vui lòng tải lại trang.");
+    } finally {
+      setIsLoadingGoals(false);
     }
   }
 
@@ -801,8 +811,33 @@ export default function GoalsPage() {
             );
           })}
 
+          {/* FINANCE-DATA-1B: an initial read failure must not present as
+              "Chưa có mục tiêu nào". */}
+          {goals.length === 0 && isLoadingGoals && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
+                <Target size={24} className="text-slate-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Đang tải dữ liệu mục tiêu...
+              </h3>
+            </div>
+          )}
+
+          {goals.length === 0 && !isLoadingGoals && goalsLoadError && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
+                <Target size={24} className="text-rose-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Không thể tải dữ liệu mục tiêu
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">{goalsLoadError}</p>
+            </div>
+          )}
+
           {/* Empty state */}
-          {goals.length === 0 && (
+          {goals.length === 0 && !isLoadingGoals && !goalsLoadError && (
             <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
                 <Target size={24} className="text-blue-400" />

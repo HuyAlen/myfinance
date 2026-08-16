@@ -177,6 +177,16 @@ const REALTIME_REFRESH_DEBOUNCE_MS = 100;
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<WalletType[]>([]);
+  // FINANCE-DATA-1B: `wallets` starts at [] the same as a genuine
+  // zero-wallet account, so the empty-state CTA below must not trust
+  // `wallets.length === 0` until a load has actually SUCCEEDED at least
+  // once — otherwise an initial read failure (getWallets now rejects
+  // instead of silently resolving []) would render "Chưa có ví tiền nào"
+  // as if it were a validated conclusion.
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
+  const [walletsLoadError, setWalletsLoadError] = useState<string | null>(
+    null,
+  );
   const [currentMonthTransactions, setCurrentMonthTransactions] = useState<
     Transaction[]
   >([]);
@@ -212,6 +222,11 @@ export default function WalletsPage() {
     // state setter below only runs after a successful resolve, so a
     // caught failure simply leaves the previously-loaded wallets/counts
     // on screen instead of clearing them to an empty list.
+    // FINANCE-DATA-1B: `walletsLoadError` is cleared on success (so a
+    // later successful reload after a transient failure doesn't leave a
+    // stale error around) and set — WITHOUT touching `wallets` — on
+    // failure, so the empty-state gate below can tell "genuinely no
+    // wallets" apart from "we don't actually know yet".
     try {
       const { startDate, endDate } = getCurrentMonthRange();
       const [w, monthTxns, txnLinks, forexLinks] = await Promise.all([
@@ -238,8 +253,14 @@ export default function WalletsPage() {
       setWallets(w);
       setCurrentMonthTransactions(monthTxns);
       setWalletLinkCounts(counts);
+      setWalletsLoadError(null);
     } catch (error) {
       console.error("[WalletsPage] reloadData failed:", error);
+      setWalletsLoadError(
+        "Không thể tải dữ liệu ví. Vui lòng tải lại trang.",
+      );
+    } finally {
+      setIsLoadingWallets(false);
     }
   }, []);
 
@@ -983,27 +1004,60 @@ export default function WalletsPage() {
             );
           })}
 
-          {/* Empty state */}
-          {spendableWallets.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
-                <Wallet size={24} className="text-blue-400" />
+          {/* FINANCE-DATA-1B: three distinct states share this slot — an
+              initial read failure must render neither the loading nor the
+              legitimate "Chưa có ví tiền nào" (add your first wallet) CTA,
+              since neither is true when we simply don't know yet. */}
+          {spendableWallets.length === 0 && isLoadingWallets && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
+                <Wallet size={24} className="text-slate-400" />
               </div>
               <h3 className="mt-4 text-base font-black text-slate-700">
-                Chưa có ví tiền nào
+                Đang tải dữ liệu ví...
               </h3>
-              <p className="mt-2 text-sm text-slate-400">
-                Bắt đầu bằng cách thêm ví đầu tiên của bạn.
-              </p>
-              <button
-                onClick={openCreateForm}
-                className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
-              >
-                <Plus size={15} />
-                Thêm ví tiền
-              </button>
             </div>
           )}
+
+          {spendableWallets.length === 0 &&
+            !isLoadingWallets &&
+            walletsLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+                <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
+                  <Wallet size={24} className="text-rose-400" />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-700">
+                  Không thể tải dữ liệu ví
+                </h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  {walletsLoadError}
+                </p>
+              </div>
+            )}
+
+          {/* Empty state */}
+          {spendableWallets.length === 0 &&
+            !isLoadingWallets &&
+            !walletsLoadError && (
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+                <div className="flex size-16 items-center justify-center rounded-3xl bg-blue-100">
+                  <Wallet size={24} className="text-blue-400" />
+                </div>
+                <h3 className="mt-4 text-base font-black text-slate-700">
+                  Chưa có ví tiền nào
+                </h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  Bắt đầu bằng cách thêm ví đầu tiên của bạn.
+                </p>
+                <button
+                  onClick={openCreateForm}
+                  className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
+                >
+                  <Plus size={15} />
+                  Thêm ví tiền
+                </button>
+              </div>
+            )}
         </div>
       </section>
 

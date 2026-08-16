@@ -452,6 +452,12 @@ export default function Header({
   const [appData, setAppData] = useState<AppData>(EMPTY);
   const [notifList, setNotifList] = useState<NotificationItem[]>([]);
   const loadedRef = useRef(false);
+  // FINANCE-DATA-1B: appData/notifList start empty until the idle load
+  // below succeeds. "Không có thông báo mới" / "Không tìm thấy kết quả"
+  // are visible zero-claims — without this flag they'd render the same
+  // way whether the load genuinely found nothing or simply never
+  // succeeded, so the two spots that show them check this first.
+  const [hasHeaderDataLoaded, setHasHeaderDataLoaded] = useState(false);
 
   // Derived
   const pageMeta = PAGE_META[pathname] ?? { title: "MyFinance", desc: "" };
@@ -521,6 +527,7 @@ export default function Header({
               read: readIds.has(notification.id),
             })),
           );
+          setHasHeaderDataLoaded(true);
         } catch (error) {
           console.error("[Header] idle data load failed:", error);
         }
@@ -857,6 +864,11 @@ export default function Header({
                     Enter — mở kết quả đầu tiên · Esc — đóng
                   </div>
                 </>
+              ) : !hasHeaderDataLoaded ? (
+                <div className="flex flex-col items-center py-8 text-sm">
+                  <Search size={24} className="mb-2 text-slate-200" />
+                  <p className="text-slate-400">Đang tải dữ liệu tìm kiếm...</p>
+                </div>
               ) : (
                 <div className="flex flex-col items-center py-8 text-sm">
                   <Search size={24} className="mb-2 text-slate-200" />
@@ -1298,6 +1310,13 @@ export default function Header({
                           </button>
                         );
                       })
+                    ) : !hasHeaderDataLoaded ? (
+                      <div className="flex flex-col items-center py-10">
+                        <Bell size={28} className="mb-2 text-slate-200" />
+                        <p className="text-sm text-slate-400">
+                          Đang tải thông báo...
+                        </p>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center py-10">
                         <Bell size={28} className="mb-2 text-slate-200" />
