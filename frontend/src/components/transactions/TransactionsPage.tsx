@@ -9,6 +9,12 @@ import {
   hasTransactionsContext,
   parseTransactionsContext,
 } from "@/src/lib/navigation/financeNavigation";
+import {
+  getSavingTransferKind,
+  isInternalTransferTransaction,
+  normalizeTransactionNote,
+} from "@/src/lib/transactions/transactionClassification";
+import { resolveTransactionsEffectiveRange } from "@/src/lib/transactions/transactionsPeriod";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -127,19 +133,15 @@ function createEmptyForm(): FormState {
 }
 
 /**
- * Derives the [start, end] day-string bounds (inclusive, "YYYY-MM-DD") of a
- * "YYYY-MM" calendar month using local Date components — never UTC — so the
- * range lines up with how transaction dates are stored and compared.
+ * Vietnamese label for an explicit drill-down date range, matching
+ * DateFilterProvider's own "custom" mode label format (dd/mm/yyyy —
+ * dd/mm/yyyy) so the header reads consistently whether the range came
+ * from the global custom picker or from a contextual drill-down link.
  */
-function getSelectedMonthRange(selectedMonth: string) {
-  const [yearStr, monthStr] = selectedMonth.split("-");
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const startDate = `${yearStr}-${monthStr}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDate = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
-
-  return { startDate, endDate };
+function formatDrillDownRangeLabel(startDate: string, endDate: string) {
+  const toDisplay = (isoDate: string) =>
+    isoDate.split("-").reverse().join("/");
+  return `${toDisplay(startDate)} - ${toDisplay(endDate)}`;
 }
 
 type ForexUnifiedTransaction = Transaction & {
@@ -384,109 +386,6 @@ function getCompactCategoryName(category?: Category) {
   };
 }
 
-function normalizeTransactionNote(note: string) {
-  return note
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d");
-}
-
-function getTransactionTransferReferenceType(transaction: Transaction) {
-  const metadata = transaction as Transaction & {
-    transferReferenceType?: string;
-    transfer_reference_type?: string;
-  };
-
-  return String(
-    metadata.transferReferenceType ?? metadata.transfer_reference_type ?? "",
-  )
-    .trim()
-    .toLowerCase();
-}
-
-function getTransactionSourceType(transaction: Transaction) {
-  const metadata = transaction as Transaction & {
-    sourceType?: string;
-    source_type?: string;
-  };
-
-  return String(metadata.sourceType ?? metadata.source_type ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function getTransactionDestinationType(transaction: Transaction) {
-  const metadata = transaction as Transaction & {
-    destinationType?: string;
-    destination_type?: string;
-  };
-
-  return String(metadata.destinationType ?? metadata.destination_type ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function getSavingTransferKind(
-  transaction: Transaction,
-): "deposit" | "withdraw" | "close" | null {
-  const referenceType = getTransactionTransferReferenceType(transaction);
-  const sourceType = getTransactionSourceType(transaction);
-  const destinationType = getTransactionDestinationType(transaction);
-
-  if (transaction.type === "transfer" && referenceType === "saving") {
-    if (sourceType === "wallet" && destinationType === "saving")
-      return "deposit";
-    if (sourceType === "saving" && destinationType === "wallet")
-      return "withdraw";
-  }
-
-  const normalizedNote = normalizeTransactionNote(transaction.note);
-
-  if (
-    normalizedNote.includes("tat toan tiet kiem") ||
-    normalizedNote.startsWith("tat toan")
-  ) {
-    return "close";
-  }
-
-  if (
-    normalizedNote.startsWith("rut tu tiet kiem") ||
-    normalizedNote.startsWith("rut tien tu tiet kiem") ||
-    normalizedNote.startsWith("rut tien")
-  ) {
-    return "withdraw";
-  }
-
-  if (
-    normalizedNote.startsWith("nap vao tiet kiem") ||
-    normalizedNote.startsWith("gui vao tiet kiem") ||
-    normalizedNote.startsWith("nap them vao tiet kiem") ||
-    normalizedNote.startsWith("nap them") ||
-    normalizedNote.startsWith("gui tiet kiem")
-  ) {
-    return "deposit";
-  }
-
-  return null;
-}
-
-function isInternalTransferTransaction(transaction: Transaction) {
-  if (transaction.type === "transfer") return true;
-
-  const savingKind = getSavingTransferKind(transaction);
-  if (savingKind) return true;
-
-  const normalizedNote = normalizeTransactionNote(transaction.note);
-
-  return (
-    normalizedNote.startsWith("chuyen tien") ||
-    normalizedNote.includes("chuyen vi") ||
-    normalizedNote.includes("noi bo")
-  );
-}
-
 function getTransactionDisplayType(transaction: Transaction) {
   if (isForexUnifiedTransaction(transaction)) return "forex";
   return isInternalTransferTransaction(transaction)
@@ -644,7 +543,33 @@ function getVisiblePageNumbers(totalPages: number, currentPage: number) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
-  const { selectedMonth } = useDateFilter();
+  const { dateRange, filterLabel } = useDateFilter();
+  // TXN-CORRECTNESS-1: read before reloadData (below) so its identity can
+  // depend on the resolved effective range rather than a locally
+  // re-derived, month-only range that used to ignore quarter/year/custom
+  // mode and any contextual drill-down link.
+  const searchParams = useSearchParams();
+  const urlTransactionsContext = useMemo(
+    () =>
+      hasTransactionsContext(searchParams)
+        ? parseTransactionsContext(searchParams)
+        : null,
+    [searchParams],
+  );
+  const effectiveRange = useMemo(
+    () => resolveTransactionsEffectiveRange(dateRange, urlTransactionsContext),
+    [dateRange, urlTransactionsContext],
+  );
+  const effectiveRangeLabel = useMemo(
+    () =>
+      urlTransactionsContext?.dateFrom && urlTransactionsContext?.dateTo
+        ? formatDrillDownRangeLabel(
+            urlTransactionsContext.dateFrom,
+            urlTransactionsContext.dateTo,
+          )
+        : filterLabel,
+    [urlTransactionsContext, filterLabel],
+  );
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
   const [forexCashTransactions, setForexCashTransactions] = useState<
@@ -723,7 +648,7 @@ export default function TransactionsPage() {
   // transactions/categories/wallets). Fixed uniformly across all five
   // branches: only set state on fulfillment, always log on rejection.
   const reloadData = useCallback(async () => {
-    const { startDate, endDate } = getSelectedMonthRange(selectedMonth);
+    const { startDate, endDate } = effectiveRange;
     const [
       txnsResult,
       forexAccountsResult,
@@ -791,13 +716,13 @@ export default function TransactionsPage() {
         walletsResult.reason,
       );
     }
-  }, [selectedMonth, toast]);
+  }, [effectiveRange, toast]);
 
   // ── Reload coordinator ──────────────────────────────────────────────────
-  // `reloadData`'s identity changes with `selectedMonth`. `latestReloadDataRef`
+  // `reloadData`'s identity changes with `effectiveRange`. `latestReloadDataRef`
   // always points at the current one so a reload that was already in flight
-  // when the month changed still resolves its trailing/pending run against
-  // the newly selected month, never a stale one.
+  // when the effective period changed still resolves its trailing/pending
+  // run against the newly resolved period, never a stale one.
   const latestReloadDataRef = useRef(reloadData);
   useEffect(() => {
     latestReloadDataRef.current = reloadData;
@@ -846,12 +771,13 @@ export default function TransactionsPage() {
     };
   }, []);
 
-  // Initial load and every month change trigger an immediate (non-debounced)
-  // reload — Transactions must follow the selected month exactly, unlike
-  // Dashboard's year-cache.
+  // Initial load and every effective-period change (global filter mode/value
+  // change, or a contextual drill-down navigation) trigger an immediate
+  // (non-debounced) reload — Transactions must follow the effective period
+  // exactly, unlike Dashboard's year-cache.
   useEffect(() => {
     void runReload();
-  }, [selectedMonth, runReload]);
+  }, [effectiveRange, runReload]);
 
   useEffect(() => {
     return () => {
@@ -898,7 +824,21 @@ export default function TransactionsPage() {
 
   const filtered = useMemo(() => {
     return unifiedTransactions.filter((t) => {
-      if (!t.date.startsWith(selectedMonth)) return false;
+      // TXN-CORRECTNESS-1: defensive re-check against the actual effective
+      // period (not a hardcoded "month" prefix match) — the fetch is
+      // already scoped to this same range, but keeping this guard means a
+      // stale-period response arriving after a newer effectiveRange has
+      // already been requested (e.g. an in-flight reload racing a rapid
+      // period switch) can never display as if it belonged to the new
+      // period; it's simply filtered out until the new period's own fetch
+      // resolves.
+      const transactionDay = String(t.date ?? "").slice(0, 10);
+      if (
+        transactionDay < effectiveRange.startDate ||
+        transactionDay > effectiveRange.endDate
+      ) {
+        return false;
+      }
       const cat = categoryById.get(t.categoryId);
       const wal = walletById.get(t.walletId);
       const dstWal = t.transferToWalletId
@@ -930,9 +870,8 @@ export default function TransactionsPage() {
         .toLowerCase();
       if (typeFilter !== "all" && displayType !== typeFilter) return false;
       if (keyword && !searchText.includes(keyword.toLowerCase())) return false;
-      const transactionDate = String(t.date ?? "").slice(0, 10);
-      if (dateFrom && transactionDate < dateFrom) return false;
-      if (dateTo && transactionDate > dateTo) return false;
+      if (dateFrom && transactionDay < dateFrom) return false;
+      if (dateTo && transactionDay > dateTo) return false;
       if (
         walletFilter &&
         t.walletId !== walletFilter &&
@@ -947,7 +886,7 @@ export default function TransactionsPage() {
     });
   }, [
     unifiedTransactions,
-    selectedMonth,
+    effectiveRange,
     categoryById,
     walletById,
     keyword,
@@ -1096,16 +1035,19 @@ export default function TransactionsPage() {
   const displayRangeStart = sorted.length === 0 ? 0 : precedingCount + 1;
   const displayRangeEnd = precedingCount + visibleCount;
 
-  // Reset to page 1 whenever the month changes (also clears any stale
-  // selection from a different month's data set). Tracked with useState
-  // (not useRef) for the "previous value" comparison: React's ref-safety
-  // lint rule disallows reading/writing ref.current during render, and
-  // calling setState conditionally during render is the React-documented
-  // alternative — it still resolves within the same render pass, with no
-  // extra commit versus an effect-based reset.
-  const [prevSelectedMonth, setPrevSelectedMonth] = useState(selectedMonth);
-  if (prevSelectedMonth !== selectedMonth) {
-    setPrevSelectedMonth(selectedMonth);
+  // Reset to page 1 whenever the effective period changes (global filter
+  // mode/value change, or a contextual drill-down navigation — also clears
+  // any stale selection from a different period's data set). Tracked with
+  // useState (not useRef) for the "previous value" comparison: React's
+  // ref-safety lint rule disallows reading/writing ref.current during
+  // render, and calling setState conditionally during render is the
+  // React-documented alternative — it still resolves within the same
+  // render pass, with no extra commit versus an effect-based reset.
+  const effectiveRangeKey = `${effectiveRange.startDate}_${effectiveRange.endDate}`;
+  const [prevEffectiveRangeKey, setPrevEffectiveRangeKey] =
+    useState(effectiveRangeKey);
+  if (prevEffectiveRangeKey !== effectiveRangeKey) {
+    setPrevEffectiveRangeKey(effectiveRangeKey);
     setCurrentPage(0);
     setSelectedIds(new Set());
   }
@@ -1320,7 +1262,6 @@ export default function TransactionsPage() {
 
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const appliedContextKeyRef = useRef<string | null>(null);
 
   // Contextual drill-down from Budgets/Wallets/Dashboard/Header: seed the
@@ -1757,8 +1698,9 @@ export default function TransactionsPage() {
               Giao dịch
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Theo dõi các khoản thu, chi và chuyển tiền trong tháng{" "}
-              {selectedMonth}.
+              {hasActiveFilters
+                ? `Đang lọc kết quả — số liệu bên dưới phản ánh danh sách đã lọc, không phải toàn bộ ${effectiveRangeLabel}.`
+                : `Theo dõi các khoản thu, chi và chuyển tiền trong ${effectiveRangeLabel}.`}
             </p>
           </div>
 
@@ -1784,7 +1726,7 @@ export default function TransactionsPage() {
             label="Thu nhập"
             value={formatVND(totalIncome)}
             note={`${cashFlowTransactions.filter((item) => item.type === "income").length} giao dịch`}
-            footerLabel="Dòng tiền tháng này"
+            footerLabel="Dòng tiền kỳ này"
             footerValue={getSignedAmountText(netCashFlow)}
             hideFooterValueOnMobile
             tone="income"
@@ -3266,7 +3208,7 @@ function LiquidityHeroCard({
 
         <div className="min-w-0 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm lg:ml-2">
           <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
-            Dòng tiền tháng này
+            Dòng tiền kỳ này
           </p>
           <p className="mt-2 whitespace-nowrap text-2xl font-black leading-none tabular-nums text-white">
             {getSignedAmountText(netCashFlow)}
@@ -3310,7 +3252,7 @@ function SummaryCard({
   mobileFooterLabel?: string;
   footerValue: string;
   /** For the one footer that pairs a long label with a full VND amount
-   * (Thu nhập's "Dòng tiền tháng này"): that exact figure is already shown,
+   * (Thu nhập's "Dòng tiền kỳ này"): that exact figure is already shown,
    * unabbreviated, as the "Dòng tiền ròng" card's own headline value in the
    * same 2x2 grid, so on mobile we drop the redundant repeat here instead of
    * shrinking the text below a readable size to force it onto one line. */

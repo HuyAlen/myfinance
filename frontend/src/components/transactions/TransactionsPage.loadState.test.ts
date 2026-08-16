@@ -28,7 +28,7 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
     "const reloadData = useCallback(async () => {",
   );
   const reloadEnd = source.indexOf(
-    "}, [selectedMonth, toast]);",
+    "}, [effectiveRange, toast]);",
     reloadStart,
   );
   const reloadSource = source.slice(reloadStart, reloadEnd);
