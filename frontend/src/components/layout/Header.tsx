@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -25,18 +25,19 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
-import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
+import {
+  useRealtime,
+  useRealtimeTable,
+} from "@/src/components/realtime/RealtimeProvider";
 import {
   useDateFilter,
   type DateFilterMode,
 } from "../layout/DateFilterProvider";
 import { signOut } from "@/src/lib/auth";
-import { calculateBudgetSpending } from "@/src/services/finance/financeCalculations";
 import {
-  buildBudgetsHref,
-  buildDebtsHref,
-  buildGoalsHref,
-} from "@/src/lib/navigation/financeNavigation";
+  buildFinanceNotifications,
+  getCurrentLocalMonthKey,
+} from "@/src/lib/notifications/financeNotifications";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 
 import {
@@ -58,6 +59,12 @@ import type {
   Transaction,
   Wallet as WalletType,
 } from "@/src/types/finance";
+
+// NOTIF-FRESHNESS-1: same coalescing window Dashboard/Transactions/Wallets
+// already use for their own realtime-triggered reloads — several
+// independent per-table events from one multi-table write land close
+// together and should fold into a single reload, not one per event.
+const HEADER_REALTIME_REFRESH_DEBOUNCE_MS = 100;
 
 // ─── Page meta ────────────────────────────────────────────────────────────────
 const PAGE_META: Record<string, { title: string; desc: string }> = {
@@ -218,108 +225,25 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
 }
 
 // ─── Build notifications ──────────────────────────────────────────────────────
+// NOTIF-CORRECTNESS-1: the actual rule engine now lives in
+// buildFinanceNotifications (src/lib/notifications/financeNotifications.ts)
+// — a pure, framework-free module that uses each domain's canonical
+// calculation (calculateBudgetSpendingCollection, getGoalEffectiveCurrentAmount,
+// getTotalIncome/getTotalExpense) instead of a second, locally-reimplemented
+// copy that had drifted from them. This wrapper only adds the one field
+// specific to Header's own presentation (`read`, always false here — the
+// caller immediately overwrites it from localStorage, unchanged from before
+// this ticket).
 function buildNotifications(data: AppData): NotificationItem[] {
-  const out: NotificationItem[] = [];
-  const currentMonth = new Date().toISOString().slice(0, 7); // "2026-06"
-
-  // Budget alerts
-  for (const budget of data.budgets.filter((b) => b.month === currentMonth)) {
-    const cat = data.categories.find((c) => c.id === budget.categoryId);
-    const label = cat?.name ?? "Danh mục";
-    const spending = calculateBudgetSpending({
-      budget,
-      transactions: data.transactions,
-      categories: data.categories,
-    });
-    const pct = spending.usagePercent;
-
-    if (pct >= 100) {
-      out.push({
-        id: "bover-" + budget.id,
-        title: "Vượt ngân sách · " + label,
-        body: "Đã chi " + Math.round(pct) + "% ngân sách tháng này.",
-        href: buildBudgetsHref({ budgetId: budget.id }),
-        tone: "warning",
-        read: false,
-      });
-    } else if (pct >= 80) {
-      out.push({
-        id: "bnear-" + budget.id,
-        title: "Gần vượt ngân sách · " + label,
-        body: "Đã dùng " + Math.round(pct) + "% giới hạn tháng này.",
-        href: buildBudgetsHref({ budgetId: budget.id }),
-        tone: "warning",
-        read: false,
-      });
-    }
-  }
-
-  // Goal milestones
-  for (const g of data.goals) {
-    if (g.targetAmount > 0 && g.currentAmount >= g.targetAmount) {
-      out.push({
-        id: "gdone-" + g.id,
-        title: "Mục tiêu hoàn thành · " + g.name,
-        body: "Chúc mừng! Bạn đã đạt được mục tiêu này.",
-        href: buildGoalsHref({ goalId: g.id }),
-        tone: "success",
-        read: false,
-      });
-    } else if (g.targetAmount > 0 && g.currentAmount / g.targetAmount >= 0.75) {
-      out.push({
-        id: "gnear-" + g.id,
-        title: "Sắp đạt mục tiêu · " + g.name,
-        body:
-          Math.round((g.currentAmount / g.targetAmount) * 100) +
-          "% hoàn thành — gần tới đích rồi!",
-        href: buildGoalsHref({ goalId: g.id }),
-        tone: "success",
-        read: false,
-      });
-    }
-  }
-
-  // Debt risk (< 15% paid off)
-  for (const d of data.debts) {
-    const paidPct =
-      d.totalAmount > 0 ? (1 - d.remainingAmount / d.totalAmount) * 100 : 100;
-    if (paidPct < 15 && d.remainingAmount > 0) {
-      out.push({
-        id: "drisk-" + d.id,
-        title: "Nợ chưa thanh toán · " + d.name,
-        body:
-          "Mới hoàn trả " +
-          Math.round(paidPct) +
-          "%. Cân nhắc tăng tốc trả nợ.",
-        href: buildDebtsHref({ debtId: d.id }),
-        tone: "warning",
-        read: false,
-      });
-    }
-  }
-
-  // Negative cash flow this month
-  const thisMonthTx = data.transactions.filter((t) =>
-    t.date.startsWith(currentMonth),
-  );
-  const income = thisMonthTx
-    .filter((t) => t.type === "income")
-    .reduce((s, t) => s + t.amount, 0);
-  const expense = thisMonthTx
-    .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
-  if (thisMonthTx.length > 0 && expense > income) {
-    out.push({
-      id: "cashflow",
-      title: "Dòng tiền âm tháng này",
-      body: "Chi tiêu vượt thu nhập. Kiểm tra lại ngân sách và các khoản chi.",
-      href: "/reports",
-      tone: "warning",
-      read: false,
-    });
-  }
-
-  return out.slice(0, 8);
+  const currentMonth = getCurrentLocalMonthKey();
+  return buildFinanceNotifications({
+    budgets: data.budgets,
+    transactions: data.transactions,
+    categories: data.categories,
+    goals: data.goals,
+    debts: data.debts,
+    currentMonth,
+  }).map((notification) => ({ ...notification, read: false }));
 }
 
 // ─── KindIcon ─────────────────────────────────────────────────────────────────
@@ -448,7 +372,11 @@ export default function Header({
   const [customStart, setCustomStart] = useState(dateRange.startDate);
   const [customEnd, setCustomEnd] = useState(dateRange.endDate);
 
-  // App data (loaded once for search + notifications)
+  // App data (loaded once for search + notifications) — reloadHeaderData
+  // below is the single canonical fetch+build+commit path shared by the
+  // initial idle-deferred load and NOTIF-FRESHNESS-1's realtime-triggered
+  // reconciliation, so there is exactly one place that can ever mutate
+  // appData/notifList/hasHeaderDataLoaded.
   const [appData, setAppData] = useState<AppData>(EMPTY);
   const [notifList, setNotifList] = useState<NotificationItem[]>([]);
   const loadedRef = useRef(false);
@@ -458,6 +386,16 @@ export default function Header({
   // way whether the load genuinely found nothing or simply never
   // succeeded, so the two spots that show them check this first.
   const [hasHeaderDataLoaded, setHasHeaderDataLoaded] = useState(false);
+  // NOTIF-FRESHNESS-1: `loadedRef` above only guards *scheduling* the one
+  // idle-deferred initial load, never reload eligibility itself — a
+  // realtime-triggered reload must remain callable for the component's
+  // entire lifetime. This ref mirror lets the idle callback skip its own
+  // fetch if a realtime-triggered reload already completed first (see the
+  // idle-scheduling effect below) without adding a second piece of state.
+  const hasHeaderDataLoadedRef = useRef(false);
+  useEffect(() => {
+    hasHeaderDataLoadedRef.current = hasHeaderDataLoaded;
+  }, [hasHeaderDataLoaded]);
 
   // Derived
   const pageMeta = PAGE_META[pathname] ?? { title: "MyFinance", desc: "" };
@@ -475,6 +413,140 @@ export default function Header({
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
 
+  // NOTIF-FRESHNESS-1: the one canonical fetch+build+commit function.
+  // FINANCE-DATA-1's readers reject on a genuine query failure instead of
+  // resolving to [] — caught here so a failure never becomes an unhandled
+  // rejection, and so that a LATER failure (after a prior success) simply
+  // leaves appData/notifList/hasHeaderDataLoaded untouched: last-known-good
+  // is preserved, never replaced by a fabricated empty/successful state.
+  // Every field this reads (transactions/budgets/categories/goals/debts)
+  // is refetched together and committed atomically in one setState burst
+  // per field — never a partial/hybrid snapshot.
+  const reloadHeaderData = useCallback(async () => {
+    try {
+      const [
+        transactions,
+        wallets,
+        categories,
+        goals,
+        budgets,
+        debts,
+        investments,
+      ] = await Promise.all([
+        getTransactions(),
+        getWallets(),
+        getCategories(),
+        getGoals(),
+        getBudgets(),
+        getDebts(),
+        getInvestments(),
+      ]);
+      const data: AppData = {
+        transactions,
+        wallets,
+        categories,
+        goals,
+        budgets,
+        debts,
+        investments,
+      };
+      setAppData(data);
+
+      const readIds = readNotificationIds();
+      setNotifList(
+        buildNotifications(data).map((notification) => ({
+          ...notification,
+          read: readIds.has(notification.id),
+        })),
+      );
+      setHasHeaderDataLoaded(true);
+    } catch (error) {
+      console.error("[Header] data load failed:", error);
+    }
+  }, []);
+
+  const reloadHeaderDataRef = useRef(reloadHeaderData);
+  useEffect(() => {
+    reloadHeaderDataRef.current = reloadHeaderData;
+  }, [reloadHeaderData]);
+
+  // Single-flight + trailing-reload coalescing — the same shape Dashboard/
+  // Transactions/Wallets already use for their own realtime reload
+  // coordinators. At most one fetch burst is ever in flight; any refresh
+  // request arriving while one is running folds into exactly one
+  // follow-up run instead of firing an overlapping fetch per event, and no
+  // request is ever silently dropped.
+  const isReloadingHeaderDataRef = useRef(false);
+  const hasPendingHeaderReloadRef = useRef(false);
+  const runHeaderReload = useCallback(async () => {
+    if (isReloadingHeaderDataRef.current) {
+      hasPendingHeaderReloadRef.current = true;
+      return;
+    }
+    isReloadingHeaderDataRef.current = true;
+    try {
+      do {
+        hasPendingHeaderReloadRef.current = false;
+        await reloadHeaderDataRef.current();
+      } while (hasPendingHeaderReloadRef.current);
+    } finally {
+      isReloadingHeaderDataRef.current = false;
+    }
+  }, []);
+
+  const headerRefreshDebounceTimerRef = useRef<number | null>(null);
+  const requestHeaderRefresh = useCallback(() => {
+    if (headerRefreshDebounceTimerRef.current) {
+      window.clearTimeout(headerRefreshDebounceTimerRef.current);
+    }
+    headerRefreshDebounceTimerRef.current = window.setTimeout(() => {
+      headerRefreshDebounceTimerRef.current = null;
+      void runHeaderReload();
+    }, HEADER_REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [runHeaderReload]);
+
+  useEffect(() => {
+    return () => {
+      if (headerRefreshDebounceTimerRef.current) {
+        window.clearTimeout(headerRefreshDebounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Only the tables that can actually change notification output are
+  // registered — wallets/investments/forex data feed the global search
+  // index only and never a notification rule (see
+  // financeNotifications.ts's own dependency audit), so a wallet rename or
+  // investment edit correctly does not trigger a Header reload. Reuses the
+  // existing app-level RealtimeProvider channel — no new Supabase
+  // subscription is created here.
+  useRealtimeTable(
+    ["transactions", "budgets", "categories", "goals", "debts"],
+    requestHeaderRefresh,
+  );
+
+  // NOTIF-FRESHNESS-1 month-rollover: no realtime event fires purely from
+  // the wall clock crossing into a new local calendar month, so an app
+  // left open (or backgrounded) across midnight would otherwise keep
+  // evaluating notifications against the old month indefinitely with zero
+  // DB activity to trigger a refresh. Re-checking on tab foreground is a
+  // one-shot DOM lifecycle event, not a poll/timer — it only runs on an
+  // actual visibility transition, and only requests a refresh when the
+  // local month key has genuinely changed since last checked.
+  const lastKnownMonthKeyRef = useRef(getCurrentLocalMonthKey());
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      const currentMonthKey = getCurrentLocalMonthKey();
+      if (currentMonthKey === lastKnownMonthKeyRef.current) return;
+      lastKnownMonthKeyRef.current = currentMonthKey;
+      requestHeaderRefresh();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [requestHeaderRefresh]);
+
   // Load all data once on mount — feeds the global search index and the
   // notification bell only, neither of which is above-the-fold critical
   // content. Deferred to an idle moment so these 7 parallel full-table
@@ -485,55 +557,15 @@ export default function Header({
     loadedRef.current = true;
 
     runWhenIdle(() => {
-      void (async () => {
-        // FINANCE-DATA-1: these readers now reject on a genuine query
-        // failure instead of silently resolving to [] — caught here so a
-        // failure never becomes an unhandled rejection. Leaves the search
-        // index/notification bell simply un-populated until the next
-        // successful idle load rather than crashing.
-        try {
-          const [
-            transactions,
-            wallets,
-            categories,
-            goals,
-            budgets,
-            debts,
-            investments,
-          ] = await Promise.all([
-            getTransactions(),
-            getWallets(),
-            getCategories(),
-            getGoals(),
-            getBudgets(),
-            getDebts(),
-            getInvestments(),
-          ]);
-          const data: AppData = {
-            transactions,
-            wallets,
-            categories,
-            goals,
-            budgets,
-            debts,
-            investments,
-          };
-          setAppData(data);
-
-          const readIds = readNotificationIds();
-          setNotifList(
-            buildNotifications(data).map((notification) => ({
-              ...notification,
-              read: readIds.has(notification.id),
-            })),
-          );
-          setHasHeaderDataLoaded(true);
-        } catch (error) {
-          console.error("[Header] idle data load failed:", error);
-        }
-      })();
+      // A realtime event can arrive and complete its own reload before
+      // this idle callback ever fires (e.g. a throttled/slow
+      // requestIdleCallback) — skip the redundant fetch if so; any
+      // still-in-flight realtime reload is already coalescing correctly
+      // via runHeaderReload's own single-flight guard regardless.
+      if (hasHeaderDataLoadedRef.current) return;
+      void runHeaderReload();
     });
-  }, []);
+  }, [runHeaderReload]);
 
   // Handlers
   async function handleLogout() {
@@ -693,6 +725,19 @@ export default function Header({
     setMonthOpen(false);
     updateUrlFilter("range", `${customStart}_${customEnd}`);
   }
+
+  // NOTIF-UI-1: Escape closes the notification dropdown, matching the
+  // existing outside-click overlay's scope exactly (only notifOpen, not the
+  // other Header dropdowns) — installed only while open, cleaned up on
+  // close, no permanent global listener.
+  useEffect(() => {
+    if (!notifOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setNotifOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [notifOpen]);
 
   function handleNotifClick(href: string, id: string) {
     const readIds = readNotificationIds();
@@ -1238,9 +1283,9 @@ export default function Header({
                   className="fixed inset-0 z-40"
                   onClick={() => setNotifOpen(false)}
                 />
-                <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
+                <div className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(420px,calc(100vw-24px))]">
                   {/* Header */}
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                     <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                       <p className="text-sm font-black text-slate-900">
                         Thông báo
@@ -1262,7 +1307,7 @@ export default function Header({
                   </div>
 
                   {/* List */}
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-105 overflow-y-auto">
                     {notifList.length > 0 ? (
                       notifList.map((n) => {
                         const dot =
@@ -1283,13 +1328,13 @@ export default function Header({
                             key={n.id}
                             onClick={() => handleNotifClick(n.href, n.id)}
                             className={
-                              "flex w-full items-start gap-3 border-b border-slate-50 px-4 py-3 text-left transition hover:bg-slate-50 " +
+                              "flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition hover:bg-slate-50 " +
                               bg
                             }
                           >
                             <span
                               className={
-                                "mt-1.5 size-2 shrink-0 rounded-full " +
+                                "mt-2 size-2 shrink-0 rounded-full " +
                                 dot +
                                 (n.read ? " opacity-30" : "")
                               }
@@ -1297,13 +1342,13 @@ export default function Header({
                             <div className="min-w-0 flex-1">
                               <p
                                 className={
-                                  "text-xs font-bold " +
-                                  (n.read ? "text-slate-400" : "text-slate-800")
+                                  "text-sm font-semibold leading-5 " +
+                                  (n.read ? "text-slate-500" : "text-slate-800")
                                 }
                               >
                                 {n.title}
                               </p>
-                              <p className="mt-0.5 text-[11px] leading-4 text-slate-400">
+                              <p className="mt-1 text-[13px] leading-5 text-slate-500">
                                 {n.body}
                               </p>
                             </div>

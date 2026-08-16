@@ -29,8 +29,10 @@ describe("Header distinguishes an unloaded search index/notification list from a
     );
   });
 
-  it("the idle load sets hasHeaderDataLoaded only on success", () => {
-    const start = source.indexOf("runWhenIdle(() => {");
+  it("reloadHeaderData (the shared load/reload function used by both the initial idle load and NOTIF-FRESHNESS-1's realtime reconciliation) sets hasHeaderDataLoaded only on success", () => {
+    const start = source.indexOf(
+      "const reloadHeaderData = useCallback(async () => {",
+    );
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf("} catch (error) {", start);
     expect(end).toBeGreaterThan(start);
