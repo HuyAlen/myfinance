@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   beginPeriodGeneration,
+  isActionCenterReady,
   isBudgetAttentionReady,
   isHeroReady,
   isMonthlyProgressReady,
@@ -166,6 +167,92 @@ describe("isMonthlyProgressReady", () => {
     const budgetsLoaded = shouldMarkReady(true, true);
     const cashFlowReady = shouldMarkReady(false, true);
     expect(isMonthlyProgressReady(cashFlowReady, budgetsLoaded)).toBe(true);
+  });
+});
+
+/**
+ * DASHBOARD-ACTIONCENTER-1 Action Center readiness — locks in the exact
+ * six-flag union `generateDashboardActions`' seven rules were traced
+ * against (every Dashboard readiness domain except `forexReady`, which no
+ * rule reads). Deleting any one dependency from `isActionCenterReady`'s
+ * implementation would let one of these tests keep passing on the
+ * remaining "all true" case but fail its own single-flag-false case below.
+ */
+describe("isActionCenterReady", () => {
+  const ALL_READY = [true, true, true, true, true, true] as const;
+
+  it("all six required domains ready: Action Center ready", () => {
+    expect(isActionCenterReady(...ALL_READY)).toBe(true);
+  });
+
+  it("nothing ready yet: not ready", () => {
+    expect(isActionCenterReady(false, false, false, false, false, false)).toBe(
+      false,
+    );
+  });
+
+  it("the original bug scenario — cashFlow and budgets ready, net worth/saving-investment/emergency-fund/goals still pending: not ready", () => {
+    expect(isActionCenterReady(false, true, false, false, false, true)).toBe(
+      false,
+    );
+  });
+
+  it("net worth (isDashboardReady) not ready alone: not ready — debt-ratio/liquidBalance/investment-return actions would be false-omitted", () => {
+    expect(isActionCenterReady(false, true, true, true, true, true)).toBe(
+      false,
+    );
+  });
+
+  it("cashFlowReady not ready alone: not ready — income/expense/over-budget actions would be false-omitted", () => {
+    expect(isActionCenterReady(true, false, true, true, true, true)).toBe(
+      false,
+    );
+  });
+
+  it("savingInvestmentReady not ready alone: not ready — saving-rate/slow-goal actions would be false-omitted", () => {
+    expect(isActionCenterReady(true, true, false, true, true, true)).toBe(
+      false,
+    );
+  });
+
+  it("emergencyFundReady not ready alone: not ready — the emergency-fund action would be false-omitted", () => {
+    expect(isActionCenterReady(true, true, true, false, true, true)).toBe(
+      false,
+    );
+  });
+
+  it("goalsReady not ready alone: not ready — the slow-goal action would be false-omitted", () => {
+    expect(isActionCenterReady(true, true, true, true, false, true)).toBe(
+      false,
+    );
+  });
+
+  it("budgetsLoaded not ready alone: not ready — the over-budget action would be false-omitted", () => {
+    expect(isActionCenterReady(true, true, true, true, true, false)).toBe(
+      false,
+    );
+  });
+
+  it("end-to-end: same-context later failure on one domain preserves last-known-good via shouldMarkReady, Action Center stays ready", () => {
+    const netWorthReady = shouldMarkReady(false, true); // failed this cycle, succeeded before
+    expect(
+      isActionCenterReady(netWorthReady, true, true, true, true, true),
+    ).toBe(true);
+  });
+
+  it("end-to-end: initial load, nothing has resolved yet — not ready, no fabricated partial action set", () => {
+    const netWorthReady = shouldMarkReady(false, false);
+    const cashFlowReady = shouldMarkReady(false, false);
+    expect(
+      isActionCenterReady(
+        netWorthReady,
+        cashFlowReady,
+        false,
+        false,
+        false,
+        false,
+      ),
+    ).toBe(false);
   });
 });
 

@@ -110,6 +110,65 @@ export function isMonthlyProgressReady(
 }
 
 /**
+ * DASHBOARD-ACTIONCENTER-1 Action Center Readiness Correctness patch.
+ *
+ * `generateDashboardActions` (financeCalculations.ts) draws from every one
+ * of Dashboard's readiness domains at once — it is a cross-cutting "top
+ * financial issues" summarizer, not a single-card feature. Audited
+ * field-by-field against its actual seven rules:
+ *
+ *   - the "no financial data yet" bootstrap message reads
+ *     transactions/wallets/debts/investments/goals/budgets — every domain
+ *     below;
+ *   - the income/expense/saving-rate action reads `summary.income`/
+ *     `expense` (cashFlowReady) and `summary.savingRate`/`saving`
+ *     (savingInvestmentReady);
+ *   - the debt-ratio action reads `summary.debtRatio`/`totalDebt`
+ *     (isDashboardReady's own netWorth bundle);
+ *   - the emergency-fund action reads `summary.monthlyExpense`/
+ *     `emergencyMonths` (emergencyFundReady) and `summary.liquidBalance`
+ *     (isDashboardReady — it is wallets-derived, one of the exact fields
+ *     isDashboardReady's own doc comment lists);
+ *   - the over-budget action reads `budgets` (budgetsLoaded) and
+ *     `transactions`/`categories` (cashFlowReady — the same reuse
+ *     `isBudgetAttentionReady` already established);
+ *   - the investment-return action reads `summary.investmentReturn`/
+ *     `investmentPL` and `investments.length` (isDashboardReady);
+ *   - the slow-goal action reads `goals` (goalsReady) and `summary.saving`
+ *     (savingInvestmentReady).
+ *
+ * The union of all seven is every one of Dashboard's readiness flags
+ * except `forexReady` — no rule reads a Forex-cash-ledger-derived field.
+ * This happens to be a broad union, but it is the PROVEN one, not an
+ * over-broad shortcut: Action Center genuinely cuts across debt,
+ * investment, goals, budget, cash-flow, and emergency-fund domains
+ * simultaneously, unlike every other single-purpose card above.
+ *
+ * Before this patch, Action Center rendered off `hasFinancialData` (an OR
+ * across the same six raw arrays) — so as soon as ANY one domain had ever
+ * loaded, the whole recommendation set was presented as complete even
+ * while other required domains were still their initial `[]`/unresolved
+ * state, silently omitting (not just deferring) their advice.
+ */
+export function isActionCenterReady(
+  netWorthReady: boolean,
+  cashFlowReady: boolean,
+  savingInvestmentReady: boolean,
+  emergencyFundReady: boolean,
+  goalsReady: boolean,
+  budgetsLoaded: boolean,
+): boolean {
+  return (
+    netWorthReady &&
+    cashFlowReady &&
+    savingInvestmentReady &&
+    emergencyFundReady &&
+    goalsReady &&
+    budgetsLoaded
+  );
+}
+
+/**
  * PERF-3: classifies whether a period (year-scoped) reload targets a
  * different context than the one currently reflected in state.
  *

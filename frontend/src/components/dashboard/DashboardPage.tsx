@@ -21,6 +21,7 @@ import {
 } from "@/src/lib/performance/dashboardPerfDebug";
 import {
   beginPeriodGeneration,
+  isActionCenterReady,
   isBudgetAttentionReady,
   isHeroReady,
   isMonthlyProgressReady,
@@ -3097,6 +3098,25 @@ export default function DashboardPage() {
     cashFlowReady,
   );
 
+  // DASHBOARD-ACTIONCENTER-1:
+  // Action Center (`aiActions`/`priorityActions` below) cuts across every
+  // readiness domain at once — see isActionCenterReady's own doc comment
+  // for the field-by-field trace. Before this, Action Center rendered off
+  // `hasFinancialData` (an OR across the same raw arrays inside
+  // generateDashboardActions), so it could present a partial recommendation
+  // set as complete while wallets/debts/investments/goals/budgets were
+  // still loading — the exact bug F-2 of the FINANCE-DATA-1 Final Re-Audit
+  // found. `forexReady` is deliberately excluded: no Action Center rule
+  // reads a Forex-cash-ledger-derived field.
+  const actionCenterReady = isActionCenterReady(
+    isDashboardReady,
+    cashFlowReady,
+    savingInvestmentReady,
+    emergencyFundReady,
+    goalsReady,
+    budgetsLoaded,
+  );
+
   const upcomingMoneyEvents = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -3356,7 +3376,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {priorityActions.length > 0 ? (
+        {/* DASHBOARD-ACTIONCENTER-1: gated on actionCenterReady — before
+            every required domain (net worth, cash flow, saving/investment,
+            emergency fund, goals, budgets) has loaded at least once,
+            wallets/debts/investments/goals/budgets may still be their
+            initial [] while transactions/budgets already resolved, and
+            generateDashboardActions' own `hasFinancialData` OR-gate would
+            otherwise present that partial input set as a complete,
+            authoritative recommendation list. See isActionCenterReady's
+            doc comment for the full per-rule dependency trace. */}
+        {!actionCenterReady ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+          </div>
+        ) : priorityActions.length > 0 ? (
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
             {priorityActions.map((action, index) => (
               <ActionCard
