@@ -71,7 +71,83 @@ describe("ConfirmDialog re-entry guard (TXN-FLOW-1)", () => {
     );
   });
 
-  it("no useEffect was added to synchronize the guard — it is set/cleared directly inside the event handler", () => {
-    expect(source).not.toContain("useEffect");
+  it("the re-entry guard itself is set/cleared directly inside handleConfirm, not synchronized via an effect (TXN-UX-1 later adds an unrelated useEffect for Escape/focus support, scoped to the Escape/initial-focus concern only)", () => {
+    const start = source.indexOf("async function handleConfirm() {");
+    const end = source.indexOf("return (", start);
+    const fnSource = source.slice(start, end);
+    expect(fnSource).not.toContain("useEffect");
+  });
+});
+
+/**
+ * TXN-UX-1 — ConfirmDialog Dialog Semantics & Escape (F-12).
+ *
+ * Shared across 7 consumer pages (Budgets, Categories, Debts, Goals,
+ * Investments, Settings, Transactions) — every addition here must remain
+ * purely additive (ARIA attributes, an Escape listener, a focus ref) so
+ * none of those callers need any change.
+ */
+describe("ConfirmDialog dialog semantics and Escape (TXN-UX-1)", () => {
+  const source = readFileSync(
+    path.resolve(__dirname, "ConfirmDialog.tsx"),
+    "utf8",
+  );
+  const normalized = source.replace(/\s+/g, " ");
+
+  it("the panel exposes role=dialog, aria-modal=true, and is labelled by the visible title via a stable useId()", () => {
+    expect(source).toContain("const titleId = useId();");
+    expect(normalized).toContain('role="dialog"');
+    expect(normalized).toContain('aria-modal="true"');
+    expect(normalized).toContain("aria-labelledby={titleId}");
+    expect(normalized).toContain('<h3 id={titleId}');
+  });
+
+  it("Escape is installed only while a confirmation is pending (keyed on `action`) and cleaned up on close", () => {
+    const start = source.indexOf("if (!action) return;");
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf("}, [action]);", start);
+    expect(end).toBeGreaterThan(start);
+    const effectSource = source.slice(start, end);
+
+    expect(effectSource).toContain('if (event.key !== "Escape") return;');
+    expect(normalized).toContain('document.addEventListener("keydown", handleKeyDown);');
+    expect(normalized).toContain(
+      'return () => document.removeEventListener("keydown", handleKeyDown);',
+    );
+  });
+
+  it("Escape while idle behaves like Cancel (calls the latest onCancel via a ref, never a stale closure)", () => {
+    const start = source.indexOf("if (!action) return;");
+    const end = source.indexOf("}, [action]);", start);
+    const effectSource = source.slice(start, end);
+    expect(effectSource).toContain("onCancelRef.current();");
+  });
+
+  it("Escape while isConfirming is ignored — cannot bypass the already-disabled Cancel/Confirm buttons mid-mutation", () => {
+    const start = source.indexOf("if (!action) return;");
+    const end = source.indexOf("}, [action]);", start);
+    const effectSource = source.slice(start, end);
+
+    const guardIdx = effectSource.indexOf("if (isConfirmingRef.current) return;");
+    const cancelCallIdx = effectSource.indexOf("onCancelRef.current();");
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(cancelCallIdx).toBeGreaterThan(guardIdx);
+  });
+
+  it("the onCancel ref is refreshed in its own effect, not mutated during render (react-hooks/refs safety)", () => {
+    const start = source.indexOf("const onCancelRef = useRef(onCancel);");
+    expect(start).toBeGreaterThan(-1);
+    const nextRegion = source.slice(start, start + 120);
+    const normalizedRegion = nextRegion.replace(/\s+/g, " ");
+    expect(normalizedRegion).toContain(
+      "useEffect(() => { onCancelRef.current = onCancel; });",
+    );
+  });
+
+  it("initial focus lands on the dialog panel (tabIndex={-1}), not automatically on the destructive Confirm button", () => {
+    expect(source).toContain("const panelRef = useRef<HTMLDivElement>(null);");
+    expect(source).toContain("panelRef.current?.focus();");
+    expect(normalized).toContain("ref={panelRef}");
+    expect(normalized).toContain("tabIndex={-1}");
   });
 });

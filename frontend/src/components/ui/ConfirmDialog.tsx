@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export type PendingConfirm = {
   title?: string;
@@ -29,6 +29,37 @@ export default function ConfirmDialog({
   // effect is needed to keep it in sync with `action` changing.
   const [isConfirming, setIsConfirming] = useState(false);
   const isConfirmingRef = useRef(false);
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Always call the latest onCancel without needing it in the Escape
+  // effect's dependency array (avoids reinstalling that listener on every
+  // render just because the parent passed a fresh inline callback). The
+  // ref is updated in its own effect, not during render, per
+  // react-hooks/refs.
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  });
+
+  // TXN-UX-1: installed only while a confirmation is pending, cleaned up
+  // when it closes — no permanent global listener. Escape while idle
+  // behaves exactly like clicking Cancel; Escape while `isConfirming` is
+  // ignored, matching the already-disabled Cancel button (a mutation is
+  // in flight — the same interaction contract for mouse and keyboard).
+  useEffect(() => {
+    if (!action) return;
+    panelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      if (isConfirmingRef.current) return;
+      onCancelRef.current();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [action]);
 
   if (!action) return null;
 
@@ -47,8 +78,15 @@ export default function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-        <h3 className="text-lg font-bold text-slate-900">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl outline-none"
+      >
+        <h3 id={titleId} className="text-lg font-bold text-slate-900">
           {action.title || "Xác nhận"}
         </h3>
 

@@ -46,9 +46,10 @@ describe("TransactionsPage Create/Edit modal body scrolls on mobile (TXN-MOBILE-
     expect(formOpenTag).toContain("flex-1");
   });
 
-  it("does not touch the modal panel's own outer overflow-hidden (a different, legitimate boundary clip, not the scroll bug)", () => {
-    expect(source).toContain(
-      'className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"',
+  it("does not touch the modal panel's own outer overflow-hidden (a different, legitimate boundary clip, not the scroll bug) — TXN-UX-1 added dialog-semantics attributes to this same element, so the class list is checked independent of attribute order", () => {
+    const normalized = source.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      'className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl outline-none sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"',
     );
   });
 

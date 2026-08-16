@@ -19,6 +19,7 @@ import {
   isSessionStillCurrent,
   isSubmittingThisSession,
 } from "@/src/lib/transactions/mutationSession";
+import { matchesSearchQuery } from "@/src/lib/transactions/transactionSearch";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -904,11 +905,12 @@ export default function TransactionsPage() {
         typeLabel,
         String(t.amount),
         formatVND(t.amount),
-      ]
-        .join(" ")
-        .toLowerCase();
+      ].join(" ");
       if (typeFilter !== "all" && displayType !== typeFilter) return false;
-      if (keyword && !searchText.includes(keyword.toLowerCase())) return false;
+      // TXN-UX-1: diacritic-insensitive on both sides — a plain-ASCII
+      // query like "rut tien" must match "Rút tiền mặt tại ATM" without
+      // the stored/displayed text itself ever changing.
+      if (!matchesSearchQuery(searchText, keyword)) return false;
       if (dateFrom && transactionDay < dateFrom) return false;
       if (dateTo && transactionDay > dateTo) return false;
       if (
@@ -1299,6 +1301,46 @@ export default function TransactionsPage() {
 
   useQuickActionCreateIntent(openCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
+
+  // TXN-UX-1: minimal keyboard/focus support for the Create/Edit dialog —
+  // installed only while it's open, cleaned up on close (no permanent
+  // global listener). Escape routes through the exact same close path as
+  // the visible Cancel/X button (setIsFormOpen(false)) — TXN-FLOW-1
+  // already keeps Cancel/Close enabled while a submit is pending (the
+  // form-session token, not a disabled Close button, is what protects a
+  // stale completion from touching a newer form), so Escape needs no
+  // special case for isSubmitting either. Initial focus lands on the
+  // dialog panel itself (tabIndex={-1}), not a form field — this app is
+  // mobile-first, and auto-focusing a text/date input would pop the
+  // on-screen keyboard open every time the modal appears. On close, focus
+  // returns to whatever triggered the open, guarded by a liveness check
+  // since a reload after a successful save can remove/reorder rows.
+  const modalPanelRef = useRef<HTMLDivElement>(null);
+  const formTriggerElementRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!isFormOpen) return;
+
+    formTriggerElementRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    modalPanelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setIsFormOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      const trigger = formTriggerElementRef.current;
+      if (trigger && document.contains(trigger)) {
+        trigger.focus();
+      }
+    };
+  }, [isFormOpen]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -1872,6 +1914,7 @@ export default function TransactionsPage() {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="Tìm giao dịch, danh mục, ví tiền..."
+                aria-label="Tìm kiếm giao dịch"
                 className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
               />
               {keyword && (
@@ -1881,6 +1924,7 @@ export default function TransactionsPage() {
                   </span>
                   <button
                     onClick={() => setKeyword("")}
+                    aria-label="Xóa tìm kiếm"
                     className="text-slate-400 transition-colors hover:text-slate-600"
                   >
                     <X size={13} />
@@ -1948,6 +1992,7 @@ export default function TransactionsPage() {
               <button
                 onClick={exportCSV}
                 title="Xuất CSV"
+                aria-label="Xuất CSV"
                 className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
               >
                 <Download size={14} />
@@ -1957,7 +2002,9 @@ export default function TransactionsPage() {
               <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
                 <button
                   onClick={() => setViewMode("table")}
-                  title="Table view"
+                  title="Dạng bảng"
+                  aria-label="Xem dạng bảng"
+                  aria-pressed={viewMode === "table"}
                   className={
                     "rounded-xl p-1.5 transition-all " +
                     (viewMode === "table"
@@ -1969,7 +2016,9 @@ export default function TransactionsPage() {
                 </button>
                 <button
                   onClick={() => setViewMode("timeline")}
-                  title="Timeline view"
+                  title="Dạng dòng thời gian"
+                  aria-label="Xem dạng dòng thời gian"
+                  aria-pressed={viewMode === "timeline"}
                   className={
                     "rounded-xl p-1.5 transition-all " +
                     (viewMode === "timeline"
@@ -2177,6 +2226,7 @@ export default function TransactionsPage() {
                 </button>
                 <button
                   onClick={() => setSelectedIds(new Set())}
+                  aria-label="Bỏ chọn tất cả"
                   className="rounded-xl bg-white/15 p-2 transition-all hover:bg-white/25"
                 >
                   <X size={13} className="text-white" />
@@ -2256,6 +2306,7 @@ export default function TransactionsPage() {
                   }
                   onChange={toggleSelectAll}
                   title="Chọn tất cả giao dịch đã lọc (mọi trang)"
+                  aria-label="Chọn tất cả giao dịch đã lọc (mọi trang)"
                   className="h-4 w-4 cursor-pointer rounded border-slate-300"
                 />
               </div>
@@ -2381,6 +2432,7 @@ export default function TransactionsPage() {
                                   openEditForm(t);
                                   setSwipedId(null);
                                 }}
+                                aria-label="Sửa giao dịch"
                                 className="flex size-10 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 transition-all active:scale-90"
                               >
                                 <Edit3 size={15} />
@@ -2390,6 +2442,7 @@ export default function TransactionsPage() {
                                   handleDelete(t.id);
                                   setSwipedId(null);
                                 }}
+                                aria-label="Xóa giao dịch"
                                 className="flex size-10 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 transition-all active:scale-90"
                               >
                                 <Trash2 size={15} />
@@ -2571,6 +2624,7 @@ export default function TransactionsPage() {
                                   onClick={() => openEditForm(t)}
                                   className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                                   title="Sửa"
+                                  aria-label="Sửa giao dịch"
                                 >
                                   <Edit3 size={13} />
                                 </button>
@@ -2578,6 +2632,7 @@ export default function TransactionsPage() {
                                   onClick={() => handleDelete(t.id)}
                                   className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
                                   title="Xóa"
+                                  aria-label="Xóa giao dịch"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -2741,12 +2796,14 @@ export default function TransactionsPage() {
                         <div className="flex shrink-0 gap-1">
                           <button
                             onClick={() => openEditForm(t)}
+                            aria-label="Sửa giao dịch"
                             className="flex size-7 items-center justify-center rounded-xl border border-transparent text-slate-300 transition-all hover:border-slate-200 hover:text-blue-600"
                           >
                             <Edit3 size={12} />
                           </button>
                           <button
                             onClick={() => handleDelete(t.id)}
+                            aria-label="Xóa giao dịch"
                             className="flex size-7 items-center justify-center rounded-xl border border-transparent text-slate-300 transition-all hover:border-slate-200 hover:text-rose-500"
                           >
                             <Trash2 size={12} />
@@ -2843,21 +2900,36 @@ export default function TransactionsPage() {
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
         <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+          <div
+            ref={modalPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-dialog-title"
+            aria-describedby="transaction-dialog-description"
+            tabIndex={-1}
+            className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl outline-none sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"
+          >
             {/* Modal header */}
             <div className="shrink-0 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl">
+                  <h2
+                    id="transaction-dialog-title"
+                    className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl"
+                  >
                     {form.id ? "Sửa giao dịch" : "Thêm giao dịch"}
                   </h2>
-                  <p className="mt-0.5 max-w-60 text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
+                  <p
+                    id="transaction-dialog-description"
+                    className="mt-0.5 max-w-60 text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs"
+                  >
                     Ghi nhận khoản thu, chi hoặc chuyển tiền giữa các ví.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
+                  aria-label="Đóng"
                   className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95 sm:size-9"
                 >
                   <X size={17} />
@@ -3244,6 +3316,7 @@ function FilterChip({
       {label}
       <button
         onClick={onRemove}
+        aria-label={`Xóa bộ lọc ${label}`}
         className="text-current opacity-60 hover:opacity-100"
       >
         <X size={10} />
