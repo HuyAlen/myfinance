@@ -1165,6 +1165,14 @@ export default function TransactionsPage() {
       variant: "danger",
       confirmText: "Xóa tất cả",
       onConfirm: async () => {
+        // TXN-BULKDELETE-1: each iteration is its own committed RPC — the
+        // batch is NOT one atomic DB transaction. So a later item failing
+        // does not undo earlier successes; local state must be reconciled
+        // against the database for whatever actually committed, not just
+        // for a fully-successful batch.
+        const succeededIds: string[] = [];
+        let failureMessage: string | null = null;
+
         for (const id of idsToDelete) {
           const unifiedTransaction = unifiedTransactions.find(
             (item) => item.id === id,
@@ -1177,12 +1185,10 @@ export default function TransactionsPage() {
               unifiedTransaction.sourceId,
             );
             if (error) {
-              toast({
-                variant: "error",
-                message: "Lỗi xóa giao dịch Forex: " + error,
-              });
-              return;
+              failureMessage = "Lỗi xóa giao dịch Forex: " + error;
+              break;
             }
+            succeededIds.push(id);
             continue;
           }
 
@@ -1193,8 +1199,8 @@ export default function TransactionsPage() {
               -1,
             );
             if (balanceResult.error) {
-              toast({ variant: "error", message: balanceResult.error });
-              return;
+              failureMessage = balanceResult.error;
+              break;
             }
           }
           const { error } = await deleteTransaction(id);
@@ -1202,13 +1208,40 @@ export default function TransactionsPage() {
             if (transaction?.type === "transfer") {
               await applyTransferWalletBalance(transaction, 1);
             }
-            toast({ variant: "error", message: "Lỗi xóa giao dịch: " + error });
-            return;
+            failureMessage = "Lỗi xóa giao dịch: " + error;
+            break;
           }
+          succeededIds.push(id);
         }
-        setSelectedIds(new Set());
+
+        // At least one delete actually committed — reconcile the visible
+        // list and the selection against the database regardless of
+        // whether the rest of the batch succeeded. A successfully-deleted
+        // row must never remain visible or selected just because a later
+        // item in the same batch failed.
+        if (succeededIds.length > 0) {
+          const succeededSet = new Set(succeededIds);
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            for (const succeededId of succeededSet) next.delete(succeededId);
+            return next;
+          });
+          await runReload();
+        }
+
+        if (failureMessage) {
+          const remaining = count - succeededIds.length;
+          toast({
+            variant: "error",
+            message:
+              succeededIds.length > 0
+                ? `Đã xóa ${succeededIds.length} giao dịch. Không thể xóa ${remaining} giao dịch còn lại: ${failureMessage}`
+                : failureMessage,
+          });
+          return;
+        }
+
         toast({ variant: "success", message: `Đã xóa ${count} giao dịch.` });
-        await runReload();
       },
     });
   }
