@@ -38,6 +38,11 @@ import {
   buildFinanceNotifications,
   getCurrentLocalMonthKey,
 } from "@/src/lib/notifications/financeNotifications";
+import {
+  advanceNotificationFirstSeen,
+  sortNotificationsNewestFirst,
+  type NotificationFirstSeenMap,
+} from "@/src/lib/notifications/notificationOrdering";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 
 import {
@@ -305,6 +310,52 @@ function persistNotificationIds(ids: Iterable<string>) {
   }
 }
 
+// NOTIFICATION ORDERING FIX: persists "when did this client first observe
+// this notification id" (see notificationOrdering.ts's own doc comment for
+// why this — not a database created_at, which doesn't exist for these
+// synthesized alerts — is the correct source of truth here). Kept as its
+// own key, separate from NOTIFICATION_STORAGE_KEY (read ids), since read
+// state and ordering are two independent concerns that must never
+// influence each other.
+const NOTIFICATION_ORDER_STORAGE_KEY = "myfinance_notification_first_seen";
+
+function readNotificationFirstSeen(): NotificationFirstSeenMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_ORDER_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const result: NotificationFirstSeenMap = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        result[id] = value;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function persistNotificationFirstSeen(map: NotificationFirstSeenMap) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      NOTIFICATION_ORDER_STORAGE_KEY,
+      JSON.stringify(map),
+    );
+  } catch {
+    // Ignore localStorage errors.
+  }
+}
+
 // ─── Realtime status chip ─────────────────────────────────────────────────────
 function RealtimeStatusChip() {
   const { status, lastSync } = useRealtime();
@@ -452,9 +503,30 @@ export default function Header({
       };
       setAppData(data);
 
+      // NOTIFICATION ORDERING FIX: newest-first, deterministic, and
+      // independent of read/unread state — see notificationOrdering.ts's
+      // own doc comment for why "first observed by this client" is the
+      // correct substitute for a database created_at that doesn't exist
+      // for these synthesized alerts. This is the ONE place the active
+      // notification set is (re)computed — both the initial idle load and
+      // every realtime-triggered reconciliation call this same function —
+      // so there is exactly one source of truth for ordering, never a
+      // second sort applied anywhere else.
+      const freshNotifications = buildNotifications(data);
+      const firstSeen = advanceNotificationFirstSeen(
+        freshNotifications.map((notification) => notification.id),
+        readNotificationFirstSeen(),
+        Date.now(),
+      );
+      persistNotificationFirstSeen(firstSeen);
+      const orderedNotifications = sortNotificationsNewestFirst(
+        freshNotifications,
+        firstSeen,
+      );
+
       const readIds = readNotificationIds();
       setNotifList(
-        buildNotifications(data).map((notification) => ({
+        orderedNotifications.map((notification) => ({
           ...notification,
           read: readIds.has(notification.id),
         })),

@@ -21,7 +21,6 @@ import {
 } from "@/src/lib/performance/dashboardPerfDebug";
 import {
   beginPeriodGeneration,
-  isActionCenterReady,
   isBudgetAttentionReady,
   isMonthlyProgressReady,
   isNetWorthTrendReady,
@@ -31,18 +30,6 @@ import {
 } from "@/src/lib/dashboard/dashboardReadiness";
 import { buildDashboardBudgetAttention } from "@/src/lib/dashboard/dashboardBudgetAttention";
 import {
-  composeIssueIdentity,
-  deriveAggregateIssueKind,
-  selectDashboardPriorityActions,
-  type DashboardActionCandidate,
-} from "@/src/lib/dashboard/dashboardActionPriority";
-import {
-  buildDashboardComparison,
-  isComparisonWindowLoaded,
-  resolveMonthComparisonWindow,
-  type DashboardComparison,
-} from "@/src/lib/dashboard/dashboardPeriodComparison";
-import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -50,10 +37,8 @@ import {
 } from "@/src/lib/navigation/financeNavigation";
 
 import {
-  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
-  Bot,
   Briefcase,
   CalendarClock,
   CreditCard,
@@ -62,10 +47,8 @@ import {
   PiggyBank,
   ShieldCheck,
   Target,
-  TrendingDown,
   TrendingUp,
   Wallet,
-  Zap,
   ReceiptText,
 } from "lucide-react";
 
@@ -86,10 +69,8 @@ import {
   calculateDashboardSummary,
   calculateFinancialStructureSummary,
   calculateRule503020,
-  filterBudgetsByDateRange,
   filterTransactionsByDateRange,
   formatVND,
-  generateDashboardActions,
   getForexAssetValue,
   getForexNetCapital,
   getGoalEffectiveCurrentAmount,
@@ -97,8 +78,6 @@ import {
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
-
-import type { DashboardActionIcon } from "@/src/services/finance/financeCalculations";
 
 import type {
   Budget,
@@ -129,10 +108,8 @@ const CashFlowChart = dynamic(() => import("./CashFlowChart"), {
 });
 
 const DASHBOARD_RUNTIME_COMPONENTS = {
-  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
-  Bot,
   Briefcase,
   CalendarClock,
   CreditCard,
@@ -141,10 +118,8 @@ const DASHBOARD_RUNTIME_COMPONENTS = {
   PiggyBank,
   ShieldCheck,
   Target,
-  TrendingDown,
   TrendingUp,
   Wallet,
-  Zap,
   ReceiptText,
 };
 
@@ -758,10 +733,10 @@ export default function DashboardPage() {
   //                        Forex asset value — the canonical Net Worth asset/
   //                        liability bundle (`calculateDashboardSummary`'s
   //                        netWorth/totalAssets/totalDebt/liquidBalance/
-  //                        debtRatio fields). Gates the Hero-adjacent
-  //                        `hasNoDebt` badge and the `dashboard_critical_ready`
-  //                        metric. Does NOT need transactions/categories/goals —
-  //                        none of the fields it gates read them.
+  //                        debtRatio fields). Gates the Net Worth Hero values
+  //                        and the `dashboard_critical_ready` metric. Does NOT
+  //                        need transactions/categories/goals — none of the
+  //                        fields it gates read them.
   const [isDashboardReady, setIsDashboardReady] = useState(false);
   const [cashFlowReady, setCashFlowReady] = useState(false);
   const [goalsReady, setGoalsReady] = useState(false);
@@ -800,7 +775,7 @@ export default function DashboardPage() {
   // selectedYear in the first place.
   const loadedPeriodYearRef = useRef<number | null>(null);
   const periodRequestIdRef = useRef(0);
-  const { dateRange, selectedYear, filterMode } = useDateFilter();
+  const { dateRange, selectedYear } = useDateFilter();
 
   // PERF-4 Hero Milestone Operation Semantics patch: dashboard_hero_ready
   // is emitted operation-locally (inside reloadData/reloadPeriod, right
@@ -848,11 +823,6 @@ export default function DashboardPage() {
   const filteredTransactions = useMemo(
     () => filterTransactionsByDateRange(transactions, dateRange),
     [transactions, dateRange],
-  );
-
-  const filteredBudgets = useMemo(
-    () => filterBudgetsByDateRange(budgets, dateRange),
-    [budgets, dateRange],
   );
 
   // DASH-POLISH-1: the ONE accepted period transaction subset for the
@@ -1402,7 +1372,7 @@ export default function DashboardPage() {
 
     // NET WORTH group — the full canonical asset/liability bundle behind
     // `calculateDashboardSummary`'s netWorth/totalAssets/totalDebt/
-    // liquidBalance/debtRatio fields (Hero section, `hasNoDebt`). Waits for
+    // liquidBalance/debtRatio fields used by the Net Worth Hero. Waits for
     // literally everything those fields read: wallets, investments, debts,
     // savings, and the complete Forex asset value (accounts+equity+ledger).
     // Never render an incomplete Net Worth — unchanged invariant from
@@ -2518,227 +2488,14 @@ export default function DashboardPage() {
     }, []);
   }, [recentTxns]);
 
-  // ── Financial health score v2 ─────────────────────────────────────────────
-  const healthMetrics = useMemo(() => {
-    const savingScore = Math.max(
-      0,
-      Math.min(Math.round(summary.savingRate * 2.5), 100),
-    );
-    const debtSafetyScore = Math.max(
-      0,
-      Math.min(100 - Math.round(summary.debtRatio), 100),
-    );
-    const goalScore = Math.max(0, Math.min(Math.round(summary.goalScore), 100));
-    const emergencyScore = Math.max(
-      0,
-      Math.min(Math.round((emergencyMonthsExact / 6) * 100), 100),
-    );
-
-    const totalScore = Math.round(
-      savingScore * 0.3 +
-        debtSafetyScore * 0.3 +
-        emergencyScore * 0.25 +
-        goalScore * 0.15,
-    );
-
-    return {
-      savingScore,
-      debtSafetyScore,
-      goalScore,
-      emergencyScore,
-      totalScore,
-    };
-  }, [
-    summary.savingRate,
-    summary.debtRatio,
-    summary.goalScore,
-    emergencyMonthsExact,
-  ]);
-
   // UI-DASH-2: shared with the Budget Attention card below so the two never
   // drift onto different months for the same selected period — both read
   // this same key rather than each recomputing their own. Hoisted above
-  // kpiCards (UI-DASH-3) and aiActions (FINANCE-CORRECTNESS-1) so both can
-  // reuse it too.
+  // kpiCards and the period-aware Dashboard surfaces below can reuse it.
   const dashboardMonthKey = useMemo(
     () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
     [selectedYear, selectedMonth],
   );
-
-  // ── AI actions ────────────────────────────────────────────────────────────
-  // FINANCE-CORRECTNESS-1: explicitly passes dashboardMonthKey (the same
-  // selected-period key Budget Attention/Monthly Progress already use) so
-  // the over-budget advisor action evaluates the Dashboard's SELECTED
-  // month, not generateDashboardActions' own former internal wall-clock
-  // "current month" guess — that guess could silently disagree with every
-  // other period-aware Dashboard surface whenever selectedYear/selectedMonth
-  // isn't the real current month.
-  const aiActions = useMemo(
-    () =>
-      generateDashboardActions({
-        transactions: filteredTransactions,
-        wallets: snapshotWallets,
-        budgets: filteredBudgets,
-        goals: snapshotGoals,
-        debts: snapshotDebts,
-        investments: snapshotInvestments,
-        categories,
-        summary,
-        monthKey: dashboardMonthKey,
-      }),
-    [
-      filteredTransactions,
-      snapshotWallets,
-      filteredBudgets,
-      snapshotGoals,
-      snapshotDebts,
-      snapshotInvestments,
-      categories,
-      summary,
-      dashboardMonthKey,
-    ],
-  );
-  const actionIcons: Record<DashboardActionIcon, React.ReactNode> = {
-    alert: <AlertTriangle size={18} />,
-    savings: <PiggyBank size={18} />,
-    shield: <ShieldCheck size={18} />,
-    debt: <CreditCard size={18} />,
-    bank: <Landmark size={18} />,
-    emergency: <Zap size={18} />,
-    investment: <TrendingDown size={18} />,
-    goal: <Target size={18} />,
-    budget: <AlertTriangle size={18} />,
-  };
-
-  // UI-DASH-3: `domain` (not a rendered icon) so this can be merged with
-  // `aiActions` through the shared, source-agnostic
-  // `selectDashboardPriorityActions` policy below — the actual icon is
-  // resolved once, at final render assembly, via `actionIcons[domain]`.
-  // Semantic Issue Identity patch: each action is given an EXPLICIT
-  // `issueKind` describing WHAT financial condition it reports —
-  // "emergency-fund", "goals-progress", "saving-rate" — never derived
-  // from its ctaRoute. This is what lets this "saving rate is great"
-  // action correctly dedupe against `aiActions`' "saving rate still
-  // needs work" action even though the two point at different pages
-  // (/goals vs /transactions) — they're the same underlying observation,
-  // reported by two sources, and must never both appear together.
-  const v3AdvisorActions = useMemo((): DashboardActionCandidate[] => {
-    const actions: Array<
-      Omit<DashboardActionCandidate, "issueKey" | "isContextual"> & {
-        issueKind: string;
-      }
-    > = [];
-
-    const emergencyTarget = (summary.monthlyExpense || summary.expense) * 3;
-    const emergencyGap = Math.max(
-      emergencyTarget - savingsSnapshot.emergencyFund,
-      0,
-    );
-
-    if (emergencyMonthsExact < 3) {
-      actions.push({
-        domain: "emergency",
-        issueKind: "emergency-fund",
-        title: "Ưu tiên tạo quỹ khẩn cấp",
-        body: `Hiện tại bạn có khoảng ${formatOneDecimal(emergencyMonthsExact)} tháng chi tiêu. Mục tiêu tối thiểu là 3 tháng, cần bổ sung khoảng ${formatVND(emergencyGap)}.`,
-        tone: emergencyMonthsExact < 1 ? "danger" : "warning",
-        ctaLabel: "Tạo mục tiêu",
-        ctaRoute: "/goals",
-      });
-    }
-
-    if (goals.length > 0 && healthMetrics.goalScore < 30) {
-      actions.push({
-        domain: "goal",
-        // Aggregate ("average across ALL goals"), never entity-specific —
-        // stays distinct from aiActions' specific behind-schedule goal
-        // action (which composes "goals-progress:<goalId>").
-        issueKind: "goals-progress",
-        title: "Mục tiêu tài chính đang chậm",
-        body: `${goals.length} mục tiêu hiện đạt trung bình ${summary.goalScore}%. Hãy chọn 1 mục tiêu ưu tiên và đặt khoản góp cố định hàng tháng.`,
-        tone: "warning",
-        ctaLabel: "Xem mục tiêu",
-        ctaRoute: "/goals",
-      });
-    }
-
-    if (summary.savingRate >= 30) {
-      actions.push({
-        domain: "savings",
-        issueKind: "saving-rate",
-        title: "Tỷ lệ tiết kiệm & đầu tư rất tốt",
-        body: `Bạn đang phân bổ ${summary.savingRate}% thu nhập cho tiết kiệm & đầu tư, cao hơn mốc 20%. Có thể tiếp tục ưu tiên quỹ khẩn cấp hoặc đầu tư dài hạn.`,
-        tone: "good",
-        ctaLabel: "Phân bổ mục tiêu",
-        ctaRoute: "/goals",
-      });
-    }
-
-    return actions.map(({ issueKind, ...action }) => ({
-      ...action,
-      ...composeIssueIdentity(issueKind, action.ctaRoute),
-    }));
-  }, [
-    emergencyMonthsExact,
-    goals.length,
-    healthMetrics.goalScore,
-    summary.monthlyExpense,
-    summary.expense,
-    savingsSnapshot.emergencyFund,
-    summary.goalScore,
-    summary.savingRate,
-  ]);
-
-  // UI-DASH-3 Action Center merge policy: consider candidates from BOTH
-  // sources instead of picking one source wholesale (the prior bug — see
-  // dashboardActionPriority.ts). `aiActions` already carries contextual
-  // ctaRoutes (buildBudgetsHref/buildGoalsHref) for two of its action
-  // types; this only decides which candidates win, it never builds a URL.
-  // `aiActions`' semantic issueKind is derived from its domain (that
-  // generator doesn't expose a structured "what condition is this" field)
-  // via `deriveAggregateIssueKind`, then composed with any entity id the
-  // same way v3's explicit kinds are — so both sources land on identical
-  // issueKeys for the SAME real issue (emergency fund, saving rate),
-  // while two DIFFERENT entities (two distinct over-budget categories,
-  // two distinct behind-schedule goals) never collapse into one just
-  // because they share a domain.
-  const priorityActionCandidates = useMemo(
-    () =>
-      selectDashboardPriorityActions([
-        ...v3AdvisorActions,
-        ...aiActions.map((action): DashboardActionCandidate => {
-          const domain = action.icon;
-          return {
-            domain,
-            title: action.title,
-            body: action.body,
-            tone: action.tone,
-            ctaLabel: action.ctaLabel,
-            ctaRoute: action.ctaRoute,
-            ...composeIssueIdentity(
-              deriveAggregateIssueKind(domain),
-              action.ctaRoute,
-            ),
-          };
-        }),
-      ]),
-    [v3AdvisorActions, aiActions],
-  );
-
-  const priorityActions = priorityActionCandidates.map((candidate) => ({
-    icon: actionIcons[candidate.domain],
-    title: candidate.title,
-    body: candidate.body,
-    tone: candidate.tone,
-    ctaLabel: candidate.ctaLabel,
-    ctaRoute: candidate.ctaRoute,
-  }));
-
-  // Gated on isDashboardReady: `summary.debtRatio` defaults to 0 before the
-  // Net Worth asset/liability bundle has loaded (empty wallets/debts), which
-  // would otherwise render this badge's "no debt" claim before debts are
-  // actually known to be zero.
-  const hasNoDebt = isDashboardReady && summary.debtRatio <= 0;
 
   // PERF-4B: the Hero is no longer one all-or-nothing gate. Each visible
   // field now uses exactly the readiness flag(s) its own data actually
@@ -2770,143 +2527,6 @@ export default function DashboardPage() {
   // Net Worth bundle, so only those two get an earlier readiness flag. The
   // other three read bundled `baseSummary`/Forex-ledger fields and must
   // still wait for `isDashboardReady`, unchanged from before PERF-2.
-  // UI-DASH-4 Period Comparison Layer.
-  //
-  // Scoped to `filterMode === "month"` only — the dominant/default mode,
-  // and the only one this sprint's product brief specifies like-for-like
-  // semantics for. Quarter/year/custom stay unavailable rather than
-  // shipping under-tested previous-quarter/previous-year elapsed-window
-  // arithmetic (see dashboardPeriodComparison.ts's module doc).
-  //
-  // Zero new queries: `loadedRangeStartDate` reuses the EXACT existing
-  // `getDashboardFetchRange(selectedYear)` call already made for the
-  // actual fetch (PERF-3) — this is a second read of an already-pure,
-  // already-computed value, not a new formula. If the previous month's
-  // window falls before that boundary (the January → prior-December
-  // case), the comparison is unavailable rather than triggering a fetch.
-  //
-  // Current/previous use the IDENTICAL canonical pipeline already
-  // powering `periodFlowSummary`/`savingsRateFromSavings` above
-  // (isInternalTransferTransaction → getTotalIncome/getTotalExpense;
-  // getNetSavingAllocation/getNetInvestmentAllocation → clampScore) — just
-  // invoked against the previous window's dates instead of `dateRange`.
-  const loadedRangeStartDate = useMemo(
-    () => getDashboardFetchRange(selectedYear).startDate,
-    [selectedYear],
-  );
-
-  const periodComparison = useMemo((): {
-    cashFlow: DashboardComparison;
-    savingRate: DashboardComparison;
-  } => {
-    const unavailable = {
-      cashFlow: { available: false as const },
-      savingRate: { available: false as const },
-    };
-
-    if (filterMode !== "month") return unavailable;
-
-    const today = toLocalDateKey(new Date());
-    let previous: { startDate: string; endDate: string };
-    try {
-      previous = resolveMonthComparisonWindow(dateRange, today).previous;
-    } catch {
-      // dateRange isn't a month-start range yet (e.g. mid-transition
-      // while switching filter modes) — no comparison this render.
-      return unavailable;
-    }
-
-    if (!isComparisonWindowLoaded(previous, loadedRangeStartDate)) {
-      return unavailable;
-    }
-
-    const previousTransactions = filterTransactionsByDateRange(
-      transactions,
-      previous,
-    );
-    const previousNonTransfer = previousTransactions.filter(
-      (transaction) => !isInternalTransferTransaction(transaction),
-    );
-    const previousIncome = getTotalIncome(previousNonTransfer);
-    const previousExpense = getTotalExpense(previousNonTransfer, categories);
-    const previousNetCashFlow = previousIncome - previousExpense;
-
-    const previousSavingAmount = Math.max(
-      0,
-      getNetSavingAllocation(
-        savingTransactions,
-        previous.startDate,
-        previous.endDate,
-      ),
-    );
-    const previousInvestmentAmount = Math.max(
-      0,
-      getNetInvestmentAllocation(
-        forexCashTransactions,
-        previous.startDate,
-        previous.endDate,
-      ),
-    );
-    const previousSavingRate =
-      previousIncome > 0
-        ? clampScore(
-            ((previousSavingAmount + previousInvestmentAmount) /
-              previousIncome) *
-              100,
-          )
-        : 0;
-
-    return {
-      cashFlow: buildDashboardComparison(netCashFlow, previousNetCashFlow),
-      savingRate: buildDashboardComparison(
-        summary.savingRate,
-        previousSavingRate,
-      ),
-    };
-  }, [
-    filterMode,
-    dateRange,
-    loadedRangeStartDate,
-    transactions,
-    categories,
-    savingTransactions,
-    forexCashTransactions,
-    netCashFlow,
-    summary.savingRate,
-  ]);
-
-  function formatComparisonLabel(
-    comparison: DashboardComparison,
-    formatDelta: (magnitude: number) => string,
-  ): string | undefined {
-    if (!comparison.available) return undefined;
-    if (comparison.direction === "flat") return "Không đổi so với kỳ trước";
-    const sign = comparison.delta > 0 ? "+" : "-";
-    return `${sign}${formatDelta(Math.abs(comparison.delta))} so với kỳ trước`;
-  }
-
-  const cashFlowComparisonLabel = formatComparisonLabel(
-    periodComparison.cashFlow,
-    (magnitude) => formatVND(magnitude),
-  );
-  const savingRateComparisonLabel = formatComparisonLabel(
-    periodComparison.savingRate,
-    (magnitude) => `${formatOneDecimal(magnitude)} điểm %`,
-  );
-
-  // Metric-specific interpretation, not a universal "up = green" rule
-  // (§31): both Cash Flow and Saving Rate happen to treat a higher value
-  // as an improvement, but that judgment is made HERE, per metric — not
-  // inside the generic comparison helper.
-  function comparisonTone(
-    comparison: DashboardComparison,
-  ): "good" | "danger" | "neutral" {
-    if (!comparison.available) return "neutral";
-    if (comparison.direction === "up") return "good";
-    if (comparison.direction === "down") return "danger";
-    return "neutral";
-  }
-
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
@@ -2918,12 +2538,6 @@ export default function DashboardPage() {
       // Period metric (periodFlowSummary) — carries the selected Dashboard
       // period, not today's date, to Transactions.
       href: buildTransactionsHref({ month: dashboardMonthKey }),
-      comparison: cashFlowComparisonLabel
-        ? {
-            label: cashFlowComparisonLabel,
-            tone: comparisonTone(periodComparison.cashFlow),
-          }
-        : undefined,
     },
     {
       title: "Tiết kiệm & Đầu tư",
@@ -2937,12 +2551,6 @@ export default function DashboardPage() {
       // combined Transactions filter (`type` only accepts one value), so
       // there is no unambiguous destination to send the user to.
       href: undefined as string | undefined,
-      comparison: savingRateComparisonLabel
-        ? {
-            label: savingRateComparisonLabel,
-            tone: comparisonTone(periodComparison.savingRate),
-          }
-        : undefined,
     },
     {
       title: "Quỹ khẩn cấp",
@@ -3125,25 +2733,6 @@ export default function DashboardPage() {
   const budgetAttentionReady = isBudgetAttentionReady(
     budgetsLoaded,
     cashFlowReady,
-  );
-
-  // DASHBOARD-ACTIONCENTER-1:
-  // Action Center (`aiActions`/`priorityActions` below) cuts across every
-  // readiness domain at once — see isActionCenterReady's own doc comment
-  // for the field-by-field trace. Before this, Action Center rendered off
-  // `hasFinancialData` (an OR across the same raw arrays inside
-  // generateDashboardActions), so it could present a partial recommendation
-  // set as complete while wallets/debts/investments/goals/budgets were
-  // still loading — the exact bug F-2 of the FINANCE-DATA-1 Final Re-Audit
-  // found. `forexReady` is deliberately excluded: no Action Center rule
-  // reads a Forex-cash-ledger-derived field.
-  const actionCenterReady = isActionCenterReady(
-    isDashboardReady,
-    cashFlowReady,
-    savingInvestmentReady,
-    emergencyFundReady,
-    goalsReady,
-    budgetsLoaded,
   );
 
   const upcomingMoneyEvents = useMemo(() => {
@@ -3381,80 +2970,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-      </section>
-
-      {/* UI-DASH-1: "what should I do next" moved up next to financial
-          position — was previously the last section on the page. Content,
-          conditional rendering, and CTA behavior are unchanged. */}
-      {/* Action center */}
-      <section className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
-              <Bot size={20} />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900">
-                Ưu tiên tài chính
-              </h2>
-              <p className="text-sm text-slate-600">
-                Các hành động nên làm tiếp theo dựa trên dữ liệu hiện tại.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {hasNoDebt && (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                ✓ Không có nợ phải trả
-              </span>
-            )}
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-              Tối đa 3 việc quan trọng
-            </span>
-          </div>
-        </div>
-
-        {/* DASHBOARD-ACTIONCENTER-1: gated on actionCenterReady — before
-            every required domain (net worth, cash flow, saving/investment,
-            emergency fund, goals, budgets) has loaded at least once,
-            wallets/debts/investments/goals/budgets may still be their
-            initial [] while transactions/budgets already resolved, and
-            generateDashboardActions' own `hasFinancialData` OR-gate would
-            otherwise present that partial input set as a complete,
-            authoritative recommendation list. See isActionCenterReady's
-            doc comment for the full per-rule dependency trace. */}
-        {!actionCenterReady ? (
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
-            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
-            <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
-          </div>
-        ) : priorityActions.length > 0 ? (
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            {priorityActions.map((action, index) => (
-              <ActionCard
-                key={`${action.title}-${index}`}
-                rank={index + 1}
-                icon={action.icon}
-                title={action.title}
-                body={action.body}
-                tone={action.tone}
-                ctaLabel={action.ctaLabel}
-                ctaRoute={action.ctaRoute}
-                onNavigate={router.push}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 text-center sm:p-5">
-            <p className="text-sm font-black text-emerald-700">
-              Tài chính đang trong trạng thái ổn định.
-            </p>
-            <p className="mt-1 text-xs text-emerald-700/80">
-              Không có việc khẩn cấp cần xử lý.
-            </p>
-          </div>
-        )}
       </section>
 
       {/* Operating KPIs */}
@@ -4324,7 +3839,6 @@ function KpiCard({
   tone,
   isLoading = false,
   onClick,
-  comparison,
 }: {
   title: string;
   value: string;
@@ -4337,12 +3851,6 @@ function KpiCard({
    * non-interactive — some KPIs legitimately have no unambiguous
    * destination (see kpiCards' own per-card comments). */
   onClick?: () => void;
-  /** UI-DASH-4: an already-formatted, already-toned previous-period
-   * comparison line (e.g. "+1.250.000 đ so với kỳ trước"). KpiCard only
-   * renders what it's given — the comparison finance/date logic lives in
-   * DashboardPage's periodComparison memo, never here. Omitted entirely
-   * (not even a skeleton) when no comparison is available/ready. */
-  comparison?: { label: string; tone: "good" | "warning" | "danger" | "neutral" };
 }) {
   const toneStyles = {
     good: {
@@ -4386,13 +3894,6 @@ function KpiCard({
               {value}
             </p>
             <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
-            {comparison && (
-              <p
-                className={`mt-1 truncate text-[11px] font-bold ${toneStyles[comparison.tone].value}`}
-              >
-                {comparison.label}
-              </p>
-            )}
           </>
         )}
       </div>
@@ -4534,70 +4035,6 @@ function AllocationRow({
           className={`h-full rounded-full ${barClass} transition-all duration-300`}
           style={{ width: `${Math.min(roundedActual, 100)}%` }}
         />
-      </div>
-    </div>
-  );
-}
-
-function ActionCard({
-  rank,
-  icon,
-  title,
-  body,
-  tone,
-  ctaLabel,
-  ctaRoute,
-  onNavigate,
-}: {
-  rank: number;
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  tone: "danger" | "warning" | "good";
-  ctaLabel?: string;
-  ctaRoute?: string;
-  onNavigate?: (href: string) => void;
-}) {
-  const styles = {
-    danger: "border-rose-100 bg-rose-50 text-rose-700",
-    warning: "border-amber-100 bg-amber-50 text-amber-700",
-    good: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  };
-  const rankStyles = {
-    danger: "bg-rose-600",
-    warning: "bg-amber-500",
-    good: "bg-emerald-600",
-  };
-  const buttonStyles = {
-    danger: "bg-rose-600 text-white shadow-rose-100 hover:bg-rose-700",
-    warning: "bg-amber-500 text-white shadow-amber-100 hover:bg-amber-600",
-    good: "bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700",
-  };
-  return (
-    <div className={`rounded-2xl border p-4 ${styles[tone]}`}>
-      <div className="flex gap-3">
-        <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-black text-white ${rankStyles[tone]}`}
-        >
-          {rank}
-        </span>
-        <div className="mt-0.5">{icon}</div>
-        <div className="min-w-0">
-          <p className="font-black">{title}</p>
-          <p className="mt-1 text-sm leading-6 opacity-80">{body}</p>
-          {ctaLabel && ctaRoute && onNavigate && (
-            <button
-              type="button"
-              onClick={() => onNavigate(ctaRoute)}
-              className={
-                "mt-3 inline-flex items-center rounded-lg px-3 py-2 text-xs font-black shadow-md transition " +
-                buttonStyles[tone]
-              }
-            >
-              {ctaLabel}
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

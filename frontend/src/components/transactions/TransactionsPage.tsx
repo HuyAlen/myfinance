@@ -1866,8 +1866,8 @@ export default function TransactionsPage() {
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               {hasActiveFilters
-                ? `Đang lọc kết quả — số liệu bên dưới phản ánh danh sách đã lọc, không phải toàn bộ ${effectiveRangeLabel}.`
-                : `Theo dõi các khoản thu, chi và chuyển tiền trong ${effectiveRangeLabel}.`}
+                ? `Đang hiển thị các giao dịch phù hợp với bộ lọc trong ${effectiveRangeLabel}.`
+                : `Tổng quan thu, chi và chuyển tiền trong ${effectiveRangeLabel}.`}
             </p>
           </div>
 
