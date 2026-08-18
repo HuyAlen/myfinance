@@ -22,6 +22,7 @@ import {
   computeDraggedPosition,
   exceedsDragThreshold,
   parseStoredFabPosition,
+  shouldCloseMobileMenuOnOutsidePointerDown,
   type FabPosition,
 } from "@/src/lib/ui/fabPosition";
 
@@ -157,6 +158,8 @@ export default function QuickActionFab() {
   const [isDragging, setIsDragging] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
+  const fabButtonRef = useRef<HTMLButtonElement>(null);
   const rafRef = useRef<number | null>(null);
   const dragRef = useRef<DragState>({
     dragging: false,
@@ -200,6 +203,37 @@ export default function QuickActionFab() {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  // Mobile's compact panel is a lightweight, non-modal popover — no
+  // full-screen backdrop element dimming the page — so "tap outside closes
+  // it" is done via a single document-level pointerdown listener instead of
+  // an invisible full-viewport click-catcher. Registered only while the
+  // menu is open. shouldCloseMobileMenuOnOutsidePointerDown keeps this
+  // desktop-inert (desktop's stack never had outside-click-to-close and
+  // must not gain it here) and never fires for a tap on the panel itself or
+  // on the FAB button (which already has its own open/close toggle).
+  useEffect(() => {
+    if (!isQuickActionOpen) return;
+
+    function handleOutsidePointerDown(event: Event) {
+      const target = event.target as Node | null;
+      const insidePanel = Boolean(mobilePanelRef.current?.contains(target));
+      const insideFab = Boolean(fabButtonRef.current?.contains(target));
+      if (
+        shouldCloseMobileMenuOnOutsidePointerDown(
+          window.innerWidth,
+          insidePanel,
+          insideFab,
+        )
+      ) {
+        setIsQuickActionOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () =>
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  }, [isQuickActionOpen]);
 
   function selectAction(href: string) {
     // Close synchronously, before kicking off navigation, so the expanded
@@ -351,6 +385,7 @@ export default function QuickActionFab() {
   function renderFabButton() {
     return (
       <button
+        ref={fabButtonRef}
         type="button"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -391,60 +426,54 @@ export default function QuickActionFab() {
     });
   }
 
-  // Mobile-only compact action sheet — deliberately independent of the FAB's
-  // own `position`/drag location (see the ticket's "menu position = mobile-
-  // safe canonical overlay" requirement): it always anchors above BottomNav
-  // via the same `--mobile-bottom-nav-height` + safe-area token the FAB's
-  // own default anchor already uses, rather than chasing wherever the user
-  // dragged the button. Reuses the exact same QUICK_ACTIONS entries/hrefs
-  // and `selectAction` as the desktop stack — only the presentation differs
-  // (light tinted-icon rows instead of solid color blocks, per the ticket's
-  // "too visually heavy at this size on mobile" finding). `lg:hidden` keeps
-  // this out of the desktop layout entirely, matching how BottomNav/Sidebar
-  // already split mobile vs. desktop with pure Tailwind breakpoints instead
-  // of a JS media-query hook.
+  // Mobile-only compact action panel — a lightweight floating utility menu,
+  // NOT a modal/bottom sheet: no full-screen backdrop (see the outside-tap
+  // effect above for how it still closes on an outside tap), a bounded
+  // ~140-150px height via a 2x2 grid instead of a tall 1-column stack, and
+  // deliberately independent of the FAB's own `position`/drag location (see
+  // the ticket's "menu position = mobile-safe canonical overlay"
+  // requirement) — it always anchors above BottomNav via the same
+  // `--mobile-bottom-nav-height` + safe-area token the FAB's own default
+  // anchor already uses, rather than chasing wherever the user dragged the
+  // button. Reuses the exact same QUICK_ACTIONS entries/hrefs and
+  // `selectAction` as the desktop stack — only the presentation differs
+  // (light tinted-icon cells instead of solid color blocks). `lg:hidden`
+  // keeps this out of the desktop layout entirely, matching how
+  // BottomNav/Sidebar already split mobile vs. desktop with pure Tailwind
+  // breakpoints instead of a JS media-query hook.
   function renderMobileActionPanel() {
     return (
-      <>
-        <div
-          className="fixed inset-0 z-100 bg-slate-900/10 lg:hidden"
-          aria-hidden="true"
-          onClick={() => setIsQuickActionOpen(false)}
-        />
-        <div
-          className="fixed z-100 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl lg:hidden"
-          style={{
-            bottom:
-              "calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem)",
-            left: "max(1rem, calc(env(safe-area-inset-left) + 0.75rem))",
-            right: "max(1rem, calc(env(safe-area-inset-right) + 0.75rem))",
-          }}
-        >
-          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Thao tác nhanh
-          </p>
-          <div className="flex flex-col gap-1">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon;
-              return (
-                <button
-                  key={action.href}
-                  type="button"
-                  onClick={() => selectAction(action.href)}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-slate-700 active:bg-slate-100"
-                >
-                  <span
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.mobileIconBg}`}
-                  >
-                    <Icon size={19} className={action.mobileIconColor} />
-                  </span>
-                  <span className="whitespace-nowrap">{action.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </>
+      <div
+        ref={mobilePanelRef}
+        className="fixed z-100 grid grid-cols-2 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-xl lg:hidden"
+        style={{
+          bottom:
+            "calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem)",
+          left: "max(1rem, calc(env(safe-area-inset-left) + 0.75rem))",
+          right: "max(1rem, calc(env(safe-area-inset-right) + 0.75rem))",
+        }}
+      >
+        {QUICK_ACTIONS.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.href}
+              type="button"
+              onClick={() => selectAction(action.href)}
+              className="flex min-h-14 items-center gap-2 rounded-2xl px-2.5 py-2 active:bg-slate-100"
+            >
+              <span
+                className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.mobileIconBg}`}
+              >
+                <Icon size={17} className={action.mobileIconColor} />
+              </span>
+              <span className="truncate text-[13px] font-semibold text-slate-700">
+                {action.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     );
   }
 

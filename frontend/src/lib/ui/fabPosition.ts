@@ -108,3 +108,28 @@ export function computeDraggedPosition(
     y: startElementPosition.y + (currentPointer.y - startPointer.y),
   };
 }
+
+/** Matches the app's one established `lg` breakpoint (1024px), already used
+ * by `getViewportBounds()`'s own desktop/mobile split — not a new value. */
+const DESKTOP_BREAKPOINT_PX = 1024;
+
+/**
+ * Decides whether a pointerdown outside the mobile Quick Action panel
+ * should close it. Deliberately desktop-inert: below `DESKTOP_BREAKPOINT_PX`
+ * the desktop action stack isn't even rendered (see QuickActionFab.tsx's
+ * `lg:flex`/`lg:hidden` split), and it never had outside-click-to-close
+ * behavior before this — this function must never introduce that on
+ * desktop, only give mobile's lightweight, non-modal panel a way to close
+ * without a full-screen backdrop element. Takes plain booleans/numbers
+ * (never a DOM Node or Event) so the decision itself is directly testable;
+ * the caller does the actual `ref.contains(event.target)` containment
+ * checks and the `window.innerWidth` read.
+ */
+export function shouldCloseMobileMenuOnOutsidePointerDown(
+  viewportWidth: number,
+  pointerInsidePanel: boolean,
+  pointerInsideFabButton: boolean,
+): boolean {
+  if (viewportWidth >= DESKTOP_BREAKPOINT_PX) return false;
+  return !pointerInsidePanel && !pointerInsideFabButton;
+}

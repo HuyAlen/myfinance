@@ -4,6 +4,7 @@ import {
   computeDraggedPosition,
   exceedsDragThreshold,
   parseStoredFabPosition,
+  shouldCloseMobileMenuOnOutsidePointerDown,
   type FabPositionBounds,
 } from "./fabPosition";
 
@@ -191,5 +192,49 @@ describe("computeDraggedPosition (grab-offset preservation — no snapping to po
     expect(
       computeDraggedPosition(startElement, startPointer, currentPointer),
     ).toEqual(viaOffset);
+  });
+});
+
+describe("shouldCloseMobileMenuOnOutsidePointerDown — mobile-only, non-modal outside-tap-to-close", () => {
+  it("closes on mobile when the tap lands outside both the panel and the FAB", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(390, false, false)).toBe(
+      true,
+    );
+  });
+
+  it("does not close when the tap lands inside the panel itself", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(390, true, false)).toBe(
+      false,
+    );
+  });
+
+  it("does not close when the tap lands on the FAB button (its own onClick handles the toggle)", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(390, false, true)).toBe(
+      false,
+    );
+  });
+
+  it("never closes on desktop (>= 1024px) — outside-click-to-close was never desktop's behavior and must not become it", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(1440, false, false)).toBe(
+      false,
+    );
+  });
+
+  it("is desktop-inert exactly at the established lg breakpoint (1024px)", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(1024, false, false)).toBe(
+      false,
+    );
+  });
+
+  it("is still mobile just below the breakpoint (1023px)", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(1023, false, false)).toBe(
+      true,
+    );
+  });
+
+  it("on desktop, being outside both panel/FAB still never closes — desktop is fully unaffected regardless of containment", () => {
+    expect(shouldCloseMobileMenuOnOutsidePointerDown(1440, true, true)).toBe(
+      false,
+    );
   });
 });
