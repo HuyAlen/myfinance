@@ -133,3 +133,113 @@ export function shouldCloseMobileMenuOnOutsidePointerDown(
   if (viewportWidth >= DESKTOP_BREAKPOINT_PX) return false;
   return !pointerInsidePanel && !pointerInsideFabButton;
 }
+
+export type FabRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export type QuickActionPanelGeometry = {
+  fabRect: FabRect;
+  panelWidth: number;
+  panelHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  /** Horizontal clearance from the viewport's left/right edges. */
+  margin: number;
+  /** Visual separation kept between the FAB and the panel. */
+  gap: number;
+  /** Vertical clearance reserved above (header) and below (BottomNav +
+   * safe-area-inset-bottom) the FAB — the same heuristic values
+   * `getViewportBounds()` already uses for clamping the FAB itself. */
+  safeTop: number;
+  safeBottom: number;
+};
+
+export type QuickActionPanelPlacement =
+  | "above-left"
+  | "above-right"
+  | "below-left"
+  | "below-right";
+
+export type QuickActionPanelPosition = {
+  left: number;
+  top: number;
+  placement: QuickActionPanelPlacement;
+};
+
+/**
+ * Positions the mobile Quick Action panel relative to the FAB's CURRENT
+ * on-screen rect (default anchor, restored, or freshly dragged — this
+ * function doesn't care which, it only takes the rect), instead of a fixed
+ * canonical spot above BottomNav. Two independent decisions, each falling
+ * back gracefully when the preferred side is too tight, then a final
+ * viewport clamp so the result can never overflow regardless of how those
+ * decisions landed:
+ *
+ * - Vertical: prefer opening ABOVE the FAB (typical for a bottom-anchored
+ *   FAB); fall back to BELOW if there isn't room above but there is below;
+ *   if neither side comfortably fits, pick whichever has more room.
+ * - Horizontal: align toward whichever side of the FAB has more room — if
+ *   the FAB's center is past the viewport's horizontal midpoint (FAB on the
+ *   right half), the panel's right edge aligns with the FAB's right edge
+ *   (panel extends left); otherwise the panel's left edge aligns with the
+ *   FAB's left edge (panel extends right).
+ *
+ * `placement` names the side pair actually chosen (e.g. the default
+ * bottom-right FAB position produces "above-left") — informational for
+ * callers/tests, not consumed by the positioning math itself.
+ */
+export function computeQuickActionPanelPosition(
+  geometry: QuickActionPanelGeometry,
+): QuickActionPanelPosition {
+  const {
+    fabRect,
+    panelWidth,
+    panelHeight,
+    viewportWidth,
+    viewportHeight,
+    margin,
+    gap,
+    safeTop,
+    safeBottom,
+  } = geometry;
+
+  const fabCenterX = fabRect.left + fabRect.width / 2;
+  const extendLeft = fabCenterX > viewportWidth / 2;
+
+  const spaceAbove = fabRect.top - safeTop;
+  const spaceBelow =
+    viewportHeight - safeBottom - (fabRect.top + fabRect.height);
+
+  let openAbove: boolean;
+  if (spaceAbove >= panelHeight + gap) {
+    openAbove = true;
+  } else if (spaceBelow >= panelHeight + gap) {
+    openAbove = false;
+  } else {
+    openAbove = spaceAbove >= spaceBelow;
+  }
+
+  const rawTop = openAbove
+    ? fabRect.top - gap - panelHeight
+    : fabRect.top + fabRect.height + gap;
+  const rawLeft = extendLeft
+    ? fabRect.left + fabRect.width - panelWidth
+    : fabRect.left;
+
+  const left = clampNumber(rawLeft, margin, viewportWidth - panelWidth - margin);
+  const top = clampNumber(
+    rawTop,
+    safeTop + margin,
+    viewportHeight - panelHeight - safeBottom - margin,
+  );
+
+  const placement: QuickActionPanelPlacement = `${openAbove ? "above" : "below"}-${
+    extendLeft ? "left" : "right"
+  }`;
+
+  return { left, top, placement };
+}

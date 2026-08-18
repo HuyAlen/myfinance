@@ -36,6 +36,14 @@ const QuickActionFab = dynamic(
   { ssr: false, loading: () => null },
 );
 
+// TEMPORARY: hides the floating AI launcher (bottom-right button) without
+// deleting it — AIFloatingButton's implementation, the AI drawer/history/
+// pending-actions/backend, and the separate header "AI" advisor button
+// (Header.tsx) are all untouched. Flip back to `true` to re-enable; kept as
+// a plain gate here (not mounted at all when false) rather than a CSS
+// display:none, per this being a rendering decision, not a style one.
+const SHOW_AI_FLOATING_BUTTON = false;
+
 type AppShellProps = {
   children: React.ReactNode;
 };
@@ -172,7 +180,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         <BottomNav />
 
-        {!aiAgentOpen && !isGlobalFabSuppressed && (
+        {SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && (
           <AIFloatingButton
             onClick={() => {
               if (!hasOpenedAI) markInstant("ai:click");

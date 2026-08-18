@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -20,6 +21,7 @@ import { buildQuickActionCreateHref } from "@/src/lib/navigation/quickActionInte
 import {
   clampFabPosition,
   computeDraggedPosition,
+  computeQuickActionPanelPosition,
   exceedsDragThreshold,
   parseStoredFabPosition,
   shouldCloseMobileMenuOnOutsidePointerDown,
@@ -28,6 +30,7 @@ import {
 
 const QUICK_ACTIONS = [
   {
+    id: "transaction",
     label: "Thêm giao dịch",
     href: buildQuickActionCreateHref("/transactions"),
     icon: ReceiptText,
@@ -36,6 +39,7 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-blue-600",
   },
   {
+    id: "wallet",
     label: "Tạo ví tiền",
     href: buildQuickActionCreateHref("/wallets"),
     icon: Wallet,
@@ -44,6 +48,7 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-emerald-600",
   },
   {
+    id: "goal",
     label: "Tạo mục tiêu",
     href: buildQuickActionCreateHref("/goals"),
     icon: Target,
@@ -52,6 +57,7 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-violet-600",
   },
   {
+    id: "budget",
     label: "Tạo ngân sách",
     href: buildQuickActionCreateHref("/budgets"),
     icon: ChartPie,
@@ -60,6 +66,23 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-cyan-600",
   },
 ];
+
+// TEMPORARY visibility control — hides items from the Quick Action launcher
+// without deleting their definitions (href/icon/colors above stay intact,
+// so their destination pages/routes/business logic are completely
+// unaffected; re-enabling later is just flipping these back to `true`).
+// Keyed by the stable `id` above, never by the display label, so a future
+// copy/wording change can never silently re-show or re-hide an action.
+const QUICK_ACTION_VISIBILITY: Record<string, boolean> = {
+  transaction: true,
+  wallet: false,
+  goal: false,
+  budget: false,
+};
+
+const VISIBLE_QUICK_ACTIONS = QUICK_ACTIONS.filter(
+  (action) => QUICK_ACTION_VISIBILITY[action.id],
+);
 
 // Same button size as AIFloatingButton's own size-14 (56px), and the same
 // bottom-nav/safe-area clamping heuristic that button already established
@@ -71,6 +94,30 @@ const FAB_SIZE = 56;
 const DRAG_THRESHOLD = 5;
 const ACTION_LIST_GAP = 8; // matches the original flex gap-2 (0.5rem)
 const POSITION_STORAGE_KEY = "myfinance:quick-action-fab-position";
+
+// Known/fixed dimensions for the mobile compact panel, not measured from
+// the DOM — the panel's width is enforced via inline style below so this
+// stays true (no risk of the alignment math disagreeing with an
+// auto-sized box), and its height is a stable estimate (2 rows of the
+// fixed min-h-14 cells + row gap + panel padding) since content always
+// truncates to one line and can never grow the box taller in practice.
+const MOBILE_PANEL_WIDTH = 272;
+const MOBILE_PANEL_HEIGHT = 144;
+const MOBILE_PANEL_GAP = 10;
+
+// Compact single-row dimensions used only while exactly one action is
+// visible (see QUICK_ACTION_VISIBILITY) — avoids rendering the 2x2 grid
+// with 3 empty cells. Same "known/fixed, matched by an explicit inline
+// width style" approach as MOBILE_PANEL_WIDTH/HEIGHT above.
+const MOBILE_SINGLE_ACTION_WIDTH = 224;
+const MOBILE_SINGLE_ACTION_HEIGHT = 80;
+const IS_SINGLE_MOBILE_ACTION = VISIBLE_QUICK_ACTIONS.length <= 1;
+const EFFECTIVE_MOBILE_PANEL_WIDTH = IS_SINGLE_MOBILE_ACTION
+  ? MOBILE_SINGLE_ACTION_WIDTH
+  : MOBILE_PANEL_WIDTH;
+const EFFECTIVE_MOBILE_PANEL_HEIGHT = IS_SINGLE_MOBILE_ACTION
+  ? MOBILE_SINGLE_ACTION_HEIGHT
+  : MOBILE_PANEL_HEIGHT;
 
 function getViewportBounds() {
   return {
@@ -156,6 +203,10 @@ export default function QuickActionFab() {
     readStoredPosition(),
   );
   const [isDragging, setIsDragging] = useState(false);
+  const [panelPosition, setPanelPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const mobilePanelRef = useRef<HTMLDivElement>(null);
@@ -234,6 +285,55 @@ export default function QuickActionFab() {
     return () =>
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
   }, [isQuickActionOpen]);
+
+  // Follows the FAB's CURRENT on-screen rect — default anchor, restored, or
+  // freshly dragged — rather than a fixed canonical spot above BottomNav.
+  // useLayoutEffect (not useEffect) so the measurement + recompute happens
+  // before the browser paints the commit that opened the menu, avoiding a
+  // visible flash at a stale/absent position. Re-runs on `position` (the
+  // FAB's own dragged coordinate) so a drag that ends while closed is
+  // immediately reflected the next time the menu opens — never stale
+  // coordinates from a previous drag. Only does this work while the menu
+  // is actually open and only on mobile widths (desktop's stack doesn't use
+  // this at all) — never runs on every pointermove/frame, only on open and
+  // on resize/orientation change while open, per the "no measurement
+  // loops" requirement.
+  useLayoutEffect(() => {
+    if (!isQuickActionOpen) return;
+    if (window.innerWidth >= 1024) return;
+
+    function reposition() {
+      const fabRect = fabButtonRef.current?.getBoundingClientRect();
+      if (!fabRect) return;
+      const bounds = getViewportBounds();
+      setPanelPosition(
+        computeQuickActionPanelPosition({
+          fabRect: {
+            left: fabRect.left,
+            top: fabRect.top,
+            width: fabRect.width,
+            height: fabRect.height,
+          },
+          panelWidth: EFFECTIVE_MOBILE_PANEL_WIDTH,
+          panelHeight: EFFECTIVE_MOBILE_PANEL_HEIGHT,
+          viewportWidth: bounds.viewportWidth,
+          viewportHeight: bounds.viewportHeight,
+          margin: bounds.marginX,
+          gap: MOBILE_PANEL_GAP,
+          safeTop: bounds.marginTop,
+          safeBottom: bounds.marginBottom,
+        }),
+      );
+    }
+
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("orientationchange", reposition);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("orientationchange", reposition);
+    };
+  }, [isQuickActionOpen, position]);
 
   function selectAction(href: string) {
     // Close synchronously, before kicking off navigation, so the expanded
@@ -407,7 +507,7 @@ export default function QuickActionFab() {
   }
 
   function renderActionButtons() {
-    return QUICK_ACTIONS.map((action) => {
+    return VISIBLE_QUICK_ACTIONS.map((action) => {
       const Icon = action.icon;
       return (
         <button
@@ -429,31 +529,35 @@ export default function QuickActionFab() {
   // Mobile-only compact action panel — a lightweight floating utility menu,
   // NOT a modal/bottom sheet: no full-screen backdrop (see the outside-tap
   // effect above for how it still closes on an outside tap), a bounded
-  // ~140-150px height via a 2x2 grid instead of a tall 1-column stack, and
-  // deliberately independent of the FAB's own `position`/drag location (see
-  // the ticket's "menu position = mobile-safe canonical overlay"
-  // requirement) — it always anchors above BottomNav via the same
-  // `--mobile-bottom-nav-height` + safe-area token the FAB's own default
-  // anchor already uses, rather than chasing wherever the user dragged the
-  // button. Reuses the exact same QUICK_ACTIONS entries/hrefs and
-  // `selectAction` as the desktop stack — only the presentation differs
-  // (light tinted-icon cells instead of solid color blocks). `lg:hidden`
-  // keeps this out of the desktop layout entirely, matching how
-  // BottomNav/Sidebar already split mobile vs. desktop with pure Tailwind
-  // breakpoints instead of a JS media-query hook.
-  function renderMobileActionPanel() {
+  // ~144px height via a 2x2 grid instead of a tall 1-column stack, and
+  // positioned relative to the FAB's OWN current rect (see the
+  // useLayoutEffect above) rather than a fixed canonical spot — wherever
+  // the user drags the FAB, the panel opens right beside it, clamped to
+  // stay fully inside the viewport and clear of BottomNav/safe-area.
+  // Renders VISIBLE_QUICK_ACTIONS (not the raw QUICK_ACTIONS list), and
+  // when that's down to a single entry (see QUICK_ACTION_VISIBILITY) drops
+  // the 2x2 grid for one compact row instead of leaving 3 empty cells.
+  // Reuses the exact same action entries/hrefs and `selectAction` as the
+  // desktop stack — only the presentation differs (light tinted-icon
+  // cells instead of solid color blocks). `lg:hidden` keeps this out of
+  // the desktop layout entirely, matching how BottomNav/Sidebar already
+  // split mobile vs. desktop with pure Tailwind breakpoints instead of a
+  // JS media-query hook.
+  function renderMobileActionPanel(panelPos: { left: number; top: number }) {
     return (
       <div
         ref={mobilePanelRef}
-        className="fixed z-100 grid grid-cols-2 gap-2 rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-xl lg:hidden"
+        className={[
+          "fixed z-100 rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-xl lg:hidden",
+          IS_SINGLE_MOBILE_ACTION ? "flex" : "grid grid-cols-2 gap-2",
+        ].join(" ")}
         style={{
-          bottom:
-            "calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem)",
-          left: "max(1rem, calc(env(safe-area-inset-left) + 0.75rem))",
-          right: "max(1rem, calc(env(safe-area-inset-right) + 0.75rem))",
+          left: panelPos.left,
+          top: panelPos.top,
+          width: EFFECTIVE_MOBILE_PANEL_WIDTH,
         }}
       >
-        {QUICK_ACTIONS.map((action) => {
+        {VISIBLE_QUICK_ACTIONS.map((action) => {
           const Icon = action.icon;
           return (
             <button
@@ -480,10 +584,13 @@ export default function QuickActionFab() {
   if (position === null) {
     // Original, untouched default: bottom-right anchored via CSS, action
     // list grows upward above the button through normal flex-column flow.
-    // Desktop (lg+) only — mobile renders the compact bottom sheet instead.
+    // Desktop (lg+) only — mobile renders the FAB-relative compact panel
+    // instead (see renderMobileActionPanel).
     return (
       <>
-        {isQuickActionOpen && renderMobileActionPanel()}
+        {isQuickActionOpen &&
+          panelPosition &&
+          renderMobileActionPanel(panelPosition)}
         <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 flex flex-col items-end gap-2 lg:bottom-6">
           {isQuickActionOpen && (
             <div className="hidden flex-col items-end gap-2 lg:flex">
@@ -513,7 +620,9 @@ export default function QuickActionFab() {
 
   return (
     <>
-      {isQuickActionOpen && renderMobileActionPanel()}
+      {isQuickActionOpen &&
+        panelPosition &&
+        renderMobileActionPanel(panelPosition)}
       {isQuickActionOpen && (
         <div
           className="fixed z-100 hidden flex-col items-end gap-2 lg:flex"

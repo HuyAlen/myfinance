@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   clampFabPosition,
   computeDraggedPosition,
+  computeQuickActionPanelPosition,
   exceedsDragThreshold,
   parseStoredFabPosition,
   shouldCloseMobileMenuOnOutsidePointerDown,
   type FabPositionBounds,
+  type QuickActionPanelGeometry,
 } from "./fabPosition";
 
 /**
@@ -236,5 +238,195 @@ describe("shouldCloseMobileMenuOnOutsidePointerDown — mobile-only, non-modal o
     expect(shouldCloseMobileMenuOnOutsidePointerDown(1440, true, true)).toBe(
       false,
     );
+  });
+});
+
+describe("computeQuickActionPanelPosition — mobile panel follows the FAB", () => {
+  const VIEWPORT_WIDTH = 390;
+  const VIEWPORT_HEIGHT = 844;
+  const PANEL_WIDTH = 272;
+  const PANEL_HEIGHT = 144;
+  const MARGIN = 16;
+  const GAP = 10;
+  const SAFE_TOP = 76;
+  const SAFE_BOTTOM = 104;
+  const FAB_SIZE = 56;
+
+  function baseGeometry(
+    fabRect: QuickActionPanelGeometry["fabRect"],
+  ): QuickActionPanelGeometry {
+    return {
+      fabRect,
+      panelWidth: PANEL_WIDTH,
+      panelHeight: PANEL_HEIGHT,
+      viewportWidth: VIEWPORT_WIDTH,
+      viewportHeight: VIEWPORT_HEIGHT,
+      margin: MARGIN,
+      gap: GAP,
+      safeTop: SAFE_TOP,
+      safeBottom: SAFE_BOTTOM,
+    };
+  }
+
+  it("default bottom-right FAB opens the panel above-left", () => {
+    // Bottom-right anchor: right-4 (16px from right edge), just above
+    // BottomNav — mirrors QuickActionFab's real default CSS anchor.
+    const fabRect = {
+      left: VIEWPORT_WIDTH - FAB_SIZE - 16,
+      top: VIEWPORT_HEIGHT - SAFE_BOTTOM - FAB_SIZE - 8,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.placement).toBe("above-left");
+    expect(result.top).toBeLessThan(fabRect.top);
+    // Panel's right edge aligns with the FAB's right edge (extends left).
+    expect(result.left + PANEL_WIDTH).toBeCloseTo(
+      fabRect.left + fabRect.width,
+      0,
+    );
+  });
+
+  it("bottom-left FAB opens the panel above-right", () => {
+    const fabRect = {
+      left: 16,
+      top: VIEWPORT_HEIGHT - SAFE_BOTTOM - FAB_SIZE - 8,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.placement).toBe("above-right");
+    expect(result.top).toBeLessThan(fabRect.top);
+    // Panel's left edge aligns with the FAB's left edge (extends right).
+    expect(result.left).toBeCloseTo(fabRect.left, 0);
+  });
+
+  it("top-right FAB opens the panel below-left", () => {
+    const fabRect = {
+      left: VIEWPORT_WIDTH - FAB_SIZE - 16,
+      top: SAFE_TOP + 8,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.placement).toBe("below-left");
+    expect(result.top).toBeGreaterThan(fabRect.top + fabRect.height);
+  });
+
+  it("top-left FAB opens the panel below-right", () => {
+    const fabRect = {
+      left: 16,
+      top: SAFE_TOP + 8,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.placement).toBe("below-right");
+    expect(result.top).toBeGreaterThan(fabRect.top + fabRect.height);
+  });
+
+  it("a FAB near the center of the screen still gets a panel positioned close to it (does not snap to a fixed bottom-of-screen location)", () => {
+    const fabRect = {
+      left: VIEWPORT_WIDTH / 2 - FAB_SIZE / 2,
+      top: VIEWPORT_HEIGHT / 2 - FAB_SIZE / 2,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    // Vertically adjacent to the FAB (either directly above or below it,
+    // separated by exactly the gap), never far away at a canonical spot.
+    const isDirectlyAbove =
+      Math.abs(result.top + PANEL_HEIGHT + GAP - fabRect.top) < 1;
+    const isDirectlyBelow =
+      Math.abs(result.top - GAP - (fabRect.top + fabRect.height)) < 1;
+    expect(isDirectlyAbove || isDirectlyBelow).toBe(true);
+  });
+
+  it("prefers opening above when there is enough room on both sides", () => {
+    const fabRect = {
+      left: 16,
+      top: VIEWPORT_HEIGHT / 2,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+    expect(result.placement.startsWith("above")).toBe(true);
+  });
+
+  it("clamps horizontally so the panel never overflows the left/right viewport edges", () => {
+    // FAB pinned at the absolute left edge — naive alignment would put the
+    // panel's left edge at 0, violating the margin.
+    const fabRect = { left: 0, top: 300, width: FAB_SIZE, height: FAB_SIZE };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.left).toBeGreaterThanOrEqual(MARGIN);
+    expect(result.left + PANEL_WIDTH).toBeLessThanOrEqual(
+      VIEWPORT_WIDTH - MARGIN,
+    );
+  });
+
+  it("clamps vertically so the panel never overlaps BottomNav (respects safeBottom)", () => {
+    // FAB dragged as low as the FAB's own clamp would ever allow.
+    const fabRect = {
+      left: 100,
+      top: VIEWPORT_HEIGHT - SAFE_BOTTOM - FAB_SIZE,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.top + PANEL_HEIGHT).toBeLessThanOrEqual(
+      VIEWPORT_HEIGHT - SAFE_BOTTOM - MARGIN,
+    );
+  });
+
+  it("clamps vertically so the panel never overlaps the top safe area (respects safeTop)", () => {
+    const fabRect = { left: 100, top: SAFE_TOP, width: FAB_SIZE, height: FAB_SIZE };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    expect(result.top).toBeGreaterThanOrEqual(SAFE_TOP + MARGIN);
+  });
+
+  it("never returns a position that overlaps any viewport edge, across a sweep of FAB positions", () => {
+    const fabPositions = [
+      { left: 0, top: 0 },
+      { left: VIEWPORT_WIDTH - FAB_SIZE, top: 0 },
+      { left: 0, top: VIEWPORT_HEIGHT - FAB_SIZE },
+      { left: VIEWPORT_WIDTH - FAB_SIZE, top: VIEWPORT_HEIGHT - FAB_SIZE },
+      { left: VIEWPORT_WIDTH / 2 - FAB_SIZE / 2, top: VIEWPORT_HEIGHT / 2 },
+    ];
+
+    for (const { left, top } of fabPositions) {
+      const result = computeQuickActionPanelPosition(
+        baseGeometry({ left, top, width: FAB_SIZE, height: FAB_SIZE }),
+      );
+      expect(result.left).toBeGreaterThanOrEqual(MARGIN);
+      expect(result.left + PANEL_WIDTH).toBeLessThanOrEqual(
+        VIEWPORT_WIDTH - MARGIN,
+      );
+      expect(result.top).toBeGreaterThanOrEqual(SAFE_TOP + MARGIN - 1); // -1 for floating point tolerance
+      expect(result.top + PANEL_HEIGHT).toBeLessThanOrEqual(
+        VIEWPORT_HEIGHT - SAFE_BOTTOM - MARGIN + 1,
+      );
+    }
+  });
+
+  it("keeps a visible gap between the FAB and the panel rather than letting them touch or overlap", () => {
+    const fabRect = {
+      left: VIEWPORT_WIDTH - FAB_SIZE - 16,
+      top: VIEWPORT_HEIGHT - SAFE_BOTTOM - FAB_SIZE - 8,
+      width: FAB_SIZE,
+      height: FAB_SIZE,
+    };
+    const result = computeQuickActionPanelPosition(baseGeometry(fabRect));
+
+    // placement is "above" here, so the panel's bottom edge should sit
+    // `gap` px above the FAB's top edge (when not clamped).
+    expect(fabRect.top - (result.top + PANEL_HEIGHT)).toBeCloseTo(GAP, 0);
   });
 });
