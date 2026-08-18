@@ -567,22 +567,29 @@ export default function WalletsPage() {
       return;
     }
 
-    // Finance Engine v2 rule: addTransaction()/updateTransaction()/
-    // deleteTransaction() are the only places that mutate wallet.balance,
-    // each backed by a transaction record. An EDIT here must never
-    // overwrite the persisted balance directly — that would silently
-    // change net worth with no corresponding transaction history, breaking
-    // reconciliation. Only a brand-new wallet may set an opening balance,
-    // since it has no history to diverge from.
-    let balance: number;
-    if (existingWallet) {
-      balance = existingWallet.balance;
-    } else {
-      balance = Number(form.balance);
-      if (Number.isNaN(balance) || balance < 0) {
-        setSaveError("Vui lòng nhập số dư hợp lệ");
-        return;
-      }
+    // WALLET-BALANCE-EDIT-1: wallet.balance is a persisted field, atomically
+    // incremented/decremented by addTransaction()/updateTransaction()/
+    // deleteTransaction() (never recomputed from a transaction sum — see
+    // financeStorage.ts) — proven Model A, not a derived value. A manual
+    // edit here is therefore a direct correction to that same persisted
+    // field via updateWallet(), exactly like editing name/type already is —
+    // not a fake transaction, so it can never pollute income/expense/cash-
+    // flow reports or duplicate a transfer's effect. Same validation for a
+    // brand-new wallet's opening balance and an existing wallet's
+    // correction, since both are just "the balance this wallet starts
+    // reflecting from now on."
+    //
+    // Known trade-off (disclosed, not silently ignored): the Dashboard's
+    // Net Worth Trend chart reconstructs past net worth by walking
+    // transaction deltas backward from the CURRENT total. A balance
+    // correction has no transaction to walk back through, so — exactly
+    // like a new wallet's opening balance already does today — it will
+    // read as if the higher/lower balance had always been there, rather
+    // than appearing at the specific date of the edit.
+    const balance = Number(form.balance);
+    if (Number.isNaN(balance) || balance < 0) {
+      setSaveError("Vui lòng nhập số dư hợp lệ");
+      return;
     }
 
     const wallet: WalletType = {
@@ -1246,12 +1253,11 @@ export default function WalletsPage() {
                         setForm((p) => ({ ...p, balance: raw }))
                       }
                       placeholder="0"
-                      disabled={Boolean(form.id)}
                     />
                     {form.id && (
                       <p className="mt-1.5 text-[11px] font-medium leading-4 text-slate-400">
-                        Số dư được cập nhật tự động qua giao dịch và không thể
-                        sửa trực tiếp tại đây.
+                        Bạn có thể cập nhật số dư hiện tại của ví. Thay đổi sẽ
+                        không tạo giao dịch mới.
                       </p>
                     )}
                   </div>
