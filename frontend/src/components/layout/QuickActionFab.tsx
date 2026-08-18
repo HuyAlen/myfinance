@@ -31,24 +31,32 @@ const QUICK_ACTIONS = [
     href: buildQuickActionCreateHref("/transactions"),
     icon: ReceiptText,
     cls: "bg-blue-600 shadow-blue-200/60 hover:bg-blue-700",
+    mobileIconBg: "bg-blue-100",
+    mobileIconColor: "text-blue-600",
   },
   {
     label: "Tạo ví tiền",
     href: buildQuickActionCreateHref("/wallets"),
     icon: Wallet,
     cls: "bg-emerald-600 shadow-emerald-200/60 hover:bg-emerald-700",
+    mobileIconBg: "bg-emerald-100",
+    mobileIconColor: "text-emerald-600",
   },
   {
     label: "Tạo mục tiêu",
     href: buildQuickActionCreateHref("/goals"),
     icon: Target,
     cls: "bg-violet-600 shadow-violet-200/60 hover:bg-violet-700",
+    mobileIconBg: "bg-violet-100",
+    mobileIconColor: "text-violet-600",
   },
   {
     label: "Tạo ngân sách",
     href: buildQuickActionCreateHref("/budgets"),
     icon: ChartPie,
     cls: "bg-cyan-600 shadow-cyan-200/60 hover:bg-cyan-700",
+    mobileIconBg: "bg-cyan-100",
+    mobileIconColor: "text-cyan-600",
   },
 ];
 
@@ -383,18 +391,79 @@ export default function QuickActionFab() {
     });
   }
 
+  // Mobile-only compact action sheet — deliberately independent of the FAB's
+  // own `position`/drag location (see the ticket's "menu position = mobile-
+  // safe canonical overlay" requirement): it always anchors above BottomNav
+  // via the same `--mobile-bottom-nav-height` + safe-area token the FAB's
+  // own default anchor already uses, rather than chasing wherever the user
+  // dragged the button. Reuses the exact same QUICK_ACTIONS entries/hrefs
+  // and `selectAction` as the desktop stack — only the presentation differs
+  // (light tinted-icon rows instead of solid color blocks, per the ticket's
+  // "too visually heavy at this size on mobile" finding). `lg:hidden` keeps
+  // this out of the desktop layout entirely, matching how BottomNav/Sidebar
+  // already split mobile vs. desktop with pure Tailwind breakpoints instead
+  // of a JS media-query hook.
+  function renderMobileActionPanel() {
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-100 bg-slate-900/10 lg:hidden"
+          aria-hidden="true"
+          onClick={() => setIsQuickActionOpen(false)}
+        />
+        <div
+          className="fixed z-100 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl lg:hidden"
+          style={{
+            bottom:
+              "calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem)",
+            left: "max(1rem, calc(env(safe-area-inset-left) + 0.75rem))",
+            right: "max(1rem, calc(env(safe-area-inset-right) + 0.75rem))",
+          }}
+        >
+          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Thao tác nhanh
+          </p>
+          <div className="flex flex-col gap-1">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.href}
+                  type="button"
+                  onClick={() => selectAction(action.href)}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-slate-700 active:bg-slate-100"
+                >
+                  <span
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.mobileIconBg}`}
+                  >
+                    <Icon size={19} className={action.mobileIconColor} />
+                  </span>
+                  <span className="whitespace-nowrap">{action.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (position === null) {
     // Original, untouched default: bottom-right anchored via CSS, action
     // list grows upward above the button through normal flex-column flow.
+    // Desktop (lg+) only — mobile renders the compact bottom sheet instead.
     return (
-      <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 flex flex-col items-end gap-2 lg:bottom-6">
-        {isQuickActionOpen && (
-          <div className="flex flex-col items-end gap-2">
-            {renderActionButtons()}
-          </div>
-        )}
-        {renderFabButton()}
-      </div>
+      <>
+        {isQuickActionOpen && renderMobileActionPanel()}
+        <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 flex flex-col items-end gap-2 lg:bottom-6">
+          {isQuickActionOpen && (
+            <div className="hidden flex-col items-end gap-2 lg:flex">
+              {renderActionButtons()}
+            </div>
+          )}
+          {renderFabButton()}
+        </div>
+      </>
     );
   }
 
@@ -415,9 +484,10 @@ export default function QuickActionFab() {
 
   return (
     <>
+      {isQuickActionOpen && renderMobileActionPanel()}
       {isQuickActionOpen && (
         <div
-          className="fixed z-100 flex flex-col items-end gap-2"
+          className="fixed z-100 hidden flex-col items-end gap-2 lg:flex"
           style={{
             left: position.x + FAB_SIZE,
             top: position.y - ACTION_LIST_GAP,
