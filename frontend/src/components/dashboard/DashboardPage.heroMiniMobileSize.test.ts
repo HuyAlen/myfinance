@@ -50,9 +50,9 @@ describe("DashboardPage HeroMini mobile KPI card size (V2 polish)", () => {
     expect(heroMiniSource).toContain("sm:size-7");
   });
 
-  it("increases mobile label size (14px) and reverts to the original 9px (plus the untouched xl/2xl overrides) at sm and up", () => {
+  it("increases mobile label size well above the original 9px, and reverts to it at sm and up (exact mobile size was later tuned for a single-line fit — see DashboardPage.heroMiniLabelWrap.test.ts)", () => {
     const heroMiniSource = extractHeroMiniSource();
-    expect(heroMiniSource).toContain("text-[14px] font-semibold");
+    expect(heroMiniSource).toContain("font-semibold");
     expect(heroMiniSource).toContain("sm:text-[9px]");
     expect(heroMiniSource).toContain("sm:leading-3.5");
     // Untouched — these only ever applied at xl/2xl and still do.

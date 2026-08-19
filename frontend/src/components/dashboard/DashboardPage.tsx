@@ -3812,7 +3812,7 @@ function HeroMini({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 whitespace-normal text-[14px] font-semibold leading-tight text-slate-600 sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 xl:text-[8px] 2xl:text-[10px]">
+          <p className="whitespace-nowrap text-[12.5px] font-semibold leading-tight tracking-[-0.01em] text-slate-600 sm:tracking-normal sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           {isLoading ? (
