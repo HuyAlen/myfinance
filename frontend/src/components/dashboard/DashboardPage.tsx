@@ -3805,21 +3805,21 @@ function HeroMini({
   isLoading?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-white/70 bg-white/95/85 px-2.5 py-3 shadow-sm transition-all duration-200 hover:shadow-md backdrop-blur">
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+    <div className="min-w-0 min-h-[100px] overflow-hidden rounded-2xl border border-white/70 bg-white/95/85 p-3 shadow-sm transition-all duration-200 hover:shadow-md backdrop-blur sm:min-h-0 sm:overflow-visible sm:px-2.5 sm:py-3">
+      <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 sm:size-7">
           {icon}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[9px] font-semibold leading-3.5 text-slate-600 xl:text-[8px] 2xl:text-[10px]">
+          <p className="truncate text-[14px] font-semibold leading-4 text-slate-600 sm:text-[9px] sm:leading-3.5 xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           {isLoading ? (
-            <div className="mt-1 h-3.5 w-16 animate-pulse rounded-md bg-slate-200/80" />
+            <div className="mt-1.5 h-4 w-16 animate-pulse rounded-md bg-slate-200/80 sm:mt-1 sm:h-3.5" />
           ) : (
             <p
-              className={`mt-0.5 whitespace-nowrap text-[clamp(8px,2.35vw,13px)] font-black leading-4 tracking-[-0.045em] tabular-nums ${valueClass}`}
+              className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,16px)] font-black leading-5 tracking-[-0.03em] tabular-nums sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.045em] ${valueClass}`}
               title={value}
             >
               {value}
