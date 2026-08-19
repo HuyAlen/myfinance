@@ -48,6 +48,22 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-emerald-600",
   },
   {
+    // Distinct from "wallet" above ("Tạo ví tiền" — opens the create-wallet
+    // form via ?action=create) — this one is a plain navigation to the
+    // Wallets page itself, so it deliberately does NOT use
+    // buildQuickActionCreateHref. Same icon as Sidebar's own "Ví Tiền" link
+    // (Wallet, from lucide-react) for semantic consistency; indigo keeps it
+    // visually distinct from both "Thêm giao dịch" (blue) and the hidden
+    // "Tạo ví tiền" (emerald).
+    id: "open-wallets",
+    label: "Mở Ví Tiền",
+    href: "/wallets",
+    icon: Wallet,
+    cls: "bg-indigo-600 shadow-indigo-200/60 hover:bg-indigo-700",
+    mobileIconBg: "bg-indigo-100",
+    mobileIconColor: "text-indigo-600",
+  },
+  {
     id: "goal",
     label: "Tạo mục tiêu",
     href: buildQuickActionCreateHref("/goals"),
@@ -75,6 +91,7 @@ const QUICK_ACTIONS = [
 // copy/wording change can never silently re-show or re-hide an action.
 const QUICK_ACTION_VISIBILITY: Record<string, boolean> = {
   transaction: true,
+  "open-wallets": true,
   wallet: false,
   goal: false,
   budget: false,
@@ -105,19 +122,34 @@ const MOBILE_PANEL_WIDTH = 272;
 const MOBILE_PANEL_HEIGHT = 144;
 const MOBILE_PANEL_GAP = 10;
 
-// Compact single-row dimensions used only while exactly one action is
-// visible (see QUICK_ACTION_VISIBILITY) — avoids rendering the 2x2 grid
-// with 3 empty cells. Same "known/fixed, matched by an explicit inline
-// width style" approach as MOBILE_PANEL_WIDTH/HEIGHT above.
+// Compact dimensions used while fewer than the full 4 actions are visible
+// (see QUICK_ACTION_VISIBILITY) — avoids rendering the 2x2 grid with empty
+// cells. Same "known/fixed, matched by an explicit inline width style"
+// approach as MOBILE_PANEL_WIDTH/HEIGHT above.
+//
+// - Exactly 1 visible action: a single compact card (own width/height).
+// - Exactly 2: `grid-cols-2` naturally lays them out as ONE row (no second
+//   row is created for only 2 children), so it needs the full grid WIDTH
+//   (two side-by-side cells) but only ONE row's HEIGHT — not
+//   MOBILE_PANEL_HEIGHT, which assumes a full two-row 2x2 grid.
+// - 3 or 4 (not currently reachable, but kept correct): the original full
+//   2x2 grid dimensions.
 const MOBILE_SINGLE_ACTION_WIDTH = 224;
 const MOBILE_SINGLE_ACTION_HEIGHT = 80;
+const MOBILE_TWO_ACTION_WIDTH = MOBILE_PANEL_WIDTH;
+const MOBILE_TWO_ACTION_HEIGHT = MOBILE_SINGLE_ACTION_HEIGHT;
 const IS_SINGLE_MOBILE_ACTION = VISIBLE_QUICK_ACTIONS.length <= 1;
+const IS_TWO_ACTION_MOBILE_LAYOUT = VISIBLE_QUICK_ACTIONS.length === 2;
 const EFFECTIVE_MOBILE_PANEL_WIDTH = IS_SINGLE_MOBILE_ACTION
   ? MOBILE_SINGLE_ACTION_WIDTH
-  : MOBILE_PANEL_WIDTH;
+  : IS_TWO_ACTION_MOBILE_LAYOUT
+    ? MOBILE_TWO_ACTION_WIDTH
+    : MOBILE_PANEL_WIDTH;
 const EFFECTIVE_MOBILE_PANEL_HEIGHT = IS_SINGLE_MOBILE_ACTION
   ? MOBILE_SINGLE_ACTION_HEIGHT
-  : MOBILE_PANEL_HEIGHT;
+  : IS_TWO_ACTION_MOBILE_LAYOUT
+    ? MOBILE_TWO_ACTION_HEIGHT
+    : MOBILE_PANEL_HEIGHT;
 
 function getViewportBounds() {
   return {
@@ -535,14 +567,15 @@ export default function QuickActionFab() {
   // the user drags the FAB, the panel opens right beside it, clamped to
   // stay fully inside the viewport and clear of BottomNav/safe-area.
   // Renders VISIBLE_QUICK_ACTIONS (not the raw QUICK_ACTIONS list), and
-  // when that's down to a single entry (see QUICK_ACTION_VISIBILITY) drops
-  // the 2x2 grid for one compact row instead of leaving 3 empty cells.
-  // Reuses the exact same action entries/hrefs and `selectAction` as the
-  // desktop stack — only the presentation differs (light tinted-icon
-  // cells instead of solid color blocks). `lg:hidden` keeps this out of
-  // the desktop layout entirely, matching how BottomNav/Sidebar already
-  // split mobile vs. desktop with pure Tailwind breakpoints instead of a
-  // JS media-query hook.
+  // when that's fewer than 4 (see QUICK_ACTION_VISIBILITY) uses the
+  // matching EFFECTIVE_MOBILE_PANEL_WIDTH/HEIGHT for exactly 1 or 2 visible
+  // actions instead of leaving empty cells or reserving a second row's
+  // worth of unused height. Reuses the exact same action entries/hrefs and
+  // `selectAction` as the desktop stack — only the presentation differs
+  // (light tinted-icon cells instead of solid color blocks). `lg:hidden`
+  // keeps this out of the desktop layout entirely, matching how
+  // BottomNav/Sidebar already split mobile vs. desktop with pure Tailwind
+  // breakpoints instead of a JS media-query hook.
   function renderMobileActionPanel(panelPos: { left: number; top: number }) {
     return (
       <div
