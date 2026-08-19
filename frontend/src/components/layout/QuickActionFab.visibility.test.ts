@@ -86,7 +86,8 @@ describe("QuickActionFab temporary action visibility", () => {
     expect(source).toContain(
       "const IS_SINGLE_MOBILE_ACTION = VISIBLE_QUICK_ACTIONS.length <= 1;",
     );
-    expect(source).toContain('IS_SINGLE_MOBILE_ACTION ? "flex" : "grid grid-cols-2 gap-2"');
+    expect(source).toContain("grid grid-cols-2 gap-2");
+    expect(source).toContain("IS_SINGLE_MOBILE_ACTION");
   });
 
   it("the single-action layout still uses a known/fixed width matched to the positioning math (consistent with the grid case)", () => {

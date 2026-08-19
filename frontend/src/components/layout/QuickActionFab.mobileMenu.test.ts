@@ -43,9 +43,10 @@ describe("QuickActionFab mobile panel follows the draggable FAB", () => {
     expect(extractPanelSource()).toContain("lg:hidden");
   });
 
-  it("still uses the compact 2x2 grid, not a tall 1-column vertical stack", () => {
-    expect(extractPanelSource()).toContain("grid-cols-2");
-    expect(extractPanelSource()).not.toContain("flex-col");
+  it("uses a compact grid (3/4 actions) or a compact vertical stack (exactly 2) — never the old tall items-end stack from before the compact panel existed", () => {
+    const panelSource = extractPanelSource();
+    expect(panelSource).toContain("grid-cols-2");
+    expect(panelSource).not.toContain("items-end");
   });
 
   it("still has NO full-screen dark backdrop element — remains a lightweight popover, not a modal", () => {
@@ -94,8 +95,10 @@ describe("QuickActionFab mobile panel follows the draggable FAB", () => {
     expect(source).toContain('buildQuickActionCreateHref("/budgets")');
   });
 
-  it("action labels are still truncated to a single line — can never 3-line wrap", () => {
-    expect(extractPanelSource()).toContain("truncate");
+  it("action labels render fully on one line (whitespace-nowrap) — never truncated with an ellipsis, never 3-line wrap", () => {
+    const panelSource = extractPanelSource();
+    expect(panelSource).toContain("whitespace-nowrap");
+    expect(panelSource).not.toContain("truncate");
   });
 
   it("mobile cells still use light tinted-icon styling, not the desktop's solid saturated color blocks", () => {

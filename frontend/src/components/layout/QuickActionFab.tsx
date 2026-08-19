@@ -124,20 +124,23 @@ const MOBILE_PANEL_GAP = 10;
 
 // Compact dimensions used while fewer than the full 4 actions are visible
 // (see QUICK_ACTION_VISIBILITY) — avoids rendering the 2x2 grid with empty
-// cells. Same "known/fixed, matched by an explicit inline width style"
-// approach as MOBILE_PANEL_WIDTH/HEIGHT above.
+// cells, or (for exactly 2) a horizontally-squeezed 2-column row that's too
+// narrow for either label to render without truncating. Same "known/fixed,
+// matched by an explicit inline width style" approach as
+// MOBILE_PANEL_WIDTH/HEIGHT above.
 //
-// - Exactly 1 visible action: a single compact card (own width/height).
-// - Exactly 2: `grid-cols-2` naturally lays them out as ONE row (no second
-//   row is created for only 2 children), so it needs the full grid WIDTH
-//   (two side-by-side cells) but only ONE row's HEIGHT — not
-//   MOBILE_PANEL_HEIGHT, which assumes a full two-row 2x2 grid.
+// - Exactly 1 visible action: a single compact card.
+// - Exactly 2: a vertical two-row mini-menu (NOT a 2-column grid) — each
+//   row gets the panel's full content width, so a label like "Thêm giao
+//   dịch" renders on one line instead of being squeezed into a ~120px-wide
+//   grid cell and ellipsized. Reads as a small floating group attached to
+//   the FAB rather than a wide, mostly-empty card.
 // - 3 or 4 (not currently reachable, but kept correct): the original full
 //   2x2 grid dimensions.
 const MOBILE_SINGLE_ACTION_WIDTH = 224;
-const MOBILE_SINGLE_ACTION_HEIGHT = 80;
-const MOBILE_TWO_ACTION_WIDTH = MOBILE_PANEL_WIDTH;
-const MOBILE_TWO_ACTION_HEIGHT = MOBILE_SINGLE_ACTION_HEIGHT;
+const MOBILE_SINGLE_ACTION_HEIGHT = 64;
+const MOBILE_TWO_ACTION_WIDTH = 208;
+const MOBILE_TWO_ACTION_HEIGHT = 120;
 const IS_SINGLE_MOBILE_ACTION = VISIBLE_QUICK_ACTIONS.length <= 1;
 const IS_TWO_ACTION_MOBILE_LAYOUT = VISIBLE_QUICK_ACTIONS.length === 2;
 const EFFECTIVE_MOBILE_PANEL_WIDTH = IS_SINGLE_MOBILE_ACTION
@@ -561,28 +564,35 @@ export default function QuickActionFab() {
   // Mobile-only compact action panel — a lightweight floating utility menu,
   // NOT a modal/bottom sheet: no full-screen backdrop (see the outside-tap
   // effect above for how it still closes on an outside tap), a bounded
-  // ~144px height via a 2x2 grid instead of a tall 1-column stack, and
-  // positioned relative to the FAB's OWN current rect (see the
-  // useLayoutEffect above) rather than a fixed canonical spot — wherever
-  // the user drags the FAB, the panel opens right beside it, clamped to
-  // stay fully inside the viewport and clear of BottomNav/safe-area.
-  // Renders VISIBLE_QUICK_ACTIONS (not the raw QUICK_ACTIONS list), and
-  // when that's fewer than 4 (see QUICK_ACTION_VISIBILITY) uses the
-  // matching EFFECTIVE_MOBILE_PANEL_WIDTH/HEIGHT for exactly 1 or 2 visible
-  // actions instead of leaving empty cells or reserving a second row's
-  // worth of unused height. Reuses the exact same action entries/hrefs and
-  // `selectAction` as the desktop stack — only the presentation differs
-  // (light tinted-icon cells instead of solid color blocks). `lg:hidden`
-  // keeps this out of the desktop layout entirely, matching how
-  // BottomNav/Sidebar already split mobile vs. desktop with pure Tailwind
-  // breakpoints instead of a JS media-query hook.
+  // height via a vertical mini-menu instead of a tall 1-column stack or a
+  // squeezed 2-column grid, and positioned relative to the FAB's OWN
+  // current rect (see the useLayoutEffect above) rather than a fixed
+  // canonical spot — wherever the user drags the FAB, the panel opens
+  // right beside it, clamped to stay fully inside the viewport and clear
+  // of BottomNav/safe-area. Renders VISIBLE_QUICK_ACTIONS (not the raw
+  // QUICK_ACTIONS list), and when that's fewer than 4 (see
+  // QUICK_ACTION_VISIBILITY) uses the matching
+  // EFFECTIVE_MOBILE_PANEL_WIDTH/HEIGHT for exactly 1 or 2 visible actions
+  // instead of leaving empty cells or a horizontally-squeezed row that
+  // truncates labels. Labels are `whitespace-nowrap` (never `truncate`) —
+  // the 1- and 2-action panel widths are sized to fit each label on one
+  // line; there is no ellipsis fallback. Reuses the exact same action
+  // entries/hrefs and `selectAction` as the desktop stack — only the
+  // presentation differs (light tinted-icon cells instead of solid color
+  // blocks). `lg:hidden` keeps this out of the desktop layout entirely,
+  // matching how BottomNav/Sidebar already split mobile vs. desktop with
+  // pure Tailwind breakpoints instead of a JS media-query hook.
   function renderMobileActionPanel(panelPos: { left: number; top: number }) {
     return (
       <div
         ref={mobilePanelRef}
         className={[
-          "fixed z-100 rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-xl lg:hidden",
-          IS_SINGLE_MOBILE_ACTION ? "flex" : "grid grid-cols-2 gap-2",
+          "fixed z-100 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl lg:hidden",
+          IS_SINGLE_MOBILE_ACTION
+            ? "flex"
+            : IS_TWO_ACTION_MOBILE_LAYOUT
+              ? "flex flex-col gap-1.5"
+              : "grid grid-cols-2 gap-2",
         ].join(" ")}
         style={{
           left: panelPos.left,
@@ -597,14 +607,14 @@ export default function QuickActionFab() {
               key={action.href}
               type="button"
               onClick={() => selectAction(action.href)}
-              className="flex min-h-14 items-center gap-2 rounded-2xl px-2.5 py-2 active:bg-slate-100"
+              className="flex min-h-12 items-center gap-2 rounded-2xl px-2.5 py-1.5 active:bg-slate-100"
             >
               <span
                 className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.mobileIconBg}`}
               >
                 <Icon size={17} className={action.mobileIconColor} />
               </span>
-              <span className="truncate text-[13px] font-semibold text-slate-700">
+              <span className="whitespace-nowrap text-[13px] font-semibold text-slate-700">
                 {action.label}
               </span>
             </button>

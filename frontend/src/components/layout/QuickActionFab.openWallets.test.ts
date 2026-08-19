@@ -79,22 +79,28 @@ describe('QuickActionFab "Mở Ví Tiền" navigation action', () => {
     expect(source).toContain("{VISIBLE_QUICK_ACTIONS.map((action) => {");
   });
 
-  it("with exactly 2 visible actions, the mobile panel uses the grid layout (grid-cols-2 renders 2 items as one row, not the old single-action flex card)", () => {
+  it("with exactly 2 visible actions, the mobile panel uses a vertical two-row stack, NOT a 2-column grid (which squeezed both labels and forced truncation)", () => {
     expect(source).toContain(
       "const IS_TWO_ACTION_MOBILE_LAYOUT = VISIBLE_QUICK_ACTIONS.length === 2;",
     );
+    const start = source.indexOf("function renderMobileActionPanel(");
+    const end = source.indexOf("\n  }", start);
+    const panelSource = source.slice(start, end);
+    expect(panelSource).toContain("IS_TWO_ACTION_MOBILE_LAYOUT");
+    expect(panelSource).toContain('"flex flex-col gap-1.5"');
   });
 
-  it("the two-action mobile panel width matches the full grid width (two side-by-side cells), not the narrower single-action width", () => {
-    expect(source).toContain(
-      "const MOBILE_TWO_ACTION_WIDTH = MOBILE_PANEL_WIDTH;",
-    );
+  it("the two-action mobile panel has its own dedicated, compact width/height — not aliased to the single-action or full-grid constants", () => {
+    expect(source).toContain("const MOBILE_TWO_ACTION_WIDTH = 208;");
+    expect(source).toContain("const MOBILE_TWO_ACTION_HEIGHT = 120;");
   });
 
-  it("the two-action mobile panel height is ONE row's height, not the stale two-row 2x2 grid height (MOBILE_PANEL_HEIGHT) — no leftover empty vertical space", () => {
-    expect(source).toContain(
-      "const MOBILE_TWO_ACTION_HEIGHT = MOBILE_SINGLE_ACTION_HEIGHT;",
-    );
+  it("action labels use whitespace-nowrap, never truncate — full labels are the whole point of this layout", () => {
+    const start = source.indexOf("function renderMobileActionPanel(");
+    const end = source.indexOf("\n  }", start);
+    const panelSource = source.slice(start, end);
+    expect(panelSource).toContain("whitespace-nowrap");
+    expect(panelSource).not.toContain("truncate");
   });
 
   it("EFFECTIVE_MOBILE_PANEL_WIDTH/HEIGHT resolve through all three cases (1, 2, and the fallback 3/4) in that priority order", () => {
