@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/src/lib/database.types";
+import type { Database, Json } from "@/src/lib/database.types";
 
 type DbClient = SupabaseClient<Database>;
 
@@ -23,6 +23,13 @@ export type AIStoredMessage = {
   metadata: Record<string, unknown> | null;
   createdAt: string;
 };
+
+function toMetadataObject(value: Json | null): Record<string, unknown> | null {
+  if (value === null || Array.isArray(value) || typeof value !== "object") {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
 
 export function buildConversationTitle(question: string) {
   const normalized = question.replace(/\s+/g, " ").trim();
@@ -124,7 +131,7 @@ export async function listAIMessages(
     model: row.model,
     confidence: row.confidence,
     status: row.status,
-    metadata: row.metadata,
+    metadata: toMetadataObject(row.metadata),
     createdAt: row.created_at,
   }));
 }
@@ -158,7 +165,7 @@ export async function saveAIMessage(input: {
       model: input.model ?? null,
       confidence: input.confidence ?? null,
       status: input.status ?? "completed",
-      metadata: input.metadata ?? null,
+      metadata: (input.metadata ?? null) as Json,
     })
     .select("*")
     .single();

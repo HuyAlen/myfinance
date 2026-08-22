@@ -32,15 +32,16 @@ import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
 import {
   clearAllUserData,
+  exportFinanceBackup,
   getCategories,
   getDebts,
   getGoals,
-  getBudgets,
-  getInvestments,
   getTransactions,
   getWallets,
-  importAllData,
   resetFinanceDemoData,
+  restoreFinanceBackup,
+  validateFinanceBackup,
+  type FinanceBackupV2,
 } from "@/src/services/finance/financeStorage";
 import {
   deleteAIFinanceApiKey,
@@ -298,7 +299,7 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Reset dữ liệu demo?",
       description:
-        "Toàn bộ dữ liệu hiện tại sẽ bị xóa và thay bằng dữ liệu demo.",
+        "Toàn bộ dữ liệu hiện tại, bao gồm Tiết kiệm và Forex, sẽ bị xóa và thay bằng dữ liệu demo.",
       confirmText: "Reset",
       variant: "warning",
       onConfirm: async () => {
@@ -323,7 +324,7 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Xóa toàn bộ dữ liệu?",
       description:
-        "Hành động này không thể hoàn tác. Tất cả giao dịch, ví và dữ liệu tài chính sẽ bị xóa vĩnh viễn.",
+        "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính, bao gồm Tiết kiệm và Forex, sẽ bị xóa vĩnh viễn.",
       confirmText: "Xóa tất cả",
       variant: "danger",
       onConfirm: async () => {
@@ -339,94 +340,98 @@ export default function SettingsPage() {
   }
 
   async function handleExportJson() {
-    // FINANCE-DATA-1: these readers now reject on a genuine query failure
-    // instead of silently resolving to [] — unlike the reload helpers
-    // above, an export has no prior state to fall back on, so a failure
-    // here must actually tell the user via the existing toast mechanism
-    // rather than silently producing an incomplete/empty backup file.
+    // FINANCE-DATA-2: the database now produces one versioned snapshot in a
+    // single RPC call. This prevents a partial browser-side export where one
+    // of several independent collection reads fails after the others succeed.
     try {
-      const [
-        wallets,
-        categories,
-        transactions,
-        debts,
-        goals,
-        budgets,
-        investments,
-      ] = await Promise.all([
-        getWallets(),
-        getCategories(),
-        getTransactions(),
-        getDebts(),
-        getGoals(),
-        getBudgets(),
-        getInvestments(),
-      ]);
-      const data = {
-        pf_wallets: wallets,
-        pf_categories: categories,
-        pf_transactions: transactions,
-        pf_debts: debts,
-        pf_goals: goals,
-        pf_budgets: budgets,
-        pf_investments: investments,
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
+      const backup = await exportFinanceBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download =
-        "personal-finance-backup-" +
+        "myfinance-backup-v2-" +
         new Date().toISOString().slice(0, 10) +
         ".json";
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("[SettingsPage] handleExportJson failed:", error);
-      toast({ variant: "error", message: "Không thể xuất dữ liệu. Vui lòng thử lại." });
+      toast({
+        variant: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Không thể xuất dữ liệu. Vui lòng thử lại.",
+      });
     }
   }
 
-  function handleImportJson(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const result = JSON.parse(String(reader.result));
-        const { error: importErr } = await importAllData({
-          wallets: Array.isArray(result.pf_wallets)
-            ? result.pf_wallets
-            : undefined,
-          categories: Array.isArray(result.pf_categories)
-            ? result.pf_categories
-            : undefined,
-          transactions: Array.isArray(result.pf_transactions)
-            ? result.pf_transactions
-            : undefined,
-          debts: Array.isArray(result.pf_debts) ? result.pf_debts : undefined,
-          goals: Array.isArray(result.pf_goals) ? result.pf_goals : undefined,
-          budgets: Array.isArray(result.pf_budgets)
-            ? result.pf_budgets
-            : undefined,
-          investments: Array.isArray(result.pf_investments)
-            ? result.pf_investments
-            : undefined,
-        });
-        await reloadStats();
-        if (importErr) {
+  function requestBackupRestore(backup: FinanceBackupV2, fileName: string) {
+    setPendingAction({
+      title: "Khôi phục backup?",
+      description:
+        `File ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
+        "(Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, " +
+        "Tiết kiệm và Forex). Nếu bất kỳ bước nào thất bại, dữ liệu hiện tại " +
+        "sẽ được giữ nguyên.",
+      confirmText: "Khôi phục",
+      variant: "warning",
+      onConfirm: async () => {
+        const { error: restoreError } = await restoreFinanceBackup(backup);
+        if (restoreError) {
           toast({
             variant: "error",
-            message: "Lỗi import dữ liệu: " + importErr,
+            message: "Không thể khôi phục dữ liệu: " + restoreError,
           });
-        } else {
-          toast({ variant: "success", message: "Import dữ liệu thành công." });
+          return;
         }
+
+        await reloadStats();
+        toast({
+          variant: "success",
+          message: "Đã khôi phục backup thành công.",
+        });
+      },
+    });
+  }
+
+  function handleImportJson(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Allow choosing the same file again after cancel/error. The File object
+    // remains valid after the input value is cleared.
+    input.value = "";
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed: unknown = JSON.parse(String(reader.result));
+        const validation = validateFinanceBackup(parsed);
+
+        // Client-side preflight happens before the destructive confirmation
+        // is even offered. The restore RPC repeats the same structural checks
+        // server-side before its first DELETE, so this is UX plus defense in
+        // depth, not the authority for safety.
+        if (!validation.ok) {
+          toast({ variant: "error", message: validation.error });
+          return;
+        }
+
+        requestBackupRestore(validation.backup, file.name);
       } catch {
         toast({ variant: "error", message: "File JSON không hợp lệ." });
       }
+    };
+    reader.onerror = () => {
+      toast({
+        variant: "error",
+        message: "Không thể đọc file backup. Vui lòng thử lại.",
+      });
     };
     reader.readAsText(file);
   }
@@ -1606,7 +1611,7 @@ export default function SettingsPage() {
                     Export JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Tải toàn bộ dữ liệu về máy dưới dạng file JSON backup.
+                    Tải snapshot đầy đủ Ví, Tiết kiệm, Forex và các dữ liệu tài chính về file JSON backup V2.
                   </p>
                   <button
                     onClick={handleExportJson}
@@ -1626,7 +1631,7 @@ export default function SettingsPage() {
                     Import JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Khôi phục dữ liệu từ file backup JSON đã export trước đó.
+                    Khôi phục atomically từ backup MyFinance V2. Backup cũ thiếu Savings/Forex sẽ bị từ chối an toàn.
                   </p>
                   <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-[.98]">
                     <Upload size={13} />

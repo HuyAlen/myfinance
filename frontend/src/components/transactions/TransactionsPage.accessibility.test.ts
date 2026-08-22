@@ -21,7 +21,7 @@ describe("Icon-only control accessible names (F-11)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   it("modal close button has an accessible name (previously had none)", () => {
     const start = source.indexOf('onClick={() => setIsFormOpen(false)}');
@@ -97,7 +97,7 @@ describe("CRUD modal dialog semantics (F-12)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   it("the modal panel exposes role=dialog, aria-modal=true, and is labelled/described by the visible heading/description", () => {
     const panelStart = source.indexOf(

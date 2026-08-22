@@ -108,7 +108,7 @@ describe("TransactionsPage wiring: effective range consumed consistently (source
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const normalized = source.replace(/\s+/g, " ");
 
   it("the locally-duplicated getSelectedMonthRange period system is fully removed", () => {
@@ -165,12 +165,22 @@ describe("F-7 wiring: header disambiguates filtered totals from period totals (s
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const normalized = source.replace(/\s+/g, " ");
 
   it("the summary subtitle branches on hasActiveFilters and names the effective period, not a raw selectedMonth string", () => {
-    expect(normalized).toContain("{hasActiveFilters ? `Đang lọc kết quả");
-    expect(source).toContain("${effectiveRangeLabel}");
+    const subtitleStart = normalized.indexOf("{hasActiveFilters ?");
+    expect(subtitleStart).toBeGreaterThan(-1);
+    const subtitleEnd = normalized.indexOf("</p>", subtitleStart);
+    expect(subtitleEnd).toBeGreaterThan(subtitleStart);
+    const subtitleSource = normalized.slice(subtitleStart, subtitleEnd);
+
+    // Copy may evolve, but BOTH branches must remain scoped to the resolved
+    // effective period. This intentionally asserts semantics rather than a
+    // specific Vietnamese sentence.
+    const periodLabelOccurrences =
+      subtitleSource.split("${effectiveRangeLabel}").length - 1;
+    expect(periodLabelOccurrences).toBe(2);
     expect(source).not.toContain("{selectedMonth}");
   });
 

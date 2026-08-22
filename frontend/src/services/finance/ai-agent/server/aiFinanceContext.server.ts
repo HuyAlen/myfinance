@@ -19,12 +19,11 @@ import {
 
 type Client = SupabaseClient<Database>;
 
-type CategoryRow = Database["public"]["Tables"]["categories"]["Row"] & {
-  // Canonical Budget Spending needs a category's planning group. Persisted
-  // as `planning_group` on the categories table (financeStorage.ts's
-  // fromCategoryRow is the authoritative mapper); the generated Database
-  // type here predates that column, but select("*") already returns it.
-  planning_group?: CategoryPlanningGroup | null;
+type CategoryDbRow = Database["public"]["Tables"]["categories"]["Row"];
+type CategoryRow = Pick<CategoryDbRow, "id" | "name" | "type" | "planning_group"> & {
+  // Transitional alias accepted only at this domain boundary. The canonical
+  // database column is `planning_group`; older in-memory fixtures may still
+  // carry the camelCase domain property.
   planningGroup?: CategoryPlanningGroup | null;
 };
 
@@ -37,9 +36,12 @@ export function toDomainCategory(row: CategoryRow): Category {
   };
 }
 
-export function toDomainTransaction(
-  row: Database["public"]["Tables"]["transactions"]["Row"],
-): Transaction {
+type TransactionRow = Pick<
+  Database["public"]["Tables"]["transactions"]["Row"],
+  "id" | "type" | "amount" | "categoryId" | "walletId" | "note" | "date"
+>;
+
+export function toDomainTransaction(row: TransactionRow): Transaction {
   return {
     id: row.id,
     type: row.type as Transaction["type"],
@@ -52,7 +54,10 @@ export function toDomainTransaction(
 }
 
 export function toDomainBudget(
-  row: Database["public"]["Tables"]["budgets"]["Row"],
+  row: Pick<
+    Database["public"]["Tables"]["budgets"]["Row"],
+    "id" | "categoryId" | "month" | "limitAmount"
+  >,
 ): Budget {
   return {
     id: row.id,
@@ -63,7 +68,10 @@ export function toDomainBudget(
 }
 
 export function toDomainWallet(
-  row: Database["public"]["Tables"]["wallets"]["Row"],
+  row: Pick<
+    Database["public"]["Tables"]["wallets"]["Row"],
+    "id" | "name" | "type" | "balance"
+  >,
 ): Wallet {
   return {
     id: row.id,
@@ -74,7 +82,10 @@ export function toDomainWallet(
 }
 
 export function toDomainDebt(
-  row: Database["public"]["Tables"]["debts"]["Row"],
+  row: Pick<
+    Database["public"]["Tables"]["debts"]["Row"],
+    "id" | "name" | "totalAmount" | "remainingAmount"
+  >,
 ): Debt {
   return {
     id: row.id,
@@ -85,7 +96,10 @@ export function toDomainDebt(
 }
 
 export function toDomainInvestment(
-  row: Database["public"]["Tables"]["investments"]["Row"],
+  row: Pick<
+    Database["public"]["Tables"]["investments"]["Row"],
+    "id" | "name" | "type" | "currentValue" | "investedAmount"
+  >,
 ): Investment {
   return {
     id: row.id,

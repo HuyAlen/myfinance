@@ -24,42 +24,98 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
+const LOCAL_UI_MODE =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_LOCAL_UI_MODE === "true";
+
+const LOCAL_UI_USER: User = {
+  id: "local-ui-user",
+  aud: "authenticated",
+  role: "authenticated",
+  email: "local@myfinance.dev",
+  app_metadata: {
+    provider: "local",
+    providers: ["local"],
+  },
+  user_metadata: {
+    name: "Local UI",
+  },
+  created_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-01-01T00:00:00.000Z",
+};
+
+const LOCAL_UI_SESSION: Session = {
+  access_token: "local-ui-mode",
+  refresh_token: "local-ui-mode",
+  expires_in: 60 * 60 * 24 * 365,
+  expires_at: 4102444800,
+  token_type: "bearer",
+  user: LOCAL_UI_USER,
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() =>
+    LOCAL_UI_MODE ? LOCAL_UI_USER : null,
+  );
+  const [session, setSession] = useState<Session | null>(() =>
+    LOCAL_UI_MODE ? LOCAL_UI_SESSION : null,
+  );
+  const [loading, setLoading] = useState(() => !LOCAL_UI_MODE);
   const mountedAtRef = useRef<number | null>(null);
   const hasReportedAuthReadyRef = useRef(false);
 
   useEffect(() => {
     mountedAtRef.current = performance.now();
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const reportAuthReady = () => {
+      if (
+        hasReportedAuthReadyRef.current ||
+        mountedAtRef.current === null
+      ) {
+        return;
+      }
+
+      hasReportedAuthReadyRef.current = true;
+      reportPerformanceMetric(
+        "auth_ready",
+        performance.now() - mountedAtRef.current,
+        { status: "success" },
+      );
+    };
+
+    // Development-only UI mode. This bypasses Supabase auth so the
+    // frontend can be inspected locally without a reachable Supabase project.
+    if (LOCAL_UI_MODE) {
+      reportAuthReady();
+      return;
+    }
+
+    let active = true;
+
+    // Normal Supabase authentication.
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return;
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-
-      if (!hasReportedAuthReadyRef.current && mountedAtRef.current !== null) {
-        hasReportedAuthReadyRef.current = true;
-        reportPerformanceMetric(
-          "auth_ready",
-          performance.now() - mountedAtRef.current,
-          { status: "success" },
-        );
-      }
+      reportAuthReady();
     });
 
-    // Listen for auth state changes (login, logout, token refresh)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

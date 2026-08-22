@@ -501,7 +501,7 @@ export default function WalletsPage() {
       id: crypto.randomUUID(),
       type: "transfer",
       // Canonical for transfer transactions per schema contract (see
-      // supabase_schema.sql: 'Empty string for transfer transactions; UUID/slug
+      // /supabase/schema.sql: empty string for transfer transactions; UUID/slug
       // for income and expense') and matches TransactionsPage's own transfer
       // payload — not a category id, so never a fake/invented UUID.
       categoryId: "",
@@ -635,7 +635,7 @@ export default function WalletsPage() {
     // data) instead of relying on in-memory current-month data — an old
     // transaction from a prior month/year would otherwise be missed. No DB
     // FK enforces this (walletId/transferToWalletId → wallets is
-    // intentionally omitted; see supabase_schema.sql), so this remains the
+    // intentionally omitted; see /supabase/schema.sql), so this remains the
     // integrity guard before delete.
     setIsCheckingDelete(true);
     try {

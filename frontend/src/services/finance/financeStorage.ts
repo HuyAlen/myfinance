@@ -16,6 +16,13 @@ import type {
   Wallet,
 } from "@/src/types/finance";
 
+// ─── Local UI mode ────────────────────────────────────────────────────────────
+
+const LOCAL_UI_MODE =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_LOCAL_UI_MODE === "true";
+const LOCAL_UI_USER_ID = "local-ui-user";
+
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 // `supabase.auth.getUser()` re-verifies the session with a network round trip
@@ -29,6 +36,8 @@ import type {
 // case. Row-level security on every Supabase query still enforces the real
 // access control, so this is not a security downgrade.
 async function getAuthUserId(): Promise<string | null> {
+  if (LOCAL_UI_MODE) return LOCAL_UI_USER_ID;
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -36,6 +45,219 @@ async function getAuthUserId(): Promise<string | null> {
 }
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
+
+// ─── FINANCE-DATA-2: versioned, atomic backup/restore contract ───────────────
+
+export const FINANCE_BACKUP_FORMAT = "myfinance-backup" as const;
+export const FINANCE_BACKUP_VERSION = 2 as const;
+export const FINANCE_BACKUP_DOMAINS = [
+  "wallets",
+  "categories",
+  "transactions",
+  "debts",
+  "goals",
+  "budgets",
+  "investments",
+  "savings",
+  "saving_transactions",
+  "forex_accounts",
+  "forex_cash_transactions",
+] as const;
+
+export type FinanceBackupDomain = (typeof FINANCE_BACKUP_DOMAINS)[number];
+export type FinanceBackupRow = Record<string, unknown>;
+export type FinanceBackupData = Record<
+  FinanceBackupDomain,
+  FinanceBackupRow[]
+>;
+
+export type FinanceBackupV2 = {
+  format: typeof FINANCE_BACKUP_FORMAT;
+  version: typeof FINANCE_BACKUP_VERSION;
+  exported_at: string;
+  data: FinanceBackupData;
+};
+
+export type FinanceBackupValidationResult =
+  | { ok: true; backup: FinanceBackupV2 }
+  | { ok: false; error: string };
+
+const LEGACY_BACKUP_KEYS = [
+  "pf_wallets",
+  "pf_categories",
+  "pf_transactions",
+  "pf_debts",
+  "pf_goals",
+  "pf_budgets",
+  "pf_investments",
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function validateFinanceBackup(
+  input: unknown,
+): FinanceBackupValidationResult {
+  if (!isRecord(input)) {
+    return { ok: false, error: "File backup không hợp lệ." };
+  }
+
+  if (LEGACY_BACKUP_KEYS.some((key) => key in input)) {
+    return {
+      ok: false,
+      error:
+        "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.",
+    };
+  }
+
+  if (input.format !== FINANCE_BACKUP_FORMAT) {
+    return {
+      ok: false,
+      error: "File không phải backup MyFinance hợp lệ.",
+    };
+  }
+
+  if (input.version !== FINANCE_BACKUP_VERSION) {
+    return {
+      ok: false,
+      error: `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION}.`,
+    };
+  }
+
+  if (
+    typeof input.exported_at !== "string" ||
+    Number.isNaN(Date.parse(input.exported_at))
+  ) {
+    return {
+      ok: false,
+      error: "Backup thiếu thời điểm export hợp lệ.",
+    };
+  }
+
+  if (!isRecord(input.data)) {
+    return { ok: false, error: "Backup thiếu khối dữ liệu bắt buộc." };
+  }
+
+  for (const domain of FINANCE_BACKUP_DOMAINS) {
+    const rows = input.data[domain];
+    if (!Array.isArray(rows)) {
+      return {
+        ok: false,
+        error: `Backup thiếu dữ liệu bắt buộc: ${domain}.`,
+      };
+    }
+
+    if (!rows.every(isRecord)) {
+      return {
+        ok: false,
+        error: `Backup có dữ liệu không hợp lệ trong ${domain}.`,
+      };
+    }
+  }
+
+  return { ok: true, backup: input as FinanceBackupV2 };
+}
+
+function mapFinanceBackupError(error: { code?: string; message: string }) {
+  switch (error.code) {
+    case "MFB01":
+      return ERR_NO_AUTH;
+    case "MFB02":
+      return "File backup không hợp lệ hoặc không đầy đủ.";
+    case "MFB03":
+      return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION}.`;
+    case "MFB04":
+      return "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.";
+    default:
+      return error.message;
+  }
+}
+
+export async function exportFinanceBackup(): Promise<FinanceBackupV2> {
+  if (LOCAL_UI_MODE) {
+    throw new Error(
+      "Backup cloud không khả dụng khi NEXT_PUBLIC_LOCAL_UI_MODE=true.",
+    );
+  }
+
+  const { data, error } = await supabase.rpc("export_finance_backup");
+  if (error) {
+    console.error("[financeStorage] exportFinanceBackup:", error.message);
+    throw new Error(mapFinanceBackupError(error));
+  }
+
+  const validation = validateFinanceBackup(data);
+  if (!validation.ok) {
+    console.error(
+      "[financeStorage] exportFinanceBackup returned invalid payload:",
+      validation.error,
+    );
+    throw new Error(validation.error);
+  }
+
+  return validation.backup;
+}
+
+export async function restoreFinanceBackup(
+  input: unknown,
+): Promise<{ error: string | null }> {
+  if (LOCAL_UI_MODE) {
+    return {
+      error: "Khôi phục backup cloud không khả dụng trong Local UI Mode.",
+    };
+  }
+
+  const validation = validateFinanceBackup(input);
+  if (!validation.ok) return { error: validation.error };
+
+  const { error } = await supabase.rpc("restore_finance_backup", {
+    p_backup: validation.backup,
+  });
+
+  if (error) {
+    console.error("[financeStorage] restoreFinanceBackup:", error.message);
+    return { error: mapFinanceBackupError(error) };
+  }
+
+  return { error: null };
+}
+
+function createEmptyFinanceBackupV2(
+  exportedAt = new Date().toISOString(),
+): FinanceBackupV2 {
+  const data: FinanceBackupData = {
+    wallets: [],
+    categories: [],
+    transactions: [],
+    debts: [],
+    goals: [],
+    budgets: [],
+    investments: [],
+    savings: [],
+    saving_transactions: [],
+    forex_accounts: [],
+    forex_cash_transactions: [],
+  };
+
+  return {
+    format: FINANCE_BACKUP_FORMAT,
+    version: FINANCE_BACKUP_VERSION,
+    exported_at: exportedAt,
+    data,
+  };
+}
+
+function withSnapshotTimestamps<T extends FinanceBackupRow>(
+  row: T,
+  timestamp: string,
+): FinanceBackupRow {
+  return {
+    ...row,
+    created_at: row.created_at ?? timestamp,
+    updated_at: row.updated_at ?? timestamp,
+  };
+}
 
 const LEGACY_FUTURE_ALLOCATION_CATEGORY_IDS = new Set([
   "saving-demo",
@@ -80,6 +302,10 @@ function sanitizeDemoFinanceData(
     budgets,
     goals,
   };
+}
+
+function getLocalUiDemoData() {
+  return sanitizeDemoFinanceData(buildDemoFinanceData(LOCAL_UI_USER_ID));
 }
 
 // ─── Category planning group mapping ─────────────────────────────────────────
@@ -612,6 +838,8 @@ function toTransactionInsertRow(
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
 export async function getWallets(): Promise<Wallet[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().wallets;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -626,6 +854,8 @@ export async function getWallets(): Promise<Wallet[]> {
 }
 
 export async function getCategories(): Promise<Category[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().categories;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -642,6 +872,12 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getTransactions(): Promise<Transaction[]> {
+  if (LOCAL_UI_MODE) {
+    return [...getLocalUiDemoData().transactions].sort((a, b) =>
+      b.date.localeCompare(a.date),
+    );
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -668,6 +904,15 @@ export async function getTransactionsInRange(
   startDate: string,
   endDate: string,
 ): Promise<Transaction[]> {
+  if (LOCAL_UI_MODE) {
+    return getLocalUiDemoData()
+      .transactions.filter(
+        (transaction) =>
+          transaction.date >= startDate && transaction.date <= endDate,
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -687,6 +932,8 @@ export async function getTransactionsInRange(
 }
 
 export async function getDebts(): Promise<Debt[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().debts;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -701,6 +948,8 @@ export async function getDebts(): Promise<Debt[]> {
 }
 
 export async function getGoals(): Promise<Goal[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().goals;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -723,6 +972,8 @@ export async function getGoals(): Promise<Goal[]> {
 }
 
 export async function getBudgets(): Promise<Budget[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().budgets;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -739,6 +990,8 @@ export async function getBudgets(): Promise<Budget[]> {
 }
 
 export async function getInvestments(): Promise<Investment[]> {
+  if (LOCAL_UI_MODE) return getLocalUiDemoData().investments;
+
   const userId = await getAuthUserId();
   if (!userId) return [];
   const { data, error } = await supabase
@@ -753,6 +1006,8 @@ export async function getInvestments(): Promise<Investment[]> {
 }
 
 export async function getForexAccounts(): Promise<ForexAccount[]> {
+  if (LOCAL_UI_MODE) return [];
+
   const userId = await getAuthUserId();
   if (!userId) return [];
 
@@ -773,6 +1028,8 @@ export async function getForexAccounts(): Promise<ForexAccount[]> {
 export async function getForexCashTransactions(): Promise<
   ForexCashTransaction[]
 > {
+  if (LOCAL_UI_MODE) return [];
+
   const userId = await getAuthUserId();
   if (!userId) return [];
 
@@ -798,6 +1055,8 @@ export async function getForexCashTransactionsInRange(
   startDate: string,
   endDate: string,
 ): Promise<ForexCashTransaction[]> {
+  if (LOCAL_UI_MODE) return [];
+
   const userId = await getAuthUserId();
   if (!userId) return [];
 
@@ -859,6 +1118,8 @@ function unblockSeed(userId: string): void {
  * Safe to call on every page mount — it is a no-op in both cases above.
  */
 export async function initFinanceDemoData() {
+  if (LOCAL_UI_MODE) return;
+
   const userId = await getAuthUserId();
   if (!userId) return;
 
@@ -925,77 +1186,42 @@ export async function resetFinanceDemoData(): Promise<{
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // Allow auto-seed to work again after an explicit reset
-  unblockSeed(userId);
-
-  const deleteErrors = await Promise.all([
-    supabase.from("forex_cash_transactions").delete().eq("user_id", userId),
-    supabase.from("forex_accounts").delete().eq("user_id", userId),
-    supabase.from("transactions").delete().eq("user_id", userId),
-    supabase.from("budgets").delete().eq("user_id", userId),
-    supabase.from("goals").delete().eq("user_id", userId),
-    supabase.from("debts").delete().eq("user_id", userId),
-    supabase.from("investments").delete().eq("user_id", userId),
-    supabase.from("categories").delete().eq("user_id", userId),
-    supabase.from("wallets").delete().eq("user_id", userId),
-  ]);
-  const firstDeleteErr = deleteErrors.find((r) => r.error)?.error;
-  if (firstDeleteErr) {
-    console.error(
-      "[financeStorage] resetFinanceDemoData delete:",
-      firstDeleteErr.message,
-    );
-    return { error: firstDeleteErr.message };
-  }
-
+  // FINANCE-DATA-3: reset is a complete eleven-domain replacement, not a
+  // sequence of browser-side DELETEs followed by independent INSERTs. Reuse
+  // FINANCE-DATA-2's atomic restore RPC so Savings/Forex are cleared together
+  // with the legacy seven demo domains, and any failure rolls everything back.
+  const timestamp = new Date().toISOString();
   const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
+  const backup = createEmptyFinanceBackupV2(timestamp);
 
-  const insertErrors = await Promise.all([
-    supabase
-      .from("wallets")
-      .insert(demoData.wallets.map((wallet) => toWalletRow(wallet, userId))),
-    supabase
-      .from("categories")
-      .insert(
-        demoData.categories.map((category) =>
-          toCategoryInsertRow(category, userId),
-        ) as never,
-      ),
-    supabase
-      .from("transactions")
-      .insert(
-        demoData.transactions.map((transaction) =>
-          toTransactionInsertRow(transaction, userId),
-        ) as never,
-      ),
-    supabase
-      .from("debts")
-      .insert(demoData.debts.map((debt) => toDebtRow(debt, userId))),
-    supabase
-      .from("goals")
-      .insert(
-        demoData.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
-      ),
-    supabase
-      .from("budgets")
-      .insert(demoData.budgets.map((budget) => toBudgetRow(budget, userId))),
-    supabase
-      .from("investments")
-      .insert(
-        demoData.investments.map((investment) =>
-          toInvestmentRow(investment, userId),
-        ),
-      ),
-  ]);
-  const firstInsertErr = insertErrors.find((r) => r.error)?.error;
-  if (firstInsertErr) {
-    console.error(
-      "[financeStorage] resetFinanceDemoData insert:",
-      firstInsertErr.message,
-    );
-    return { error: firstInsertErr.message };
-  }
+  backup.data.wallets = demoData.wallets.map((wallet) =>
+    withSnapshotTimestamps(toWalletRow(wallet, userId), timestamp),
+  );
+  backup.data.categories = demoData.categories.map((category) =>
+    withSnapshotTimestamps(toCategoryInsertRow(category, userId), timestamp),
+  );
+  backup.data.transactions = demoData.transactions.map((transaction) =>
+    withSnapshotTimestamps(toTransactionInsertRow(transaction, userId), timestamp),
+  );
+  backup.data.debts = demoData.debts.map((debt) =>
+    withSnapshotTimestamps(toDebtRow(debt, userId), timestamp),
+  );
+  backup.data.goals = demoData.goals.map((goal) =>
+    withSnapshotTimestamps(toGoalInsertRow(goal, userId), timestamp),
+  );
+  backup.data.budgets = demoData.budgets.map((budget) =>
+    withSnapshotTimestamps(toBudgetRow(budget, userId), timestamp),
+  );
+  backup.data.investments = demoData.investments.map((investment) =>
+    withSnapshotTimestamps(toInvestmentRow(investment, userId), timestamp),
+  );
 
+  const result = await restoreFinanceBackup(backup);
+  if (result.error) return result;
+
+  // Only re-enable automatic demo seeding after the atomic replacement has
+  // actually committed. A failed reset must never change this guard.
+  unblockSeed(userId);
   return { error: null };
 }
 
@@ -1003,202 +1229,32 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const deleteSteps = [
-    {
-      label: "Giao dịch Forex",
-      run: () =>
-        supabase.from("forex_cash_transactions").delete().eq("user_id", userId),
-    },
-    {
-      label: "Tài khoản Forex",
-      run: () => supabase.from("forex_accounts").delete().eq("user_id", userId),
-    },
-    {
-      label: "Giao dịch",
-      run: () => supabase.from("transactions").delete().eq("user_id", userId),
-    },
-    {
-      label: "Ngân sách",
-      run: () => supabase.from("budgets").delete().eq("user_id", userId),
-    },
-    {
-      label: "Mục tiêu",
-      run: () => supabase.from("goals").delete().eq("user_id", userId),
-    },
-    {
-      label: "Khoản nợ",
-      run: () => supabase.from("debts").delete().eq("user_id", userId),
-    },
-    {
-      label: "Đầu tư",
-      run: () => supabase.from("investments").delete().eq("user_id", userId),
-    },
-    {
-      label: "Danh mục",
-      run: () => supabase.from("categories").delete().eq("user_id", userId),
-    },
-    {
-      label: "Ví tiền",
-      run: () => supabase.from("wallets").delete().eq("user_id", userId),
-    },
-  ] as const;
+  // FINANCE-DATA-3: an empty V2 snapshot covers all eleven persisted domains:
+  // wallets, categories, transactions, debts, goals, budgets, investments,
+  // savings, saving_transactions, forex_accounts and forex_cash_transactions.
+  // restore_finance_backup performs the destructive work inside one PostgreSQL
+  // transaction, so Clear All can no longer stop halfway through.
+  const result = await restoreFinanceBackup(createEmptyFinanceBackupV2());
+  if (result.error) return result;
 
-  for (const step of deleteSteps) {
-    const { error } = await step.run();
-    if (error) {
-      console.error(
-        `[financeStorage] clearAllUserData – ${step.label}:`,
-        error.message,
-      );
-      return { error: `Không thể xóa ${step.label}: ${error.message}` };
-    }
-  }
-
-  // Prevent auto-seed from re-populating demo data on next page load
+  // Prevent auto-seed from re-populating demo data on next page load. Set this
+  // only after the database clear has committed successfully.
   blockSeed(userId);
-
   return { error: null };
 }
 
-/** @deprecated Use clearAllUserData() — kept for internal use by importAllData */
+/** @deprecated Use clearAllUserData(). */
 export const clearAllData = clearAllUserData;
 
-export async function importAllData(data: {
-  wallets?: Wallet[];
-  categories?: Category[];
-  transactions?: Transaction[];
-  debts?: Debt[];
-  goals?: Goal[];
-  budgets?: Budget[];
-  investments?: Investment[];
-  forexAccounts?: ForexAccount[];
-  forexCashTransactions?: ForexCashTransaction[];
-}): Promise<{ error: string | null }> {
-  const clearResult = await clearAllUserData();
-  if (clearResult.error) return clearResult;
-
-  const userId = await getAuthUserId();
-  if (!userId) return { error: ERR_NO_AUTH };
-
-  const inserts: PromiseLike<{ error: { message: string } | null }>[] = [];
-
-  if (data.wallets?.length) {
-    inserts.push(
-      supabase
-        .from("wallets")
-        .insert(data.wallets.map((wallet) => toWalletRow(wallet, userId))),
-    );
-  }
-
-  const importCategories = (data.categories ?? []).filter(
-    (category) => !isLegacyFutureAllocationCategoryId(category.id),
-  );
-
-  if (importCategories.length) {
-    inserts.push(
-      supabase
-        .from("categories")
-        .insert(
-          importCategories.map((category) =>
-            toCategoryInsertRow(category, userId),
-          ) as never,
-        ),
-    );
-  }
-
-  const importTransactions = (data.transactions ?? []).filter(
-    (transaction) =>
-      !isLegacyFutureAllocationCategoryId(transaction.categoryId),
-  );
-
-  if (importTransactions.length) {
-    inserts.push(
-      supabase
-        .from("transactions")
-        .insert(
-          importTransactions.map((transaction) =>
-            toTransactionInsertRow(transaction, userId),
-          ) as never,
-        ),
-    );
-  }
-
-  if (data.debts?.length) {
-    inserts.push(
-      supabase
-        .from("debts")
-        .insert(data.debts.map((debt) => toDebtRow(debt, userId))),
-    );
-  }
-
-  if (data.goals?.length) {
-    inserts.push(
-      supabase
-        .from("goals")
-        .insert(
-          data.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
-        ),
-    );
-  }
-
-  const importBudgets = (data.budgets ?? []).filter(
-    (budget) => !isLegacyFutureAllocationCategoryId(budget.categoryId),
-  );
-
-  if (importBudgets.length) {
-    inserts.push(
-      supabase
-        .from("budgets")
-        .insert(importBudgets.map((budget) => toBudgetRow(budget, userId))),
-    );
-  }
-
-  if (data.investments?.length) {
-    inserts.push(
-      supabase
-        .from("investments")
-        .insert(
-          data.investments.map((investment) =>
-            toInvestmentRow(investment, userId),
-          ),
-        ),
-    );
-  }
-
-  if (data.forexAccounts?.length) {
-    inserts.push(
-      supabase
-        .from("forex_accounts")
-        .insert(
-          data.forexAccounts.map((account) =>
-            toForexAccountRow({ ...account, currency: "VND" }, userId),
-          ),
-        ),
-    );
-  }
-
-  // Forex cash transactions must be restored through the RPC so wallet and
-  // Forex balances stay atomic and consistent. They are intentionally not
-  // inserted directly into the table here.
-  if (data.forexCashTransactions?.length) {
-    for (const transaction of data.forexCashTransactions) {
-      const result = await addForexCashTransaction({
-        ...transaction,
-        currency: "VND",
-      });
-      if (result.error) return result;
-    }
-  }
-
-  const results = await Promise.all(inserts);
-  const firstErr =
-    results.find((result) => result.error !== null)?.error ?? null;
-  if (firstErr) {
-    console.error("[financeStorage] importAllData:", firstErr.message);
-    return { error: firstErr.message };
-  }
-
-  return { error: null };
+/**
+ * @deprecated FINANCE-DATA-2 no longer accepts unversioned collection bags.
+ * Kept as a compatibility alias so any stale caller fails safe through the
+ * same V2 preflight instead of clearing data first.
+ */
+export async function importAllData(
+  backup: unknown,
+): Promise<{ error: string | null }> {
+  return restoreFinanceBackup(backup);
 }
 
 // ─── Finance Engine v2: Transaction CRUD + Balance Sync ────────────────
@@ -1610,7 +1666,7 @@ export async function deleteWallet(
  * transaction history — safe to call once per delete attempt.
  *
  * No DB foreign key enforces this (walletId/transferToWalletId → wallets is
- * intentionally omitted; see supabase_schema.sql), so this application-layer
+ * intentionally omitted; see /supabase/schema.sql), so this application-layer
  * check remains the only integrity guard before delete.
  */
 export async function hasWalletReferences(
@@ -1658,6 +1714,13 @@ export async function hasWalletReferences(
 export async function getTransactionWalletLinks(): Promise<
   { walletId: string; transferToWalletId: string | null }[]
 > {
+  if (LOCAL_UI_MODE) {
+    return getLocalUiDemoData().transactions.map((transaction) => ({
+      walletId: transaction.walletId,
+      transferToWalletId: transaction.transferToWalletId ?? null,
+    }));
+  }
+
   const userId = await getAuthUserId();
   if (!userId) return [];
 
@@ -1678,6 +1741,8 @@ export async function getTransactionWalletLinks(): Promise<
 export async function getForexCashWalletLinks(): Promise<
   { walletId: string }[]
 > {
+  if (LOCAL_UI_MODE) return [];
+
   const userId = await getAuthUserId();
   if (!userId) return [];
 

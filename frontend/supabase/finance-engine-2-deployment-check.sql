@@ -16,8 +16,9 @@
 --   transfer_fee, exchange_rate, transfer_reference,
 --   transfer_reference_type, source_type, destination_type,
 --   created_at, updated_at
--- The last 6 in that first group are NOT in the tracked supabase_schema.sql
--- — this query tells you definitively whether they exist in the live DB.
+-- The last 6 were missing from the legacy baseline when FINANCE-ENGINE-2
+-- shipped. DB-SSOT-1 now tracks them in /supabase/schema.sql; this historical
+-- query remains useful for checking an existing live database for drift.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 SELECT column_name, data_type, is_nullable, column_default

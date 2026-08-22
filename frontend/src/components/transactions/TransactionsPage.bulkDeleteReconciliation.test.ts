@@ -23,7 +23,7 @@ describe("handleBulkDelete outcome tracking (TXN-BULKDELETE-1)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   const start = source.indexOf("function handleBulkDelete() {");
   const end = source.indexOf("function exportCSV() {");
@@ -81,7 +81,7 @@ describe("authoritative reconciliation is mandatory whenever at least one delete
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const start = source.indexOf("function handleBulkDelete() {");
   const end = source.indexOf("function exportCSV() {");
   const fnSource = source.slice(start, end);
@@ -130,7 +130,7 @@ describe("feedback never claims full success on a partial failure (TXN-BULKDELET
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const start = source.indexOf("function handleBulkDelete() {");
   const end = source.indexOf("function exportCSV() {");
   const fnSource = source.slice(start, end);
@@ -175,7 +175,7 @@ describe("normal + Forex cash outcome tracking shares one reconciliation path (T
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const start = source.indexOf("function handleBulkDelete() {");
   const end = source.indexOf("function exportCSV() {");
   const fnSource = source.slice(start, end);
@@ -198,7 +198,7 @@ describe("no regression to delete atomicity, single delete, or ConfirmDialog gua
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   it("handleDelete (single delete) is untouched — still reloads unconditionally on its own success path", () => {
     const start = source.indexOf("function handleDelete(id: string) {");

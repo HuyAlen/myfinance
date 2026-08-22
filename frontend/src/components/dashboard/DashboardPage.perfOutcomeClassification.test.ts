@@ -25,7 +25,7 @@ describe("DashboardPage measureDashboardQuery outcome-classification wiring", ()
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   function callBlockFor(queryName: string): string {
     const marker = `"${queryName}"`;
@@ -34,15 +34,19 @@ describe("DashboardPage measureDashboardQuery outcome-classification wiring", ()
       startIndex,
       `expected to find a measureDashboardQuery call for "${queryName}"`,
     ).toBeGreaterThan(-1);
-    // Each call site is exactly one `const xPromise = measureDashboardQuery(
-    // ...);` statement — none of these query definitions contain a literal
-    // `;` inside their args (no semicolons in the select-column strings or
-    // the { data, error } fallbacks), so the next `;` after the query-name
-    // literal reliably closes THIS statement without spilling into the
-    // next one.
-    const endIndex = source.indexOf(";", startIndex);
-    expect(endIndex, `expected a statement terminator after "${queryName}"`).toBeGreaterThan(startIndex);
-    return source.slice(startIndex, endIndex);
+    // Slice the containing top-level query declaration instead of stopping
+    // at the first semicolon. Local/dev wrappers may legitimately add
+    // statements inside the callback (for example an early local-mode
+    // return), while the classifier remains an argument of the SAME
+    // measureDashboardQuery call.
+    const declarationStart = source.lastIndexOf("\n    const ", startIndex);
+    const nextDeclaration = source.indexOf(
+      "\n    const ",
+      startIndex + marker.length,
+    );
+    expect(declarationStart).toBeGreaterThan(-1);
+    const endIndex = nextDeclaration === -1 ? source.length : nextDeclaration;
+    return source.slice(declarationStart, endIndex);
   }
 
   it.each(["savings", "saving_transactions", "forex_equity"])(

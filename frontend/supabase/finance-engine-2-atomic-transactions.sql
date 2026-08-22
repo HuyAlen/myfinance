@@ -8,8 +8,8 @@
 --
 -- IMPORTANT — READ BEFORE APPLYING
 -- ─────────────────────────────────────────────────────────────────────────
--- This repo's tracked supabase_schema.sql does NOT list the following
--- "transactions" columns, even though financeStorage.ts's toTransactionRow/
+-- At the time FINANCE-ENGINE-2 was authored, the repository baseline did NOT list
+-- the following "transactions" columns, even though financeStorage.ts's toTransactionRow/
 -- fromTransactionRow have consistently read/written them across multiple
 -- prior shipped sprints (PERF-TRANSACTIONS-1, WALLETS-2.1, ...):
 --   transfer_fee, exchange_rate, transfer_reference,
@@ -24,7 +24,7 @@
 -- Before running this migration:
 --   1. Confirm the exact column list/types of "transactions" in the live DB
 --      (e.g. `\d transactions` in the Supabase SQL editor, or regenerate
---      supabase_schema.sql from the live schema) and reconcile any naming
+--      a schema-only dump from the live schema) and reconcile any naming
 --      differences with the INSERT/UPDATE column lists below.
 --   2. Run finance-engine-2-orphan-audit.sql (read-only) first — this
 --      migration does NOT add any foreign key, so no orphan data can break
@@ -524,10 +524,11 @@ GRANT EXECUTE ON FUNCTION public.delete_finance_transaction TO authenticated;
 --      hasWalletReferences() existed, demo-data resets, import/export
 --      round-trips). Adding FKs against unverified data risks the
 --      migration itself failing in production with no easy rollback path.
---   2. forex_cash_transactions' schema is not tracked in this repo at all
---      (created directly via Supabase dashboard, same as the transactions
---      columns noted above) — its exact wallet_id column type/nullability
---      cannot be confirmed from source.
+--   2. At the time this historical migration was authored,
+--      forex_cash_transactions was live-only. DB-SSOT-1 now reconstructs the
+--      current repository contract in /supabase/schema.sql; use the read-only
+--      /supabase/schema-verification.sql against the target project to detect
+--      any remaining production drift before adding foreign keys.
 --
 -- Recommended next step (a follow-up, explicitly scoped migration):
 --   1. Run the read-only audit in finance-engine-2-orphan-audit.sql against

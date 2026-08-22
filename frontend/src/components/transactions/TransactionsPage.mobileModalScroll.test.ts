@@ -22,7 +22,7 @@ describe("TransactionsPage Create/Edit modal body scrolls on mobile (TXN-MOBILE-
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
 
   const formStart = source.indexOf('<form\n              id="transaction-form"');
   const formTagEnd = source.indexOf(">", formStart);

@@ -29,42 +29,42 @@
 -- atomic, but "create_finance_transaction is the only place that mutates
 -- wallet.balance" would be an inaccurate claim and is not made here.
 --
--- SCHEMA STATUS — MANUALLY VERIFIED AGAINST THE LIVE DATABASE
+-- SCHEMA STATUS — RECONCILED AGAINST CURRENT LIVE METADATA
 -- ─────────────────────────────────────────────────────────────────────────
--- Unlike the first version of this migration, the following facts about
--- "savings" and "saving_transactions" have been manually confirmed against
--- the live Supabase project (they are not tracked in this repo's
--- supabase_schema.sql, same situation as the forex_* tables and the
--- "transactions" table's transfer_* columns — confirming them required
--- inspecting the live database directly, not just this repo):
+-- DB-SSOT-1 verification on 2026-08-22 confirmed the UUID/type/balance and
+-- saving_transactions cardinality facts below, but also exposed live drift:
+-- the deployed create_saving_account/create_saving_movement functions reference
+-- savings.wallet_id and savings.updated_at while the current live savings table
+-- does not expose those two columns. That state is internally inconsistent and
+-- must not be copied into a fresh bootstrap. /supabase/schema.sql therefore
+-- keeps the two RPC-required columns as the coherent target contract; an
+-- existing database needs a reviewed forward migration to add them.
 --
---   savings.id              uuid (primary key)
---   savings.user_id         uuid
---   savings.name            text
---   savings.type            text — CHECK constraint allows exactly
---                            'savings_account' | 'term_deposit' |
---                            'certificate' | 'emergency_fund' (NOT 'other')
---   savings.balance         numeric not null default 0,
---                            CHECK (balance >= 0)  [savings_balance_check]
---   savings.wallet_id       text (references a wallets.id, no enforced FK)
---   savings.interest_rate   numeric, nullable
---   savings.maturity_date   date, nullable
---   savings.notes           text, nullable
---   savings.created_at      timestamptz
---   savings.updated_at      timestamptz
+-- Current live columns confirmed:
+--   savings.id              uuid primary key, default gen_random_uuid()
+--   savings.user_id         uuid nullable, default auth.uid()
+--   savings.name            text not null
+--   savings.type            text not null
+--   savings.balance         numeric not null default 0
+--   savings.interest_rate   numeric nullable
+--   savings.maturity_date   date nullable
+--   savings.notes           text nullable
+--   savings.created_at      timestamptz not null default now()
 --
---   saving_transactions.id               uuid (primary key)
---   saving_transactions.saving_id        uuid, FK -> savings.id
---                                         ON DELETE CASCADE
---   saving_transactions.user_id          uuid
---   saving_transactions.type             text — allows 'deposit' |
---                                         'withdraw' | 'interest' |
---                                         'settlement'
---   saving_transactions.amount           numeric, CHECK (amount > 0)
---   saving_transactions.transaction_date date
---   saving_transactions.note             text, nullable
---   saving_transactions.wallet_id        text, nullable
---   saving_transactions.created_at       timestamptz
+-- Canonical-only drift repair required by deployed Savings RPCs:
+--   savings.wallet_id       text nullable
+--   savings.updated_at      timestamptz not null default now()
+--
+-- Current live saving_transactions columns confirmed:
+--   saving_transactions.id               uuid, default gen_random_uuid()
+--   saving_transactions.saving_id        uuid
+--   saving_transactions.user_id          uuid nullable, default auth.uid()
+--   saving_transactions.type             text
+--   saving_transactions.amount           numeric
+--   saving_transactions.transaction_date date, default CURRENT_DATE
+--   saving_transactions.note             text nullable
+--   saving_transactions.wallet_id        text nullable
+--   saving_transactions.created_at       timestamptz not null default now()
 --
 --   RLS is enabled on savings, saving_transactions, wallets, and
 --   transactions; every relevant policy restricts rows with

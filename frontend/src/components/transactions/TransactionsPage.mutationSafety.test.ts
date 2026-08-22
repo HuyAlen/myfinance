@@ -16,7 +16,7 @@ describe("TransactionsPage form-session mutation safety wiring (TXN-FLOW-1)", ()
   const source = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n/g, "\n");
   const normalized = source.replace(/\s+/g, " ");
 
   it("imports the shared mutation-session comparisons rather than reimplementing them inline", () => {

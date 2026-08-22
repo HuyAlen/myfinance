@@ -26,9 +26,9 @@ WHERE t."transferToWalletId" IS NOT NULL
   AND w.id IS NULL;
 
 -- 3. Forex cash transactions whose wallet no longer exists.
--- NOTE: forex_cash_transactions' schema is not tracked in this repo, so
--- this query assumes the column names financeStorage.ts already reads
--- (wallet_id, user_id) — verify these match the live table before running.
+-- NOTE: DB-SSOT-1 now tracks the repository Forex contract in
+-- /supabase/schema.sql. Because older projects may still differ, verify the
+-- live table with /supabase/schema-verification.sql before acting on results.
 SELECT f.id, f.user_id, f.wallet_id, f.type, f.amount
 FROM forex_cash_transactions f
 LEFT JOIN wallets w ON w.id = f.wallet_id AND w.user_id = f.user_id
