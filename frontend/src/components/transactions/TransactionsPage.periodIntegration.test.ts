@@ -171,8 +171,10 @@ describe("F-7 wiring: header disambiguates filtered totals from period totals (s
   it("the summary subtitle branches on hasActiveFilters and names the effective period, not a raw selectedMonth string", () => {
     const subtitleStart = normalized.indexOf("{hasActiveFilters ?");
     expect(subtitleStart).toBeGreaterThan(-1);
+
     const subtitleEnd = normalized.indexOf("</p>", subtitleStart);
     expect(subtitleEnd).toBeGreaterThan(subtitleStart);
+
     const subtitleSource = normalized.slice(subtitleStart, subtitleEnd);
 
     // Copy may evolve, but BOTH branches must remain scoped to the resolved

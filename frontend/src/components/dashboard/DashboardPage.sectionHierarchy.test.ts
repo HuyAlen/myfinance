@@ -3,20 +3,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * UI-DASH-1 Information Hierarchy & Priority Reordering.
+ * Dashboard hierarchy after intentionally removing the Financial Priority /
+ * Action Center block from the Dashboard.
  *
- * DashboardPage.tsx cannot be mounted in this project's test setup (no
- * React Testing Library — see AGENTS.md), so this locks the section order
- * via a plain text-order check on unique markers already present in the
- * source: the Hero heading ("Tài sản ròng"), the Action Center heading
- * ("Ưu tiên tài chính"), and the leading JSX comment above each other
- * major section. This is intentionally a source-order contract, not a
- * line-number assertion — it survives unrelated formatting changes as
- * long as the sections themselves stay in the intended relative order,
- * and it fails the moment a future edit moves a low-priority section back
- * above Hero/Action Center or duplicates a section.
+ * Source-inspection, not component mounting — consistent with this repo's
+ * existing DashboardPage tests.
  */
-describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
+describe("DashboardPage section hierarchy after Action Center removal", () => {
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
@@ -24,7 +17,6 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
 
   const markers = {
     hero: "Tài sản ròng",
-    actionCenter: "Ưu tiên tài chính",
     operatingKpis: "{/* Operating KPIs */}",
     budgetAttention: "{/* Budget attention */}",
     monthlyProgress: "{/* Monthly progress */}",
@@ -40,7 +32,13 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     return index;
   }
 
-  it("every major section marker appears exactly once (no duplicated section)", () => {
+  it("removes the Action Center / Financial Priority section completely", () => {
+    expect(source).not.toContain("Ưu tiên tài chính");
+    expect(source).not.toContain("{/* Action center */}");
+    expect(source).not.toContain("priorityActions.length > 0");
+  });
+
+  it("every remaining major section marker appears exactly once", () => {
     for (const [name, marker] of Object.entries(markers)) {
       const firstIndex = source.indexOf(marker);
       const lastIndex = source.lastIndexOf(marker);
@@ -51,38 +49,29 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     }
   });
 
-  it("Hero is the first major Dashboard section", () => {
+  it("Hero remains the first major Dashboard section", () => {
     const heroIndex = indexOfMarker(markers.hero);
     for (const [name, marker] of Object.entries(markers)) {
       if (name === "hero") continue;
-      expect(
-        heroIndex,
-        `Hero must appear before ${name}`,
-      ).toBeLessThan(indexOfMarker(marker));
+      expect(heroIndex, `Hero must appear before ${name}`).toBeLessThan(
+        indexOfMarker(marker),
+      );
     }
   });
 
-  it("Action Center is near the top — immediately after Hero and before every lower-priority informational section", () => {
-    const actionCenterIndex = indexOfMarker(markers.actionCenter);
-    expect(actionCenterIndex).toBeGreaterThan(indexOfMarker(markers.hero));
-
-    for (const name of [
-      "operatingKpis",
-      "budgetAttention",
-      "monthlyProgress",
-      "cashFlowAndStructure",
-      "upcomingAndTopSpending",
-      "forexGoalsRecent",
-      "todaySummary",
-    ] as const) {
-      expect(
-        actionCenterIndex,
-        `Action Center must appear before ${name}`,
-      ).toBeLessThan(indexOfMarker(markers[name]));
-    }
+  it("Operating KPIs follow Hero, then Budget Attention, then Monthly Progress", () => {
+    expect(indexOfMarker(markers.hero)).toBeLessThan(
+      indexOfMarker(markers.operatingKpis),
+    );
+    expect(indexOfMarker(markers.operatingKpis)).toBeLessThan(
+      indexOfMarker(markers.budgetAttention),
+    );
+    expect(indexOfMarker(markers.budgetAttention)).toBeLessThan(
+      indexOfMarker(markers.monthlyProgress),
+    );
   });
 
-  it("Operating KPIs, Budget Attention, and Monthly Progress (HIGH priority) appear before the MEDIUM/LOW informational sections", () => {
+  it("high-priority operating sections stay above medium/low supporting sections", () => {
     const kpisIndex = indexOfMarker(markers.operatingKpis);
     const budgetAttentionIndex = indexOfMarker(markers.budgetAttention);
     const monthlyProgressIndex = indexOfMarker(markers.monthlyProgress);
@@ -101,28 +90,13 @@ describe("DashboardPage section hierarchy (UI-DASH-1)", () => {
     }
   });
 
-  it("Budget Attention (UI-DASH-2) sits between Operating KPIs and Monthly Progress, per the sprint's preferred placement", () => {
-    expect(indexOfMarker(markers.operatingKpis)).toBeLessThan(
-      indexOfMarker(markers.budgetAttention),
-    );
-    expect(indexOfMarker(markers.budgetAttention)).toBeLessThan(
-      indexOfMarker(markers.monthlyProgress),
-    );
-  });
-
-  it("Today's Summary (LOW/supporting priority) no longer leads the Dashboard — it is the last major section", () => {
+  it("Today's Summary remains the last major section", () => {
     const todayIndex = indexOfMarker(markers.todaySummary);
     for (const [name, marker] of Object.entries(markers)) {
       if (name === "todaySummary") continue;
-      expect(
-        indexOfMarker(marker),
-        `${name} must appear before Today's Summary`,
-      ).toBeLessThan(todayIndex);
+      expect(indexOfMarker(marker), `${name} must appear before Today's Summary`).toBeLessThan(
+        todayIndex,
+      );
     }
-  });
-
-  it("Action Center's conditional rendering (priorityActions.length check) is preserved, not duplicated", () => {
-    const occurrences = source.split("priorityActions.length > 0").length - 1;
-    expect(occurrences).toBe(1);
   });
 });

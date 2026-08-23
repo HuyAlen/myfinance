@@ -306,13 +306,16 @@ describe("DASH-POLISH-1 preserves zero-new-query and prior UI-DASH contracts", (
     expect(source).toContain("budgetAttention.overBudgetItems.map(");
   });
 
-  it("UI-DASH-4 comparison wiring is untouched", () => {
-    expect(source).toContain("const periodComparison = useMemo(");
-    expect(source).toContain("buildDashboardComparison(netCashFlow, previousNetCashFlow)");
+  it("the intentionally removed KPI period-comparison UI stays absent", () => {
+    expect(source).not.toContain("const periodComparison = useMemo(");
+    expect(source).not.toContain("cashFlowComparisonLabel");
+    expect(source).not.toContain("savingRateComparisonLabel");
   });
 
-  it("UI-DASH-3 Action Center identity wiring is untouched", () => {
-    expect(source).toContain("deriveAggregateIssueKind(domain)");
-    expect(source).toContain("selectDashboardPriorityActions([");
+  it("the intentionally removed Action Center stays absent", () => {
+    expect(source).not.toContain("Ưu tiên tài chính");
+    expect(source).not.toContain("priorityActions");
+    expect(source).not.toContain("selectDashboardPriorityActions([");
+    expect(source).not.toContain("generateDashboardActions");
   });
 });

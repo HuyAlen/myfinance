@@ -207,32 +207,22 @@ describe("Chart JS chunk preload overlaps finance-data loading without a new que
   });
 });
 
-describe("Action Center / Financial Structure regression guard (PERF-4B out-of-scope, must remain untouched)", () => {
+describe("Action Center removal / Financial Structure regression guard", () => {
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
   );
 
-  it("actionCenterReady's call to isActionCenterReady is unchanged — still the full six-flag union", () => {
-    const start = source.indexOf(
+  it("Action Center remains intentionally removed from Dashboard", () => {
+    expect(source).not.toContain(
       "const actionCenterReady = isActionCenterReady(",
     );
-    expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf(");", start);
-    const callSource = source.slice(start, end);
-    for (const arg of [
-      "isDashboardReady",
-      "cashFlowReady",
-      "savingInvestmentReady",
-      "emergencyFundReady",
-      "goalsReady",
-      "budgetsLoaded",
-    ]) {
-      expect(callSource).toContain(arg);
-    }
+    expect(source).not.toContain("{/* Action center */}");
+    expect(source).not.toContain("Ưu tiên tài chính");
+    expect(source).not.toContain("<ActionCard");
   });
 
-  it("financialStructureReady keeps its existing formula — not touched by this ticket (known, deferred P3)", () => {
+  it("financialStructureReady keeps its existing formula — untouched by the Action Center removal", () => {
     expect(source).toContain(
       "const financialStructureReady = cashFlowReady && savingInvestmentReady;",
     );
