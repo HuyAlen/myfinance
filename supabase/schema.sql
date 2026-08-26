@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.categories (
   created_at        timestamptz   NOT NULL DEFAULT now(),
   updated_at        timestamptz   NOT NULL DEFAULT now(),
   CONSTRAINT categories_pkey PRIMARY KEY (id),
+  CONSTRAINT categories_user_id_id_key UNIQUE (user_id, id),
   CONSTRAINT categories_name_nonempty CHECK (trim(name) <> ''),
   CONSTRAINT categories_planning_group_check CHECK (
     planning_group IS NULL OR planning_group IN ('income','fixed','variable','saving','investment')
@@ -195,6 +196,7 @@ CREATE TABLE IF NOT EXISTS public.budgets (
   created_at          timestamptz   NOT NULL DEFAULT now(),
   updated_at          timestamptz   NOT NULL DEFAULT now(),
   CONSTRAINT budgets_pkey PRIMARY KEY (id),
+  CONSTRAINT budgets_category_owner_fk FOREIGN KEY (user_id, "categoryId") REFERENCES public.categories(user_id, id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT budgets_month_format CHECK (month ~ '^\d{4}-\d{2}$'),
   CONSTRAINT budgets_limit_positive CHECK ("limitAmount" > 0),
   CONSTRAINT budgets_rollover_nonneg CHECK ("rolloverAmount" >= 0),

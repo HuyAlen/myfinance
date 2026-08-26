@@ -1136,19 +1136,38 @@ export async function initFinanceDemoData() {
 
   const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
 
-  await Promise.all([
-    supabase.from("wallets").upsert(
-      demoData.wallets.map((wallet) => toWalletRow(wallet, userId)),
+  // CATEGORY-INTEGRITY-1: preserve FK dependency order. Categories may point
+  // at default wallets, and budgets point at categories, so neither can be
+  // raced inside the original all-domain Promise.all.
+  const walletSeed = await supabase.from("wallets").upsert(
+    demoData.wallets.map((wallet) => toWalletRow(wallet, userId)),
+    { onConflict: "id", ignoreDuplicates: true },
+  );
+  if (walletSeed.error) {
+    console.error(
+      "[financeStorage] initFinanceDemoData wallets:",
+      walletSeed.error.message,
+    );
+    return;
+  }
+
+  const categorySeed = await supabase
+    .from("categories")
+    .upsert(
+      demoData.categories.map((category) =>
+        toCategoryInsertRow(category, userId),
+      ) as never,
       { onConflict: "id", ignoreDuplicates: true },
-    ),
-    supabase
-      .from("categories")
-      .upsert(
-        demoData.categories.map((category) =>
-          toCategoryInsertRow(category, userId),
-        ) as never,
-        { onConflict: "id", ignoreDuplicates: true },
-      ),
+    );
+  if (categorySeed.error) {
+    console.error(
+      "[financeStorage] initFinanceDemoData categories:",
+      categorySeed.error.message,
+    );
+    return;
+  }
+
+  await Promise.all([
     supabase
       .from("transactions")
       .upsert(
@@ -1969,6 +1988,26 @@ export async function deleteSavingAccount(
   return { error: null };
 }
 
+function mapCategoryIntegrityError(error: {
+  code?: string;
+  message: string;
+}) {
+  if (error.code === "23503") {
+    return "Không thể xóa danh mục vì vẫn còn ngân sách liên kết. Hãy xóa hoặc chuyển ngân sách sang danh mục khác trước.";
+  }
+  return error.message;
+}
+
+function mapBudgetCategoryIntegrityError(error: {
+  code?: string;
+  message: string;
+}) {
+  if (error.code === "23503") {
+    return "Danh mục của ngân sách không tồn tại hoặc không thuộc tài khoản hiện tại.";
+  }
+  return error.message;
+}
+
 // ─── Category CRUD ────────────────────────────────────────────────────────────
 
 export async function addCategory(
@@ -2029,7 +2068,7 @@ export async function deleteCategory(
     .eq("user_id", userId);
   if (error) {
     console.error("[financeStorage] deleteCategory:", error.message);
-    return { error: error.message };
+    return { error: mapCategoryIntegrityError(error) };
   }
   return { error: null };
 }
@@ -2052,7 +2091,7 @@ export async function addBudget(
     .insert(toBudgetRow(budget, userId));
   if (error) {
     console.error("[financeStorage] addBudget:", error.message);
-    return { error: error.message };
+    return { error: mapBudgetCategoryIntegrityError(error) };
   }
   return { error: null };
 }
@@ -2075,7 +2114,7 @@ export async function updateBudget(
     .eq("user_id", userId);
   if (error) {
     console.error("[financeStorage] updateBudget:", error.message);
-    return { error: error.message };
+    return { error: mapBudgetCategoryIntegrityError(error) };
   }
   return { error: null };
 }

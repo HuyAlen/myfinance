@@ -27,6 +27,7 @@ import ConfirmDialog, {
 import { useToast } from "@/src/components/ui/ToastProvider";
 
 import type {
+  Budget,
   Category,
   CategoryPlanningGroup,
   CategoryType,
@@ -39,6 +40,7 @@ import type {
 import {
   addCategory,
   deleteCategory,
+  getBudgets,
   getCategories,
   getTransactions,
   getWallets,
@@ -256,6 +258,7 @@ export default function CategoriesPage() {
     string | null
   >(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -273,20 +276,22 @@ export default function CategoriesPage() {
   const { toast } = useToast();
 
   const reloadData = useCallback(async () => {
-    // FINANCE-DATA-1: getCategories/getTransactions/getWallets now reject
-    // on a genuine query failure instead of silently resolving to [] —
-    // caught here so every caller (mount, realtime, post-submit/delete
-    // refresh) never sees an unhandled rejection. State setters only run
-    // after a successful resolve, so a caught failure leaves the
-    // previously-loaded categories/transactions/wallets on screen.
+    // FINANCE-DATA-1 / CATEGORY-INTEGRITY-1: all dependency reads reject on
+    // genuine query failure. Budgets are loaded with categories/transactions
+    // so delete eligibility is never decided from a partial dependency view.
+    // State setters only run after every read succeeds, preserving the last
+    // known-good snapshot on a reload failure.
     try {
-      const [categoryData, transactionData, walletData] = await Promise.all([
-        getCategories(),
-        getTransactions(),
-        getWallets(),
-      ]);
+      const [categoryData, transactionData, budgetData, walletData] =
+        await Promise.all([
+          getCategories(),
+          getTransactions(),
+          getBudgets(),
+          getWallets(),
+        ]);
       setCategories(categoryData);
       setTransactions(transactionData);
+      setBudgets(budgetData);
       setWallets(walletData);
       setCategoriesLoadError(null);
     } catch (error) {
@@ -304,7 +309,7 @@ export default function CategoriesPage() {
     return () => window.clearTimeout(timer);
   }, [reloadData]);
 
-  useRealtimeTable(["categories", "transactions"], reloadData);
+  useRealtimeTable(["categories", "transactions", "budgets"], reloadData);
 
   const transactionSummaryByCategory = useMemo(() => {
     const summary = new Map<string, { count: number; total: number }>();
@@ -320,6 +325,14 @@ export default function CategoriesPage() {
     return summary;
   }, [transactions]);
 
+  const budgetCountByCategory = useMemo(() => {
+    const summary = new Map<string, number>();
+    for (const budget of budgets) {
+      summary.set(budget.categoryId, (summary.get(budget.categoryId) ?? 0) + 1);
+    }
+    return summary;
+  }, [budgets]);
+
   const enrichedCategories = useMemo(
     () =>
       categories.flatMap((category) => {
@@ -329,17 +342,19 @@ export default function CategoriesPage() {
           count: 0,
           total: 0,
         };
+        const budgetCount = budgetCountByCategory.get(category.id) ?? 0;
         return [
           {
             ...category,
             group,
             count: usage.count,
             total: usage.total,
-            isActive: usage.count > 0,
+            budgetCount,
+            isActive: usage.count > 0 || budgetCount > 0,
           },
         ];
       }),
-    [categories, transactionSummaryByCategory],
+    [budgetCountByCategory, categories, transactionSummaryByCategory],
   );
 
   const overview = useMemo(() => {
@@ -528,10 +543,19 @@ export default function CategoriesPage() {
       return;
     }
 
+    const budgetCount = budgetCountByCategory.get(category.id) ?? 0;
+    if (budgetCount > 0) {
+      toast({
+        variant: "warning",
+        message: `Không thể xóa “${category.name}” vì đang có ${budgetCount} ngân sách liên kết. Hãy xóa hoặc chuyển ngân sách sang danh mục khác trước.`,
+      });
+      return;
+    }
+
     setPendingAction({
       title: `Xóa danh mục “${category.name}”?`,
       description:
-        "Danh mục chưa có giao dịch và sẽ bị xóa vĩnh viễn khỏi tài khoản.",
+        "Danh mục chưa có giao dịch hoặc ngân sách liên kết và sẽ bị xóa vĩnh viễn khỏi tài khoản.",
       variant: "danger",
       onConfirm: async () => {
         const { error } = await deleteCategory(category.id);

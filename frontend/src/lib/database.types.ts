@@ -575,7 +575,20 @@ export type Database = {
       transactions: { Row: TransactionRow; Insert: TransactionInsert; Update: TransactionUpdate; Relationships: [] };
       debts: { Row: DebtRow; Insert: DebtInsert; Update: DebtUpdate; Relationships: [] };
       goals: { Row: GoalRow; Insert: GoalInsert; Update: GoalUpdate; Relationships: [] };
-      budgets: { Row: BudgetRow; Insert: BudgetInsert; Update: BudgetUpdate; Relationships: [] };
+      budgets: {
+        Row: BudgetRow;
+        Insert: BudgetInsert;
+        Update: BudgetUpdate;
+        Relationships: [
+          {
+            foreignKeyName: "budgets_category_owner_fk";
+            columns: ["user_id", "categoryId"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["user_id", "id"];
+          }
+        ];
+      };
       investments: { Row: InvestmentRow; Insert: InvestmentInsert; Update: InvestmentUpdate; Relationships: [] };
       savings: {
         Row: SavingRow;

@@ -89,11 +89,24 @@ describe("DB-SSOT-1 canonical Supabase schema", () => {
     expect(normalized).toContain("v_wallet_delta := -(v_amount + v_fee)");
   });
 
-  it("mirrors the live-verified finance CHECK/FK contract without stricter reconstructed constraints", () => {
+  it("preserves verified finance constraints plus the owner-safe budget/category FK", () => {
     expect(normalized).toContain("constraint categories_default_amount_check check");
     expect(normalized).toContain("constraint categories_recurrence_check check");
     expect(normalized).toContain("recurrence is null or recurrence in ('daily','weekly','monthly','yearly')");
     expect(normalized).toContain("constraint categories_default_wallet_fk foreign key (default_wallet_id) references public.wallets(id) on delete set null");
+
+    // CATEGORY-INTEGRITY-1: budgets may only reference a category owned by
+    // the same user, and category deletion must be RESTRICTed while a budget
+    // still points at it.
+    expect(normalized).toContain(
+      'constraint categories_user_id_id_key unique (user_id, id)',
+    );
+    expect(normalized).toContain(
+      'constraint budgets_category_owner_fk foreign key (user_id, "categoryid") references public.categories(user_id, id) on delete restrict on update restrict',
+    );
+    expect(normalized).not.toContain(
+      'constraint budgets_category_owner_fk foreign key (user_id, "categoryid") references public.categories(user_id, id) on delete cascade',
+    );
 
     expect(normalized).toContain("constraint savings_wallet_id_fkey foreign key (wallet_id) references public.wallets(id)");
     expect(normalized).toContain("constraint saving_transactions_wallet_id_fkey foreign key (wallet_id) references public.wallets(id)");
