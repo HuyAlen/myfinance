@@ -158,6 +158,16 @@ describe("WalletsPage allows editing an existing wallet's balance (WALLET-BALANC
     );
   });
 
+  it("NETWORTH-HISTORY-1 keeps snapshot capture out of the browser edit path", () => {
+    const fnSource = extractHandleSubmitSource();
+
+    expect(fnSource).not.toContain("capture_current_net_worth_snapshot");
+    expect(fnSource).not.toContain("NetWorthSnapshot");
+    expect(source).not.toContain("saveNetWorthSnapshot");
+    expect(source).toContain("database snapshot trigger captures the");
+    expect(source).toContain("previously recorded monthly Net Worth snapshot remains unchanged");
+  });
+
   it("unrelated wallet fields (name/type) are unaffected by this change", () => {
     expect(source).toContain('label="Tên ví"');
     expect(source).toContain("Loại ví");

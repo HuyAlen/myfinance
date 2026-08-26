@@ -41,7 +41,7 @@ import {
   resetFinanceDemoData,
   restoreFinanceBackup,
   validateFinanceBackup,
-  type FinanceBackupV2,
+  type FinanceBackupV3,
 } from "@/src/services/finance/financeStorage";
 import {
   deleteAIFinanceApiKey,
@@ -352,7 +352,7 @@ export default function SettingsPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download =
-        "myfinance-backup-v2-" +
+        "myfinance-backup-v3-" +
         new Date().toISOString().slice(0, 10) +
         ".json";
       link.click();
@@ -369,7 +369,7 @@ export default function SettingsPage() {
     }
   }
 
-  function requestBackupRestore(backup: FinanceBackupV2, fileName: string) {
+  function requestBackupRestore(backup: FinanceBackupV3, fileName: string) {
     setPendingAction({
       title: "Khôi phục backup?",
       description:

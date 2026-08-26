@@ -25,7 +25,8 @@ type RealtimeTable =
   | "debts"
   | "investments"
   | "forex_accounts"
-  | "forex_cash_transactions";
+  | "forex_cash_transactions"
+  | "net_worth_snapshots";
 
 type ReloadCallback = () => void | Promise<void>;
 

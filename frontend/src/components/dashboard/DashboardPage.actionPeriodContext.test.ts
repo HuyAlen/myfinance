@@ -49,7 +49,7 @@ describe("DashboardPage period context after Action Center removal", () => {
   });
 
   it("does not add a new transactions or budgets fetch", () => {
-    expect(source.split("getTransactionsInRange(").length - 1).toBe(3);
+    expect(source.split("getTransactionsInRange(").length - 1).toBe(2);
     expect(source.split("getBudgets(").length - 1).toBe(1);
   });
 });

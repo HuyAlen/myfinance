@@ -23,12 +23,12 @@ import {
   beginPeriodGeneration,
   isBudgetAttentionReady,
   isMonthlyProgressReady,
-  isNetWorthTrendReady,
   isNewPeriodContext,
   isStalePeriodGeneration,
   shouldMarkReady,
 } from "@/src/lib/dashboard/dashboardReadiness";
 import { buildDashboardBudgetAttention } from "@/src/lib/dashboard/dashboardBudgetAttention";
+import { buildCanonicalNetWorthTrend } from "@/src/lib/dashboard/netWorthHistory";
 import {
   buildBudgetsHref,
   buildGoalsHref,
@@ -58,6 +58,7 @@ import {
   getDebts,
   getGoals,
   getInvestments,
+  getNetWorthSnapshotsInRange,
   getForexAccounts,
   getForexCashTransactions,
   getTransactionsInRange,
@@ -85,6 +86,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  NetWorthSnapshot,
   ForexAccount,
   ForexCashTransaction,
   Transaction,
@@ -303,26 +305,6 @@ function getYearFromDate(value: string | Date | null | undefined) {
   return date.getFullYear();
 }
 
-function getRecordDate(record: Record<string, unknown>) {
-  const rawDate =
-    record.date ??
-    record.transactionDate ??
-    record.transaction_date ??
-    record.createdAt ??
-    record.created_at;
-
-  if (typeof rawDate !== "string" && !(rawDate instanceof Date)) return null;
-
-  const date = rawDate instanceof Date ? rawDate : new Date(rawDate);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getRecordAmount(record: Record<string, unknown>) {
-  const rawAmount = record.amount ?? record.value ?? record.total;
-  const amount = Number(rawAmount ?? 0);
-  return Number.isFinite(amount) ? Math.abs(amount) : 0;
-}
-
 type RecentActivityKind =
   | "income"
   | "expense"
@@ -514,72 +496,6 @@ function getRecentAmountClass(kind: RecentActivityKind) {
   return "text-slate-600";
 }
 
-function getTransactionNetWorthImpact(transaction: Transaction) {
-  const record = transaction as Record<string, unknown>;
-  const amount = getRecordAmount(record);
-  if (amount <= 0) return 0;
-
-  const searchableText = [
-    record.type,
-    record.kind,
-    record.transactionType,
-    record.transaction_type,
-    record.categoryType,
-    record.category_type,
-    record.categoryName,
-    record.category_name,
-    record.note,
-    record.description,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    searchableText.includes("transfer") ||
-    searchableText.includes("internal") ||
-    searchableText.includes("chuyển") ||
-    searchableText.includes("chuyen") ||
-    searchableText.includes("tiết kiệm") ||
-    searchableText.includes("tiet kiem") ||
-    searchableText.includes("saving")
-  ) {
-    return 0;
-  }
-
-  if (
-    searchableText.includes("income") ||
-    searchableText.includes("thu nhập") ||
-    searchableText.includes("thu nhap") ||
-    searchableText.includes("revenue")
-  ) {
-    return amount;
-  }
-
-  if (
-    searchableText.includes("expense") ||
-    searchableText.includes("chi tiêu") ||
-    searchableText.includes("chi tieu") ||
-    searchableText.includes("spending")
-  ) {
-    return -amount;
-  }
-
-  const signedAmount = Number(record.amount ?? 0);
-  return Number.isFinite(signedAmount) ? signedAmount : 0;
-}
-
-function getSavingTransactionNetWorthImpact(
-  transaction: DashboardSavingTransaction,
-) {
-  if (transaction.type === "interest") return transaction.amount;
-  return 0;
-}
-
-function getEndOfMonth(year: number, month: number) {
-  return new Date(year, month, 0, 23, 59, 59, 999);
-}
-
 function formatOneDecimal(value: number) {
   if (!Number.isFinite(value)) return "0";
   return new Intl.NumberFormat("vi-VN", {
@@ -717,6 +633,9 @@ export default function DashboardPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [netWorthSnapshots, setNetWorthSnapshots] = useState<
+    NetWorthSnapshot[]
+  >([]);
   // Each readiness flag below covers exactly the dependencies its own
   // consumer(s) mathematically need — audited field-by-field, not assumed
   // from which fetch group a value happens to be spread from:
@@ -757,6 +676,7 @@ export default function DashboardPage() {
   const [emergencyFundReady, setEmergencyFundReady] = useState(false);
   const [savingInvestmentReady, setSavingInvestmentReady] = useState(false);
   const [forexReady, setForexReady] = useState(false);
+  const [netWorthHistoryReady, setNetWorthHistoryReady] = useState(false);
   // UI-DASH-2: has the budgets dataset itself (snapshot-like — global,
   // never refetched on a year switch) ever completed a successful load
   // this session? `budgets.length === 0` cannot answer this — it's also
@@ -780,14 +700,14 @@ export default function DashboardPage() {
   const hasLoadedForexRef = useRef(false);
   const hasLoadedBudgetsRef = useRef(false);
   const hasLoadedNetWorthRef = useRef(false);
+  const hasLoadedNetWorthHistoryRef = useRef(false);
 
-  // PERF-3: which year's transactions are currently sitting in `transactions`
-  // state, and a monotonic id used to detect a stale (superseded) period
-  // fetch resolving after a newer one — see reloadPeriod below. Snapshot
-  // data (wallets/investments/Forex/debts/goals/savings/budgets) has no
-  // equivalent notion of "context" because its queries never depend on
-  // selectedYear in the first place.
+  // PERF-3: which year's transactions and Net Worth snapshots are currently
+  // sitting in state, plus a monotonic id used to reject stale period reads.
+  // Current-state datasets (wallets/investments/Forex/debts/goals/savings/
+  // budgets) remain year-independent and are not refetched on a year switch.
   const loadedPeriodYearRef = useRef<number | null>(null);
+  const loadedNetWorthHistoryYearRef = useRef<number | null>(null);
   const periodRequestIdRef = useRef(0);
   const { dateRange, selectedYear } = useDateFilter();
 
@@ -802,9 +722,10 @@ export default function DashboardPage() {
   // re-validated Hero's dependencies could complete without ever emitting
   // the milestone for its own operation id.
   //
-  // reloadPeriod never touches Net Worth (it's snapshot-only, unaffected
-  // by a year switch — see PERF-3), so it needs to know whether Net Worth
-  // is CURRENTLY valid without depending on which operation last set it.
+  // reloadPeriod never refetches CURRENT Net Worth (the live asset/liability
+  // bundle is year-independent); it only refetches historical monthly
+  // snapshots. It therefore needs to know whether current Net Worth is valid
+  // without depending on which operation last set it.
   // Reading `isDashboardReady` directly inside reloadPeriod's closure
   // would be stale forever (reloadPeriod's identity never changes after
   // first render), so this ref mirrors the live value instead — the
@@ -828,10 +749,13 @@ export default function DashboardPage() {
     hasLoadedGoalsRef.current = false;
     hasLoadedEmergencyFundRef.current = false;
     hasLoadedSavingInvestmentRef.current = false;
+    hasLoadedNetWorthHistoryRef.current = false;
+    loadedNetWorthHistoryYearRef.current = null;
     setCashFlowReady(false);
     setGoalsReady(false);
     setEmergencyFundReady(false);
     setSavingInvestmentReady(false);
+    setNetWorthHistoryReady(false);
   }, []);
 
   const filteredTransactions = useMemo(
@@ -1093,6 +1017,19 @@ export default function DashboardPage() {
         isStale: () => isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
       },
     );
+    const netWorthHistoryPromise = measureDashboardQuery(
+      "net_worth_history",
+      ctx,
+      () =>
+        getNetWorthSnapshotsInRange(
+          `${selectedYear}-01-01`,
+          `${selectedYear}-12-01`,
+        ),
+      {
+        isStale: () =>
+          isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+      },
+    );
     const debtsPromise = measureDashboardQuery("debts", ctx, () => getDebts());
     const goalsPromise = measureDashboardQuery("goals", ctx, () => getGoals());
     const savingsPromise = measureDashboardQuery<
@@ -1172,6 +1109,31 @@ export default function DashboardPage() {
         return false;
       }
     }
+
+    // NET WORTH HISTORY group — persisted monthly snapshots are the only
+    // historical source. Missing months remain unknown/null; no transaction
+    // reversal or current-balance backfill is allowed.
+    const netWorthHistoryGroupPromise = (async () => {
+      try {
+        const history = await netWorthHistoryPromise;
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+
+        setNetWorthSnapshots(history ?? []);
+        loadedNetWorthHistoryYearRef.current = selectedYear;
+        hasLoadedNetWorthHistoryRef.current = true;
+        setNetWorthHistoryReady(true);
+      } catch (error) {
+        if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+        console.error("[DashboardPage] net-worth-history reload failed", error);
+
+        if (
+          hasLoadedNetWorthHistoryRef.current &&
+          loadedNetWorthHistoryYearRef.current === selectedYear
+        ) {
+          setNetWorthHistoryReady(true);
+        }
+      }
+    })();
 
     // CASH FLOW group — `periodFlowSummary` (income/expense, "Dòng tiền
     // ròng") is computed purely from transactions+categories.
@@ -1517,6 +1479,7 @@ export default function DashboardPage() {
       emergencyFundGroupPromise,
       savingInvestmentGroupPromise,
       forexGroupPromise,
+      netWorthHistoryGroupPromise,
     ]);
 
     // Secondary content (Budget recommendation) resolves and paints
@@ -1543,50 +1506,55 @@ export default function DashboardPage() {
     }
   }, [selectedYear, invalidatePeriodReadinessForNewContext]);
 
-  // PERF-3: fires ONLY on a selectedYear change (see the effect below), not
-  // on mount/Realtime/manual refresh — those go through the full
-  // reloadData above. The only network query that genuinely depends on
-  // selectedYear is getTransactionsInRange(fetchRange); every other
-  // Dashboard dataset (wallets, investments, Forex, categories, debts,
-  // goals, savings, saving_transactions, budgets) is year-independent
-  // snapshot data already sitting in state from the last full reload, so
-  // changing the reporting year must not refetch it. The four period-
-  // dependent readiness flags (cashFlow/goals/emergencyFund/
-  // savingInvestment) are recomputed from the new transactions plus the
-  // existing snapshot state; the two snapshot-only flags (isDashboardReady,
-  // forexReady) are left untouched — a year switch never invalidates them.
+  // PERF-3 + NETWORTH-HISTORY-1: a year switch reloads exactly the two
+  // year-dependent datasets: transactions and persisted Net Worth snapshots.
+  // Current asset/liability datasets remain snapshot-like and are not refetched.
   const reloadPeriod = useCallback(async (year: number) => {
-    // PERF-4: this is always a "year_change" logical operation — reloadPeriod
-    // has exactly one caller (the selectedYear-change effect below). One
-    // operation id, purely observational — see reloadData's identical
-    // comment above.
     const operationId = nextDashboardOperationId("period");
-    const ctx: DashboardOperationContext = { operationId, trigger: "year_change" };
+    const ctx: DashboardOperationContext = {
+      operationId,
+      trigger: "year_change",
+    };
     const operationStartedAt = dashboardPerfNow();
     logDashboardOperationStart(ctx, year);
 
     const periodGeneration = beginPeriodGeneration(periodRequestIdRef);
-
     if (isNewPeriodContext(loadedPeriodYearRef.current, year)) {
       invalidatePeriodReadinessForNewContext();
     }
 
     const fetchRange = getDashboardFetchRange(year);
-    try {
-      const txn = await measureDashboardQuery(
-        "transactions",
-        ctx,
-        () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
-        {
-          isStale: () => isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
-        },
-      );
-      // A faster, more recent year switch may have already superseded this
-      // request — never let an older, slower response win a race and
-      // overwrite the newer year's data.
-      if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+    const transactionsRequest = measureDashboardQuery(
+      "transactions",
+      ctx,
+      () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
+      {
+        isStale: () =>
+          isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+      },
+    );
+    const historyRequest = measureDashboardQuery(
+      "net_worth_history",
+      ctx,
+      () =>
+        getNetWorthSnapshotsInRange(`${year}-01-01`, `${year}-12-01`),
+      {
+        isStale: () =>
+          isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+      },
+    );
 
-      setTransactions(txn ?? []);
+    // Both year-dependent reads start before either is awaited. A failure in
+    // one domain must not suppress a successful result from the other.
+    const [transactionsResult, historyResult] = await Promise.allSettled([
+      transactionsRequest,
+      historyRequest,
+    ]);
+
+    if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
+
+    if (transactionsResult.status === "fulfilled") {
+      setTransactions(transactionsResult.value ?? []);
       loadedPeriodYearRef.current = year;
       emitDashboardMilestone(
         ctx,
@@ -1603,22 +1571,7 @@ export default function DashboardPage() {
           dashboardPerfNow() - operationStartedAt,
         );
       }
-      // Reaching here means the fetch above genuinely succeeded fresh and
-      // is still current (non-stale) — a real revalidation of THIS period
-      // operation's own (and only) Hero-relevant dependency, Cash Flow.
-      // This freshness is intentionally NOT written anywhere a concurrent
-      // full operation could read it — a period operation may reuse the
-      // current snapshot's Net Worth validity (see isDashboardReadyRef
-      // immediately below), but the reverse must never happen: this
-      // operation's own Cash Flow success must never be usable as
-      // evidence that a DIFFERENT (full) operation validated ITS OWN Cash
-      // Flow — see the PERF-4 Hero Freshness Ownership patch.
-      //
-      // reloadPeriod never touches Net Worth (snapshot-only, unaffected by
-      // a year switch — PERF-3), so it reuses the CURRENT snapshot state
-      // via the ref mirror rather than requiring its own operation to have
-      // refetched it — see isDashboardReadyRef's declaration for why a
-      // direct closure read would be stale.
+
       if (isDashboardReadyRef.current) {
         emitDashboardMilestone(
           ctx,
@@ -1638,14 +1591,11 @@ export default function DashboardPage() {
         setSavingInvestmentReady(true);
         hasLoadedSavingInvestmentRef.current = true;
       }
-    } catch (error) {
-      if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
-      console.error("[DashboardPage] period reload failed", error);
-      // Same last-known-good policy as reloadData's groups: a same-context
-      // retry failure keeps showing the previous successful load; a
-      // failure with no prior success for THIS year (isNewPeriodContext
-      // already reset the refs above) stays not-ready rather than
-      // fabricating a zero.
+    } else {
+      console.error(
+        "[DashboardPage] period reload failed",
+        transactionsResult.reason,
+      );
       if (hasLoadedCashFlowRef.current) {
         setCashFlowReady(true);
         emitDashboardMilestone(
@@ -1657,6 +1607,24 @@ export default function DashboardPage() {
       if (hasLoadedGoalsRef.current) setGoalsReady(true);
       if (hasLoadedEmergencyFundRef.current) setEmergencyFundReady(true);
       if (hasLoadedSavingInvestmentRef.current) setSavingInvestmentReady(true);
+    }
+
+    if (historyResult.status === "fulfilled") {
+      setNetWorthSnapshots(historyResult.value ?? []);
+      loadedNetWorthHistoryYearRef.current = year;
+      hasLoadedNetWorthHistoryRef.current = true;
+      setNetWorthHistoryReady(true);
+    } else {
+      console.error(
+        "[DashboardPage] net-worth-history period reload failed",
+        historyResult.reason,
+      );
+      if (
+        hasLoadedNetWorthHistoryRef.current &&
+        loadedNetWorthHistoryYearRef.current === year
+      ) {
+        setNetWorthHistoryReady(true);
+      }
     }
   }, [invalidatePeriodReadinessForNewContext]);
 
@@ -1735,8 +1703,8 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  // PERF-3: a pure year switch reloads only the period data (transactions)
-  // via reloadPeriod, reusing the already-valid snapshot rather than
+  // PERF-3: a pure year switch reloads only year-dependent data (transactions
+  // + canonical Net Worth snapshots) via reloadPeriod, reusing the already-valid current snapshot rather than
   // repeating the mount effect's full reload. Skips the very first render
   // — the mount effect above already covers the initial selectedYear.
   const hasHandledInitialYearRef = useRef(false);
@@ -1774,6 +1742,7 @@ export default function DashboardPage() {
       "wallets",
       "transactions",
       "investments",
+      "net_worth_snapshots",
       "forex_accounts",
       "forex_cash_transactions",
       "debts",
@@ -1984,10 +1953,9 @@ export default function DashboardPage() {
   );
 
   // ── Net-worth timeline ────────────────────────────────────────────────────
-  // Net worth is reconstructed from the current real asset snapshot and actual
-  // balance-changing movements after each month end. Internal transfers such as
-  // wallet transfers and saving deposits/withdrawals are ignored because they
-  // only move money between asset buckets.
+  // NETWORTH-HISTORY-1: persisted monthly snapshots are the historical SSOT.
+  // Missing months remain unknown/null; current balances and transaction deltas
+  // are never used to fabricate a past value.
   const selectedMonth = useMemo(() => {
     const monthFromRange = getMonthIndexFromDate(dateRange.startDate);
     const yearFromRange = getYearFromDate(dateRange.startDate);
@@ -1998,112 +1966,15 @@ export default function DashboardPage() {
     return now.getFullYear() === selectedYear ? now.getMonth() + 1 : 12;
   }, [dateRange.startDate, selectedYear]);
 
-  const firstNetWorthDataMonth = useMemo(() => {
-    const transactionMonths = transactions
-      .map((item) => getRecordDate(item as Record<string, unknown>))
-      .filter((date): date is Date =>
-        Boolean(date && date.getFullYear() === selectedYear),
-      )
-      .map((date) => date.getMonth() + 1);
-
-    const savingMonths = savings
-      .map((item) => getRecordDate({ date: item.createdAt }))
-      .filter((date): date is Date =>
-        Boolean(date && date.getFullYear() === selectedYear),
-      )
-      .map((date) => date.getMonth() + 1);
-
-    const months = [...transactionMonths, ...savingMonths];
-    return months.length ? Math.min(...months) : selectedMonth;
-  }, [savings, selectedMonth, selectedYear, transactions]);
-
-  const netWorthTrend = useMemo(() => {
-    const now = new Date();
-    const currentNetWorth = summary.netWorth;
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const latestRealMonth =
-      selectedYear < currentYear
-        ? 12
-        : selectedYear === currentYear
-          ? currentMonth
-          : 0;
-    const snapshotMonth =
-      selectedYear === currentYear
-        ? Math.min(selectedMonth, currentMonth)
-        : selectedMonth;
-
-    return Array.from({ length: 12 }, (_, index) => {
-      const month = index + 1;
-      const isFutureMonth = month > latestRealMonth;
-
-      if (isFutureMonth) {
-        return {
-          label: `T${month}`,
-          month,
-          value: null,
-          hasData: false,
-          isSnapshotMonth: false,
-        };
-      }
-
-      // If the system has no records before the first real transaction month,
-      // keep those months at 0 instead of back-filling the current wallet balance.
-      if (month < firstNetWorthDataMonth) {
-        return {
-          label: `T${month}`,
-          month,
-          value: null,
-          hasData: false,
-          isSnapshotMonth: false,
-        };
-      }
-
-      const monthEnd = getEndOfMonth(selectedYear, month);
-      const transactionImpactAfterMonth = transactions.reduce((sum, item) => {
-        const transactionDate = getRecordDate(item as Record<string, unknown>);
-        if (
-          !transactionDate ||
-          transactionDate.getFullYear() !== selectedYear ||
-          transactionDate <= monthEnd
-        ) {
-          return sum;
-        }
-        return sum + getTransactionNetWorthImpact(item);
-      }, 0);
-
-      const savingImpactAfterMonth = savingTransactions.reduce((sum, item) => {
-        const transactionDate = getRecordDate({ date: item.date });
-        if (
-          !transactionDate ||
-          transactionDate.getFullYear() !== selectedYear ||
-          transactionDate <= monthEnd
-        ) {
-          return sum;
-        }
-        return sum + getSavingTransactionNetWorthImpact(item);
-      }, 0);
-
-      const value =
-        currentNetWorth - transactionImpactAfterMonth - savingImpactAfterMonth;
-      const isSnapshotMonth = month === snapshotMonth;
-
-      return {
-        label: `T${month}`,
-        month,
-        value,
-        hasData: true,
-        isSnapshotMonth,
-      };
-    });
-  }, [
-    firstNetWorthDataMonth,
-    savingTransactions,
-    selectedMonth,
-    selectedYear,
-    summary.netWorth,
-    transactions,
-  ]);
+  const netWorthTrend = useMemo(
+    () =>
+      buildCanonicalNetWorthTrend({
+        snapshots: netWorthSnapshots,
+        selectedYear,
+        selectedMonth,
+      }),
+    [netWorthSnapshots, selectedMonth, selectedYear],
+  );
 
   const netWorthChartStats = useMemo(() => {
     const points = netWorthTrend.filter(
@@ -2117,9 +1988,7 @@ export default function DashboardPage() {
           .reverse()
           .find((point) => point.month < currentPoint.month) ?? null)
       : null;
-    const currentValue = currentPoint
-      ? Number(currentPoint.value)
-      : summary.netWorth;
+    const currentValue = currentPoint ? Number(currentPoint.value) : 0;
     const highestValue = points.length
       ? Math.max(...points.map((point) => Number(point.value)))
       : currentValue;
@@ -2138,7 +2007,7 @@ export default function DashboardPage() {
         ? currentValue - Number(previousPoint.value)
         : 0,
     };
-  }, [netWorthTrend, summary.netWorth]);
+  }, [netWorthTrend]);
 
   // ── Cash-flow trend (real monthly transaction data) ───────────────────────
   const selectedYearTransactions = useMemo(
@@ -2531,17 +2400,11 @@ export default function DashboardPage() {
   //     fetch happened to be slower than the Net Worth bundle.
   //   - the "Dòng tiền dương/âm" badge — `cashFlowReady` alone (unchanged
   //     dependency: `netCashFlow` is periodFlowSummary's income/expense).
-  //   - the comparison delta + NetWorthTrendChart — `netWorthTrendReady`
-  //     below (isDashboardReady && cashFlowReady && savingInvestmentReady),
-  //     since netWorthTrend/netWorthChartStats reduce over BOTH
-  //     `transactions` and `savingTransactions` on top of the current
-  //     snapshot. No new query for any of this — same three existing
-  //     flags, recomposed per field instead of unioned for the whole Hero.
-  const netWorthTrendReady = isNetWorthTrendReady(
-    isDashboardReady,
-    cashFlowReady,
-    savingInvestmentReady,
-  );
+  //   - the comparison delta + NetWorthTrendChart — `netWorthHistoryReady`
+  //     alone. The chart now reads the year-scoped persisted snapshot table and
+  //     no longer waits on cash-flow or saving-transaction ledgers.
+  const netWorthTrendReady = netWorthHistoryReady;
+  const hasNetWorthHistoryData = netWorthTrend.some((point) => point.hasData);
 
   // ── Compact operating KPIs ───────────────────────────────────────────────
   // `ready` is per-card: only "Dòng tiền ròng" (periodFlowSummary — pure
@@ -2949,7 +2812,7 @@ export default function DashboardPage() {
                   Biến động tài sản ròng
                 </p>
                 <p className="mt-1 text-xs text-slate-600">
-                  Chỉ dùng dữ liệu thật đã ghi nhận trong năm {selectedYear}.
+                  Dùng snapshot Net Worth theo tháng đã được hệ thống ghi nhận trong năm {selectedYear}.
                 </p>
               </div>
               <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
@@ -2957,35 +2820,30 @@ export default function DashboardPage() {
                   So với kỳ trước
                 </p>
                 {netWorthTrendReady ? (
-                  <p
-                    className={`text-sm font-black ${
-                      netWorthChartStats.changeFromPrevious >= 0
-                        ? "text-emerald-600"
-                        : "text-rose-500"
-                    }`}
-                  >
-                    {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
-                    {formatVND(netWorthChartStats.changeFromPrevious)}
-                  </p>
+                  hasNetWorthHistoryData ? (
+                    <p
+                      className={`text-sm font-black ${
+                        netWorthChartStats.changeFromPrevious >= 0
+                          ? "text-emerald-600"
+                          : "text-rose-500"
+                      }`}
+                    >
+                      {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
+                      {formatVND(netWorthChartStats.changeFromPrevious)}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-bold text-slate-500">
+                      Chưa có dữ liệu
+                    </p>
+                  )
                 ) : (
                   <div className="ml-auto h-5 w-20 animate-pulse rounded bg-slate-200/80" />
                 )}
               </div>
             </div>
 
-            {/* netWorthTrend/netWorthChartStats are derived from the current
-                Net Worth snapshot (isDashboardReady) reversed backward by
-                `transactions` (cashFlowReady, and — PERF-3 — also the exact
-                "transactions belong to the currently selected year" signal,
-                so this doubles as the chart's period-context gate with no
-                new state) AND `savingTransactions` (savingInvestmentReady —
-                PERF-4B: previously missing from this gate, so the chart
-                could render before the saving-transactions ledger loaded
-                and silently omit real saving/withdrawal reversals from the
-                reconstructed past-month values). Without this full gate, a
-                still-held prior year's transactions, or a not-yet-loaded
-                saving ledger, could render as if they were already part of
-                a valid net worth trend before their own fetch resolves. */}
+            {/* NETWORTH-HISTORY-1: the chart reads persisted monthly snapshots
+                only. Unknown months stay null and never inherit today's Net Worth. */}
             {netWorthTrendReady ? (
               <NetWorthTrendChart trend={netWorthTrend} />
             ) : (

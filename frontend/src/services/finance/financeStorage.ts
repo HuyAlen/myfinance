@@ -10,6 +10,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  NetWorthSnapshot,
   ForexAccount,
   ForexCashTransaction,
   Transaction,
@@ -46,11 +47,12 @@ async function getAuthUserId(): Promise<string | null> {
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
 
-// ─── FINANCE-DATA-2: versioned, atomic backup/restore contract ───────────────
+// ─── NETWORTH-HISTORY-1 / FINANCE-DATA-2 backup contract ────────────────────
 
 export const FINANCE_BACKUP_FORMAT = "myfinance-backup" as const;
-export const FINANCE_BACKUP_VERSION = 2 as const;
-export const FINANCE_BACKUP_DOMAINS = [
+export const FINANCE_BACKUP_VERSION = 3 as const;
+export const FINANCE_BACKUP_V2_VERSION = 2 as const;
+export const FINANCE_BACKUP_V2_DOMAINS = [
   "wallets",
   "categories",
   "transactions",
@@ -63,15 +65,28 @@ export const FINANCE_BACKUP_DOMAINS = [
   "forex_accounts",
   "forex_cash_transactions",
 ] as const;
+export const FINANCE_BACKUP_DOMAINS = [
+  ...FINANCE_BACKUP_V2_DOMAINS,
+  "net_worth_snapshots",
+] as const;
 
 export type FinanceBackupDomain = (typeof FINANCE_BACKUP_DOMAINS)[number];
+export type FinanceBackupV2Domain = (typeof FINANCE_BACKUP_V2_DOMAINS)[number];
 export type FinanceBackupRow = Record<string, unknown>;
-export type FinanceBackupData = Record<
-  FinanceBackupDomain,
+export type FinanceBackupData = Record<FinanceBackupDomain, FinanceBackupRow[]>;
+export type FinanceBackupV2Data = Record<
+  FinanceBackupV2Domain,
   FinanceBackupRow[]
 >;
 
 export type FinanceBackupV2 = {
+  format: typeof FINANCE_BACKUP_FORMAT;
+  version: typeof FINANCE_BACKUP_V2_VERSION;
+  exported_at: string;
+  data: FinanceBackupV2Data;
+};
+
+export type FinanceBackupV3 = {
   format: typeof FINANCE_BACKUP_FORMAT;
   version: typeof FINANCE_BACKUP_VERSION;
   exported_at: string;
@@ -79,7 +94,7 @@ export type FinanceBackupV2 = {
 };
 
 export type FinanceBackupValidationResult =
-  | { ok: true; backup: FinanceBackupV2 }
+  | { ok: true; backup: FinanceBackupV3; sourceVersion: 2 | 3 }
   | { ok: false; error: string };
 
 const LEGACY_BACKUP_KEYS = [
@@ -94,6 +109,22 @@ const LEGACY_BACKUP_KEYS = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateBackupDomains(
+  data: Record<string, unknown>,
+  domains: readonly string[],
+): string | null {
+  for (const domain of domains) {
+    const rows = data[domain];
+    if (!Array.isArray(rows)) {
+      return `Backup thiếu dữ liệu bắt buộc: ${domain}.`;
+    }
+    if (!rows.every(isRecord)) {
+      return `Backup có dữ liệu không hợp lệ trong ${domain}.`;
+    }
+  }
+  return null;
 }
 
 export function validateFinanceBackup(
@@ -118,13 +149,6 @@ export function validateFinanceBackup(
     };
   }
 
-  if (input.version !== FINANCE_BACKUP_VERSION) {
-    return {
-      ok: false,
-      error: `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION}.`,
-    };
-  }
-
   if (
     typeof input.exported_at !== "string" ||
     Number.isNaN(Date.parse(input.exported_at))
@@ -137,26 +161,59 @@ export function validateFinanceBackup(
 
   if (!isRecord(input.data)) {
     return { ok: false, error: "Backup thiếu khối dữ liệu bắt buộc." };
+
+  }
+  const backupData = input.data;
+
+  if (input.version !== 2 && input.version !== 3) {
+    return {
+      ok: false,
+      error: `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (hoặc V2 để nâng cấp an toàn).`,
+    };
   }
 
-  for (const domain of FINANCE_BACKUP_DOMAINS) {
-    const rows = input.data[domain];
-    if (!Array.isArray(rows)) {
-      return {
-        ok: false,
-        error: `Backup thiếu dữ liệu bắt buộc: ${domain}.`,
-      };
-    }
+  const sourceVersion = input.version;
+  const requiredDomains =
+    sourceVersion === FINANCE_BACKUP_V2_VERSION
+      ? FINANCE_BACKUP_V2_DOMAINS
+      : FINANCE_BACKUP_DOMAINS;
+  const domainError = validateBackupDomains(backupData, requiredDomains);
+  if (domainError) return { ok: false, error: domainError };
 
-    if (!rows.every(isRecord)) {
-      return {
-        ok: false,
-        error: `Backup có dữ liệu không hợp lệ trong ${domain}.`,
-      };
-    }
+  if (sourceVersion === FINANCE_BACKUP_V2_VERSION) {
+    const normalizedData = Object.fromEntries(
+      FINANCE_BACKUP_V2_DOMAINS.map((domain) => [domain, backupData[domain]]),
+    ) as FinanceBackupV2Data;
+
+    return {
+      ok: true,
+      sourceVersion,
+      backup: {
+        format: FINANCE_BACKUP_FORMAT,
+        version: FINANCE_BACKUP_VERSION,
+        exported_at: input.exported_at,
+        data: {
+          ...normalizedData,
+          net_worth_snapshots: [],
+        },
+      },
+    };
   }
 
-  return { ok: true, backup: input as FinanceBackupV2 };
+  const normalizedData = Object.fromEntries(
+    FINANCE_BACKUP_DOMAINS.map((domain) => [domain, backupData[domain]]),
+  ) as FinanceBackupData;
+
+  return {
+    ok: true,
+    sourceVersion,
+    backup: {
+      format: FINANCE_BACKUP_FORMAT,
+      version: FINANCE_BACKUP_VERSION,
+      exported_at: input.exported_at,
+      data: normalizedData,
+    },
+  };
 }
 
 function mapFinanceBackupError(error: { code?: string; message: string }) {
@@ -166,7 +223,7 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
     case "MFB02":
       return "File backup không hợp lệ hoặc không đầy đủ.";
     case "MFB03":
-      return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION}.`;
+      return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (V2 vẫn có thể được nâng cấp khi restore).`;
     case "MFB04":
       return "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.";
     default:
@@ -174,7 +231,7 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
   }
 }
 
-export async function exportFinanceBackup(): Promise<FinanceBackupV2> {
+export async function exportFinanceBackup(): Promise<FinanceBackupV3> {
   if (LOCAL_UI_MODE) {
     throw new Error(
       "Backup cloud không khả dụng khi NEXT_PUBLIC_LOCAL_UI_MODE=true.",
@@ -196,6 +253,10 @@ export async function exportFinanceBackup(): Promise<FinanceBackupV2> {
     throw new Error(validation.error);
   }
 
+  if (validation.sourceVersion !== FINANCE_BACKUP_VERSION) {
+    throw new Error("Máy chủ trả về backup cũ. Vui lòng áp dụng migration Net Worth History trước khi export.");
+  }
+
   return validation.backup;
 }
 
@@ -211,6 +272,9 @@ export async function restoreFinanceBackup(
   const validation = validateFinanceBackup(input);
   if (!validation.ok) return { error: validation.error };
 
+  // V2 is normalized client-side to a V3 envelope with an empty snapshot
+  // collection. The server then restores state and captures exactly one
+  // current-month baseline rather than fabricating historical months.
   const { error } = await supabase.rpc("restore_finance_backup", {
     p_backup: validation.backup,
   });
@@ -223,9 +287,9 @@ export async function restoreFinanceBackup(
   return { error: null };
 }
 
-function createEmptyFinanceBackupV2(
+function createEmptyFinanceBackupV3(
   exportedAt = new Date().toISOString(),
-): FinanceBackupV2 {
+): FinanceBackupV3 {
   const data: FinanceBackupData = {
     wallets: [],
     categories: [],
@@ -238,6 +302,7 @@ function createEmptyFinanceBackupV2(
     saving_transactions: [],
     forex_accounts: [],
     forex_cash_transactions: [],
+    net_worth_snapshots: [],
   };
 
   return {
@@ -1005,6 +1070,71 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+type NetWorthSnapshotDbRow = {
+  id: string;
+  snapshot_month: string;
+  cash_and_wallets: number | string;
+  savings: number | string;
+  investments: number | string;
+  forex: number | string;
+  total_assets: number | string;
+  total_debt: number | string;
+  net_worth: number | string;
+  captured_at: string;
+};
+
+function fromNetWorthSnapshotRow(row: NetWorthSnapshotDbRow): NetWorthSnapshot {
+  return {
+    id: row.id,
+    snapshotMonth: row.snapshot_month,
+    cashAndWallets: Number(row.cash_and_wallets),
+    savings: Number(row.savings),
+    investments: Number(row.investments),
+    forex: Number(row.forex),
+    totalAssets: Number(row.total_assets),
+    totalDebt: Number(row.total_debt),
+    netWorth: Number(row.net_worth),
+    capturedAt: row.captured_at,
+  };
+}
+
+/**
+ * Reads persisted canonical monthly Net Worth snapshots for one bounded range.
+ * Missing months remain missing; this function never reconstructs history from
+ * current balances or transaction deltas.
+ */
+export async function getNetWorthSnapshotsInRange(
+  startMonth: string,
+  endMonth: string,
+): Promise<NetWorthSnapshot[]> {
+  if (LOCAL_UI_MODE) return [];
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("net_worth_snapshots")
+    .select(
+      "id,snapshot_month,cash_and_wallets,savings,investments,forex,total_assets,total_debt,net_worth,captured_at",
+    )
+    .eq("user_id", userId)
+    .gte("snapshot_month", startMonth)
+    .lte("snapshot_month", endMonth)
+    .order("snapshot_month", { ascending: true });
+
+  if (error) {
+    console.error(
+      "[financeStorage] getNetWorthSnapshotsInRange:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as NetWorthSnapshotDbRow[]).map(
+    fromNetWorthSnapshotRow,
+  );
+}
+
 export async function getForexAccounts(): Promise<ForexAccount[]> {
   if (LOCAL_UI_MODE) return [];
 
@@ -1111,16 +1241,16 @@ function unblockSeed(userId: string): void {
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
 /**
- * Builds the exact V2 snapshot used by both first-login auto-seed and explicit
+ * Builds the exact V3 snapshot used by both first-login auto-seed and explicit
  * "Reset Demo Data". Keeping one serializer prevents the two flows from
  * drifting on field names, timestamp defaults, or domain coverage.
  */
 function buildDemoFinanceBackup(
   userId: string,
   timestamp = new Date().toISOString(),
-): FinanceBackupV2 {
+): FinanceBackupV3 {
   const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
-  const backup = createEmptyFinanceBackupV2(timestamp);
+  const backup = createEmptyFinanceBackupV3(timestamp);
 
   backup.data.wallets = demoData.wallets.map((wallet) =>
     withSnapshotTimestamps(toWalletRow(wallet, userId), timestamp),
@@ -1158,7 +1288,7 @@ function buildDemoFinanceBackup(
  *   1. serializes competing seed requests for this user;
  *   2. freezes writes to every persisted finance domain for the short
  *      check-and-seed transaction;
- *   3. checks ALL eleven persisted finance domains, not only wallets;
+ *   3. checks ALL persisted finance domains, including Net Worth history;
  *   4. delegates the replacement to restore_finance_backup, whose function
  *      call is already the all-or-nothing PostgreSQL transaction boundary.
  *
@@ -1191,7 +1321,7 @@ export async function resetFinanceDemoData(): Promise<{
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // FINANCE-DATA-3: reset remains a complete eleven-domain atomic replacement.
+  // NETWORTH-HISTORY-1: reset remains a complete V3 atomic replacement across all persisted finance domains.
   // FINANCE-SEED-1 reuses the same snapshot serializer as first-login seed so
   // both paths cannot drift on demo rows or persisted field names.
   const backup = buildDemoFinanceBackup(userId);
@@ -1209,12 +1339,13 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // FINANCE-DATA-3: an empty V2 snapshot covers all eleven persisted domains:
+  // FINANCE-DATA-3: an empty V3 snapshot covers all persisted finance domains, including Net Worth history:
   // wallets, categories, transactions, debts, goals, budgets, investments,
-  // savings, saving_transactions, forex_accounts and forex_cash_transactions.
+  // savings, saving_transactions, forex_accounts, forex_cash_transactions, and
+  // net_worth_snapshots.
   // restore_finance_backup performs the destructive work inside one PostgreSQL
   // transaction, so Clear All can no longer stop halfway through.
-  const result = await restoreFinanceBackup(createEmptyFinanceBackupV2());
+  const result = await restoreFinanceBackup(createEmptyFinanceBackupV3());
   if (result.error) return result;
 
   // Prevent auto-seed from re-populating demo data on next page load. Set this

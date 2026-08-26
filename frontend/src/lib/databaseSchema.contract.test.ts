@@ -10,7 +10,7 @@ const normalized = sql.replace(/\s+/g, " ").toLowerCase();
 const financeDomains = [
   "wallets", "categories", "transactions", "debts", "goals", "budgets",
   "investments", "savings", "saving_transactions", "forex_accounts",
-  "forex_cash_transactions",
+  "forex_cash_transactions", "net_worth_snapshots",
 ] as const;
 
 const aiTables = [
@@ -137,6 +137,7 @@ describe("DB-SSOT-1 canonical Supabase schema", () => {
       "create index if not exists forex_cash_transactions_account_date_idx on public.forex_cash_transactions (forex_account_id, transaction_date desc)",
       "create index if not exists forex_cash_transactions_user_id_idx on public.forex_cash_transactions (user_id)",
       "create index if not exists forex_cash_transactions_wallet_id_idx on public.forex_cash_transactions (wallet_id)",
+      "create index if not exists net_worth_snapshots_user_month_idx on public.net_worth_snapshots (user_id, snapshot_month)",
     ]) {
       expect(normalized).toContain(indexDefinition);
     }
@@ -209,6 +210,8 @@ describe("DB-SSOT-1 canonical Supabase schema", () => {
     expect(normalized).toContain("grant select, insert, update on table public.ai_user_settings to authenticated");
     expect(normalized).toContain("grant select, insert, delete on table public.ai_action_audit_logs to authenticated");
     expect(normalized).toContain("grant select, insert on table public.ai_usage_logs to authenticated");
+    expect(normalized).toContain("grant select on table public.net_worth_snapshots to authenticated");
+    expect(normalized).not.toContain("grant insert, update, delete on table public.net_worth_snapshots to authenticated");
   });
 
   it("does not restore the legacy permissive public read-write policy", () => {

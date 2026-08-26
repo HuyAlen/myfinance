@@ -17,8 +17,9 @@ import { describe, expect, it } from "vitest";
  * categories argument) and never needed cashFlowReady at all. These tests
  * lock in the fixed, per-field gating so a future change cannot silently
  * re-couple the headline/buckets to an unrelated dataset, or let the
- * comparison/chart render before `savingTransactions` has actually loaded
- * (the separate F-6 correctness-adjacent gap the same audit found).
+ * comparison/chart render before canonical Net Worth history has loaded.
+ * NETWORTH-HISTORY-1 intentionally decouples that chart from transaction and
+ * saving-transaction readiness because those ledgers no longer reconstruct it.
  */
 describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", () => {
   const source = readFileSync(
@@ -26,7 +27,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
     "utf8",
   );
 
-  it("imports isNetWorthTrendReady, and no longer imports isHeroReady, from the canonical dashboardReadiness module", () => {
+  it("no longer imports a composite Net Worth trend gate from dashboardReadiness", () => {
     const importStart = source.indexOf("beginPeriodGeneration,");
     expect(importStart).toBeGreaterThan(-1);
     const importEnd = source.indexOf(
@@ -36,7 +37,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
     expect(importEnd).toBeGreaterThan(importStart);
     const importSource = source.slice(importStart, importEnd);
 
-    expect(importSource).toContain("isNetWorthTrendReady");
+    expect(importSource).not.toContain("isNetWorthTrendReady");
     expect(importSource).not.toContain("isHeroReady");
   });
 
@@ -89,30 +90,25 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
   });
 });
 
-describe("Net Worth comparison + chart require netWorthTrendReady, including savingInvestmentReady (PERF-4B / F-6)", () => {
+describe("Net Worth comparison + chart use canonical history readiness (NETWORTH-HISTORY-1)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
   );
 
-  it("netWorthTrendReady is computed from isDashboardReady, cashFlowReady, and savingInvestmentReady, in that order", () => {
-    const start = source.indexOf(
-      "const netWorthTrendReady = isNetWorthTrendReady(",
+  it("netWorthTrendReady depends only on netWorthHistoryReady", () => {
+    expect(source).toContain(
+      "const netWorthTrendReady = netWorthHistoryReady;",
     );
-    expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf(");", start);
-    const callSource = source.slice(start, end);
-
-    const order = ["isDashboardReady", "cashFlowReady", "savingInvestmentReady"];
-    let lastIndex = -1;
-    for (const arg of order) {
-      const idx = callSource.indexOf(arg);
-      expect(idx).toBeGreaterThan(lastIndex);
-      lastIndex = idx;
-    }
+    const declarationStart = source.indexOf(
+      "const netWorthTrendReady = netWorthHistoryReady;",
+    );
+    const declarationWindow = source.slice(declarationStart, declarationStart + 220);
+    expect(declarationWindow).not.toContain("cashFlowReady");
+    expect(declarationWindow).not.toContain("savingInvestmentReady");
   });
 
-  it("both the comparison delta and the NetWorthTrendChart are gated on netWorthTrendReady — exactly two occurrences inside the Hero panel", () => {
+  it("both the comparison and chart remain gated on netWorthTrendReady", () => {
     const panelStart = source.indexOf(
       '<div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85',
     );
@@ -132,7 +128,7 @@ describe("Net Worth comparison + chart require netWorthTrendReady, including sav
   });
 });
 
-describe("Chart JS chunk preload overlaps finance-data loading without a new query (PERF-4B / F-2)", () => {
+describe("Chart JS chunk preload overlaps finance-data loading while canonical history stays concurrent (PERF-4B / NETWORTH-HISTORY-1)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
@@ -167,16 +163,10 @@ describe("Chart JS chunk preload overlaps finance-data loading without a new que
     expect(cashFlowChartImportOccurrences).toBe(2);
   });
 
-  it("does not add a new finance-data-fetching call — every query call site count matches its existing, unchanged baseline", () => {
-    // Each of these is invoked exactly once in reloadData, EXCEPT
-    // getTransactionsInRange, which has two genuine, pre-existing call
-    // sites (the mount/full reloadData, and reloadPeriod's year-switch-only
-    // reload) plus one comment mention — none of that is new, and none of
-    // it was touched by this ticket, which changes rendering readiness,
-    // not fetching.
+  it("adds only the required year-scoped Net Worth history reader; existing data-call counts remain stable", () => {
     const baselineCounts: Record<string, number> = {
       "getWallets(": 1,
-      "getTransactionsInRange(": 3,
+      "getTransactionsInRange(": 2,
       "getInvestments(": 1,
       "getDebts(": 1,
       "getForexAccounts(": 1,
@@ -189,6 +179,10 @@ describe("Chart JS chunk preload overlaps finance-data loading without a new que
       const occurrences = source.split(fn).length - 1;
       expect(occurrences).toBe(expectedCount);
     }
+
+    // One full-reload call + one period-reload call; the import itself is not
+    // counted because this source-contract intentionally matches call syntax.
+    expect(source.split("getNetWorthSnapshotsInRange(").length - 1).toBe(2);
   });
 
   it("the preload effect sets no state and awaits nothing — a pure fire-and-forget side effect", () => {

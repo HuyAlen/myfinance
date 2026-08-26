@@ -163,6 +163,19 @@ export type Investment = {
   currentPrice?: number;
 };
 
+export type NetWorthSnapshot = {
+  id: string;
+  snapshotMonth: string;
+  cashAndWallets: number;
+  savings: number;
+  investments: number;
+  forex: number;
+  totalAssets: number;
+  totalDebt: number;
+  netWorth: number;
+  capturedAt: string;
+};
+
 export type ForexAccountStatus = "active" | "inactive" | "archived";
 
 export type ForexCashTransactionType = "deposit" | "withdrawal";

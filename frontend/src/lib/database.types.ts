@@ -368,6 +368,38 @@ type ForexCashTransactionInsert = {
 };
 type ForexCashTransactionUpdate = Partial<ForexCashTransactionInsert>;
 
+type NetWorthSnapshotRow = {
+  id: string;
+  user_id: string;
+  snapshot_month: string;
+  cash_and_wallets: number;
+  savings: number;
+  investments: number;
+  forex: number;
+  total_assets: number;
+  total_debt: number;
+  net_worth: number;
+  captured_at: string;
+  created_at: string;
+  updated_at: string;
+};
+type NetWorthSnapshotInsert = {
+  id?: string;
+  user_id: string;
+  snapshot_month: string;
+  cash_and_wallets?: number;
+  savings?: number;
+  investments?: number;
+  forex?: number;
+  total_assets?: number;
+  total_debt?: number;
+  net_worth?: number;
+  captured_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+type NetWorthSnapshotUpdate = Partial<NetWorthSnapshotInsert>;
+
 type AIUserSettingsRow = {
   id: string;
   user_id: string;
@@ -615,6 +647,12 @@ export type Database = {
           { foreignKeyName: "forex_cash_transactions_wallet_id_fkey"; columns: ["wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }
         ];
       };
+      net_worth_snapshots: {
+        Row: NetWorthSnapshotRow;
+        Insert: NetWorthSnapshotInsert;
+        Update: NetWorthSnapshotUpdate;
+        Relationships: [];
+      };
       ai_user_settings: { Row: AIUserSettingsRow; Insert: AIUserSettingsInsert; Update: AIUserSettingsUpdate; Relationships: [] };
       ai_conversations: { Row: AIConversationRow; Insert: AIConversationInsert; Update: AIConversationUpdate; Relationships: [] };
       ai_messages: {
@@ -683,6 +721,7 @@ export type Database = {
         Returns: ForexCashTransactionRow;
       };
       delete_forex_cash_transaction: { Args: { p_id: string }; Returns: undefined };
+      capture_current_net_worth_snapshot: { Args: { p_user_id: string }; Returns: undefined };
       export_finance_backup: { Args: Record<PropertyKey, never>; Returns: Json };
       restore_finance_backup: { Args: { p_backup: Json }; Returns: Json };
       seed_finance_demo_data: { Args: { p_seed: Json }; Returns: boolean };

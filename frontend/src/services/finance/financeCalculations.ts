@@ -658,9 +658,13 @@ export interface NetWorthBreakdown {
 }
 
 /**
- * Canonical net worth breakdown — the ONLY place the assets-minus-liabilities
- * equation should be implemented. Dashboard, Reports, and any future
- * page/AI tool must call this instead of re-deriving net worth locally.
+ * Canonical LIVE net worth breakdown — the ONLY TypeScript implementation of
+ * the assets-minus-liabilities equation. Dashboard, Reports, and any future
+ * page/AI tool must call this instead of re-deriving current Net Worth locally.
+ *
+ * NETWORTH-HISTORY-1 persists the same breakdown at the PostgreSQL mutation
+ * boundary in capture_current_net_worth_snapshot(). Historical consumers read
+ * those recorded snapshots; they never reverse transactions from today's value.
  *
  * Assets:
  * - every wallet's balance, unconditionally (this matches every existing

@@ -29,8 +29,8 @@ beforeEach(() => {
   mockRpc.mockResolvedValue({ data: { restored: true }, error: null });
 });
 
-describe("FINANCE-DATA-3 clear/reset integrity", () => {
-  it("Clear All replaces all eleven domains with one empty atomic snapshot", async () => {
+describe("NETWORTH-HISTORY-1 clear/reset integrity", () => {
+  it("Clear All replaces every persisted domain including Net Worth history with one empty atomic snapshot", async () => {
     await expect(clearAllUserData()).resolves.toEqual({ error: null });
 
     expect(mockFrom).not.toHaveBeenCalled();
@@ -40,7 +40,7 @@ describe("FINANCE-DATA-3 clear/reset integrity", () => {
       expect.objectContaining({
         p_backup: expect.objectContaining({
           format: "myfinance-backup",
-          version: 2,
+          version: 3,
         }),
       }),
     );
@@ -57,7 +57,7 @@ describe("FINANCE-DATA-3 clear/reset integrity", () => {
     }
   });
 
-  it("Reset Demo atomically clears Savings/Forex while restoring the canonical demo domains", async () => {
+  it("Reset Demo restores canonical demo state with an empty history payload so the server captures one current baseline", async () => {
     await expect(resetFinanceDemoData()).resolves.toEqual({ error: null });
 
     expect(mockFrom).not.toHaveBeenCalled();
@@ -83,6 +83,7 @@ describe("FINANCE-DATA-3 clear/reset integrity", () => {
     expect(backup.data.saving_transactions).toEqual([]);
     expect(backup.data.forex_accounts).toEqual([]);
     expect(backup.data.forex_cash_transactions).toEqual([]);
+    expect(backup.data.net_worth_snapshots).toEqual([]);
 
     for (const domain of [
       "wallets",

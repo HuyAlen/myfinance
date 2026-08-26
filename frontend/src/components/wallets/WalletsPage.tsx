@@ -579,13 +579,10 @@ export default function WalletsPage() {
     // correction, since both are just "the balance this wallet starts
     // reflecting from now on."
     //
-    // Known trade-off (disclosed, not silently ignored): the Dashboard's
-    // Net Worth Trend chart reconstructs past net worth by walking
-    // transaction deltas backward from the CURRENT total. A balance
-    // correction has no transaction to walk back through, so — exactly
-    // like a new wallet's opening balance already does today — it will
-    // read as if the higher/lower balance had always been there, rather
-    // than appearing at the specific date of the edit.
+    // NETWORTH-HISTORY-1: this direct correction still does not create a
+    // fake finance transaction. The database snapshot trigger captures the
+    // corrected CURRENT month atomically with the wallet write, while every
+    // previously recorded monthly Net Worth snapshot remains unchanged.
     const balance = Number(form.balance);
     if (Number.isNaN(balance) || balance < 0) {
       setSaveError("Vui lòng nhập số dư hợp lệ");

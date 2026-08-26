@@ -293,9 +293,9 @@ describe("DASH-POLISH-1 preserves zero-new-query and prior UI-DASH contracts", (
   );
 
   it("does not add a new getTransactionsInRange or getBudgets call site", () => {
-    // 3 textual occurrences: the 2 real call sites (reloadData/reloadPeriod)
-    // plus one pre-existing code comment mentioning the function name.
-    expect(source.split("getTransactionsInRange(").length - 1).toBe(3);
+    // NETWORTH-HISTORY-1 leaves exactly the 2 real transaction call sites
+    // (reloadData/reloadPeriod). Historical Net Worth has its own reader now.
+    expect(source.split("getTransactionsInRange(").length - 1).toBe(2);
     expect(source.split("getBudgets(").length - 1).toBe(1);
   });
 
