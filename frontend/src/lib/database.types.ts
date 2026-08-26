@@ -685,6 +685,7 @@ export type Database = {
       delete_forex_cash_transaction: { Args: { p_id: string }; Returns: undefined };
       export_finance_backup: { Args: Record<PropertyKey, never>; Returns: Json };
       restore_finance_backup: { Args: { p_backup: Json }; Returns: Json };
+      seed_finance_demo_data: { Args: { p_seed: Json }; Returns: boolean };
     };
     Enums: {
       wallet_type: WalletType;

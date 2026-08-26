@@ -1111,105 +1111,14 @@ function unblockSeed(userId: string): void {
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
 /**
- * Seeds demo data on first login ONLY.
- * Skipped when:
- *  (a) the user already has wallets in Supabase, OR
- *  (b) the seed-guard flag is set (e.g. after "Clear All Data").
- * Safe to call on every page mount — it is a no-op in both cases above.
+ * Builds the exact V2 snapshot used by both first-login auto-seed and explicit
+ * "Reset Demo Data". Keeping one serializer prevents the two flows from
+ * drifting on field names, timestamp defaults, or domain coverage.
  */
-export async function initFinanceDemoData() {
-  if (LOCAL_UI_MODE) return;
-
-  const userId = await getAuthUserId();
-  if (!userId) return;
-
-  // Respect explicit "do not auto-seed" flag set by clearAllUserData
-  if (isSeedBlocked(userId)) return;
-
-  // Check whether this user already has data
-  const { data } = await supabase
-    .from("wallets")
-    .select("id")
-    .eq("user_id", userId)
-    .limit(1);
-  if (data && data.length > 0) return;
-
-  const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
-
-  // CATEGORY-INTEGRITY-1: preserve FK dependency order. Categories may point
-  // at default wallets, and budgets point at categories, so neither can be
-  // raced inside the original all-domain Promise.all.
-  const walletSeed = await supabase.from("wallets").upsert(
-    demoData.wallets.map((wallet) => toWalletRow(wallet, userId)),
-    { onConflict: "id", ignoreDuplicates: true },
-  );
-  if (walletSeed.error) {
-    console.error(
-      "[financeStorage] initFinanceDemoData wallets:",
-      walletSeed.error.message,
-    );
-    return;
-  }
-
-  const categorySeed = await supabase
-    .from("categories")
-    .upsert(
-      demoData.categories.map((category) =>
-        toCategoryInsertRow(category, userId),
-      ) as never,
-      { onConflict: "id", ignoreDuplicates: true },
-    );
-  if (categorySeed.error) {
-    console.error(
-      "[financeStorage] initFinanceDemoData categories:",
-      categorySeed.error.message,
-    );
-    return;
-  }
-
-  await Promise.all([
-    supabase
-      .from("transactions")
-      .upsert(
-        demoData.transactions.map((transaction) =>
-          toTransactionInsertRow(transaction, userId),
-        ) as never,
-        { onConflict: "id", ignoreDuplicates: true },
-      ),
-    supabase.from("debts").upsert(
-      demoData.debts.map((debt) => toDebtRow(debt, userId)),
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
-    supabase
-      .from("goals")
-      .upsert(
-        demoData.goals.map((goal) => toGoalInsertRow(goal, userId)) as never,
-        { onConflict: "id", ignoreDuplicates: true },
-      ),
-    supabase.from("budgets").upsert(
-      demoData.budgets.map((budget) => toBudgetRow(budget, userId)),
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
-    supabase.from("investments").upsert(
-      demoData.investments.map((investment) =>
-        toInvestmentRow(investment, userId),
-      ),
-      { onConflict: "id", ignoreDuplicates: true },
-    ),
-  ]);
-}
-
-export async function resetFinanceDemoData(): Promise<{
-  error: string | null;
-}> {
-  const userId = await getAuthUserId();
-  if (!userId) return { error: ERR_NO_AUTH };
-
-  // FINANCE-DATA-3: reset is a complete eleven-domain replacement, not a
-  // sequence of browser-side DELETEs followed by independent INSERTs. Reuse
-  // FINANCE-DATA-2's atomic restore RPC so Savings/Forex are cleared together
-  // with the legacy seven demo domains, and any failure rolls everything back.
-  const timestamp = new Date().toISOString();
+function buildDemoFinanceBackup(
+  userId: string,
+  timestamp = new Date().toISOString(),
+): FinanceBackupV2 {
   const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
   const backup = createEmptyFinanceBackupV2(timestamp);
 
@@ -1220,7 +1129,10 @@ export async function resetFinanceDemoData(): Promise<{
     withSnapshotTimestamps(toCategoryInsertRow(category, userId), timestamp),
   );
   backup.data.transactions = demoData.transactions.map((transaction) =>
-    withSnapshotTimestamps(toTransactionInsertRow(transaction, userId), timestamp),
+    withSnapshotTimestamps(
+      toTransactionInsertRow(transaction, userId),
+      timestamp,
+    ),
   );
   backup.data.debts = demoData.debts.map((debt) =>
     withSnapshotTimestamps(toDebtRow(debt, userId), timestamp),
@@ -1234,6 +1146,55 @@ export async function resetFinanceDemoData(): Promise<{
   backup.data.investments = demoData.investments.map((investment) =>
     withSnapshotTimestamps(toInvestmentRow(investment, userId), timestamp),
   );
+
+  return backup;
+}
+
+/**
+ * Seeds demo data on first login ONLY.
+ *
+ * FINANCE-SEED-1: the browser no longer performs a fail-open "wallets empty?"
+ * read followed by independent table upserts. One server-authoritative RPC:
+ *   1. serializes competing seed requests for this user;
+ *   2. freezes writes to every persisted finance domain for the short
+ *      check-and-seed transaction;
+ *   3. checks ALL eleven persisted finance domains, not only wallets;
+ *   4. delegates the replacement to restore_finance_backup, whose function
+ *      call is already the all-or-nothing PostgreSQL transaction boundary.
+ *
+ * The local seed guard remains a UX/product opt-out after Clear All. Database
+ * correctness never depends on it: if the RPC fails or any data already
+ * exists, no partial seed can be committed.
+ */
+export async function initFinanceDemoData() {
+  if (LOCAL_UI_MODE) return;
+
+  const userId = await getAuthUserId();
+  if (!userId) return;
+
+  // Respect explicit "do not auto-seed" flag set by clearAllUserData.
+  if (isSeedBlocked(userId)) return;
+
+  const seedSnapshot = buildDemoFinanceBackup(userId);
+  const { error } = await supabase.rpc("seed_finance_demo_data", {
+    p_seed: seedSnapshot,
+  });
+
+  if (error) {
+    console.error("[financeStorage] initFinanceDemoData:", error.message);
+  }
+}
+
+export async function resetFinanceDemoData(): Promise<{
+  error: string | null;
+}> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  // FINANCE-DATA-3: reset remains a complete eleven-domain atomic replacement.
+  // FINANCE-SEED-1 reuses the same snapshot serializer as first-login seed so
+  // both paths cannot drift on demo rows or persisted field names.
+  const backup = buildDemoFinanceBackup(userId);
 
   const result = await restoreFinanceBackup(backup);
   if (result.error) return result;

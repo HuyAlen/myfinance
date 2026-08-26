@@ -16,6 +16,10 @@ const canonicalSchemaPath = path.resolve(
   __dirname,
   "../../../../supabase/schema.sql",
 );
+const atomicRestorePath = path.resolve(
+  __dirname,
+  "../../../supabase/finance-data-2-atomic-backup-restore.sql",
+);
 
 function read(filePath: string) {
   return readFileSync(filePath, "utf8");
@@ -89,7 +93,10 @@ describe("CATEGORY-INTEGRITY-1 budget/category integrity contract", () => {
     );
   });
 
-  it("seeds FK prerequisites before dependent budgets", () => {
+  it("preserves FK prerequisite order inside the atomic restore boundary", () => {
+    // FINANCE-SEED-1 intentionally removes browser-side wallet/category/budget
+    // UPSERTs. The dependency invariant now belongs to the atomic restore SQL
+    // used by seed_finance_demo_data.
     const storage = read(storagePath);
     const demoStart = storage.indexOf("export async function initFinanceDemoData()");
     const demoEnd = storage.indexOf(
@@ -100,15 +107,24 @@ describe("CATEGORY-INTEGRITY-1 budget/category integrity contract", () => {
     expect(demoEnd).toBeGreaterThan(demoStart);
 
     const body = storage.slice(demoStart, demoEnd);
-    const walletSeed = body.indexOf('supabase.from("wallets").upsert(');
-    const categorySeed = body.indexOf('.from("categories")');
-    const budgetSeed = body.indexOf('supabase.from("budgets").upsert(');
+    expect(body).toContain('supabase.rpc("seed_finance_demo_data"');
+    expect(body).not.toContain('.from("wallets")');
+    expect(body).not.toContain(".upsert(");
 
-    expect(walletSeed).toBeGreaterThanOrEqual(0);
-    expect(categorySeed).toBeGreaterThan(walletSeed);
-    expect(budgetSeed).toBeGreaterThan(categorySeed);
-    expect(body).toContain("if (walletSeed.error)");
-    expect(body).toContain("if (categorySeed.error)");
+    const restoreSql = normalize(read(atomicRestorePath));
+    const walletInsert = restoreSql.indexOf(
+      "insert into public.wallets select * from jsonb_populate_recordset",
+    );
+    const categoryInsert = restoreSql.indexOf(
+      "insert into public.categories select * from jsonb_populate_recordset",
+    );
+    const budgetInsert = restoreSql.indexOf(
+      "insert into public.budgets select * from jsonb_populate_recordset",
+    );
+
+    expect(walletInsert).toBeGreaterThanOrEqual(0);
+    expect(categoryInsert).toBeGreaterThan(walletInsert);
+    expect(budgetInsert).toBeGreaterThan(categoryInsert);
   });
 
   it("records the composite relationship in database types", () => {
