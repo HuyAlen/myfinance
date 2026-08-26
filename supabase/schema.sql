@@ -1340,7 +1340,6 @@ BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFE01';
   END IF;
-
   IF p_amount IS NULL OR p_amount <= 0 THEN
     RAISE EXCEPTION 'Amount must be greater than zero' USING ERRCODE = 'MFE04';
   END IF;
@@ -1353,11 +1352,8 @@ BEGIN
     RAISE EXCEPTION 'At least one affected wallet is required' USING ERRCODE = 'MFE04';
   END IF;
 
-  -- Lock the transaction row first. This serializes a concurrent
-  -- update-vs-delete race on the SAME transaction: whichever call locks
-  -- first proceeds; the loser either finds the row already gone (delete
-  -- won — "not found" below) or is blocked until the first commits, then
-  -- reads its post-commit state (which for delete means "not found" too).
+  -- Serialize concurrent writers on the same transaction before validating
+  -- the caller's expected old state.
   SELECT * INTO v_existing FROM transactions
     WHERE id = p_id AND user_id = v_user_id
     FOR UPDATE;
@@ -1373,14 +1369,21 @@ BEGIN
       USING ERRCODE = 'MFE07';
   END IF;
 
-  IF p_old_effect_wallet_id_1 IS NOT NULL THEN v_wallet_ids := array_append(v_wallet_ids, p_old_effect_wallet_id_1); END IF;
-  IF p_old_effect_wallet_id_2 IS NOT NULL THEN v_wallet_ids := array_append(v_wallet_ids, p_old_effect_wallet_id_2); END IF;
-  IF p_new_effect_wallet_id_1 IS NOT NULL THEN v_wallet_ids := array_append(v_wallet_ids, p_new_effect_wallet_id_1); END IF;
-  IF p_new_effect_wallet_id_2 IS NOT NULL THEN v_wallet_ids := array_append(v_wallet_ids, p_new_effect_wallet_id_2); END IF;
+  IF p_old_effect_wallet_id_1 IS NOT NULL THEN
+    v_wallet_ids := array_append(v_wallet_ids, p_old_effect_wallet_id_1);
+  END IF;
+  IF p_old_effect_wallet_id_2 IS NOT NULL THEN
+    v_wallet_ids := array_append(v_wallet_ids, p_old_effect_wallet_id_2);
+  END IF;
+  IF p_new_effect_wallet_id_1 IS NOT NULL THEN
+    v_wallet_ids := array_append(v_wallet_ids, p_new_effect_wallet_id_1);
+  END IF;
+  IF p_new_effect_wallet_id_2 IS NOT NULL THEN
+    v_wallet_ids := array_append(v_wallet_ids, p_new_effect_wallet_id_2);
+  END IF;
   v_wallet_ids := ARRAY(SELECT DISTINCT unnest(v_wallet_ids) ORDER BY 1);
 
-  -- Deterministic (id-ascending) lock order across the UNION of old+new
-  -- affected wallets — same deadlock-avoidance reasoning as create above.
+  -- Deterministic lock order across the union of old/new affected wallets.
   PERFORM 1 FROM wallets
     WHERE id = ANY(v_wallet_ids) AND user_id = v_user_id
     ORDER BY id ASC
@@ -1392,31 +1395,43 @@ BEGIN
     RAISE EXCEPTION 'One or more wallets were not found' USING ERRCODE = 'MFE02';
   END IF;
 
-  -- Authoritative post-lock balance check: compute the NET delta per
-  -- affected wallet (reverse-old + apply-new combined) against its current
-  -- server-side balance, so e.g. "same wallet, 1M -> 1.5M" is validated as
-  -- a single -500K net change rather than two separate steps that could
-  -- transiently (and incorrectly) look insufficient or sufficient.
+  -- Build the final per-wallet NET delta:
+  --   reverse old effect = -old_delta
+  --   apply new effect   = +new_delta
   FOREACH v_wallet_id IN ARRAY v_wallet_ids LOOP
     v_balances := jsonb_set(v_balances, ARRAY[v_wallet_id], '0'::jsonb);
   END LOOP;
+
   IF p_old_effect_wallet_id_1 IS NOT NULL THEN
-    v_balances := jsonb_set(v_balances, ARRAY[p_old_effect_wallet_id_1],
-      to_jsonb((v_balances->>p_old_effect_wallet_id_1)::numeric - p_old_effect_delta_1));
+    v_balances := jsonb_set(
+      v_balances,
+      ARRAY[p_old_effect_wallet_id_1],
+      to_jsonb((v_balances->>p_old_effect_wallet_id_1)::numeric - p_old_effect_delta_1)
+    );
   END IF;
   IF p_old_effect_wallet_id_2 IS NOT NULL THEN
-    v_balances := jsonb_set(v_balances, ARRAY[p_old_effect_wallet_id_2],
-      to_jsonb((v_balances->>p_old_effect_wallet_id_2)::numeric - p_old_effect_delta_2));
+    v_balances := jsonb_set(
+      v_balances,
+      ARRAY[p_old_effect_wallet_id_2],
+      to_jsonb((v_balances->>p_old_effect_wallet_id_2)::numeric - p_old_effect_delta_2)
+    );
   END IF;
   IF p_new_effect_wallet_id_1 IS NOT NULL THEN
-    v_balances := jsonb_set(v_balances, ARRAY[p_new_effect_wallet_id_1],
-      to_jsonb((v_balances->>p_new_effect_wallet_id_1)::numeric + p_new_effect_delta_1));
+    v_balances := jsonb_set(
+      v_balances,
+      ARRAY[p_new_effect_wallet_id_1],
+      to_jsonb((v_balances->>p_new_effect_wallet_id_1)::numeric + p_new_effect_delta_1)
+    );
   END IF;
   IF p_new_effect_wallet_id_2 IS NOT NULL THEN
-    v_balances := jsonb_set(v_balances, ARRAY[p_new_effect_wallet_id_2],
-      to_jsonb((v_balances->>p_new_effect_wallet_id_2)::numeric + p_new_effect_delta_2));
+    v_balances := jsonb_set(
+      v_balances,
+      ARRAY[p_new_effect_wallet_id_2],
+      to_jsonb((v_balances->>p_new_effect_wallet_id_2)::numeric + p_new_effect_delta_2)
+    );
   END IF;
 
+  -- Validate every final balance before mutating any wallet.
   FOREACH v_wallet_id IN ARRAY v_wallet_ids LOOP
     SELECT balance INTO v_balance FROM wallets
       WHERE id = v_wallet_id AND user_id = v_user_id;
@@ -1426,24 +1441,17 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Reverse OLD effects, then apply NEW effects — inside the same locked
-  -- transaction, so no intermediate balance state is ever visible/committed.
-  IF p_old_effect_wallet_id_1 IS NOT NULL THEN
-    UPDATE wallets SET balance = balance - p_old_effect_delta_1
-      WHERE id = p_old_effect_wallet_id_1 AND user_id = v_user_id;
-  END IF;
-  IF p_old_effect_wallet_id_2 IS NOT NULL THEN
-    UPDATE wallets SET balance = balance - p_old_effect_delta_2
-      WHERE id = p_old_effect_wallet_id_2 AND user_id = v_user_id;
-  END IF;
-  IF p_new_effect_wallet_id_1 IS NOT NULL THEN
-    UPDATE wallets SET balance = balance + p_new_effect_delta_1
-      WHERE id = p_new_effect_wallet_id_1 AND user_id = v_user_id;
-  END IF;
-  IF p_new_effect_wallet_id_2 IS NOT NULL THEN
-    UPDATE wallets SET balance = balance + p_new_effect_delta_2
-      WHERE id = p_new_effect_wallet_id_2 AND user_id = v_user_id;
-  END IF;
+  -- FINANCE-TRANSACTION-EDIT-1: apply exactly one final NET mutation per
+  -- affected wallet. A zero-net metadata-only edit skips wallet mutation,
+  -- so wallets_balance_nn can never see a false transient negative state.
+  FOREACH v_wallet_id IN ARRAY v_wallet_ids LOOP
+    v_net := (v_balances->>v_wallet_id)::numeric;
+    IF v_net <> 0 THEN
+      UPDATE wallets
+      SET balance = balance + v_net
+      WHERE id = v_wallet_id AND user_id = v_user_id;
+    END IF;
+  END LOOP;
 
   UPDATE transactions SET
     type = p_type::transaction_type,
