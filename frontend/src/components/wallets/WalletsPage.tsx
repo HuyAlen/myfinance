@@ -112,21 +112,23 @@ function isValidLocalDateInputValue(value: string) {
 function formatCompactWalletAmount(value: number) {
   const normalized = Number.isFinite(value) ? value : 0;
   const absolute = Math.abs(normalized);
-  const formatter = new Intl.NumberFormat("vi-VN", {
+  const compactFormatter = new Intl.NumberFormat("vi-VN", {
     maximumFractionDigits: 1,
+  });
+  const fullFormatter = new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 0,
   });
 
   if (absolute >= 1_000_000_000) {
-    return `${formatter.format(absolute / 1_000_000_000)}tỷ`;
+    return `${compactFormatter.format(absolute / 1_000_000_000)} tỷ đ`;
   }
   if (absolute >= 1_000_000) {
-    return `${formatter.format(absolute / 1_000_000)}tr`;
-  }
-  if (absolute >= 1_000) {
-    return `${formatter.format(absolute / 1_000)}N`;
+    return `${compactFormatter.format(absolute / 1_000_000)} tr đ`;
   }
 
-  return formatter.format(Math.round(absolute));
+  // Keep sub-million values explicit instead of ambiguous N/K abbreviations:
+  // 39,000 -> 39.000 đ; 540,000 -> 540.000 đ.
+  return `${fullFormatter.format(Math.round(absolute))} đ`;
 }
 
 /**
