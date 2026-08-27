@@ -1554,7 +1554,7 @@ export default function Header({
 
           <label className="relative flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-[#E8F0F7] bg-[#FAFCFE] px-3 text-sm font-semibold text-[#52718F] shadow-[0_2px_8px_rgba(47,128,237,0.025)] active:scale-[.99]">
             <CalendarDays size={16} className="shrink-0 text-[#2F80ED]" />
-            <span className="pointer-events-none min-w-0 flex-1 text-center text-[16px] font-semibold text-[#52718F]">
+            <span className="pointer-events-none min-w-0 flex-1 text-center text-[16px] font-bold text-[#52718F]">
               {formatCompactMonth(selectedMonth)}
             </span>
             <input

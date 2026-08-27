@@ -57,7 +57,7 @@ describe("DASH-MOBILE-POLISH-2.1 — True Soft Blue Palette", () => {
     expect(header).toContain('bg-[#FAFCFE] text-[#7D93A8]');
     expect(header).toContain('text-[#2F80ED]');
     expect(bottomNav).toContain('text-[#A0B1C2] active:bg-[#F8FBFF]');
-    expect(bottomNav).toContain('? "text-[#2F80ED]"');
+    expect(bottomNav).toContain('? "font-bold text-[#2F80ED]"');
     expect(bottomNav).not.toContain("rgba(15,23,42,0.08)");
   });
 

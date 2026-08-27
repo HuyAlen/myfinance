@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * DASH-MOBILE-POLISH-2 — HeroMini label density regression contract.
+ * DASH-MOBILE-POLISH-2.2 — HeroMini label hierarchy regression contract.
  *
  * The professional-density pass intentionally made the mobile HeroMini
  * surface more compact. These tests preserve the important behavior
@@ -45,7 +45,8 @@ describe("DashboardPage HeroMini mobile label — compact single-line contract",
   it("uses the professional-density mobile label size while preserving the established desktop sizes", () => {
     const labelClassName = extractLabelClassName();
     expect(labelClassName).toContain("text-[11.5px]");
-    expect(labelClassName).toContain("font-semibold");
+    expect(labelClassName).toContain("font-bold");
+    expect(labelClassName).toContain("sm:font-semibold");
     expect(labelClassName).toContain("tracking-[-0.01em]");
     expect(labelClassName).toContain("sm:text-[9px]");
     expect(labelClassName).toContain("sm:leading-3.5");
@@ -64,6 +65,8 @@ describe("DashboardPage HeroMini mobile label — compact single-line contract",
     expect(heroMiniSource).toContain(
       "mt-1 whitespace-nowrap text-[clamp(12px,3.3vw,15px)]",
     );
+    expect(heroMiniSource).toContain("font-extrabold");
+    expect(heroMiniSource).toContain("sm:font-bold");
     expect(heroMiniSource).toContain("sm:text-[clamp(8px,2.35vw,13px)]");
   });
 

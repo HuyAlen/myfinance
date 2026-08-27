@@ -2699,13 +2699,15 @@ export default function DashboardPage() {
         <div className="bg-linear-to-br from-[#F8FBFF] via-[#FCFEFF] to-[#EDF6FF] p-4 sm:p-7">
           {/* DASH-MOBILE-POLISH-2.1: True Soft Blue hierarchy.
               Mobile uses visibly lighter blue/slate ink rather than dark navy; the
-              headline carries emphasis through scale while support surfaces stay airy. */}
+              headline carries emphasis through scale while support surfaces stay airy.
+              DASH-MOBILE-POLISH-2.2 reinforces scan hierarchy through font weight only:
+              key financial values/titles get stronger ink while supporting copy stays light. */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2F80ED] sm:text-xs">
                 Tài sản & nợ
               </p>
-              <h1 className="mt-1.5 text-[22px] font-semibold tracking-tight text-[#4F6B85] sm:mt-2 sm:text-3xl">
+              <h1 className="mt-1.5 text-[22px] font-bold tracking-tight text-[#4F6B85] sm:mt-2 sm:text-3xl">
                 Tài sản ròng
               </h1>
             </div>
@@ -2722,7 +2724,7 @@ export default function DashboardPage() {
             {/* PERF-4B: headline remains gated only on isDashboardReady. */}
             {isDashboardReady ? (
               <p
-                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-bold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED] sm:text-5xl"
+                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-extrabold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED] sm:text-5xl"
                 title={formatVND(summary.netWorth)}
               >
                 {formatVND(summary.netWorth)}
@@ -2804,7 +2806,7 @@ export default function DashboardPage() {
           <div className="mt-4 rounded-2xl border border-[#E8F0F7] bg-white/75 p-3.5 shadow-[0_2px_10px_rgba(47,128,237,0.025)] sm:mt-5 sm:rounded-3xl sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#4F6B85]">
+                <p className="text-sm font-bold text-[#4F6B85]">
                   Biến động tài sản ròng
                 </p>
                 <p className="mt-1 text-[11px] leading-4 text-[#879AAF] sm:text-xs">
@@ -3723,14 +3725,14 @@ function HeroMini({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="whitespace-nowrap text-[11.5px] font-semibold leading-tight tracking-[-0.01em] text-[#8196AA] sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
+          <p className="whitespace-nowrap text-[11.5px] font-bold leading-tight tracking-[-0.01em] text-[#8196AA] sm:font-semibold sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           {isLoading ? (
             <div className="mt-1.5 h-4 w-16 animate-pulse rounded-md bg-slate-200/80 sm:mt-1 sm:h-3.5" />
           ) : (
             <p
-              className={`mt-1 whitespace-nowrap text-[clamp(12px,3.3vw,15px)] font-bold leading-5 tracking-[-0.03em] tabular-nums sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.04em] ${valueClass}`}
+              className={`mt-1 whitespace-nowrap text-[clamp(12px,3.3vw,15px)] font-extrabold leading-5 tracking-[-0.03em] tabular-nums sm:font-bold sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.04em] ${valueClass}`}
               title={value}
             >
               {value}

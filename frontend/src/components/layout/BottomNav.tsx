@@ -57,10 +57,10 @@ export default function BottomNav() {
               key={href}
               href={href}
               className={[
-                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold transition-all duration-200",
+                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] transition-all duration-200",
                 isActive
-                  ? "text-[#2F80ED]"
-                  : "text-[#A0B1C2] active:bg-[#F8FBFF]",
+                  ? "font-bold text-[#2F80ED]"
+                  : "font-medium text-[#A0B1C2] active:bg-[#F8FBFF]",
               ].join(" ")}
               aria-current={isActive ? "page" : undefined}
             >
