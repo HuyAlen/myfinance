@@ -611,6 +611,10 @@ export default function SavingsPage({
         ? 0
         : Math.max(0, selectedSaving.balance - transactionAmountPreview)
     : null;
+  const transactionPreviewAmount =
+    transactionForm.type === "settlement" && transactionAmountPreview <= 0
+      ? (selectedSaving?.balance ?? 0)
+      : transactionAmountPreview;
 
   const formConfig = getSavingFormConfig(form.type);
   const previewPrincipal = parseCurrencyValue(form.balance);
@@ -2517,8 +2521,8 @@ export default function SavingsPage({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4">
-              <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1 sm:rounded-2xl">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-[#F8FBFF] px-3 py-3 [-webkit-overflow-scrolling:touch] sm:bg-white sm:px-6 sm:py-4">
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-[#E3EBF3] bg-[#F3F7FB] p-1 sm:rounded-2xl">
                 {(["deposit", "withdraw", "settlement"] as const).map((type) => (
                   <button
                     key={type}
@@ -2535,14 +2539,14 @@ export default function SavingsPage({
                               : current.amount,
                       }))
                     }
-                    className={`inline-flex min-h-9 items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-black transition sm:min-h-10 sm:gap-1.5 sm:rounded-xl sm:px-2 sm:text-xs ${
+                    className={`inline-flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-bold whitespace-nowrap transition sm:h-10 sm:gap-1.5 sm:rounded-xl sm:px-2 sm:text-xs ${
                       transactionForm.type === type
                         ? type === "deposit"
-                          ? "bg-emerald-600 text-white shadow-sm"
+                          ? "bg-white text-emerald-700 ring-1 ring-inset ring-emerald-200"
                           : type === "withdraw"
-                            ? "bg-rose-600 text-white shadow-sm"
-                            : "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-500 hover:bg-white hover:text-slate-900"
+                            ? "bg-white text-[#2F80ED] ring-1 ring-inset ring-blue-200"
+                            : "bg-white text-rose-600 ring-1 ring-inset ring-rose-200"
+                        : "text-[#7890A6] hover:bg-white hover:text-[#4A6783]"
                     }`}
                   >
                     {getTransactionIcon(type)}
@@ -2553,7 +2557,7 @@ export default function SavingsPage({
 
               <div className="mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
                 <label className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     Số tiền
                   </span>
                   <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
@@ -2572,7 +2576,7 @@ export default function SavingsPage({
                       className={`h-full min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-slate-400 ${
                         transactionForm.type === "settlement"
                           ? "cursor-not-allowed text-slate-500"
-                          : "text-slate-700"
+                          : "text-[#4A6783]"
                       }`}
                     />
                   </div>
@@ -2584,7 +2588,7 @@ export default function SavingsPage({
                 </label>
 
                 <label className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
                   </span>
                   <select
@@ -2592,7 +2596,7 @@ export default function SavingsPage({
                     onChange={(event) =>
                       updateTransactionForm("walletId", event.target.value)
                     }
-                    className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:rounded-2xl sm:px-4 sm:text-sm"
+                    className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-[#4A6783] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:rounded-2xl sm:px-4 sm:text-sm"
                   >
                     <option value="">Chọn ví</option>
                     {wallets.map((wallet) => (
@@ -2609,7 +2613,7 @@ export default function SavingsPage({
                 </label>
 
                 <label className="col-span-2">
-                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     Ghi chú
                   </span>
                   <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
@@ -2620,35 +2624,59 @@ export default function SavingsPage({
                         updateTransactionForm("note", event.target.value)
                       }
                       placeholder="Tùy chọn"
-                      className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
+                      className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-[#4A6783] outline-none placeholder:text-slate-400 sm:text-sm"
                     />
                   </div>
                 </label>
               </div>
 
-              <div className="mt-2.5 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:mt-4 sm:rounded-3xl sm:p-4">
-                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 sm:text-[10px] sm:tracking-[0.16em]">
-                  Sau giao dịch
+              <div className="mt-3 rounded-2xl border border-[#E3EBF3] bg-white p-3 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
+                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8196AA] sm:text-[10px] sm:tracking-[0.16em]">
+                  {transactionForm.type === "deposit"
+                    ? "Sau khi nạp"
+                    : transactionForm.type === "withdraw"
+                      ? "Sau khi rút"
+                      : "Sau khi tất toán"}
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
-                  <div className="rounded-xl bg-white px-2.5 py-2 sm:rounded-2xl sm:p-3">
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
+                  <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
                       Tiết kiệm
                     </p>
-                    <p className="mt-0.5 wrap-break-word text-xs font-black text-blue-700 sm:mt-1 sm:text-sm">
+                    <p className="mt-0.5 wrap-break-word text-sm font-black text-[#2F80ED] sm:mt-1 sm:text-base">
                       {transactionSavingBalanceAfter !== null
                         ? formatCurrency(transactionSavingBalanceAfter)
                         : "-"}
                     </p>
-                  </div>
-                  <div className="rounded-xl bg-white px-2.5 py-2 sm:rounded-2xl sm:p-3">
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
-                      Ví
+                    <p
+                      className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
+                        transactionForm.type === "deposit"
+                          ? "text-emerald-600"
+                          : "text-[#64748B]"
+                      }`}
+                    >
+                      {transactionForm.type === "deposit" ? "+" : "−"}
+                      {formatCurrency(transactionPreviewAmount)}
                     </p>
-                    <p className="mt-0.5 wrap-break-word text-xs font-black text-slate-950 sm:mt-1 sm:text-sm">
+                  </div>
+                  <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
+                      {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
+                    </p>
+                    <p className="mt-0.5 wrap-break-word text-sm font-black text-[#4A6783] sm:mt-1 sm:text-base">
                       {transactionWalletBalanceAfter !== null
                         ? formatCurrency(transactionWalletBalanceAfter)
                         : "Chọn ví"}
+                    </p>
+                    <p
+                      className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
+                        transactionForm.type === "deposit"
+                          ? "text-[#64748B]"
+                          : "text-emerald-600"
+                      }`}
+                    >
+                      {transactionForm.type === "deposit" ? "−" : "+"}
+                      {formatCurrency(transactionPreviewAmount)}
                     </p>
                   </div>
                 </div>
@@ -2674,18 +2702,26 @@ export default function SavingsPage({
                 type="button"
                 onClick={() => handleAddTransaction()}
                 disabled={isPersisting}
-                className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-black text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:gap-2 sm:rounded-2xl sm:px-4 ${
+                className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[13px] font-black text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:gap-2 sm:rounded-2xl sm:px-4 sm:text-sm ${
                   transactionForm.type === "deposit"
                     ? "bg-emerald-600 shadow-emerald-100 hover:bg-emerald-700"
                     : transactionForm.type === "withdraw"
-                      ? "bg-rose-600 shadow-rose-100 hover:bg-rose-700"
-                      : "bg-blue-600 shadow-blue-100 hover:bg-blue-700"
+                      ? "bg-[#2F80ED] shadow-blue-100 hover:bg-[#2676DE]"
+                      : "bg-rose-600 shadow-rose-100 hover:bg-rose-700"
                 }`}
               >
-                {getTransactionIcon(transactionForm.type)}
-                {isPersisting
-                  ? "Đang xử lý..."
-                  : `Xác nhận ${getTransactionLabel(transactionForm.type).toLowerCase()}`}
+                <span className="hidden sm:inline-flex">
+                  {getTransactionIcon(transactionForm.type)}
+                </span>
+                <span className="whitespace-nowrap">
+                  {isPersisting
+                    ? "Đang xử lý..."
+                    : transactionForm.type === "deposit"
+                      ? "Xác nhận nạp"
+                      : transactionForm.type === "withdraw"
+                        ? "Xác nhận rút"
+                        : "Xác nhận tất toán"}
+                </span>
               </button>
             </div>
           </div>

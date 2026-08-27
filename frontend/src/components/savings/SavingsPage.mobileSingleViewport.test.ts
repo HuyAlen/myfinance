@@ -3,15 +3,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * SAVINGS-UX-1.2 — Mobile Full-Screen Action Flows.
+ * SAVINGS-UX-1.1 — Mobile Single-Viewport Action Sheets.
  *
- * Source-inspection contract: edit/create and money-movement actions use the
- * entire real dynamic viewport on mobile Safari instead of rendering as
- * floating/bottom-sheet popups. Desktop keeps the existing modal treatment.
- * The body may still scroll as a keyboard/small-viewport fallback, while
- * header and primary actions remain fixed inside the full-screen surface.
+ * Source-inspection contract: edit/create and money-movement sheets must stay
+ * bounded by the real dynamic viewport on mobile Safari, use safe-area-aware
+ * chrome, and keep their primary controls compact enough to fit in one
+ * iPhone web viewport. Internal scrolling remains only as a fallback for
+ * unusually small viewports, keyboard overlap, or validation errors.
  */
-describe("SavingsPage uses full-screen mobile action surfaces", () => {
+describe("SavingsPage mobile action surfaces use one full dynamic viewport", () => {
   const source = readFileSync(
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
@@ -30,77 +30,71 @@ describe("SavingsPage uses full-screen mobile action surfaces", () => {
   const editSource = source.slice(editStart, movementStart);
   const movementSource = source.slice(movementStart, historyStart);
 
-  it("renders edit/create as a true full-screen mobile surface, with modal chrome only at sm+", () => {
-    expect(editSource).toContain(
-      "fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45",
-    );
+  it("uses the full dynamic viewport for edit/create on mobile and restores modal sizing only at sm+", () => {
     expect(editSource).toContain(
       "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
     );
     expect(editSource).toContain(
-      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl sm:rounded-4xl",
-    );
-    expect(editSource).not.toContain("rounded-[28px]");
-    expect(editSource).not.toContain(
-      "flex items-end justify-center bg-slate-950/45 px-2",
-    );
-  });
-
-  it("renders deposit/withdraw/settlement as a true full-screen mobile surface instead of the old popup", () => {
-    expect(movementSource).toContain(
-      "fixed inset-0 z-110 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45",
-    );
-    expect(movementSource).toContain(
-      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
-    );
-    expect(movementSource).toContain(
-      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl",
-    );
-    expect(movementSource).not.toContain("rounded-[28px]");
-    expect(movementSource).not.toContain("max-h-[92dvh]");
-  });
-
-  it("removes the invisible outside-click backdrop from mobile focus order while preserving desktop dismissal", () => {
-    expect(editSource).toContain(
-      'aria-label="Đóng form khoản tiết kiệm"\n            className="absolute inset-0 hidden cursor-default sm:block"',
-    );
-    expect(movementSource).toContain(
-      'aria-label="Đóng giao dịch tiết kiệm"\n            className="absolute inset-0 hidden cursor-default sm:block"',
-    );
-  });
-
-  it("uses iPhone safe areas for top chrome and bottom actions", () => {
-    expect(editSource).toContain(
       "pt-[calc(0.75rem+env(safe-area-inset-top))]",
     );
     expect(editSource).toContain(
-      "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
+      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl",
     );
-    expect(movementSource).toContain(
-      "pt-[calc(0.75rem+env(safe-area-inset-top))]",
-    );
-    expect(movementSource).toContain(
+    expect(editSource).not.toContain("max-h-full w-full max-w-xl");
+    expect(editSource).toContain(
       "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
     );
   });
 
-  it("keeps only the body scrollable as a keyboard/small-height fallback", () => {
+  it("keeps edit metadata dense on mobile while retaining 16px form text to avoid iOS focus zoom", () => {
     expect(editSource).toContain(
-      "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",
+      "mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5",
+    );
+    expect(editSource).toContain('className="col-span-2"');
+    expect(editSource).toContain("min-h-10");
+    expect(editSource).toContain("text-base font-semibold");
+    expect(editSource).toContain("sm:min-h-11");
+  });
+
+  it("reduces non-essential edit chrome on mobile but keeps it available on larger screens", () => {
+    expect(editSource).toContain(
+      'className="hidden text-[11px] font-black uppercase',
+    );
+    expect(editSource).toContain(
+      'className="mt-0.5 hidden text-sm font-medium text-slate-500 sm:block"',
+    );
+    expect(editSource).toContain("Chỉ chỉnh thông tin");
+  });
+
+  it("keeps body scrolling only as a fallback while header and actions remain fixed inside the sheet", () => {
+    expect(editSource).toContain(
+      "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
     expect(editSource).toContain("grid shrink-0 grid-cols-2");
     expect(movementSource).toContain(
-      "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",
+      "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
     expect(movementSource).toContain("grid shrink-0 grid-cols-2");
   });
 
-  it("retains 16px form text on mobile to avoid Safari focus zoom", () => {
-    expect(editSource).toContain("text-base font-semibold");
-    expect(movementSource).toContain("text-base font-semibold");
+  it("uses the full dynamic viewport for money movement on mobile and restores modal sizing only at sm+", () => {
+    expect(movementSource).toContain(
+      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+    );
+    expect(movementSource).toContain(
+      "pt-[calc(0.75rem+env(safe-area-inset-top))]",
+    );
+    expect(movementSource).toContain(
+      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg",
+    );
+    expect(movementSource).not.toContain("max-h-full w-full max-w-lg");
+    expect(movementSource).not.toContain("max-h-[92dvh]");
+    expect(movementSource).toContain(
+      "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
+    );
   });
 
-  it("keeps the focused money-movement controls and before/after balances intact", () => {
+  it("compresses the money-movement flow into one mobile frame without removing required controls", () => {
     expect(movementSource).toContain(
       "mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5",
     );
@@ -108,12 +102,24 @@ describe("SavingsPage uses full-screen mobile action surfaces", () => {
     expect(movementSource).toContain("Ví nguồn");
     expect(movementSource).toContain("Ví nhận");
     expect(movementSource).toContain("Ghi chú");
-    expect(movementSource).toContain("Sau giao dịch");
+    expect(movementSource).toContain('"Sau khi nạp"');
+    expect(movementSource).toContain('"Sau khi rút"');
+    expect(movementSource).toContain('"Sau khi tất toán"');
     expect(movementSource).toContain("transactionSavingBalanceAfter");
     expect(movementSource).toContain("transactionWalletBalanceAfter");
   });
 
-  it("keeps settlement authoritative", () => {
+  it("moves current saving balance into the compact transaction header instead of spending a full card row", () => {
+    expect(movementSource).toContain(
+      "{formatCurrency(selectedSaving.balance)}",
+    );
+    expect(movementSource).toContain(
+      '<span className="truncate">{selectedSaving.name}</span>',
+    );
+    expect(movementSource).not.toContain("Tiết kiệm hiện tại");
+  });
+
+  it("keeps settlement authoritative and compact", () => {
     expect(movementSource).toContain(
       'readOnly={transactionForm.type === "settlement"}',
     );
