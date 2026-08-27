@@ -434,19 +434,20 @@ export default function GoalsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
+    <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
+      {/* GOALS-MOBILE-POLISH-1 · Compact Goal Hierarchy & Scroll Efficiency */}
       {/* SECTION 1 · Goal Command Center */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="overflow-hidden rounded-3xl border border-[#DCE6EF] bg-white shadow-[0_8px_24px_rgba(54,83,107,0.07)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-white via-[#F8FBFF] to-[#F1F7FC] px-3.5 py-4 sm:px-6 sm:py-6">
+          <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#2F80ED] sm:text-[11px] sm:tracking-[0.18em]">
                 Goal Center
               </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-[#36536B] sm:text-4xl">
                 Mục tiêu tài chính
               </h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              <p className="mt-1 hidden max-w-2xl text-sm text-[#61788F] sm:block">
                 Theo dõi số tiền đã tích lũy, phần còn thiếu và mức đóng góp cần
                 thiết cho từng mục tiêu.
               </p>
@@ -454,14 +455,14 @@ export default function GoalsPage() {
 
             <button
               onClick={openCreateForm}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700 active:scale-95"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-sm font-bold text-white shadow-[0_6px_16px_rgba(47,128,237,0.20)] transition hover:bg-[#2676DE] active:scale-[.98] sm:rounded-2xl sm:px-5 sm:py-3"
             >
               <Plus size={17} />
               Thêm mục tiêu
             </button>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-4">
             <KpiCard
               label="Tổng mục tiêu"
               value={String(goals.length)}
@@ -504,47 +505,47 @@ export default function GoalsPage() {
 
       {/* SECTION 2 · Overall progress and priority */}
       {goals.length > 0 && (
-        <section className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
-          <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <section className="grid gap-4 sm:gap-5 xl:grid-cols-[1.45fr_0.85fr]">
+          <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
+            <div className="flex items-start justify-between gap-3 sm:items-end">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#8CA0B3]">
                   Tiến độ tổng thể
                 </p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">
+                <h2 className="mt-1 text-[17px] font-black leading-6 text-[#36536B] sm:text-xl">
                   {formatVND(summary.totalCurrent)} /{" "}
                   {formatVND(summary.totalTarget)}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-xs leading-5 text-[#61788F] sm:text-sm">
                   Còn {formatVND(summary.remaining)} để hoàn thành toàn bộ mục
                   tiêu.
                 </p>
               </div>
-              <span className="text-4xl font-black tracking-tight text-blue-600">
+              <span className="shrink-0 text-3xl font-black tracking-tight text-[#2F80ED] sm:text-4xl">
                 {summary.percent}%
               </span>
             </div>
 
-            <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#EDF3F8] sm:mt-5 sm:h-4">
               <div
                 className="h-full rounded-full bg-linear-to-r from-blue-600 to-cyan-500 transition-all duration-700"
                 style={{ width: `${Math.min(summary.percent, 100)}%` }}
               />
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4 sm:gap-3">
               {(["completed", "near", "progress", "started"] as GoalTier[]).map(
                 (tier) => {
                   const style = TIER_STYLE[tier];
                   return (
                     <div
                       key={tier}
-                      className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                      className="rounded-xl border border-[#E4ECF3] bg-[#F8FBFD] p-2.5 sm:rounded-2xl sm:p-3"
                     >
-                      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      <p className="text-[9px] font-black uppercase tracking-wide text-[#8CA0B3] sm:text-[10px]">
                         {style.label}
                       </p>
-                      <p className="mt-1 text-2xl font-black text-slate-900">
+                      <p className="mt-0.5 text-lg font-black text-[#36536B] sm:mt-1 sm:text-2xl">
                         {tierCounts[tier]}
                       </p>
                     </div>
@@ -554,42 +555,42 @@ export default function GoalsPage() {
             </div>
           </div>
 
-          <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#8CA0B3]">
                 Ưu tiên hiện tại
               </p>
-              <h2 className="mt-1 text-lg font-black text-slate-900">
+              <h2 className="mt-1 text-base font-black text-[#36536B] sm:text-lg">
                 Mục tiêu gần hoàn thành nhất
               </h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 hidden text-xs leading-5 text-[#61788F] sm:block">
                 Tập trung vào các mục tiêu có tiến độ cao để hoàn thành nhanh
                 hơn.
               </p>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 overflow-hidden rounded-2xl border border-[#DCE6EF] bg-[#F8FBFF] sm:mt-4">
               {priorityGoals.map((goal) => (
                 <div
                   key={goal.id}
-                  className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3"
+                  className="border-b border-[#E4ECF3] px-3 py-2.5 last:border-b-0 sm:px-3.5 sm:py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">
+                      <p className="truncate text-sm font-black text-[#36536B]">
                         {goal.name}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-[11px] text-[#61788F] sm:text-xs">
                         Còn {formatVND(goal.remaining)}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-black text-blue-700">
+                    <span className="shrink-0 text-sm font-black text-[#2F80ED]">
                       {goal.pct}%
                     </span>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
                     <div
-                      className="h-full rounded-full bg-blue-600"
+                      className="h-full rounded-full bg-[#2F80ED]"
                       style={{ width: `${Math.min(goal.pct, 100)}%` }}
                     />
                   </div>
@@ -597,7 +598,7 @@ export default function GoalsPage() {
               ))}
 
               {priorityGoals.length === 0 && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                <div className="p-3 text-sm font-bold text-emerald-700">
                   Tất cả mục tiêu đã hoàn thành.
                 </div>
               )}
@@ -608,21 +609,21 @@ export default function GoalsPage() {
 
       {/* SECTION 3 · Goal list */}
       <section>
-        <div className="mb-4 flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-3 flex flex-col gap-0.5 px-1 sm:mb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#8CA0B3]">
               Danh sách mục tiêu
             </p>
-            <h2 className="mt-1 text-lg font-black text-slate-900">
+            <h2 className="mt-1 text-base font-black text-[#36536B] sm:text-lg">
               {goals.length} mục tiêu đang theo dõi
             </h2>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-[11px] leading-4 text-[#61788F] sm:text-xs">
             Cập nhật số tiền đã tích lũy hoặc liên kết với khoản tiết kiệm.
           </p>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {goalMeta.map((g) => {
             const s = TIER_STYLE[g.tier];
             return (
@@ -630,7 +631,7 @@ export default function GoalsPage() {
                 key={g.id}
                 id={`goal-card-${g.id}`}
                 className={
-                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
+                  "group rounded-3xl border bg-white p-4 shadow-[0_5px_16px_rgba(54,83,107,0.06)] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg sm:rounded-4xl sm:p-6 " +
                   s.border +
                   (highlightedGoalId === g.id
                     ? " ring-2 ring-blue-400 ring-offset-2"
@@ -639,10 +640,10 @@ export default function GoalsPage() {
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
                     <div
                       className={
-                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
+                        "flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm sm:size-12 sm:rounded-2xl " +
                         s.iconGrad
                       }
                     >
@@ -653,7 +654,7 @@ export default function GoalsPage() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
+                      <h3 className="truncate text-[15px] font-black text-[#36536B] sm:text-base">
                         {g.name}
                       </h3>
                       <span
@@ -684,32 +685,32 @@ export default function GoalsPage() {
                 </div>
 
                 {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
+                <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-[#F6F9FC] p-2.5 sm:mt-5 sm:gap-2 sm:rounded-2xl sm:p-3">
+                  <div className="min-w-0 text-center">
+                    <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Mục tiêu
                     </p>
-                    <p className="mt-0.5 text-xs font-black text-blue-700">
+                    <p className="mt-0.5 truncate text-[11px] font-black text-[#2F80ED] sm:text-xs">
                       {g.targetAmount >= 1_000_000
                         ? Math.round(g.targetAmount / 1_000_000) + "M"
                         : Math.round(g.targetAmount / 1_000) + "K"}
                     </p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
+                  <div className="min-w-0 text-center">
+                    <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Đã có
                     </p>
-                    <p className="mt-0.5 text-xs font-black text-emerald-600">
+                    <p className="mt-0.5 truncate text-[11px] font-black text-emerald-600 sm:text-xs">
                       {g.effectiveCurrentAmount >= 1_000_000
                         ? Math.round(g.effectiveCurrentAmount / 1_000_000) + "M"
                         : Math.round(g.effectiveCurrentAmount / 1_000) + "K"}
                     </p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
+                  <div className="min-w-0 text-center">
+                    <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Còn lại
                     </p>
-                    <p className="mt-0.5 text-xs font-black text-slate-500">
+                    <p className="mt-0.5 truncate text-[11px] font-black text-[#61788F] sm:text-xs">
                       {g.remaining >= 1_000_000
                         ? Math.round(g.remaining / 1_000_000) + "M"
                         : Math.round(g.remaining / 1_000) + "K"}
@@ -718,21 +719,21 @@ export default function GoalsPage() {
                 </div>
 
                 {/* Large saved amount */}
-                <div className="mt-4">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                <div className="mt-3 sm:mt-4">
+                  <p className="text-[9px] font-black uppercase tracking-wide text-[#8CA0B3] sm:text-[10px]">
                     Đã tích lũy
                   </p>
                   <p
                     className={
-                      "mt-1 text-2xl font-black " +
+                      "mt-0.5 text-xl font-black tracking-tight sm:mt-1 sm:text-2xl " +
                       (g.tier === "completed"
                         ? "text-emerald-600"
-                        : "text-blue-700")
+                        : "text-[#2F80ED]")
                     }
                   >
                     {formatVND(g.effectiveCurrentAmount)}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 text-[11px] text-[#8CA0B3] sm:text-xs">
                     / {formatVND(g.targetAmount)}
                   </p>
                   {g.supabaseSavingAmount > 0 && (
@@ -749,9 +750,9 @@ export default function GoalsPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Tiến độ</span>
+                <div className="mt-3 sm:mt-4">
+                  <div className="mb-1.5 flex items-center justify-between text-[11px] sm:text-xs">
+                    <span className="text-[#61788F]">Tiến độ</span>
                     <div className="flex items-center gap-1.5">
                       {g.pct >= 100 ? (
                         <ArrowUpRight size={10} className="text-emerald-500" />
@@ -770,9 +771,9 @@ export default function GoalsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-[#EDF3F8] sm:h-3">
                     <div
-                      className="h-3 rounded-full transition-all duration-700"
+                      className="h-full rounded-full transition-all duration-700"
                       style={{
                         width: Math.min(g.pct, 100) + "%",
                         background: s.bar,
@@ -782,23 +783,23 @@ export default function GoalsPage() {
                 </div>
 
                 {/* V3 forecast */}
-                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
+                <div className="mt-3 rounded-xl border border-[#DCE6EF] bg-[#F7FAFE] p-2.5 sm:mt-4 sm:rounded-2xl sm:p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">
+                      <p className="text-[9px] font-black uppercase tracking-wide text-[#2F80ED] sm:text-[10px]">
                         Dự kiến hoàn thành
                       </p>
-                      <p className="mt-1 text-sm font-black text-slate-800">
+                      <p className="mt-0.5 text-[13px] font-black text-[#36536B] sm:mt-1 sm:text-sm">
                         {g.remaining <= 0
                           ? "Đã hoàn thành"
                           : `~${g.monthsLeft} tháng`}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] font-bold text-slate-400">
+                      <p className="text-[9px] font-bold text-[#8CA0B3] sm:text-[10px]">
                         Góp đề xuất
                       </p>
-                      <p className="mt-1 text-sm font-black text-blue-700">
+                      <p className="mt-0.5 text-[13px] font-black text-[#2F80ED] sm:mt-1 sm:text-sm">
                         {g.remaining <= 0
                           ? "0 đ"
                           : formatVND(g.suggestedMonthly) + "/tháng"}
@@ -806,7 +807,7 @@ export default function GoalsPage() {
                     </div>
                   </div>
                   {g.remaining > 0 && (
-                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                    <p className="mt-2 hidden text-[11px] leading-5 text-[#61788F] sm:block">
                       Nếu duy trì khoản góp này, mục tiêu có thể hoàn thành
                       trong khoảng 12 tháng. Bạn có thể chỉnh số tiền đã tiết
                       kiệm sau mỗi lần góp.
@@ -976,27 +977,27 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   const styles = {
-    blue: "border-blue-200 bg-blue-50 text-blue-700",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    rose: "border-rose-200 bg-rose-50 text-rose-700",
-    indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    blue: "border-[#CFE1F4] bg-[#F3F8FE] text-[#2F80ED]",
+    emerald: "border-emerald-200 bg-[#F1FBF7] text-emerald-700",
+    rose: "border-rose-200 bg-[#FFF5F6] text-rose-700",
+    indigo: "border-indigo-200 bg-[#F5F6FF] text-indigo-700",
   };
 
   return (
-    <div className={"rounded-3xl border p-4 shadow-sm " + styles[tone]}>
+    <div className={"min-h-[108px] rounded-2xl border p-3 shadow-[0_3px_10px_rgba(54,83,107,0.05)] sm:min-h-0 sm:rounded-3xl sm:p-4 " + styles[tone]}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
+          <p className="text-[9px] font-black uppercase tracking-[0.13em] opacity-75 sm:text-[10px] sm:tracking-[0.16em]">
             {label}
           </p>
-          <p className="mt-2 wrap-break-word text-xl font-black tracking-tight">
+          <p className="mt-1.5 wrap-break-word text-[17px] font-black leading-5 tracking-tight sm:mt-2 sm:text-xl sm:leading-normal">
             {value}
           </p>
-          <p className="mt-1 line-clamp-2 text-[11px] font-semibold opacity-70">
+          <p className="mt-1 line-clamp-1 text-[9.5px] font-semibold leading-4 opacity-75 sm:line-clamp-2 sm:text-[11px]">
             {sub}
           </p>
         </div>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/85 shadow-sm sm:size-9 sm:rounded-2xl">
           {icon}
         </div>
       </div>
