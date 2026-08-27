@@ -96,7 +96,7 @@ describe("SavingsPage mobile action surfaces use one full dynamic viewport", () 
 
   it("compresses the money-movement flow into one mobile frame without removing required controls", () => {
     expect(movementSource).toContain(
-      "mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5",
+      "mt-2.5 grid shrink-0 grid-cols-2 gap-x-2.5 gap-y-2.5",
     );
     expect(movementSource).toContain("Số tiền");
     expect(movementSource).toContain("Ví nguồn");

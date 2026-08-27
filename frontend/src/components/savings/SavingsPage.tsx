@@ -2521,8 +2521,8 @@ export default function SavingsPage({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-[#F8FBFF] px-3 py-3 [-webkit-overflow-scrolling:touch] sm:bg-white sm:px-6 sm:py-4">
-              <div className="grid grid-cols-3 gap-1 rounded-xl border border-[#E3EBF3] bg-[#F3F7FB] p-1 sm:rounded-2xl">
+            <div className="flex min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-[#F8FBFF] px-3 py-3 [-webkit-overflow-scrolling:touch] sm:bg-white flex-col justify-between sm:block sm:px-6 sm:py-4">
+              <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-[#E3EBF3] bg-[#F3F7FB] p-1 sm:rounded-2xl">
                 {(["deposit", "withdraw", "settlement"] as const).map((type) => (
                   <button
                     key={type}
@@ -2555,7 +2555,7 @@ export default function SavingsPage({
                 ))}
               </div>
 
-              <div className="mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
+              <div className="mt-2.5 grid shrink-0 grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
                 <label className="min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     Số tiền
@@ -2630,63 +2630,65 @@ export default function SavingsPage({
                 </label>
               </div>
 
-              <div className="mt-3 rounded-2xl border border-[#E3EBF3] bg-white p-3 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
-                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8196AA] sm:text-[10px] sm:tracking-[0.16em]">
-                  {transactionForm.type === "deposit"
-                    ? "Sau khi nạp"
-                    : transactionForm.type === "withdraw"
-                      ? "Sau khi rút"
-                      : "Sau khi tất toán"}
-                </p>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
-                  <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
-                      Tiết kiệm
-                    </p>
-                    <p className="mt-0.5 wrap-break-word text-sm font-black text-[#2F80ED] sm:mt-1 sm:text-base">
-                      {transactionSavingBalanceAfter !== null
-                        ? formatCurrency(transactionSavingBalanceAfter)
-                        : "-"}
-                    </p>
-                    <p
-                      className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
-                        transactionForm.type === "deposit"
-                          ? "text-emerald-600"
-                          : "text-[#64748B]"
-                      }`}
-                    >
-                      {transactionForm.type === "deposit" ? "+" : "−"}
-                      {formatCurrency(transactionPreviewAmount)}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
-                      {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
-                    </p>
-                    <p className="mt-0.5 wrap-break-word text-sm font-black text-[#4A6783] sm:mt-1 sm:text-base">
-                      {transactionWalletBalanceAfter !== null
-                        ? formatCurrency(transactionWalletBalanceAfter)
-                        : "Chọn ví"}
-                    </p>
-                    <p
-                      className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
-                        transactionForm.type === "deposit"
-                          ? "text-[#64748B]"
-                          : "text-emerald-600"
-                      }`}
-                    >
-                      {transactionForm.type === "deposit" ? "−" : "+"}
-                      {formatCurrency(transactionPreviewAmount)}
-                    </p>
+              <div className="shrink-0">
+                <div className="mt-3 rounded-2xl border border-[#E3EBF3] bg-white p-3 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8196AA] sm:text-[10px] sm:tracking-[0.16em]">
+                    {transactionForm.type === "deposit"
+                      ? "Sau khi nạp"
+                      : transactionForm.type === "withdraw"
+                        ? "Sau khi rút"
+                        : "Sau khi tất toán"}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
+                    <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
+                        Tiết kiệm
+                      </p>
+                      <p className="mt-0.5 wrap-break-word text-sm font-black text-[#2F80ED] sm:mt-1 sm:text-base">
+                        {transactionSavingBalanceAfter !== null
+                          ? formatCurrency(transactionSavingBalanceAfter)
+                          : "-"}
+                      </p>
+                      <p
+                        className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
+                          transactionForm.type === "deposit"
+                            ? "text-emerald-600"
+                            : "text-[#64748B]"
+                        }`}
+                      >
+                        {transactionForm.type === "deposit" ? "+" : "−"}
+                        {formatCurrency(transactionPreviewAmount)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
+                        {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
+                      </p>
+                      <p className="mt-0.5 wrap-break-word text-sm font-black text-[#4A6783] sm:mt-1 sm:text-base">
+                        {transactionWalletBalanceAfter !== null
+                          ? formatCurrency(transactionWalletBalanceAfter)
+                          : "Chọn ví"}
+                      </p>
+                      <p
+                        className={`mt-0.5 text-[10px] font-bold sm:text-xs ${
+                          transactionForm.type === "deposit"
+                            ? "text-[#64748B]"
+                            : "text-emerald-600"
+                        }`}
+                      >
+                        {transactionForm.type === "deposit" ? "−" : "+"}
+                        {formatCurrency(transactionPreviewAmount)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {transactionError ? (
-                <div className="mt-2.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 sm:mt-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
-                  {transactionError}
-                </div>
-              ) : null}
+                {transactionError ? (
+                  <div className="mt-2.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 sm:mt-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
+                    {transactionError}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-6 sm:pb-4 sm:pt-3">
