@@ -1592,7 +1592,7 @@ export default function SavingsPage({
   };
 
   return (
-    <section className="space-y-5 overflow-x-hidden">
+    <section className="space-y-4 overflow-x-hidden sm:space-y-5">
       {!isSupabaseConfigured ? (
         <div className="rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-700">
           Chưa cấu hình Supabase env. Thêm NEXT_PUBLIC_SUPABASE_URL và
@@ -1606,18 +1606,19 @@ export default function SavingsPage({
         </div>
       ) : null}
 
+      {/* SAVINGS-MOBILE-POLISH-2: compact financial hierarchy for real iPhone viewports. */}
       {/* SAVINGS V2 HERO — aligned with Goals page format */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-5 py-6 sm:px-7 sm:py-7">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+      <section className="overflow-hidden rounded-3xl border border-[#DCE6EF] bg-white shadow-[0_8px_22px_rgba(54,83,107,0.07)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F7FC] px-4 py-4 sm:px-7 sm:py-7">
+          <div className="flex flex-col gap-3 sm:gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-600">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#2F80ED] sm:text-[11px] sm:tracking-[0.2em]">
                 Savings Center
               </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              <h1 className="mt-0.5 text-2xl font-black tracking-tight text-[#36536B] sm:mt-1 sm:text-4xl">
                 Tiết kiệm
               </h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              <p className="mt-1.5 hidden max-w-2xl text-sm font-medium leading-6 text-[#61788F] sm:block">
                 Theo dõi tổng số dư, quỹ khẩn cấp, lãi dự kiến và hoạt động
                 nạp/rút trong một nơi.
               </p>
@@ -1626,14 +1627,14 @@ export default function SavingsPage({
             <button
               type="button"
               onClick={openAddModal}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-200/70 transition hover:bg-blue-700"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 text-sm font-black text-white shadow-[0_6px_14px_rgba(47,128,237,0.20)] transition hover:bg-[#2676DE] sm:min-h-11 sm:rounded-2xl sm:px-5"
             >
               <Plus size={17} />
               Thêm khoản tiết kiệm
             </button>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:mt-6 sm:gap-3 xl:grid-cols-4">
             <HeroMetric
               label="Tổng tiết kiệm"
               value={formatCurrency(metrics.totalSavings)}
@@ -1667,36 +1668,36 @@ export default function SavingsPage({
       </section>
 
       {/* SAVINGS PROGRESS — same visual structure as Goals page */}
-      <section className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
-        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+        <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px]">
                 Tiến độ quỹ khẩn cấp
               </p>
-              <h2 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
+              <h2 className="mt-1 text-lg font-black leading-tight text-[#36536B] sm:text-2xl">
                 {formatCurrency(metrics.emergencyFund)} /{" "}
                 {formatCurrency(savingsExperience.emergencyTarget)}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-[#61788F] sm:text-sm">
                 Còn {formatCurrency(savingsExperience.emergencyGap)} để đạt mục
                 tiêu {EMERGENCY_MONTH_TARGET} tháng chi phí.
               </p>
             </div>
 
-            <span className="text-4xl font-black tracking-tight text-blue-600">
+            <span className="shrink-0 text-3xl font-black tracking-tight text-[#2F80ED] sm:text-4xl">
               {savingsExperience.emergencyProgress}%
             </span>
           </div>
 
-          <div className="mt-5 h-4 overflow-hidden rounded-full bg-slate-100">
+          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#EAF0F6] sm:mt-5 sm:h-4">
             <div
               className="h-full rounded-full bg-linear-to-r from-blue-600 to-cyan-500 transition-all"
               style={{ width: `${savingsExperience.emergencyProgress}%` }}
             />
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
             <SavingsInfoTile
               label="Hiện có"
               value={formatCurrency(metrics.emergencyFund)}
@@ -1715,34 +1716,34 @@ export default function SavingsPage({
           </div>
         </div>
 
-        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+        <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
+          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px]">
             Ưu tiên hiện tại
           </p>
-          <h2 className="mt-1 text-lg font-black text-slate-950">
+          <h2 className="mt-1 text-lg font-black text-[#36536B]">
             Kế hoạch tăng trưởng
           </h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
+          <p className="mt-1 text-xs leading-5 text-[#61788F]">
             Dự phóng theo lãi suất trung bình hiện tại và chưa tính các khoản
             nạp thêm.
           </p>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-3 divide-y divide-[#E5EDF4] overflow-hidden rounded-2xl border border-[#DCE6EF] bg-[#F8FBFE] sm:mt-4 sm:space-y-3 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent">
             {savingsAnalytics.projection.map((item) => (
               <div
                 key={item.years}
-                className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3"
+                className="px-3 py-2.5 sm:rounded-2xl sm:border sm:border-blue-100 sm:bg-blue-50/60 sm:p-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-slate-900">
+                    <p className="text-sm font-black text-[#36536B]">
                       Sau {item.years} năm
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-[11px] text-[#61788F] sm:text-xs">
                       Giá trị ước tính
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm font-black text-blue-700">
+                  <span className="shrink-0 text-sm font-black text-[#2F80ED]">
                     {formatCurrency(item.value)}
                   </span>
                 </div>
@@ -1753,23 +1754,23 @@ export default function SavingsPage({
       </section>
 
       {/* SAVINGS ANALYTICS */}
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="grid gap-3 sm:gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px] sm:tracking-[0.18em]">
                 Phân bổ tiết kiệm
               </p>
-              <h2 className="mt-1 text-lg font-black text-slate-950">
+              <h2 className="mt-1 text-lg font-black text-[#36536B]">
                 Cơ cấu theo loại khoản
               </h2>
             </div>
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-10 sm:rounded-2xl">
               <Landmark size={18} />
             </span>
           </div>
 
-          <div className="mt-5 space-y-4">
+          <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
             {savingsAnalytics.allocation.length > 0 ? (
               savingsAnalytics.allocation.map((item, index) => {
                 const percent =
@@ -1793,13 +1794,13 @@ export default function SavingsPage({
                         {formatCurrency(item.value)}
                       </span>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-2 overflow-hidden rounded-full bg-[#EAF0F6] sm:h-2.5">
                       <div
                         className={`h-full rounded-full ${barClass}`}
                         style={{ width: `${percent}%` }}
                       />
                     </div>
-                    <p className="mt-1 text-xs font-bold text-slate-400">
+                    <p className="mt-1 text-[11px] font-bold text-[#8CA0B3] sm:text-xs">
                       {percent}% tổng tiết kiệm
                     </p>
                   </div>
@@ -1813,22 +1814,22 @@ export default function SavingsPage({
           </div>
         </div>
 
-        <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px] sm:tracking-[0.18em]">
                 Hoạt động tiết kiệm
               </p>
-              <h2 className="mt-1 text-lg font-black text-slate-950">
+              <h2 className="mt-1 text-lg font-black text-[#36536B]">
                 Nạp, rút và số dư bình quân
               </h2>
             </div>
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 sm:size-10 sm:rounded-2xl">
               <TrendingUp size={18} />
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
             <SavingsInfoTile
               label="Tổng nạp"
               value={formatCurrency(savingsAnalytics.totalDeposits)}
@@ -1846,11 +1847,11 @@ export default function SavingsPage({
             />
           </div>
 
-          <div className="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+          <div className="mt-4 rounded-2xl border border-[#E5EDF4] bg-[#F8FBFE] p-3 sm:mt-5 sm:rounded-3xl sm:p-4">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px]">
               Khuyến nghị
             </p>
-            <p className="mt-2 text-sm font-black text-slate-900">
+            <p className="mt-1.5 text-xs font-bold leading-5 text-[#36536B] sm:mt-2 sm:text-sm sm:font-black">
               {savingsExperience.emergencyProgress >= 100
                 ? "Quỹ khẩn cấp đã đạt mục tiêu."
                 : `Cần bổ sung khoảng ${formatCurrency(
@@ -1862,19 +1863,19 @@ export default function SavingsPage({
       </section>
 
       {/* SEARCH + FILTERS */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <section className="rounded-3xl border border-[#DCE6EF] bg-white p-2.5 shadow-[0_4px_14px_rgba(54,83,107,0.05)] sm:rounded-4xl sm:p-3">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
           <label className="relative flex-1 lg:max-w-sm">
             <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Tìm khoản tiết kiệm..."
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              className="h-11 w-full rounded-xl border border-[#DCE6EF] bg-[#F8FBFE] pl-11 pr-4 text-sm font-semibold text-[#36536B] outline-none transition placeholder:text-[#8CA0B3] focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:h-12 sm:rounded-2xl sm:pl-12"
             />
           </label>
 
-          <div className="no-scrollbar flex gap-1.5 overflow-x-auto rounded-2xl bg-slate-50 p-1.5 lg:ml-auto">
+          <div className="no-scrollbar flex snap-x snap-proximity gap-1 overflow-x-auto rounded-xl bg-[#F6F9FC] p-1 scroll-px-1 lg:ml-auto lg:rounded-2xl lg:p-1.5">
             {filters.map((filter) => {
               const isActive = activeFilter === filter.key;
               return (
@@ -1882,10 +1883,10 @@ export default function SavingsPage({
                   key={filter.key}
                   type="button"
                   onClick={() => setActiveFilter(filter.key)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition ${
+                  className={`inline-flex shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm ${
                     isActive
                       ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-500 hover:bg-white hover:text-slate-900"
+                      : "text-[#61788F] hover:bg-white hover:text-[#36536B]"
                   }`}
                 >
                   {filter.label}
@@ -1908,17 +1909,17 @@ export default function SavingsPage({
       </section>
 
       {/* SAVING ACCOUNTS */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <section className="rounded-3xl border border-[#DCE6EF] bg-white p-3.5 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
+        <div className="mb-3 flex flex-col gap-1 sm:mb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px] sm:tracking-[0.18em]">
               Danh sách khoản tiết kiệm
             </p>
-            <h2 className="mt-1 text-lg font-black text-slate-950">
+            <h2 className="mt-1 text-lg font-black text-[#36536B]">
               {filteredSavings.length} khoản đang hiển thị
             </h2>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="hidden text-xs text-[#61788F] sm:block">
             Nạp, rút, tất toán hoặc xem lịch sử trực tiếp trên từng khoản.
           </p>
         </div>
@@ -1945,7 +1946,7 @@ export default function SavingsPage({
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredSavings.map((item) => {
               const status = getSavingStatus(item);
               const expectedInterest = estimateAnnualInterest(item);
@@ -1955,11 +1956,11 @@ export default function SavingsPage({
               return (
                 <article
                   key={item.id}
-                  className="group rounded-3xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50"
+                  className="group rounded-2xl border border-[#DCE6EF] bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50 sm:rounded-3xl sm:p-5"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-11 sm:rounded-2xl">
                         {item.type === "emergency_fund" ? (
                           <ShieldCheck size={20} />
                         ) : (
@@ -1967,10 +1968,10 @@ export default function SavingsPage({
                         )}
                       </span>
                       <div className="min-w-0">
-                        <h3 className="wrap-anywhere text-base font-black text-slate-950">
+                        <h3 className="wrap-anywhere text-base font-black leading-tight text-[#24384B]">
                           {item.name}
                         </h3>
-                        <p className="mt-1 text-xs font-bold text-slate-400">
+                        <p className="mt-0.5 text-[11px] font-bold text-[#8CA0B3] sm:mt-1 sm:text-xs">
                           {getSavingTypeLabel(item.type)}
                         </p>
                       </div>
@@ -1980,7 +1981,7 @@ export default function SavingsPage({
                       <button
                         type="button"
                         onClick={() => openEditModal(item)}
-                        className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                        className="flex size-8 items-center justify-center rounded-lg border border-[#DCE6EF] bg-white text-[#8CA0B3] transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:size-9 sm:rounded-xl"
                         aria-label={`Chỉnh sửa ${item.name}`}
                       >
                         <Pencil size={15} />
@@ -1988,7 +1989,7 @@ export default function SavingsPage({
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(item)}
-                        className="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                        className="flex size-8 items-center justify-center rounded-lg border border-[#DCE6EF] bg-white text-[#8CA0B3] transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 sm:size-9 sm:rounded-xl"
                         aria-label={`Xóa ${item.name}`}
                       >
                         <Trash2 size={15} />
@@ -1996,17 +1997,17 @@ export default function SavingsPage({
                     </div>
                   </div>
 
-                  <div className="mt-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  <div className="mt-3 sm:mt-5">
+                    <p className="text-[9px] font-black uppercase tracking-[0.14em] text-[#8CA0B3] sm:text-[10px]">
                       Số dư hiện tại
                     </p>
-                    <p className="mt-1 wrap-break-word text-2xl font-black text-blue-700">
+                    <p className="mt-0.5 wrap-break-word text-xl font-black text-[#2F80ED] sm:mt-1 sm:text-2xl">
                       {formatCurrency(item.balance)}
                     </p>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3">
+                    <div className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3">
                       <p className="text-[10px] font-black uppercase text-slate-400">
                         Lãi suất
                       </p>
@@ -2016,11 +2017,11 @@ export default function SavingsPage({
                           : "Linh hoạt"}
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-3">
+                    <div className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3">
                       <p className="text-[10px] font-black uppercase text-slate-400">
                         Đáo hạn
                       </p>
-                      <p className="mt-1 text-sm font-black text-slate-700">
+                      <p className="mt-1 text-[13px] font-black text-[#36536B] sm:text-sm">
                         {item.maturityDate
                           ? formatDate(item.maturityDate)
                           : "Không kỳ hạn"}
@@ -2029,8 +2030,8 @@ export default function SavingsPage({
                   </div>
 
                   {isInterestBearingSaving(item.type) ? (
-                    <div className="mt-4">
-                      <div className="mb-1.5 flex items-center justify-between text-xs font-black">
+                    <div className="mt-3 sm:mt-4">
+                      <div className="mb-1.5 flex items-center justify-between text-[11px] font-black sm:text-xs">
                         <span className="text-slate-400">
                           {getProgressLabel(item)}
                         </span>
@@ -2048,23 +2049,23 @@ export default function SavingsPage({
                     </div>
                   ) : null}
 
-                  <div className="mt-4 flex items-center justify-between gap-3">
+                  <div className="mt-3 flex items-center justify-between gap-3 sm:mt-4">
                     <span
                       className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${status.className}`}
                     >
                       <CheckCircle2 size={12} />
                       {status.label}
                     </span>
-                    <span className="text-xs font-bold text-slate-400">
+                    <span className="text-[11px] font-bold text-[#8CA0B3] sm:text-xs">
                       {recentCount} giao dịch
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4">
                     <button
                       type="button"
                       onClick={() => openMoneyMovementModal(item, "deposit")}
-                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-emerald-50 px-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                      className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg bg-emerald-50 px-2 text-[11px] font-black text-emerald-700 transition hover:bg-emerald-100 sm:min-h-10 sm:rounded-xl sm:text-xs"
                     >
                       <ArrowUpRight size={14} />
                       Nạp
@@ -2072,7 +2073,7 @@ export default function SavingsPage({
                     <button
                       type="button"
                       onClick={() => openMoneyMovementModal(item, "withdraw")}
-                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-rose-50 px-2 text-xs font-black text-rose-700 transition hover:bg-rose-100"
+                      className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg bg-rose-50 px-2 text-[11px] font-black text-rose-700 transition hover:bg-rose-100 sm:min-h-10 sm:rounded-xl sm:text-xs"
                     >
                       <ArrowDownLeft size={14} />
                       Rút
@@ -2080,7 +2081,7 @@ export default function SavingsPage({
                     <button
                       type="button"
                       onClick={() => openHistoryModal(item)}
-                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-blue-50 px-2 text-xs font-black text-blue-700 transition hover:bg-blue-100"
+                      className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg bg-blue-50 px-2 text-[11px] font-black text-blue-700 transition hover:bg-blue-100 sm:min-h-10 sm:rounded-xl sm:text-xs"
                     >
                       <Clock3 size={14} />
                       Lịch sử
@@ -2094,22 +2095,22 @@ export default function SavingsPage({
       </section>
 
       {/* RECENT SAVINGS TIMELINE */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <section className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#8CA0B3] sm:text-[10px] sm:tracking-[0.18em]">
               Savings Timeline
             </p>
-            <h2 className="mt-1 text-lg font-black text-slate-950">
+            <h2 className="mt-1 text-lg font-black text-[#36536B]">
               Hoạt động gần đây
             </h2>
           </div>
-          <span className="flex size-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-[#F0F4F8] text-[#61788F] sm:size-10 sm:rounded-2xl">
             <Clock3 size={18} />
           </span>
         </div>
 
-        <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-3xl border border-slate-100">
+        <div className="mt-3 divide-y divide-[#E7EEF5] overflow-hidden rounded-2xl border border-[#E5EDF4] sm:mt-4 sm:rounded-3xl">
           {savingsAnalytics.recentTransactions.length > 0 ? (
             savingsAnalytics.recentTransactions.map((transaction) => {
               const signedAmount = getSignedTransactionAmount(transaction);
@@ -2118,11 +2119,11 @@ export default function SavingsPage({
               return (
                 <div
                   key={transaction.id}
-                  className="flex items-center justify-between gap-4 bg-white px-4 py-3.5"
+                  className="flex items-center justify-between gap-3 bg-white px-3 py-3 sm:gap-4 sm:px-4 sm:py-3.5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span
-                      className={`flex size-10 shrink-0 items-center justify-center rounded-2xl ${
+                      className={`flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10 sm:rounded-2xl ${
                         isPositive
                           ? "bg-emerald-50 text-emerald-600"
                           : "bg-rose-50 text-rose-600"
@@ -2131,16 +2132,16 @@ export default function SavingsPage({
                       {getTransactionIcon(transaction.type)}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">
+                      <p className="truncate text-sm font-black text-[#24384B]">
                         {transaction.savingName}
                       </p>
-                      <p className="mt-0.5 truncate text-xs font-bold text-slate-400">
+                      <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8CA0B3] sm:text-xs">
                         {transaction.note} · {formatDate(transaction.date)}
                       </p>
                     </div>
                   </div>
                   <p
-                    className={`shrink-0 text-sm font-black ${
+                    className={`shrink-0 text-[13px] font-black sm:text-sm ${
                       isPositive ? "text-emerald-600" : "text-rose-600"
                     }`}
                   >
@@ -2958,32 +2959,28 @@ function HeroMetric({
 }) {
   const styles = {
     blue: {
-      shell:
-        "border-blue-200/70 bg-linear-to-br from-blue-50 to-white text-blue-700 shadow-blue-950/10",
-      icon: "bg-blue-100 text-blue-600",
-      label: "text-blue-500",
-      note: "text-blue-500/80",
+      shell: "border-[#DCE6EF] bg-white text-[#2F80ED]",
+      icon: "bg-[#EAF3FC] text-[#2F80ED]",
+      label: "text-[#61788F]",
+      note: "text-[#8CA0B3]",
     },
     emerald: {
-      shell:
-        "border-emerald-200/70 bg-linear-to-br from-emerald-50 to-white text-emerald-700 shadow-emerald-950/10",
-      icon: "bg-emerald-100 text-emerald-600",
-      label: "text-emerald-500",
-      note: "text-emerald-500/80",
+      shell: "border-emerald-200/70 bg-white text-emerald-700",
+      icon: "bg-emerald-50 text-emerald-600",
+      label: "text-[#61788F]",
+      note: "text-[#8CA0B3]",
     },
     amber: {
-      shell:
-        "border-amber-200/70 bg-linear-to-br from-amber-50 to-white text-amber-700 shadow-amber-950/10",
-      icon: "bg-amber-100 text-amber-600",
-      label: "text-amber-500",
-      note: "text-amber-500/80",
+      shell: "border-amber-200/70 bg-white text-amber-700",
+      icon: "bg-amber-50 text-amber-600",
+      label: "text-[#61788F]",
+      note: "text-[#8CA0B3]",
     },
     violet: {
-      shell:
-        "border-violet-200/70 bg-linear-to-br from-violet-50 to-white text-violet-700 shadow-violet-950/10",
-      icon: "bg-violet-100 text-violet-600",
-      label: "text-violet-500",
-      note: "text-violet-500/80",
+      shell: "border-[#DCE6EF] bg-white text-[#3F5F79]",
+      icon: "bg-[#EEF3FA] text-[#587A9B]",
+      label: "text-[#61788F]",
+      note: "text-[#8CA0B3]",
     },
   };
 
@@ -2992,7 +2989,7 @@ function HeroMetric({
   return (
     <div
       className={
-        "rounded-3xl border p-4 shadow-lg transition-all hover:-translate-y-0.5 hover:shadow-xl " +
+        "rounded-2xl border p-3 shadow-[0_4px_12px_rgba(54,83,107,0.06)] transition-all hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-4 " +
         style.shell
       }
     >
@@ -3006,18 +3003,18 @@ function HeroMetric({
         </p>
         <span
           className={
-            "flex size-9 items-center justify-center rounded-xl " + style.icon
+            "flex size-8 items-center justify-center rounded-lg sm:size-9 sm:rounded-xl " + style.icon
           }
         >
           {icon}
         </span>
       </div>
 
-      <p className="mt-3 wrap-break-word text-xl font-black leading-tight">
+      <p className="mt-2 wrap-break-word text-[17px] font-black leading-tight sm:mt-3 sm:text-xl">
         {value}
       </p>
 
-      <p className={"mt-1 text-xs font-semibold leading-5 " + style.note}>
+      <p className={"mt-1 text-[10px] font-semibold leading-4 sm:text-xs sm:leading-5 " + style.note}>
         {note}
       </p>
     </div>
@@ -3040,11 +3037,13 @@ function SavingsInfoTile({
   };
 
   return (
-    <div className={`rounded-2xl border p-3 ${styles[tone]}`}>
-      <p className="text-[10px] font-black uppercase tracking-wide opacity-70">
+    <div className={`min-w-0 rounded-xl border px-2.5 py-2.5 sm:rounded-2xl sm:p-3 ${styles[tone]}`}>
+      <p className="text-[8px] font-black uppercase leading-3 tracking-wide opacity-75 sm:text-[10px]">
         {label}
       </p>
-      <p className="mt-1 wrap-break-word text-sm font-black">{value}</p>
+      <p className="mt-1 wrap-break-word text-[10px] font-black leading-tight tracking-tight sm:text-sm">
+        {value}
+      </p>
     </div>
   );
 }
