@@ -204,12 +204,16 @@ function getSupabaseSavingAmountForReportGoal(
   savingRows: ReportSaving[],
 ) {
   const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
-  const selectedSavingsAmount = savingRows.reduce((sum, saving) => {
-    if (!linkedSavingIds.has(saving.id)) return sum;
-    return sum + getSavingBalance(saving);
-  }, 0);
 
-  if (selectedSavingsAmount > 0) return selectedSavingsAmount;
+  // REPORTS-CORRECTNESS-1: an explicit goal -> saving link is authoritative
+  // even when the linked balance is currently zero. Falling through to name
+  // heuristics in that case can silently attach an unrelated saving account.
+  if (linkedSavingIds.size > 0) {
+    return savingRows.reduce((sum, saving) => {
+      if (!linkedSavingIds.has(saving.id)) return sum;
+      return sum + getSavingBalance(saving);
+    }, 0);
+  }
 
   const goalName = normalizeReportText(goal.name);
   return savingRows.reduce((sum, saving) => {
@@ -296,6 +300,7 @@ function filterByPeriod(
     case "year":
       return txns.filter((t) => t.date.startsWith(year));
     case "custom":
+      if (!isValidCustomRange(customStart, customEnd)) return [];
       return txns.filter((t) => t.date >= customStart && t.date <= customEnd);
   }
 }
@@ -318,6 +323,121 @@ function periodLabel(
     case "custom":
       return customStart + " → " + customEnd;
   }
+}
+
+function getCurrentReportPeriodDefaults(now = new Date()) {
+  const year = String(now.getFullYear());
+  const monthNumber = now.getMonth() + 1;
+  const month = String(monthNumber).padStart(2, "0");
+  const quarter = String(Math.floor((monthNumber - 1) / 3) + 1);
+  return {
+    year,
+    month,
+    quarter,
+    customStart: year + "-01-01",
+    customEnd: year + "-12-31",
+  };
+}
+
+function isValidCustomRange(customStart: string, customEnd: string) {
+  return Boolean(customStart && customEnd && customStart <= customEnd);
+}
+
+function getPeriodMonthKeys(
+  mode: PeriodMode,
+  year: string,
+  month: string,
+  quarter: string,
+  customStart: string,
+  customEnd: string,
+): string[] {
+  if (mode === "month") return [year + "-" + month];
+  if (mode === "quarter") {
+    const q = Number(quarter);
+    return [0, 1, 2].map((offset) =>
+      year +
+      "-" +
+      String((q - 1) * 3 + 1 + offset).padStart(2, "0"),
+    );
+  }
+  if (mode === "year") {
+    return Array.from({ length: 12 }, (_, index) =>
+      year + "-" + String(index + 1).padStart(2, "0"),
+    );
+  }
+  if (!isValidCustomRange(customStart, customEnd)) return [];
+
+  const keys: string[] = [];
+  let cursorYear = Number(customStart.slice(0, 4));
+  let cursorMonth = Number(customStart.slice(5, 7));
+  const endYear = Number(customEnd.slice(0, 4));
+  const endMonth = Number(customEnd.slice(5, 7));
+  while (
+    cursorYear < endYear ||
+    (cursorYear === endYear && cursorMonth <= endMonth)
+  ) {
+    keys.push(
+      String(cursorYear) + "-" + String(cursorMonth).padStart(2, "0"),
+    );
+    cursorMonth += 1;
+    if (cursorMonth > 12) {
+      cursorMonth = 1;
+      cursorYear += 1;
+    }
+  }
+  return keys;
+}
+
+function shiftIsoDateByYears(dateValue: string, years: number) {
+  const year = Number(dateValue.slice(0, 4)) + years;
+  const month = Number(dateValue.slice(5, 7));
+  const day = Number(dateValue.slice(8, 10));
+  const lastDay = new Date(year, month, 0).getDate();
+  return [
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(Math.min(day, lastDay)).padStart(2, "0"),
+  ].join("-");
+}
+
+function getComparisonAnchor(
+  mode: PeriodMode,
+  year: string,
+  month: string,
+  quarter: string,
+  customEnd: string,
+) {
+  if (mode === "month") {
+    return { year: Number(year), month: Number(month) };
+  }
+  if (mode === "quarter") {
+    return { year: Number(year), month: Number(quarter) * 3 };
+  }
+  if (mode === "year") {
+    return { year: Number(year), month: 12 };
+  }
+  return {
+    year: Number(customEnd.slice(0, 4)),
+    month: Number(customEnd.slice(5, 7)),
+  };
+}
+
+function getReportFileToken(
+  mode: PeriodMode,
+  year: string,
+  month: string,
+  quarter: string,
+  customStart: string,
+  customEnd: string,
+) {
+  if (mode === "month") return year + "-" + month;
+  if (mode === "quarter") return year + "-Q" + quarter;
+  if (mode === "year") return year;
+  return customStart + "_to_" + customEnd;
+}
+
+function escapeCsvCell(value: string | number) {
+  return '"' + String(value).replace(/"/g, '""') + '"';
 }
 
 function getCategoryOfTransaction(
@@ -420,6 +540,54 @@ function getRealSpendingByCategory(
     .sort((a, b) => b.value - a.value);
 }
 
+function buildMonthlyReportRow(
+  monthKey: string,
+  transactions: Transaction[],
+  categories: Category[],
+  savings: ReportSaving[],
+) {
+  const rowYear = monthKey.slice(0, 4);
+  const rowMonth = monthKey.slice(5, 7);
+  const monthTransactions = transactions.filter((transaction) =>
+    transaction.date.startsWith(monthKey),
+  );
+  const inc = getTotalIncome(monthTransactions);
+  const exp = getRealExpenseTotal(monthTransactions, categories);
+  const savingCapitalFromTransactions = getSavingCapitalTotal(
+    monthTransactions,
+    categories,
+  );
+  const savingCapitalFromSavings = savings
+    .filter((saving) => (saving.createdAt ?? "").startsWith(monthKey))
+    .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
+  const savingCapital =
+    savingCapitalFromSavings > 0
+      ? savingCapitalFromSavings
+      : savingCapitalFromTransactions;
+  const investmentCapital = getInvestmentCapitalTotal(
+    monthTransactions,
+    categories,
+  );
+  const futureAllocation = savingCapital + investmentCapital;
+  return {
+    key: monthKey,
+    month: "T" + Number(rowMonth),
+    periodLabel: "T" + Number(rowMonth) + "/" + rowYear,
+    thu: inc / 1e6,
+    chi: exp / 1e6,
+    tietKiem: savingCapital / 1e6,
+    dauTu: investmentCapital / 1e6,
+    tichLuy: futureAllocation / 1e6,
+    dongTienRong: (inc - exp) / 1e6,
+    income: inc,
+    expense: exp,
+    savingAllocation: savingCapital,
+    investmentAllocation: investmentCapital,
+    futureAllocation,
+    cashFlow: inc - exp,
+  };
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ReportsPage() {
   // FINANCE-DATA-1B: every KPI/chart on this page (net worth, income,
@@ -448,13 +616,15 @@ export default function ReportsPage() {
     ForexCashTransaction[]
   >([]);
 
-  // Period filter state (preserved)
+  // REPORTS-CORRECTNESS-1: period controls start from the user's current
+  // calendar period instead of stale hard-coded 2026/Q2 defaults.
+  const [initialPeriod] = useState(() => getCurrentReportPeriodDefaults());
   const [periodMode, setPeriodMode] = useState<PeriodMode>("year");
-  const [year, setYear] = useState("2026");
-  const [month, setMonth] = useState("06");
-  const [quarter, setQuarter] = useState("2");
-  const [customStart, setCustomStart] = useState("2026-01-01");
-  const [customEnd, setCustomEnd] = useState("2026-12-31");
+  const [year, setYear] = useState(initialPeriod.year);
+  const [month, setMonth] = useState(initialPeriod.month);
+  const [quarter, setQuarter] = useState(initialPeriod.quarter);
+  const [customStart, setCustomStart] = useState(initialPeriod.customStart);
+  const [customEnd, setCustomEnd] = useState(initialPeriod.customEnd);
 
   // UI state
   const [stmtTab, setStmtTab] = useState<"income" | "cashflow" | "networth">(
@@ -569,9 +739,14 @@ export default function ReportsPage() {
       categories,
     );
     const futureAllocation = savingAllocation + investmentAllocation;
-    const saving = income - expense;
-    const availableAfterFutureAllocation = saving - futureAllocation;
-    const savingRate =
+    const cashFlowAfterExpense = income - expense;
+    const availableAfterFutureAllocation =
+      cashFlowAfterExpense - futureAllocation;
+    const cashFlowRate =
+      income > 0
+        ? Math.round((cashFlowAfterExpense / income) * 1000) / 10
+        : 0;
+    const allocationRate =
       income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0;
     const netWorthBreakdown = calculateNetWorth({
       wallets,
@@ -591,12 +766,13 @@ export default function ReportsPage() {
     return {
       income,
       expense,
-      saving,
+      cashFlowAfterExpense,
       savingAllocation,
       investmentAllocation,
       futureAllocation,
       availableAfterFutureAllocation,
-      savingRate,
+      cashFlowRate,
+      allocationRate,
       totalAssets,
       totalDebt,
       netWorth,
@@ -626,51 +802,60 @@ export default function ReportsPage() {
 
   const incomeExpenseGap = summary.income - summary.expense;
 
-  // ── Monthly breakdown (preserved) ────────────────────────────────────────
-  const yearTxns = useMemo(
-    () => transactions.filter((t) => t.date.startsWith(year)),
-    [transactions, year],
-  );
-
+  // ── Monthly breakdown ────────────────────────────────────────────────────
   const monthly = useMemo(
     () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const m = String(i + 1).padStart(2, "0");
-        const mx = yearTxns.filter((t) => t.date.startsWith(year + "-" + m));
-        const inc = getTotalIncome(mx);
-        const exp = getRealExpenseTotal(mx, categories);
-        const savingCapitalFromTransactions = getSavingCapitalTotal(
-          mx,
+      Array.from({ length: 12 }, (_, index) =>
+        buildMonthlyReportRow(
+          year + "-" + String(index + 1).padStart(2, "0"),
+          transactions,
           categories,
-        );
-        const savingCapitalFromSavings = savings
-          .filter((saving) =>
-            (saving.createdAt ?? "").startsWith(year + "-" + m),
-          )
-          .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
-        const savingCapital =
-          savingCapitalFromSavings > 0
-            ? savingCapitalFromSavings
-            : savingCapitalFromTransactions;
-        const investmentCapital = getInvestmentCapitalTotal(mx, categories);
-        const futureAllocation = savingCapital + investmentCapital;
-        return {
-          month: "T" + (i + 1),
-          thu: inc / 1e6,
-          chi: exp / 1e6,
-          tietKiem: savingCapital / 1e6,
-          dauTu: investmentCapital / 1e6,
-          tichLuy: futureAllocation / 1e6,
-          dongTienRong: (inc - exp) / 1e6,
-          income: inc,
-          expense: exp,
-          savingAllocation: savingCapital,
-          investmentAllocation: investmentCapital,
-          futureAllocation,
-          cashFlow: inc - exp,
-        };
-      }),
-    [yearTxns, year, categories, savings],
+          savings,
+        ),
+      ),
+    [transactions, year, categories, savings],
+  );
+
+  const periodMonthKeys = useMemo(
+    () =>
+      getPeriodMonthKeys(
+        periodMode,
+        year,
+        month,
+        quarter,
+        customStart,
+        customEnd,
+      ),
+    [periodMode, year, month, quarter, customStart, customEnd],
+  );
+
+  const periodSavings = useMemo(
+    () =>
+      savings.filter((saving) =>
+        isDateInPeriod(
+          saving.createdAt,
+          periodMode,
+          year,
+          month,
+          quarter,
+          customStart,
+          customEnd,
+        ),
+      ),
+    [savings, periodMode, year, month, quarter, customStart, customEnd],
+  );
+
+  const periodMonthly = useMemo(
+    () =>
+      periodMonthKeys.map((monthKey) =>
+        buildMonthlyReportRow(
+          monthKey,
+          filtered,
+          categories,
+          periodSavings,
+        ),
+      ),
+    [periodMonthKeys, filtered, categories, periodSavings],
   );
 
   // ── Spending breakdown (preserved) ────────────────────────────────────────
@@ -687,45 +872,93 @@ export default function ReportsPage() {
     [spendingByCategory],
   );
 
-  // ── Comparisons: MoM / QoQ / YoY (preserved) ─────────────────────────────
+  // ── Comparisons: anchored to the selected report period ──────────────────
   const comparisons = useMemo(() => {
-    const now = new Date();
-    const curM = String(now.getMonth() + 1).padStart(2, "0");
-    const prevM = String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(
-      2,
-      "0",
+    if (periodMode === "custom" && !isValidCustomRange(customStart, customEnd)) {
+      const unavailable = { income: null, expense: null, cashFlow: null };
+      return { mom: unavailable, qoq: unavailable, yoy: unavailable };
+    }
+
+    const anchor = getComparisonAnchor(
+      periodMode,
+      year,
+      month,
+      quarter,
+      customEnd,
     );
-    const prevMYear =
-      now.getMonth() === 0 ? String(now.getFullYear() - 1) : year;
-    const curMonthTxns = transactions.filter((t) =>
-      t.date.startsWith(year + "-" + curM),
+    const anchorMonth = String(anchor.month).padStart(2, "0");
+    const previousMonthNumber = anchor.month === 1 ? 12 : anchor.month - 1;
+    const previousMonthYear =
+      anchor.month === 1 ? anchor.year - 1 : anchor.year;
+
+    const curMonthTxns = filterByPeriod(
+      transactions,
+      "month",
+      String(anchor.year),
+      anchorMonth,
+      "1",
+      "",
+      "",
     );
-    const prevMonthTxns = transactions.filter((t) =>
-      t.date.startsWith(prevMYear + "-" + prevM),
+    const prevMonthTxns = filterByPeriod(
+      transactions,
+      "month",
+      String(previousMonthYear),
+      String(previousMonthNumber).padStart(2, "0"),
+      "1",
+      "",
+      "",
     );
-    const curQ = Math.floor(now.getMonth() / 3) + 1;
+
+    const curQ = Math.floor((anchor.month - 1) / 3) + 1;
     const prevQ = curQ === 1 ? 4 : curQ - 1;
-    const curQMonths = [0, 1, 2].map((x) =>
-      String((curQ - 1) * 3 + 1 + x).padStart(2, "0"),
+    const prevQYear = curQ === 1 ? anchor.year - 1 : anchor.year;
+    const curQTxns = filterByPeriod(
+      transactions,
+      "quarter",
+      String(anchor.year),
+      "01",
+      String(curQ),
+      "",
+      "",
     );
-    const prevQMonths = [0, 1, 2].map((x) =>
-      String((prevQ - 1) * 3 + 1 + x).padStart(2, "0"),
+    const prevQTxns = filterByPeriod(
+      transactions,
+      "quarter",
+      String(prevQYear),
+      "01",
+      String(prevQ),
+      "",
+      "",
     );
-    const curQYear = year;
-    const prevQYear = curQ === 1 ? String(Number(year) - 1) : year;
-    const curQTxns = transactions.filter((t) =>
-      curQMonths.some((m) => t.date.startsWith(curQYear + "-" + m)),
-    );
-    const prevQTxns = transactions.filter((t) =>
-      prevQMonths.some((m) => t.date.startsWith(prevQYear + "-" + m)),
-    );
-    const prevYearTxns = transactions.filter((t) =>
-      t.date.startsWith(String(Number(year) - 1)),
-    );
+
+    const previousEquivalentPeriodTxns =
+      periodMode === "custom"
+        ? filterByPeriod(
+            transactions,
+            "custom",
+            year,
+            month,
+            quarter,
+            shiftIsoDateByYears(customStart, -1),
+            shiftIsoDateByYears(customEnd, -1),
+          )
+        : filterByPeriod(
+            transactions,
+            periodMode,
+            String(Number(year) - 1),
+            month,
+            quarter,
+            customStart,
+            customEnd,
+          );
 
     function delta(cur: number, prev: number) {
       if (prev === 0) return null;
       return Math.round(((cur - prev) / prev) * 1000) / 10;
+    }
+    function cashFlow(txns: Transaction[]) {
+      return getTotalIncome(txns) - getRealExpenseTotal(txns, categories);
     }
     return {
       mom: {
@@ -737,12 +970,7 @@ export default function ReportsPage() {
           getRealExpenseTotal(curMonthTxns, categories),
           getRealExpenseTotal(prevMonthTxns, categories),
         ),
-        saving: delta(
-          getTotalIncome(curMonthTxns) -
-            getRealExpenseTotal(curMonthTxns, categories),
-          getTotalIncome(prevMonthTxns) -
-            getRealExpenseTotal(prevMonthTxns, categories),
-        ),
+        cashFlow: delta(cashFlow(curMonthTxns), cashFlow(prevMonthTxns)),
       },
       qoq: {
         income: delta(getTotalIncome(curQTxns), getTotalIncome(prevQTxns)),
@@ -750,26 +978,34 @@ export default function ReportsPage() {
           getRealExpenseTotal(curQTxns, categories),
           getRealExpenseTotal(prevQTxns, categories),
         ),
-        saving: delta(
-          getTotalIncome(curQTxns) - getRealExpenseTotal(curQTxns, categories),
-          getTotalIncome(prevQTxns) -
-            getRealExpenseTotal(prevQTxns, categories),
-        ),
+        cashFlow: delta(cashFlow(curQTxns), cashFlow(prevQTxns)),
       },
       yoy: {
-        income: delta(getTotalIncome(yearTxns), getTotalIncome(prevYearTxns)),
-        expense: delta(
-          getRealExpenseTotal(yearTxns, categories),
-          getRealExpenseTotal(prevYearTxns, categories),
+        income: delta(
+          getTotalIncome(filtered),
+          getTotalIncome(previousEquivalentPeriodTxns),
         ),
-        saving: delta(
-          getTotalIncome(yearTxns) - getRealExpenseTotal(yearTxns, categories),
-          getTotalIncome(prevYearTxns) -
-            getRealExpenseTotal(prevYearTxns, categories),
+        expense: delta(
+          getRealExpenseTotal(filtered, categories),
+          getRealExpenseTotal(previousEquivalentPeriodTxns, categories),
+        ),
+        cashFlow: delta(
+          cashFlow(filtered),
+          cashFlow(previousEquivalentPeriodTxns),
         ),
       },
     };
-  }, [transactions, year, yearTxns, categories]);
+  }, [
+    transactions,
+    categories,
+    filtered,
+    periodMode,
+    year,
+    month,
+    quarter,
+    customStart,
+    customEnd,
+  ]);
 
   // ── Analytics engine (preserved) ─────────────────────────────────────────
   const healthV2 = useMemo(
@@ -803,10 +1039,6 @@ export default function ReportsPage() {
     () => investments.reduce((s, inv) => s + inv.investedAmount, 0),
     [investments],
   );
-  const displayedInvestmentCapital =
-    summary.investmentAssets > 0
-      ? summary.investmentAssets
-      : summary.investmentAllocation;
   const investmentROI = useMemo(
     () =>
       totalInvested > 0
@@ -831,7 +1063,7 @@ export default function ReportsPage() {
 
   // ── Professional report center data ───────────────────────────────────────
   const monthlyAverages = useMemo(() => {
-    const monthsWithData = monthly.filter(
+    const monthsWithData = periodMonthly.filter(
       (m) => m.income > 0 || m.expense > 0 || m.futureAllocation > 0,
     );
     const divisor = Math.max(monthsWithData.length, 1);
@@ -845,23 +1077,33 @@ export default function ReportsPage() {
         divisor,
       months: monthsWithData.length,
     };
-  }, [monthly]);
+  }, [periodMonthly]);
 
   const assetAllocationData = useMemo(() => {
     const walletAssets = getTotalAssets(wallets);
+    const forexAssets = getForexAssetValue(
+      forexAccounts,
+      forexCashTransactions,
+    );
     const rows = [
       { name: "Thanh khoản", value: walletAssets, color: "#2563eb" },
       { name: "Tiết kiệm", value: summary.savingAssets, color: "#06b6d4" },
       { name: "Đầu tư", value: summary.investmentAssets, color: "#8b5cf6" },
-      { name: "Nợ", value: summary.totalDebt, color: "#f43f5e" },
+      { name: "Forex", value: forexAssets, color: "#14b8a6" },
     ];
     return rows.filter((item) => item.value > 0);
   }, [
     wallets,
+    forexAccounts,
+    forexCashTransactions,
     summary.savingAssets,
     summary.investmentAssets,
-    summary.totalDebt,
   ]);
+
+  const assetAllocationTotal = useMemo(
+    () => assetAllocationData.reduce((sum, item) => sum + item.value, 0),
+    [assetAllocationData],
+  );
 
   const goalMeta = useMemo(
     () =>
@@ -930,11 +1172,17 @@ export default function ReportsPage() {
 
   const strongestIncomeMonth = useMemo(
     () =>
-      [...monthly].sort((a, b) => b.income - a.income)[0] ?? {
+      [...periodMonthly].sort((a, b) => b.income - a.income)[0] ?? {
         month: "—",
+        periodLabel: "—",
         income: 0,
       },
-    [monthly],
+    [periodMonthly],
+  );
+
+  const priorityGoal = useMemo(
+    () => [...goalMeta].sort((a, b) => a.pct - b.pct)[0] ?? null,
+    [goalMeta],
   );
 
   const topExpenseCategory = spendingByCategory[0];
@@ -945,38 +1193,6 @@ export default function ReportsPage() {
     0,
   );
 
-  // ── Export helpers (preserved) ────────────────────────────────────────────
-  function exportCSV() {
-    const rows = [
-      [
-        "Tháng",
-        "Thu nhập (đ)",
-        "Chi phí thật (đ)",
-        "Tiết kiệm + Đầu tư (đ)",
-        "Dòng tiền sau chi phí (đ)",
-      ],
-      ...monthly.map((m) => [
-        m.month,
-        String(Math.round(m.thu * 1e6)),
-        String(Math.round(m.chi * 1e6)),
-        String(Math.round((m.tichLuy ?? 0) * 1e6)),
-        String(Math.round(m.dongTienRong * 1e6)),
-      ]),
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "myfinance-report-" + year + ".csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportPDF() {
-    window.print();
-  }
-
   const label = periodLabel(
     periodMode,
     year,
@@ -985,7 +1201,74 @@ export default function ReportsPage() {
     customStart,
     customEnd,
   );
-  const YEARS = ["2024", "2025", "2026", "2027", "2028"];
+  const isReportPeriodValid =
+    periodMode !== "custom" || isValidCustomRange(customStart, customEnd);
+  const reportFileToken = getReportFileToken(
+    periodMode,
+    year,
+    month,
+    quarter,
+    customStart,
+    customEnd,
+  );
+
+  // REPORTS-CORRECTNESS-1: exports use the selected report period instead of
+  // silently exporting all 12 months of the selected year. Snapshot fields
+  // are explicitly labelled as current-state data.
+  function exportCSV() {
+    if (!isReportPeriodValid) return;
+    const rows: (string | number)[][] = [
+      ["Báo cáo", label],
+      ["Phạm vi dòng tiền", label],
+      ["Tài sản / nợ / mục tiêu", "Snapshot hiện tại"],
+      [],
+      [
+        "Kỳ",
+        "Thu nhập (đ)",
+        "Chi phí thật (đ)",
+        "Tiết kiệm + Đầu tư (đ)",
+        "Dòng tiền sau chi phí (đ)",
+      ],
+      ...periodMonthly.map((row) => [
+        row.periodLabel,
+        Math.round(row.thu * 1e6),
+        Math.round(row.chi * 1e6),
+        Math.round((row.tichLuy ?? 0) * 1e6),
+        Math.round(row.dongTienRong * 1e6),
+      ]),
+    ];
+    const csv =
+      "\uFEFF" +
+      rows
+        .map((row) => row.map((cell) => escapeCsvCell(cell)).join(","))
+        .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "myfinance-report-" + reportFileToken + ".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    if (!isReportPeriodValid) return;
+    window.print();
+  }
+
+  const currentYearNumber = Number(initialPeriod.year);
+  const dataYears = transactions
+    .map((transaction) => transaction.date.slice(0, 4))
+    .filter((candidate) => /^\d{4}$/.test(candidate));
+  const YEARS = Array.from(
+    new Set([
+      String(currentYearNumber - 2),
+      String(currentYearNumber - 1),
+      String(currentYearNumber),
+      String(currentYearNumber + 1),
+      ...dataYears,
+    ]),
+  ).sort((a, b) => Number(a) - Number(b));
   const MONTHS = Array.from({ length: 12 }, (_, i) => ({
     value: String(i + 1).padStart(2, "0"),
     label: "Tháng " + (i + 1),
@@ -1023,7 +1306,7 @@ export default function ReportsPage() {
     overview: {
       title: "Tổng quan tài chính",
       description:
-        "Bức tranh tổng hợp về tài sản, dòng tiền, sức khỏe tài chính và tiến độ mục tiêu.",
+        "Dòng tiền theo kỳ đã chọn; tài sản, nợ, sức khỏe và mục tiêu là snapshot hiện tại.",
     },
     income: {
       title: "Phân tích thu nhập",
@@ -1043,12 +1326,12 @@ export default function ReportsPage() {
     investment: {
       title: "Hiệu quả đầu tư",
       description:
-        "Theo dõi vốn, giá trị hiện tại, ROI và cơ cấu danh mục đầu tư.",
+        "Giá trị và ROI là snapshot hiện tại; vốn phân bổ được tính theo kỳ báo cáo.",
     },
     goals: {
       title: "Tiến độ mục tiêu",
       description:
-        "Theo dõi số tiền đã tích lũy, phần còn thiếu và mức góp đề xuất.",
+        "Theo dõi snapshot hiện tại của số tiền đã tích lũy, phần còn thiếu và mức góp đề xuất.",
     },
     ai: {
       title: "Phân tích và khuyến nghị",
@@ -1102,13 +1385,14 @@ export default function ReportsPage() {
                 Báo cáo tài chính
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Báo cáo {label} · Dữ liệu hợp nhất từ giao dịch, ví, tiết kiệm,
-                đầu tư và mục tiêu
+                Dòng tiền theo {label} · Tài sản, nợ, đầu tư, mục tiêu và sức
+                khỏe tài chính là snapshot hiện tại
               </p>
             </div>
             <div className="flex gap-2 print:hidden">
               <button
                 onClick={exportCSV}
+                disabled={!isReportPeriodValid}
                 className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
               >
                 <Download size={15} />
@@ -1116,6 +1400,7 @@ export default function ReportsPage() {
               </button>
               <button
                 onClick={exportPDF}
+                disabled={!isReportPeriodValid}
                 className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 hover:bg-blue-700"
               >
                 <FileText size={15} />
@@ -1129,7 +1414,7 @@ export default function ReportsPage() {
             <KpiCard
               label="Tài sản ròng"
               value={formatVND(summary.netWorth)}
-              sub="Tài sản − Nợ"
+              sub="Snapshot hiện tại · Tài sản − Nợ"
               gradient={
                 summary.netWorth >= 0
                   ? "from-blue-500 to-blue-600"
@@ -1140,7 +1425,7 @@ export default function ReportsPage() {
             />
             <KpiCard
               label="Dòng tiền sau chi phí"
-              value={formatVND(summary.saving)}
+              value={formatVND(summary.cashFlowAfterExpense)}
               sub={
                 "TB " + formatCompactVND(monthlyAverages.cashFlow) + "/tháng"
               }
@@ -1149,18 +1434,24 @@ export default function ReportsPage() {
               icon={<WalletCards size={16} />}
             />
             <KpiCard
-              label="Tiết kiệm"
+              label="Tiết kiệm hiện tại"
               value={formatVND(summary.savingAssets)}
-              sub={"Phân bổ " + formatVND(summary.futureAllocation)}
+              sub={
+                "Phân bổ tiết kiệm trong kỳ " +
+                formatVND(summary.savingAllocation)
+              }
               gradient="from-emerald-500 to-teal-500"
               iconBg="bg-white/20"
               icon={<ShieldCheck size={16} />}
             />
             <KpiCard
-              label="Danh mục đầu tư"
-              value={formatVND(displayedInvestmentCapital)}
+              label="Danh mục đầu tư hiện tại"
+              value={formatVND(summary.investmentAssets)}
               sub={
-                "ROI " + (investmentROI >= 0 ? "+" : "") + investmentROI + "%"
+                "Snapshot hiện tại · ROI " +
+                (investmentROI >= 0 ? "+" : "") +
+                investmentROI +
+                "%"
               }
               gradient="from-cyan-500 to-cyan-600"
               iconBg="bg-cyan-400/30"
@@ -1174,7 +1465,7 @@ export default function ReportsPage() {
               }
             >
               <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-                Financial Health
+                Financial Health · hiện tại
               </p>
               <p className="mt-1 text-3xl font-black text-white">
                 {healthV2.total}
@@ -1259,14 +1550,30 @@ export default function ReportsPage() {
                 <input
                   type="date"
                   value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
+                  max={customEnd || undefined}
+                  aria-invalid={!isReportPeriodValid}
+                  onChange={(e) => {
+                    const nextStart = e.target.value;
+                    setCustomStart(nextStart);
+                    if (customEnd && nextStart > customEnd) {
+                      setCustomEnd(nextStart);
+                    }
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none"
                 />
                 <span className="text-xs text-slate-400">→</span>
                 <input
                   type="date"
                   value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
+                  min={customStart || undefined}
+                  aria-invalid={!isReportPeriodValid}
+                  onChange={(e) => {
+                    const nextEnd = e.target.value;
+                    setCustomEnd(nextEnd);
+                    if (customStart && nextEnd < customStart) {
+                      setCustomStart(nextEnd);
+                    }
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none"
                 />
               </>
@@ -1323,7 +1630,7 @@ export default function ReportsPage() {
               icon={<ShieldCheck size={18} />}
               title="Sức khỏe tài chính"
               value={healthV2.total + "/100"}
-              note={`${healthV2.grade} — ${healthGrade.label}. Tỷ lệ nợ ${Math.round(summary.debtRatio)}% · Tỷ lệ tích lũy ${summary.savingRate}%.`}
+              note={`${healthV2.grade} — ${healthGrade.label}. Tỷ lệ nợ ${Math.round(summary.debtRatio)}% · Tỷ lệ tích lũy ${summary.allocationRate}%.`}
               tone={
                 healthV2.total >= 75
                   ? "good"
@@ -1364,19 +1671,19 @@ export default function ReportsPage() {
               border="border-rose-100"
             />
             <StatMini
-              label="Tiết kiệm"
-              value={formatVND(summary.saving)}
-              color={summary.saving >= 0 ? "text-blue-600" : "text-rose-500"}
+              label="Dòng tiền sau chi phí"
+              value={formatVND(summary.cashFlowAfterExpense)}
+              color={summary.cashFlowAfterExpense >= 0 ? "text-blue-600" : "text-rose-500"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Tỷ lệ tiết kiệm"
-              value={summary.savingRate + "%"}
+              label="Tỷ lệ tích lũy"
+              value={summary.allocationRate + "%"}
               color={
-                summary.savingRate >= 20
+                summary.allocationRate >= 20
                   ? "text-emerald-600"
-                  : summary.savingRate >= 10
+                  : summary.allocationRate >= 10
                     ? "text-amber-500"
                     : "text-rose-500"
               }
@@ -1390,7 +1697,7 @@ export default function ReportsPage() {
               <SectionHeader
                 icon={<PieChartIcon size={20} />}
                 title="Cấu trúc tài sản"
-                subtitle="Thanh khoản · Tiết kiệm · Đầu tư · Nợ"
+                subtitle="Snapshot hiện tại · Thanh khoản · Tiết kiệm · Đầu tư · Forex"
               />
               <div className="mt-5 grid gap-5 lg:grid-cols-[240px_1fr]">
                 <div className="relative mx-auto h-56 w-56">
@@ -1429,8 +1736,8 @@ export default function ReportsPage() {
                 <div className="space-y-3">
                   {assetAllocationData.map((item) => {
                     const pct =
-                      summary.totalAssets > 0
-                        ? Math.round((item.value / summary.totalAssets) * 100)
+                      assetAllocationTotal > 0
+                        ? Math.round((item.value / assetAllocationTotal) * 100)
                         : 0;
                     return (
                       <div key={item.name}>
@@ -1458,6 +1765,18 @@ export default function ReportsPage() {
                       </div>
                     );
                   })}
+                  {summary.totalDebt > 0 && (
+                    <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-rose-700">
+                          Nợ phải trả · ngoài cơ cấu tài sản
+                        </span>
+                        <span className="shrink-0 font-black text-rose-700">
+                          {formatVND(summary.totalDebt)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1488,10 +1807,7 @@ export default function ReportsPage() {
                 <ReportSignal
                   label="Mục tiêu ưu tiên"
                   value={
-                    goalMeta.length
-                      ? (goalMeta.sort((a, b) => a.pct - b.pct)[0]?.name ??
-                        "Không có")
-                      : "Chưa có"
+                    priorityGoal ? priorityGoal.name : "Chưa có"
                   }
                   note={
                     goalMeta.length
@@ -1609,15 +1925,15 @@ export default function ReportsPage() {
             />
             <StatMini
               label="Tháng cao nhất"
-              value={`${strongestIncomeMonth.month} · ${formatVND(strongestIncomeMonth.income)}`}
+              value={`${strongestIncomeMonth.periodLabel ?? strongestIncomeMonth.month} · ${formatVND(strongestIncomeMonth.income)}`}
               color="text-indigo-600"
               bg="bg-indigo-50"
               border="border-indigo-100"
             />
             <StatMini
               label="Dòng tiền sau chi phí"
-              value={formatVND(summary.saving)}
-              color={summary.saving >= 0 ? "text-emerald-600" : "text-rose-500"}
+              value={formatVND(summary.cashFlowAfterExpense)}
+              color={summary.cashFlowAfterExpense >= 0 ? "text-emerald-600" : "text-rose-500"}
               bg="bg-slate-50"
               border="border-slate-200"
             />
@@ -1737,26 +2053,26 @@ export default function ReportsPage() {
                     </td>
                   </tr>
                   <tr className="font-black">
-                    <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
+                    <td className="py-3 text-slate-900">Dòng tiền sau chi phí</td>
                     <td
                       className={
                         "py-3 text-right " +
-                        (summary.saving >= 0
+                        (summary.cashFlowAfterExpense >= 0
                           ? "text-blue-600"
                           : "text-rose-500")
                       }
                     >
-                      {formatVND(summary.saving)}
+                      {formatVND(summary.cashFlowAfterExpense)}
                     </td>
                     <td
                       className={
                         "py-3 text-right " +
-                        (summary.saving >= 0
+                        (summary.cashFlowAfterExpense >= 0
                           ? "text-blue-600"
                           : "text-rose-500")
                       }
                     >
-                      {summary.savingRate}%
+                      {summary.cashFlowRate}%
                     </td>
                   </tr>
                   <tr className="border-t-2 border-slate-200 bg-slate-50">
@@ -1973,8 +2289,8 @@ export default function ReportsPage() {
             />
             <StatMini
               label="Dòng tiền ròng"
-              value={formatVND(summary.saving)}
-              color={summary.saving >= 0 ? "text-blue-600" : "text-rose-600"}
+              value={formatVND(summary.cashFlowAfterExpense)}
+              color={summary.cashFlowAfterExpense >= 0 ? "text-blue-600" : "text-rose-600"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
@@ -2177,26 +2493,26 @@ export default function ReportsPage() {
                       </td>
                     </tr>
                     <tr className="font-black">
-                      <td className="py-3 text-slate-900">Lợi nhuận ròng</td>
+                      <td className="py-3 text-slate-900">Dòng tiền sau chi phí</td>
                       <td
                         className={
                           "py-3 text-right " +
-                          (summary.saving >= 0
+                          (summary.cashFlowAfterExpense >= 0
                             ? "text-blue-600"
                             : "text-rose-500")
                         }
                       >
-                        {formatVND(summary.saving)}
+                        {formatVND(summary.cashFlowAfterExpense)}
                       </td>
                       <td
                         className={
                           "py-3 text-right " +
-                          (summary.saving >= 0
+                          (summary.cashFlowAfterExpense >= 0
                             ? "text-blue-600"
                             : "text-rose-500")
                         }
                       >
-                        {summary.savingRate}%
+                        {summary.cashFlowRate}%
                       </td>
                     </tr>
                     {spendingByCategory.map((item, i) => (
@@ -2839,13 +3155,14 @@ export default function ReportsPage() {
                 Export Center
               </h2>
               <p className="text-xs text-slate-500">
-                Xuất CSV/PDF cho kỳ {label} · gồm KPI, chart và dữ liệu chi tiết
+                CSV theo kỳ {label} · PDF in tab báo cáo đang mở
               </p>
             </div>
           </div>
           <div className="flex w-full gap-2 sm:w-auto sm:gap-3">
             <button
               onClick={exportCSV}
+              disabled={!isReportPeriodValid}
               className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
             >
               <Download size={15} />
@@ -2853,6 +3170,7 @@ export default function ReportsPage() {
             </button>
             <button
               onClick={exportPDF}
+              disabled={!isReportPeriodValid}
               className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 hover:bg-blue-700"
             >
               <FileText size={15} />
@@ -3052,7 +3370,7 @@ function CompareSection({
   data: {
     income: number | null;
     expense: number | null;
-    saving: number | null;
+    cashFlow: number | null;
   };
 }) {
   return (
@@ -3061,7 +3379,11 @@ function CompareSection({
       <div className="grid grid-cols-3 gap-2">
         <DeltaChip label="Thu nhập" delta={data.income} positive />
         <DeltaChip label="Chi phí thật" delta={data.expense} positive={false} />
-        <DeltaChip label="Tiết kiệm" delta={data.saving} positive />
+        <DeltaChip
+          label="Dòng tiền sau chi phí"
+          delta={data.cashFlow}
+          positive
+        />
       </div>
     </div>
   );
