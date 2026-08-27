@@ -25,15 +25,16 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
     );
   });
 
-  it("renders wallet-type classification as a compact read-only 3-column summary", () => {
+  it("renders wallet-type classification as a compact read-only 2+1 mobile summary", () => {
     const start = source.indexOf("{/* SECTION 2 · Wallet Types */}");
     const end = source.indexOf("SECTION 3 · Wallet List", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const section = source.slice(start, end);
 
-    expect(section).toContain('className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3"');
-    expect(section).toContain("walletStats.map((stat) => {");
+    expect(section).toContain('className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3"');
+    expect(section).toContain('index === 2 ? "col-span-2 sm:col-span-1" : ""');
+    expect(section).toContain("walletStats.map((stat, index) => {");
     expect(section).toContain("formatCompactWalletAmount(stat.total)");
     expect(section).not.toContain("openEditForm(");
     expect(section).not.toContain("setIsFormOpen(true)");

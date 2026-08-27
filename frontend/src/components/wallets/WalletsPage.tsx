@@ -951,15 +951,15 @@ export default function WalletsPage() {
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
           {!walletSnapshotReady ? (
-            <div className="col-span-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:rounded-3xl sm:p-4 sm:text-sm">
+            <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:col-span-3 sm:rounded-3xl sm:p-4 sm:text-sm">
               {isLoadingWallets
                 ? "Đang tải phân loại ví..."
                 : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
             </div>
           ) : (
-            walletStats.map((stat) => {
+            walletStats.map((stat, index) => {
               const percentage =
                 totalAssets > 0
                   ? Math.round((stat.total / totalAssets) * 100)
@@ -968,7 +968,7 @@ export default function WalletsPage() {
               return (
                 <div
                   key={stat.value}
-                  className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4"
+                  className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4 ${index === 2 ? "col-span-2 sm:col-span-1" : ""}`}
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <WalletIcon type={stat.value} compact />
