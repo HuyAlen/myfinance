@@ -35,16 +35,22 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(source).toContain("truncate text-[11px] font-black");
   });
 
-  it("compresses 50/30/20 rows without hiding canonical values", () => {
-    expect(source).toContain("mt-3 space-y-2.5 sm:mt-5 sm:space-y-3");
-    expect(source).toContain(
-      "rounded-2xl border p-3 sm:rounded-3xl sm:p-4",
+  it("removes the visible 50/30/20 rule while keeping fixed-cost planning", () => {
+    const renderStart = source.indexOf("// ─── RENDER");
+    const allocationChartStart = source.indexOf(
+      "{budgets.length > 0 && (",
+      renderStart,
     );
-    expect(source).toContain("mt-2.5 grid grid-cols-3 gap-1.5");
-    expect(source).toContain("mt-3 grid grid-cols-2 gap-2");
-    expect(source).toContain("bucket.actualAmount");
-    expect(source).toContain("bucket.targetAmount");
-    expect(source).toContain("bucket.difference");
+    const planningRender = source.slice(renderStart, allocationChartStart);
+
+    expect(planningRender).toContain("Chi phí cố định");
+    expect(planningRender).toContain(
+      'className="grid grid-cols-3 gap-2 sm:gap-3"',
+    );
+    expect(planningRender).not.toContain("Quy tắc phân bổ");
+    expect(planningRender).not.toContain("Khung 50/30/20");
+    expect(planningRender).not.toContain("Điểm tuân thủ");
+    expect(planningRender).not.toContain("v7Allocation.buckets.map");
   });
 
   it("reduces allocation-chart height for the mobile viewport", () => {
@@ -68,7 +74,7 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(actionSource).toContain("handleDelete(budget.id)");
   });
 
-  it("retains FINANCE-DATA-1B/1C and authoritative planning semantics", () => {
+  it("retains FINANCE-DATA-1B/1C data-path semantics after the UI removal", () => {
     expect(normalized).toContain(
       "{filteredBudgets.length === 0 && isLoadingBudgets && (",
     );
