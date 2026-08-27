@@ -3,15 +3,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * SAVINGS-UX-1.1 — Mobile Single-Viewport Action Sheets.
+ * SAVINGS-UX-1.2 — Mobile Full-Screen Action Flows.
  *
- * Source-inspection contract: edit/create and money-movement sheets must stay
- * bounded by the real dynamic viewport on mobile Safari, use safe-area-aware
- * chrome, and keep their primary controls compact enough to fit in one
- * iPhone web viewport. Internal scrolling remains only as a fallback for
- * unusually small viewports, keyboard overlap, or validation errors.
+ * Source-inspection contract: edit/create and money-movement actions use the
+ * entire real dynamic viewport on mobile Safari instead of rendering as
+ * floating/bottom-sheet popups. Desktop keeps the existing modal treatment.
+ * The body may still scroll as a keyboard/small-viewport fallback, while
+ * header and primary actions remain fixed inside the full-screen surface.
  */
-describe("SavingsPage mobile action sheets stay within one dynamic viewport", () => {
+describe("SavingsPage uses full-screen mobile action surfaces", () => {
   const source = readFileSync(
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
@@ -30,60 +30,77 @@ describe("SavingsPage mobile action sheets stay within one dynamic viewport", ()
   const editSource = source.slice(editStart, movementStart);
   const movementSource = source.slice(movementStart, historyStart);
 
-  it("bounds the edit/create sheet to the padded dynamic viewport instead of forcing h-dvh", () => {
+  it("renders edit/create as a true full-screen mobile surface, with modal chrome only at sm+", () => {
     expect(editSource).toContain(
-      "pt-[calc(0.5rem+env(safe-area-inset-top))]",
+      "fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45",
     );
-    expect(editSource).toContain("max-h-full w-full max-w-xl");
-    expect(editSource).not.toContain("flex h-dvh w-full");
     expect(editSource).toContain(
+      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+    );
+    expect(editSource).toContain(
+      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl sm:rounded-4xl",
+    );
+    expect(editSource).not.toContain("rounded-[28px]");
+    expect(editSource).not.toContain(
+      "flex items-end justify-center bg-slate-950/45 px-2",
+    );
+  });
+
+  it("renders deposit/withdraw/settlement as a true full-screen mobile surface instead of the old popup", () => {
+    expect(movementSource).toContain(
+      "fixed inset-0 z-110 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45",
+    );
+    expect(movementSource).toContain(
+      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+    );
+    expect(movementSource).toContain(
+      "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl",
+    );
+    expect(movementSource).not.toContain("rounded-[28px]");
+    expect(movementSource).not.toContain("max-h-[92dvh]");
+  });
+
+  it("removes the invisible outside-click backdrop from mobile focus order while preserving desktop dismissal", () => {
+    expect(editSource).toContain(
+      'aria-label="Đóng form khoản tiết kiệm"\n            className="absolute inset-0 hidden cursor-default sm:block"',
+    );
+    expect(movementSource).toContain(
+      'aria-label="Đóng giao dịch tiết kiệm"\n            className="absolute inset-0 hidden cursor-default sm:block"',
+    );
+  });
+
+  it("uses iPhone safe areas for top chrome and bottom actions", () => {
+    expect(editSource).toContain(
+      "pt-[calc(0.75rem+env(safe-area-inset-top))]",
+    );
+    expect(editSource).toContain(
+      "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
+    );
+    expect(movementSource).toContain(
+      "pt-[calc(0.75rem+env(safe-area-inset-top))]",
+    );
+    expect(movementSource).toContain(
       "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
     );
   });
 
-  it("keeps edit metadata dense on mobile while retaining 16px form text to avoid iOS focus zoom", () => {
+  it("keeps only the body scrollable as a keyboard/small-height fallback", () => {
     expect(editSource).toContain(
-      "mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5",
-    );
-    expect(editSource).toContain('className="col-span-2"');
-    expect(editSource).toContain("min-h-10");
-    expect(editSource).toContain("text-base font-semibold");
-    expect(editSource).toContain("sm:min-h-11");
-  });
-
-  it("reduces non-essential edit chrome on mobile but keeps it available on larger screens", () => {
-    expect(editSource).toContain(
-      'className="hidden text-[11px] font-black uppercase',
-    );
-    expect(editSource).toContain(
-      'className="mt-0.5 hidden text-sm font-medium text-slate-500 sm:block"',
-    );
-    expect(editSource).toContain("Chỉ chỉnh thông tin");
-  });
-
-  it("keeps body scrolling only as a fallback while header and actions remain fixed inside the sheet", () => {
-    expect(editSource).toContain(
-      "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
+      "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
     expect(editSource).toContain("grid shrink-0 grid-cols-2");
     expect(movementSource).toContain(
-      "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
+      "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
     expect(movementSource).toContain("grid shrink-0 grid-cols-2");
   });
 
-  it("replaces the old 92dvh transaction cap with a sheet bounded to the real available viewport", () => {
-    expect(movementSource).toContain(
-      "pt-[calc(0.5rem+env(safe-area-inset-top))]",
-    );
-    expect(movementSource).toContain("max-h-full w-full max-w-lg");
-    expect(movementSource).not.toContain("max-h-[92dvh]");
-    expect(movementSource).toContain(
-      "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
-    );
+  it("retains 16px form text on mobile to avoid Safari focus zoom", () => {
+    expect(editSource).toContain("text-base font-semibold");
+    expect(movementSource).toContain("text-base font-semibold");
   });
 
-  it("compresses the money-movement flow into one mobile frame without removing required controls", () => {
+  it("keeps the focused money-movement controls and before/after balances intact", () => {
     expect(movementSource).toContain(
       "mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5",
     );
@@ -96,17 +113,7 @@ describe("SavingsPage mobile action sheets stay within one dynamic viewport", ()
     expect(movementSource).toContain("transactionWalletBalanceAfter");
   });
 
-  it("moves current saving balance into the compact transaction header instead of spending a full card row", () => {
-    expect(movementSource).toContain(
-      "{formatCurrency(selectedSaving.balance)}",
-    );
-    expect(movementSource).toContain(
-      '<span className="truncate">{selectedSaving.name}</span>',
-    );
-    expect(movementSource).not.toContain("Tiết kiệm hiện tại");
-  });
-
-  it("keeps settlement authoritative and compact", () => {
+  it("keeps settlement authoritative", () => {
     expect(movementSource).toContain(
       'readOnly={transactionForm.type === "settlement"}',
     );

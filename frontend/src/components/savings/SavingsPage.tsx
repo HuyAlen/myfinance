@@ -2156,20 +2156,20 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: create/edit metadata is intentionally separate from money movement and history. */}
       {isAddOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
           <button
             type="button"
             aria-label="Đóng form khoản tiết kiệm"
-            className="absolute inset-0 cursor-default"
+            className="absolute inset-0 hidden cursor-default sm:block"
             onClick={closeAddModal}
           />
 
           <form
             onSubmit={handleSubmitSaving}
-            className="relative z-10 flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-slate-950/15 sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"
+            className="relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl sm:rounded-4xl sm:shadow-2xl sm:shadow-slate-950/15"
           >
-            {/* SAVINGS-UX-1.1: compact header + dynamic-viewport bounded sheet for real iPhone web viewports. */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:px-6 sm:py-4">
+            {/* SAVINGS-UX-1.2: mobile edit/create is a true full-screen surface; desktop keeps the modal treatment. */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="min-w-0">
                 <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:block">
                   {isEditing ? "EDIT SAVING" : "NEW SAVING"}
@@ -2196,7 +2196,7 @@ export default function SavingsPage({
               </button>
             </div>
 
-            <div className="flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
               <div className="grid gap-3 sm:gap-4">
                 {isEditing && selectedSaving ? (
                   <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 sm:rounded-3xl sm:p-4">
@@ -2477,17 +2477,17 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: focused money-movement sheet. */}
       {transactionSavingId && selectedSaving ? (
-        <div className="fixed inset-0 z-110 flex items-end justify-center bg-slate-950/45 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-110 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
           <button
             type="button"
             aria-label="Đóng giao dịch tiết kiệm"
-            className="absolute inset-0 cursor-default"
+            className="absolute inset-0 hidden cursor-default sm:block"
             onClick={closeMoneyMovementModal}
           />
 
-          <div className="relative z-10 flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
-            {/* SAVINGS-UX-1.1: the whole transaction sheet is viewport-bounded; body scroll is fallback only. */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl sm:shadow-2xl">
+            {/* SAVINGS-UX-1.2: mobile money movement is a true full-screen surface; desktop keeps the modal treatment. */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="min-w-0">
                 <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 sm:block">
                   MONEY MOVEMENT
@@ -2517,7 +2517,7 @@ export default function SavingsPage({
               </button>
             </div>
 
-            <div className="flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4">
               <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1 sm:rounded-2xl">
                 {(["deposit", "withdraw", "settlement"] as const).map((type) => (
                   <button
