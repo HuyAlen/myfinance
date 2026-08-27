@@ -9,8 +9,10 @@ import {
   Edit3,
   Folder,
   Layers3,
+  MoreHorizontal,
   Plus,
   Search,
+  SlidersHorizontal,
   Tag,
   Trash2,
   Repeat2,
@@ -220,6 +222,7 @@ export default function CategoriesPage() {
   const [hasLoadedCategorySnapshot, setHasLoadedCategorySnapshot] =
     useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -283,7 +286,7 @@ export default function CategoriesPage() {
   }, [reloadData, reloadWallets]);
 
   useEffect(() => {
-    if (!isFormOpen) return;
+    if (!isFormOpen && !isFilterOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -291,7 +294,7 @@ export default function CategoriesPage() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isFormOpen]);
+  }, [isFilterOpen, isFormOpen]);
 
   useRealtimeTable(["categories", "transactions", "budgets"], reloadData);
   useRealtimeTable(["wallets"], reloadWallets);
@@ -406,6 +409,13 @@ export default function CategoriesPage() {
     sortBy,
     typeFilter,
   ]);
+
+  const activeFilterCount = [
+    typeFilter !== "all",
+    groupFilter !== "all",
+    activityFilter !== "all",
+    sortBy !== "usage",
+  ].filter(Boolean).length;
 
   function resetFilters() {
     setSearch("");
@@ -596,17 +606,17 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="space-y-4 overflow-x-hidden pb-24 sm:space-y-5 md:pb-0">
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-600">
+    <div className="space-y-3 overflow-x-hidden pb-24 sm:space-y-5 md:pb-0">
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="flex items-center justify-between gap-3 sm:items-end">
+          <div className="min-w-0">
+            <p className="hidden text-[11px] font-black uppercase tracking-[0.2em] text-blue-600 sm:block">
               Category Management
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="truncate text-xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
               Danh mục thu chi
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 hidden text-sm text-slate-500 sm:block">
               Quản lý loại giao dịch, nhóm vận hành và cấu hình định kỳ.
             </p>
           </div>
@@ -614,14 +624,15 @@ export default function CategoriesPage() {
             type="button"
             onClick={() => openCreateForm("variable")}
             disabled={!hasLoadedCategorySnapshot || Boolean(categoriesLoadError)}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/70 transition hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none disabled:hover:bg-slate-300"
+            aria-label="Thêm danh mục"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-200/70 transition hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none disabled:hover:bg-slate-300 sm:h-auto sm:w-auto sm:gap-2 sm:px-5 sm:py-3 sm:text-sm sm:font-bold"
           >
-            <Plus size={17} />
-            Thêm danh mục
+            <Plus size={18} />
+            <span className="hidden sm:inline">Thêm danh mục</span>
           </button>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="-mx-1 mt-3 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:mt-5 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
           {hasLoadedCategorySnapshot ? (
             <>
               <OverviewCard
@@ -671,19 +682,15 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-black text-slate-900">
-              Loại danh mục
-            </h2>
-            <p className="text-xs text-slate-500">
-              Chọn một loại để lọc nhanh hoặc tạo danh mục giao dịch mới.
-            </p>
-          </div>
+      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="hidden sm:block">
+          <h2 className="text-base font-black text-slate-900">Loại danh mục</h2>
+          <p className="text-xs text-slate-500">
+            Chọn một loại để lọc nhanh hoặc tạo danh mục giao dịch mới.
+          </p>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3">
           {GROUP_ORDER.map((group) => {
             const meta = GROUP_META[group];
             const stat = hasLoadedCategorySnapshot ? groupStats[group] : null;
@@ -693,7 +700,7 @@ export default function CategoriesPage() {
               <div
                 key={group}
                 className={
-                  "rounded-3xl border p-4 transition " +
+                  "min-w-0 rounded-2xl border p-2.5 transition sm:rounded-3xl sm:p-4 " +
                   (selected
                     ? `${meta.border} ${meta.bg} ring-2 ring-blue-100`
                     : "border-slate-200 bg-white hover:border-blue-200")
@@ -704,31 +711,31 @@ export default function CategoriesPage() {
                   onClick={() => setGroupFilter(selected ? "all" : group)}
                   disabled={!hasLoadedCategorySnapshot}
                   className="w-full text-left disabled:cursor-not-allowed"
+                  aria-pressed={selected}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center justify-between gap-1.5 sm:items-start sm:gap-3">
                     <div
-                      className={`flex size-9 items-center justify-center rounded-2xl text-white ${meta.iconBg}`}
+                      className={`flex size-7 shrink-0 items-center justify-center rounded-xl text-white sm:size-9 sm:rounded-2xl ${meta.iconBg}`}
                     >
                       {group === "income" ? (
-                        <Tag size={16} />
+                        <Tag size={14} />
                       ) : (
-                        <Folder size={16} />
+                        <Folder size={14} />
                       )}
                     </div>
-                    <span className="text-2xl font-black text-slate-900">
+                    <span className="text-lg font-black tabular-nums text-slate-900 sm:text-2xl">
                       {stat ? stat.count : "—"}
                     </span>
                   </div>
-                  <p className={`mt-3 text-sm font-black ${meta.color}`}>
-                    {meta.label}
+                  <p className={`mt-2 truncate text-[11px] font-black sm:mt-3 sm:text-sm ${meta.color}`}>
+                    <span className="sm:hidden">{meta.shortLabel}</span>
+                    <span className="hidden sm:inline">{meta.label}</span>
                   </p>
-                  <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-slate-500">
+                  <p className="mt-1 hidden line-clamp-2 min-h-8 text-[11px] leading-4 text-slate-500 sm:block">
                     {meta.description}
                   </p>
-                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
-                    <span>
-                      {stat ? `${stat.active} đang dùng` : "Đang tải"}
-                    </span>
+                  <div className="mt-3 hidden items-center justify-between text-[10px] text-slate-400 sm:flex">
+                    <span>{stat ? `${stat.active} đang dùng` : "Đang tải"}</span>
                     <span>
                       {stat
                         ? stat.amount > 0
@@ -744,7 +751,7 @@ export default function CategoriesPage() {
                   disabled={
                     !hasLoadedCategorySnapshot || Boolean(categoriesLoadError)
                   }
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 hidden w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex"
                 >
                   <Plus size={12} />
                   Thêm vào nhóm
@@ -755,12 +762,12 @@ export default function CategoriesPage() {
         </div>
       </section>
 
-      <section className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="grid gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
+      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-5">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[1fr_auto] sm:gap-3">
           <div className="relative">
             <Search
               size={15}
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 sm:left-4"
             />
             <input
               type="text"
@@ -768,7 +775,7 @@ export default function CategoriesPage() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Tìm danh mục..."
               disabled={!hasLoadedCategorySnapshot}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-9 text-base outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:pl-10 sm:pr-10 sm:text-sm"
             />
             {search && (
               <button
@@ -781,11 +788,27 @@ export default function CategoriesPage() {
               </button>
             )}
           </div>
-          <div className="text-xs text-slate-500">
+
+          <button
+            type="button"
+            onClick={() => setIsFilterOpen(true)}
+            disabled={!hasLoadedCategorySnapshot}
+            className="relative inline-flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
+            aria-label="Mở bộ lọc danh mục"
+          >
+            <SlidersHorizontal size={16} />
+            Lọc
+            {activeFilterCount > 0 && (
+              <span className="flex size-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <div className="hidden text-xs text-slate-500 sm:block">
             {hasLoadedCategorySnapshot ? (
               <>
-                Hiển thị{" "}
-                <b className="text-slate-800">{filteredCategories.length}</b>/
+                Hiển thị <b className="text-slate-800">{filteredCategories.length}</b>/
                 {overview.total} danh mục
               </>
             ) : (
@@ -794,7 +817,24 @@ export default function CategoriesPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[11px] text-slate-500 sm:hidden">
+          <span>
+            {hasLoadedCategorySnapshot
+              ? `${filteredCategories.length}/${overview.total} danh mục`
+              : "Đang tải dữ liệu..."}
+          </span>
+          {(search || activeFilterCount > 0) && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="font-bold text-blue-600"
+            >
+              Xóa lọc
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 hidden gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-4">
           <FilterSelect
             label="Loại"
             disabled={!hasLoadedCategorySnapshot}
@@ -846,44 +886,141 @@ export default function CategoriesPage() {
         </div>
       </section>
 
+      {isFilterOpen && (
+        <div className="fixed inset-0 z-90 flex items-end bg-slate-900/35 sm:hidden" role="presentation" onClick={() => setIsFilterOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bộ lọc danh mục"
+            className="w-full rounded-t-4xl bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Bộ lọc danh mục</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {activeFilterCount > 0
+                    ? `${activeFilterCount} bộ lọc đang áp dụng`
+                    : "Lọc và sắp xếp danh sách"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                className="flex size-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-500"
+                aria-label="Đóng bộ lọc"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              <FilterSelect
+                label="Loại"
+                value={typeFilter}
+                onChange={(value) => setTypeFilter(value as TypeFilter)}
+                options={[
+                  { value: "all", label: "Tất cả" },
+                  { value: "income", label: "Thu nhập" },
+                  { value: "expense", label: "Chi tiêu" },
+                ]}
+              />
+              <FilterSelect
+                label="Loại danh mục"
+                value={groupFilter}
+                onChange={(value) => setGroupFilter(value as GroupFilter)}
+                options={[
+                  { value: "all", label: "Tất cả nhóm" },
+                  ...GROUP_ORDER.map((group) => ({
+                    value: group,
+                    label: `${GROUP_META[group].label} (${groupStats[group].count})`,
+                  })),
+                ]}
+              />
+              <FilterSelect
+                label="Trạng thái"
+                value={activityFilter}
+                onChange={(value) => setActivityFilter(value as ActivityFilter)}
+                options={[
+                  { value: "all", label: "Tất cả" },
+                  { value: "active", label: "Đang sử dụng" },
+                  { value: "inactive", label: "Chưa sử dụng" },
+                ]}
+              />
+              <FilterSelect
+                label="Sắp xếp"
+                value={sortBy}
+                onChange={(value) => setSortBy(value as SortOption)}
+                options={[
+                  { value: "usage", label: "Dùng nhiều nhất" },
+                  { value: "amount", label: "Tổng tiền cao nhất" },
+                  { value: "name", label: "Tên A–Z" },
+                ]}
+              />
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="min-h-11 flex-1 rounded-2xl border border-slate-200 text-sm font-bold text-slate-600"
+              >
+                Đặt lại
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen(false)}
+                className="min-h-11 flex-1 rounded-2xl bg-blue-600 text-sm font-bold text-white"
+              >
+                Xem {filteredCategories.length} danh mục
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section>
-        <div className="grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
+        <div className="grid gap-2.5 sm:gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
           {filteredCategories.map((category) => {
             const meta = GROUP_META[category.group];
             return (
               <article
                 key={category.id}
-                className="group rounded-4xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md sm:p-5"
+                className="group rounded-3xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-blue-200 hover:shadow-md sm:rounded-4xl sm:p-5 lg:hover:-translate-y-0.5"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex items-center justify-between gap-2.5 sm:items-start sm:gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
                     <div
-                      className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm ${meta.iconBg}`}
+                      className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm sm:size-11 sm:rounded-2xl ${meta.iconBg}`}
                     >
                       {category.group === "income" ? (
-                        <Tag size={18} />
+                        <Tag size={16} />
                       ) : (
-                        <Folder size={18} />
+                        <Folder size={16} />
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="text-base font-black leading-tight text-slate-900 wrap-anywhere">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-black leading-tight text-slate-900 sm:whitespace-normal sm:text-base sm:wrap-anywhere">
                         {category.name}
                       </h3>
-                      <div className="mt-1 flex flex-wrap gap-1.5">
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[10px]">
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.bg} ${meta.color} ${meta.border}`}
+                          className={`shrink-0 rounded-full border px-1.5 py-0.5 font-bold sm:px-2 ${meta.bg} ${meta.color} ${meta.border}`}
                         >
                           {meta.shortLabel}
                         </span>
-
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${category.isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}
+                          className={`inline-flex min-w-0 items-center gap-1 font-bold ${category.isActive ? "text-emerald-700" : "text-slate-400"}`}
                         >
-                          {category.isActive ? "Đang sử dụng" : "Chưa sử dụng"}
+                          <span
+                            className={`size-1.5 shrink-0 rounded-full ${category.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
+                          />
+                          <span className="truncate">
+                            {category.isActive ? "Đang sử dụng" : "Chưa sử dụng"}
+                          </span>
                         </span>
                         {category.isRecurring && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-700">
+                          <span className="inline-flex shrink-0 items-center gap-1 font-bold text-cyan-700">
                             <Repeat2 size={10} />
                             Định kỳ
                           </span>
@@ -891,11 +1028,39 @@ export default function CategoriesPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1.5 opacity-100 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100">
+
+                  <details className="relative shrink-0 sm:hidden">
+                    <summary
+                      className="flex size-9 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 text-slate-500 [&::-webkit-details-marker]:hidden"
+                      aria-label={`Thao tác cho ${category.name}`}
+                    >
+                      <MoreHorizontal size={17} />
+                    </summary>
+                    <div className="absolute right-0 top-10 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(category)}
+                        className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Edit3 size={14} />
+                        Sửa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(category)}
+                        className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 size={14} />
+                        Xóa
+                      </button>
+                    </div>
+                  </details>
+
+                  <div className="hidden shrink-0 gap-1.5 opacity-100 sm:flex lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => openEditForm(category)}
-                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:size-8"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                       aria-label={`Sửa ${category.name}`}
                     >
                       <Edit3 size={13} />
@@ -903,7 +1068,7 @@ export default function CategoriesPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(category)}
-                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500 sm:size-8"
+                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
                       aria-label={`Xóa ${category.name}`}
                     >
                       <Trash2 size={13} />
@@ -911,30 +1076,26 @@ export default function CategoriesPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-3">
+                <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-slate-100 pt-2.5 sm:mt-4 sm:rounded-2xl sm:border-0 sm:bg-slate-50 sm:p-3">
                   <div className="min-w-0">
-                    <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-wide text-slate-400">
+                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Giao dịch
                     </p>
-                    <p className="mt-1 whitespace-nowrap text-[clamp(1.1rem,5.5vw,1.25rem)] font-black tabular-nums leading-none text-slate-900">
+                    <p className="mt-0.5 text-sm font-black tabular-nums text-slate-900 sm:text-xl">
                       {category.count}
                     </p>
                   </div>
                   <div className="min-w-0 text-right">
-                    <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-wide text-slate-400">
+                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Tổng tiền
                     </p>
                     <p
-                      className={`mt-1 whitespace-nowrap text-[clamp(0.8rem,4vw,1.05rem)] font-black tabular-nums leading-none tracking-tight ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
+                      className={`mt-0.5 max-w-[11rem] truncate text-sm font-black tabular-nums tracking-tight sm:text-base ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
                     >
                       {category.total > 0 ? formatVND(category.total) : "—"}
                     </p>
                   </div>
                 </div>
-
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  {meta.description}
-                </p>
               </article>
             );
           })}
@@ -942,7 +1103,7 @@ export default function CategoriesPage() {
           {/* FINANCE-DATA-1B: an initial read failure must not present as
               "Không tìm thấy danh mục" with a misleading "clear filter" CTA. */}
           {!hasLoadedCategorySnapshot && isLoadingCategories && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-8 text-center sm:p-12 md:col-span-2 xl:col-span-3">
               <div className="flex size-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-400">
                 <Folder size={22} />
               </div>
@@ -955,7 +1116,7 @@ export default function CategoriesPage() {
           {!hasLoadedCategorySnapshot &&
             !isLoadingCategories &&
             categoriesLoadError && (
-              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-8 text-center sm:p-12 md:col-span-2 xl:col-span-3">
                 <div className="flex size-14 items-center justify-center rounded-3xl bg-rose-100 text-rose-500">
                   <Folder size={22} />
                 </div>
@@ -969,7 +1130,7 @@ export default function CategoriesPage() {
             )}
 
           {hasLoadedCategorySnapshot && filteredCategories.length === 0 && (
-              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-8 text-center sm:p-12 md:col-span-2 xl:col-span-3">
                 <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
                   <Folder size={22} />
                 </div>
@@ -1017,7 +1178,7 @@ export default function CategoriesPage() {
             <form
               onSubmit={handleSubmit}
               aria-busy={isSubmitting}
-              className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto overscroll-contain px-4 py-3 [-webkit-overflow-scrolling:touch] sm:max-h-[calc(100dvh-8rem)] sm:p-6"
+              className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto overscroll-contain px-4 py-3 scroll-pb-[calc(6rem+env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] sm:max-h-[calc(100dvh-8rem)] sm:p-6"
             >
               <label className="block">
                 <span className="mb-1.5 block text-sm font-black text-slate-700">
@@ -1034,7 +1195,7 @@ export default function CategoriesPage() {
                   }
                   placeholder="VD: Ăn uống, Lương, Di chuyển..."
                   autoFocus
-                  className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
+                  className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base outline-none transition focus:border-blue-400 focus:bg-white sm:min-h-10 sm:text-sm"
                 />
               </label>
 
@@ -1042,7 +1203,7 @@ export default function CategoriesPage() {
                 <span className="mb-2 block text-sm font-black text-slate-700">
                   Loại danh mục
                 </span>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-2">
                   {GROUP_ORDER.map((group) => {
                     const meta = GROUP_META[group];
                     const selected = form.group === group;
@@ -1057,7 +1218,7 @@ export default function CategoriesPage() {
                             type: getTypeFromGroup(group),
                           }))
                         }
-                        className={`flex items-start gap-3 rounded-2xl border p-2.5 text-left transition ${selected ? `${meta.border} ${meta.bg} ring-2 ring-blue-100` : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
+                        className={`flex min-w-0 flex-col items-center gap-1.5 rounded-2xl border p-2 text-center transition sm:flex-row sm:items-start sm:gap-3 sm:p-2.5 sm:text-left ${selected ? `${meta.border} ${meta.bg} ring-2 ring-blue-100` : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
                       >
                         <span
                           className={`flex size-8 shrink-0 items-center justify-center rounded-xl text-white ${meta.iconBg}`}
@@ -1070,11 +1231,11 @@ export default function CategoriesPage() {
                         </span>
                         <span className="min-w-0">
                           <span
-                            className={`block text-sm font-black ${selected ? meta.color : "text-slate-700"}`}
+                            className={`block truncate text-[11px] font-black sm:text-sm ${selected ? meta.color : "text-slate-700"}`}
                           >
                             {meta.label}
                           </span>
-                          <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">
+                          <span className="mt-0.5 hidden text-[11px] leading-4 text-slate-400 sm:block">
                             {meta.description}
                           </span>
                         </span>
@@ -1137,7 +1298,7 @@ export default function CategoriesPage() {
                               .value as RecurrenceFrequency,
                           }))
                         }
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-base font-bold text-slate-700 outline-none focus:border-cyan-400 sm:text-sm"
                       >
                         <option value="daily">Hàng ngày</option>
                         <option value="weekly">Hàng tuần</option>
@@ -1168,7 +1329,7 @@ export default function CategoriesPage() {
                           }}
                           placeholder="0"
                           autoComplete="off"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 pr-12 text-right text-sm font-bold tabular-nums outline-none focus:border-cyan-400"
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 pr-12 text-right text-base font-bold tabular-nums outline-none focus:border-cyan-400 sm:text-sm"
                         />
                         <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
                           ₫
@@ -1188,7 +1349,7 @@ export default function CategoriesPage() {
                             defaultWalletId: event.target.value,
                           }))
                         }
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-cyan-400"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-base font-bold text-slate-700 outline-none focus:border-cyan-400 sm:text-sm"
                       >
                         <option value="">Chọn ví</option>
                         {wallets.map((wallet) => (
@@ -1212,7 +1373,7 @@ export default function CategoriesPage() {
                             nextRunDate: event.target.value,
                           }))
                         }
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-cyan-400"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-base outline-none focus:border-cyan-400 sm:text-sm"
                       />
                     </label>
                   </div>
@@ -1224,7 +1385,7 @@ export default function CategoriesPage() {
                 onDismiss={() => setSaveError(null)}
               />
 
-              <div className="mt-auto flex shrink-0 gap-3 border-t border-slate-100 bg-white pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:mt-6 sm:border-t-0 sm:pb-0">
+              <div className="sticky bottom-0 z-10 -mx-4 mt-4 flex shrink-0 gap-3 border-t border-slate-100 bg-white px-4 pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:mt-6 sm:border-t-0 sm:px-0 sm:pb-0">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
@@ -1261,7 +1422,7 @@ export default function CategoriesPage() {
 function OverviewCardSkeleton() {
   return (
     <div
-      className="h-[94px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50"
+      className="h-[72px] min-w-[112px] snap-start animate-pulse rounded-2xl border border-slate-200 bg-slate-50 sm:h-[94px] sm:min-w-0 sm:rounded-3xl"
       aria-hidden="true"
     />
   );
@@ -1287,15 +1448,15 @@ function OverviewCard({
   }[tone];
 
   return (
-    <div className={`rounded-3xl border p-4 ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-wide opacity-70">
+    <div className={`min-w-[112px] snap-start rounded-2xl border p-3 sm:min-w-0 sm:rounded-3xl sm:p-4 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[9px] font-black uppercase tracking-wide opacity-70 sm:text-[10px]">
             {label}
           </p>
-          <p className="mt-1 text-2xl font-black">{value}</p>
+          <p className="mt-0.5 text-xl font-black tabular-nums sm:mt-1 sm:text-2xl">{value}</p>
         </div>
-        <div className="flex size-10 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm sm:size-10 sm:rounded-2xl">
           {icon}
         </div>
       </div>
@@ -1325,7 +1486,7 @@ function FilterSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
