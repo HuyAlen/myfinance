@@ -66,7 +66,7 @@ describe("SavingsPage separates edit, money movement, and history flows", () => 
     expect(movementSource).toContain("handleAddTransaction()");
     expect(movementSource).toContain("transactionSavingBalanceAfter");
     expect(movementSource).toContain("transactionWalletBalanceAfter");
-    expect(movementSource).toContain("Tất toán luôn sử dụng toàn bộ số dư hiện tại.");
+    expect(movementSource).toContain("Dùng toàn bộ số dư hiện tại.");
   });
 
   it("provides a read-only history sheet with no form controls", () => {

@@ -2156,7 +2156,7 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: create/edit metadata is intentionally separate from money movement and history. */}
       {isAddOpen ? (
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng form khoản tiết kiệm"
@@ -2166,19 +2166,20 @@ export default function SavingsPage({
 
           <form
             onSubmit={handleSubmitSaving}
-            className="relative z-10 flex h-dvh w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl shadow-slate-950/15 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"
+            className="relative z-10 flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-slate-950/15 sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl"
           >
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
+            {/* SAVINGS-UX-1.1: compact header + dynamic-viewport bounded sheet for real iPhone web viewports. */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">
+                <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:block">
                   {isEditing ? "EDIT SAVING" : "NEW SAVING"}
                 </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+                <h2 className="truncate text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
                   {isEditing
                     ? "Chỉnh sửa khoản tiết kiệm"
                     : "Tạo khoản tiết kiệm mới"}
                 </h2>
-                <p className="mt-1 text-sm font-medium text-slate-500">
+                <p className="mt-0.5 hidden text-sm font-medium text-slate-500 sm:block">
                   {isEditing
                     ? "Chỉ cập nhật thông tin. Nạp, rút và tất toán được thực hiện ở thao tác riêng."
                     : "Chọn ví nguồn và nhập các thông tin cần thiết."}
@@ -2188,54 +2189,63 @@ export default function SavingsPage({
               <button
                 type="button"
                 onClick={closeAddModal}
-                className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900 sm:size-9"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
                 aria-label="Đóng"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
-            <div className="flex-1 touch-pan-y overflow-y-auto px-4 py-4 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
-              <div className="grid gap-4">
+            <div className="flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
+              <div className="grid gap-3 sm:gap-4">
                 {isEditing && selectedSaving ? (
-                  <div className="flex items-center justify-between gap-4 rounded-3xl border border-blue-100 bg-blue-50/60 p-4">
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 sm:rounded-3xl sm:p-4">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
+                      <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-500 sm:text-[10px]">
                         Số dư hiện tại
                       </p>
-                      <p className="mt-1 wrap-break-word text-2xl font-black text-blue-700">
+                      <p className="mt-0.5 wrap-break-word text-lg font-black leading-tight text-blue-700 sm:mt-1 sm:text-2xl">
                         {formatCurrency(selectedSaving.balance)}
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        {getSavingTypeLabel(selectedSaving.type)}
-                      </p>
                     </div>
-                    <span
-                      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${getSavingStatus(selectedSaving).className}`}
-                    >
-                      <CheckCircle2 size={12} />
-                      {getSavingStatus(selectedSaving).label}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black sm:px-2.5 sm:py-1 sm:text-xs ${getSavingStatus(selectedSaving).className}`}
+                      >
+                        <CheckCircle2 size={11} />
+                        {getSavingStatus(selectedSaving).label}
+                      </span>
+                      <span className="max-w-36 truncate text-[10px] font-semibold text-slate-500 sm:max-w-none sm:text-xs">
+                        {getSavingTypeLabel(selectedSaving.type)}
+                      </span>
+                    </div>
                   </div>
                 ) : null}
 
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                      Thông tin
-                    </p>
-                    <h3 className="mt-1 text-base font-black text-slate-950">
-                      {isEditing ? "Thông tin khoản" : "Thông tin khoản mới"}
-                    </h3>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3 sm:rounded-3xl sm:p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-500 sm:text-xs sm:tracking-[0.2em]">
+                        Thông tin
+                      </p>
+                      <h3 className="mt-0.5 text-sm font-black text-slate-950 sm:mt-1 sm:text-base">
+                        {isEditing ? "Thông tin khoản" : "Thông tin khoản mới"}
+                      </h3>
+                    </div>
+                    {isEditing ? (
+                      <span className="text-[10px] font-semibold text-slate-400 sm:hidden">
+                        Chỉ chỉnh thông tin
+                      </span>
+                    ) : null}
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <label>
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  <div className="mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
+                    <label className="col-span-2">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         Tên khoản
                       </span>
-                      <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                        <PiggyBank size={18} className="shrink-0 text-blue-500" />
+                      <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:gap-3 sm:rounded-2xl sm:px-4">
+                        <PiggyBank size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                         <input
                           value={form.name}
                           onChange={(event) => updateForm("name", event.target.value)}
@@ -2245,8 +2255,8 @@ export default function SavingsPage({
                       </div>
                     </label>
 
-                    <label>
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         Loại tiết kiệm
                       </span>
                       <select
@@ -2254,7 +2264,7 @@ export default function SavingsPage({
                         onChange={(event) =>
                           updateForm("type", event.target.value as SavingType)
                         }
-                        className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:text-sm"
+                        className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:rounded-2xl sm:px-4 sm:text-sm"
                       >
                         <option value="savings_account">Tài khoản tiết kiệm</option>
                         <option value="term_deposit">Tiền gửi có kỳ hạn</option>
@@ -2263,13 +2273,33 @@ export default function SavingsPage({
                       </select>
                     </label>
 
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
+                        {isEditing ? "Ví liên kết" : "Ví nguồn"}
+                      </span>
+                      <select
+                        value={form.walletId}
+                        onChange={(event) => updateForm("walletId", event.target.value)}
+                        className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:rounded-2xl sm:px-4 sm:text-sm"
+                      >
+                        <option value="">
+                          {isEditing ? "Chọn ví liên kết" : "Chọn ví nguồn"}
+                        </option>
+                        {wallets.map((wallet) => (
+                          <option key={wallet.id} value={wallet.id}>
+                            {wallet.name} · {formatCurrency(wallet.balance)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
                     {!isEditing ? (
-                      <label>
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      <label className="col-span-2 sm:col-span-1">
+                        <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                           {formConfig.amountLabel}
                         </span>
-                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                          <Banknote size={18} className="shrink-0 text-blue-500" />
+                        <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:gap-3 sm:rounded-2xl sm:px-4">
+                          <Banknote size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                           <input
                             value={form.balance}
                             inputMode="numeric"
@@ -2286,33 +2316,19 @@ export default function SavingsPage({
                       </label>
                     ) : null}
 
-                    <label>
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        {isEditing ? "Ví liên kết" : "Ví nguồn"}
-                      </span>
-                      <select
-                        value={form.walletId}
-                        onChange={(event) => updateForm("walletId", event.target.value)}
-                        className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:text-sm"
-                      >
-                        <option value="">
-                          {isEditing ? "Chọn ví liên kết" : "Chọn ví nguồn"}
-                        </option>
-                        {wallets.map((wallet) => (
-                          <option key={wallet.id} value={wallet.id}>
-                            {wallet.name} · {formatCurrency(wallet.balance)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
                     {formConfig.showInterestRate ? (
-                      <label>
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      <label
+                        className={
+                          isEditing && !formConfig.showMaturityDate
+                            ? "col-span-2"
+                            : "min-w-0"
+                        }
+                      >
+                        <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                           {formConfig.interestLabel || "Lãi suất / năm"}
                         </span>
-                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                          <Percent size={18} className="shrink-0 text-blue-500" />
+                        <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:gap-3 sm:rounded-2xl sm:px-4">
+                          <Percent size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                           <input
                             value={form.interestRate}
                             inputMode="decimal"
@@ -2327,30 +2343,30 @@ export default function SavingsPage({
                     ) : null}
 
                     {formConfig.showMaturityDate ? (
-                      <label>
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      <label className="min-w-0">
+                        <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                           {formConfig.maturityLabel}
                         </span>
-                        <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                          <Clock3 size={18} className="shrink-0 text-blue-500" />
+                        <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:gap-3 sm:rounded-2xl sm:px-4">
+                          <Clock3 size={16} className="hidden shrink-0 text-blue-500 sm:block sm:size-[18px]" />
                           <input
                             type="date"
                             value={form.maturityDate}
                             onChange={(event) =>
                               updateForm("maturityDate", event.target.value)
                             }
-                            className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none"
+                            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none sm:text-sm"
                           />
                         </div>
                       </label>
                     ) : null}
 
-                    <label className="md:col-span-2">
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    <label className="col-span-2">
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         Ghi chú
                       </span>
-                      <div className="mt-1.5 flex min-h-11 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                        <MessageSquareText size={18} className="shrink-0 text-blue-500" />
+                      <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:gap-3 sm:rounded-2xl sm:px-4">
+                        <MessageSquareText size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                         <input
                           value={form.notes}
                           onChange={(event) => updateForm("notes", event.target.value)}
@@ -2363,53 +2379,53 @@ export default function SavingsPage({
                 </div>
 
                 {!isEditing ? (
-                  <div className="rounded-3xl border border-blue-100 bg-blue-50/50 p-4">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3 sm:rounded-3xl sm:p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-500">
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-xs sm:tracking-[0.2em]">
                           Tóm tắt
                         </p>
-                        <h3 className="mt-1 text-base font-black text-slate-950">
+                        <h3 className="mt-0.5 text-sm font-black text-slate-950 sm:mt-1 sm:text-base">
                           Kiểm tra trước khi tạo
                         </h3>
                       </div>
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600">
-                        <TrendingUp size={18} />
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 sm:size-10 sm:rounded-2xl">
+                        <TrendingUp size={17} />
                       </span>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    <div className="mt-2.5 grid grid-cols-2 gap-2 sm:mt-3 sm:grid-cols-4">
+                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Số tiền gửi
                         </p>
-                        <p className="mt-1 text-sm font-black text-slate-950">
+                        <p className="mt-0.5 text-xs font-black text-slate-950 sm:mt-1 sm:text-sm">
                           {formatCurrency(previewPrincipal)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           {formConfig.interestTitle}
                         </p>
-                        <p className="mt-1 text-sm font-black text-emerald-600">
+                        <p className="mt-0.5 text-xs font-black text-emerald-600 sm:mt-1 sm:text-sm">
                           +{formatCurrency(previewInterest)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Số dư ví
                         </p>
-                        <p className="mt-1 text-sm font-black text-slate-950">
+                        <p className="mt-0.5 text-xs font-black text-slate-950 sm:mt-1 sm:text-sm">
                           {hasUnknownWalletBalance
                             ? "Không thể tải số dư"
                             : formatCurrency(selectedWalletBalance)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                        <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Ví sau chuyển
                         </p>
-                        <p className="mt-1 text-sm font-black text-blue-700">
+                        <p className="mt-0.5 text-xs font-black text-blue-700 sm:mt-1 sm:text-sm">
                           {formatCurrency(walletBalanceAfterInitialDeposit)}
                         </p>
                       </div>
@@ -2418,7 +2434,7 @@ export default function SavingsPage({
                 ) : null}
 
                 {isInitialDepositTooHigh ? (
-                  <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">
+                  <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
                     Không đủ số dư ví. Ví hiện có{" "}
                     {formatCurrency(selectedWalletBalance)}, nhưng số tiền gửi là{" "}
                     {formatCurrency(previewPrincipal)}.
@@ -2426,18 +2442,18 @@ export default function SavingsPage({
                 ) : null}
 
                 {formError ? (
-                  <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">
+                  <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
                     {formError}
                   </div>
                 ) : null}
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-3.5">
+            <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:flex sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-3.5">
               <button
                 type="button"
                 onClick={closeAddModal}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 sm:min-h-11 sm:rounded-2xl sm:px-4"
               >
                 Hủy
               </button>
@@ -2445,9 +2461,9 @@ export default function SavingsPage({
               <button
                 type="submit"
                 disabled={isPersisting || isInitialDepositTooHigh}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:gap-2 sm:rounded-2xl sm:px-4"
               >
-                {isEditing ? <Pencil size={18} /> : <Plus size={18} />}
+                {isEditing ? <Pencil size={16} /> : <Plus size={16} />}
                 {isPersisting
                   ? "Đang lưu..."
                   : isEditing
@@ -2461,7 +2477,7 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: focused money-movement sheet. */}
       {transactionSavingId && selectedSaving ? (
-        <div className="fixed inset-0 z-110 flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-110 flex items-end justify-center bg-slate-950/45 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng giao dịch tiết kiệm"
@@ -2469,54 +2485,40 @@ export default function SavingsPage({
             onClick={closeMoneyMovementModal}
           />
 
-          <div className="relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[30px] bg-white shadow-2xl sm:rounded-4xl">
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="relative z-10 flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+            {/* SAVINGS-UX-1.1: the whole transaction sheet is viewport-bounded; body scroll is fallback only. */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
               <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">
+                <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 sm:block">
                   MONEY MOVEMENT
                 </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
+                <h2 className="truncate text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-xl">
                   {transactionForm.type === "deposit"
                     ? "Nạp vào tiết kiệm"
                     : transactionForm.type === "withdraw"
                       ? "Rút từ tiết kiệm"
                       : "Tất toán tiết kiệm"}
                 </h2>
-                <p className="mt-1 truncate text-sm font-semibold text-slate-500">
-                  {selectedSaving.name}
+                <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-semibold text-slate-500 sm:mt-1 sm:text-sm">
+                  <span className="truncate">{selectedSaving.name}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="shrink-0 font-black text-blue-700">
+                    {formatCurrency(selectedSaving.balance)}
+                  </span>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeMoneyMovementModal}
-                className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200"
                 aria-label="Đóng"
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-              <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
-                      Tiết kiệm hiện tại
-                    </p>
-                    <p className="mt-1 text-2xl font-black text-blue-700">
-                      {formatCurrency(selectedSaving.balance)}
-                    </p>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${getSavingStatus(selectedSaving).className}`}
-                  >
-                    <CheckCircle2 size={12} />
-                    {getSavingStatus(selectedSaving).label}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-100 bg-slate-50 p-1">
+            <div className="flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4">
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1 sm:rounded-2xl">
                 {(["deposit", "withdraw", "settlement"] as const).map((type) => (
                   <button
                     key={type}
@@ -2533,7 +2535,7 @@ export default function SavingsPage({
                               : current.amount,
                       }))
                     }
-                    className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-black transition ${
+                    className={`inline-flex min-h-9 items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-black transition sm:min-h-10 sm:gap-1.5 sm:rounded-xl sm:px-2 sm:text-xs ${
                       transactionForm.type === type
                         ? type === "deposit"
                           ? "bg-emerald-600 text-white shadow-sm"
@@ -2549,13 +2551,13 @@ export default function SavingsPage({
                 ))}
               </div>
 
-              <div className="mt-4 grid gap-3">
-                <label>
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+              <div className="mt-2.5 grid grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
+                <label className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                     Số tiền
                   </span>
-                  <div className="mt-1.5 flex min-h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                    <Banknote size={18} className="shrink-0 text-blue-500" />
+                  <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
+                    <Banknote size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                     <input
                       value={transactionForm.amount}
                       inputMode="numeric"
@@ -2575,14 +2577,14 @@ export default function SavingsPage({
                     />
                   </div>
                   {transactionForm.type === "settlement" ? (
-                    <p className="mt-1.5 text-xs font-semibold text-slate-400">
-                      Tất toán luôn sử dụng toàn bộ số dư hiện tại.
+                    <p className="mt-1 text-[10px] font-semibold leading-4 text-slate-400 sm:mt-1.5 sm:text-xs">
+                      Dùng toàn bộ số dư hiện tại.
                     </p>
                   ) : null}
                 </label>
 
-                <label>
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                <label className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                     {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
                   </span>
                   <select
@@ -2590,7 +2592,7 @@ export default function SavingsPage({
                     onChange={(event) =>
                       updateTransactionForm("walletId", event.target.value)
                     }
-                    className="mt-1.5 min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+                    className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:rounded-2xl sm:px-4 sm:text-sm"
                   >
                     <option value="">Chọn ví</option>
                     {wallets.map((wallet) => (
@@ -2600,50 +2602,50 @@ export default function SavingsPage({
                     ))}
                   </select>
                   {selectedWallet ? (
-                    <p className="mt-1.5 text-xs font-semibold text-slate-400">
-                      Số dư ví: {formatCurrency(selectedWallet.balance)}
+                    <p className="mt-1 truncate text-[10px] font-semibold leading-4 text-slate-400 sm:mt-1.5 sm:text-xs">
+                      Số dư: {formatCurrency(selectedWallet.balance)}
                     </p>
                   ) : null}
                 </label>
 
-                <label>
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                <label className="col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                     Ghi chú
                   </span>
-                  <div className="mt-1.5 flex min-h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100">
-                    <MessageSquareText size={18} className="shrink-0 text-blue-500" />
+                  <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
+                    <MessageSquareText size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                     <input
                       value={transactionForm.note}
                       onChange={(event) =>
                         updateTransactionForm("note", event.target.value)
                       }
                       placeholder="Tùy chọn"
-                      className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                      className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-700 outline-none placeholder:text-slate-400 sm:text-sm"
                     />
                   </div>
                 </label>
               </div>
 
-              <div className="mt-4 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              <div className="mt-2.5 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:mt-4 sm:rounded-3xl sm:p-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 sm:text-[10px] sm:tracking-[0.16em]">
                   Sau giao dịch
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-white p-3">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
+                  <div className="rounded-xl bg-white px-2.5 py-2 sm:rounded-2xl sm:p-3">
+                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                       Tiết kiệm
                     </p>
-                    <p className="mt-1 wrap-break-word text-sm font-black text-blue-700">
+                    <p className="mt-0.5 wrap-break-word text-xs font-black text-blue-700 sm:mt-1 sm:text-sm">
                       {transactionSavingBalanceAfter !== null
                         ? formatCurrency(transactionSavingBalanceAfter)
                         : "-"}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-white p-3">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                  <div className="rounded-xl bg-white px-2.5 py-2 sm:rounded-2xl sm:p-3">
+                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                       Ví
                     </p>
-                    <p className="mt-1 wrap-break-word text-sm font-black text-slate-950">
+                    <p className="mt-0.5 wrap-break-word text-xs font-black text-slate-950 sm:mt-1 sm:text-sm">
                       {transactionWalletBalanceAfter !== null
                         ? formatCurrency(transactionWalletBalanceAfter)
                         : "Chọn ví"}
@@ -2653,18 +2655,18 @@ export default function SavingsPage({
               </div>
 
               {transactionError ? (
-                <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">
+                <div className="mt-2.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 sm:mt-4 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
                   {transactionError}
                 </div>
               ) : null}
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-slate-100 bg-white px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-4">
+            <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-6 sm:pb-4 sm:pt-3">
               <button
                 type="button"
                 onClick={closeMoneyMovementModal}
                 disabled={isPersisting}
-                className="min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 sm:min-h-12 sm:rounded-2xl sm:px-4"
               >
                 Hủy
               </button>
@@ -2672,7 +2674,7 @@ export default function SavingsPage({
                 type="button"
                 onClick={() => handleAddTransaction()}
                 disabled={isPersisting}
-                className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-black text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:gap-2 sm:rounded-2xl sm:px-4 ${
                   transactionForm.type === "deposit"
                     ? "bg-emerald-600 shadow-emerald-100 hover:bg-emerald-700"
                     : transactionForm.type === "withdraw"
