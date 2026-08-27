@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * DASH-MOBILE-POLISH-1 — HeroMini label density regression contract.
+ * DASH-MOBILE-POLISH-2 — HeroMini label density regression contract.
  *
  * The professional-density pass intentionally made the mobile HeroMini
  * surface more compact. These tests preserve the important behavior

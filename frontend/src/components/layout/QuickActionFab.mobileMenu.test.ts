@@ -181,12 +181,15 @@ describe("QuickActionFab mobile panel follows the draggable FAB", () => {
     expect(source).toContain("computeDraggedPosition(");
   });
 
-  it("the FAB's own icon/rotate toggle is untouched — no new detached button, no canonical relocation", () => {
+  it("keeps the same FAB icon/rotate toggle while using the softer reduced-prominence treatment", () => {
     expect(source).toContain(
-      '"bg-slate-700 shadow-slate-300/50 hover:bg-slate-800 rotate-45"',
+      '"bg-[#4B6B88] hover:bg-[#3E5D78] rotate-45"',
     );
-    expect(source).toContain("<X size={22}");
-    expect(source).toContain("<Zap size={22}");
+    expect(source).toContain("const FAB_SIZE = 48;");
+    expect(source).toContain("flex size-12 touch-none");
+    expect(source).toContain("<X size={20}");
+    expect(source).toContain("<Zap size={20}");
+    expect(source).not.toContain("bg-slate-700");
   });
 
   it("localStorage persistence, viewport clamping, and drag threshold constants are untouched", () => {

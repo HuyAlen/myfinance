@@ -101,13 +101,11 @@ const VISIBLE_QUICK_ACTIONS = QUICK_ACTIONS.filter(
   (action) => QUICK_ACTION_VISIBILITY[action.id],
 );
 
-// Same button size as AIFloatingButton's own size-14 (56px), and the same
-// bottom-nav/safe-area clamping heuristic that button already established
-// for this app (a fixed generous buffer instead of reading env() safe-area
-// values in JS) — both floating buttons should respect the same "never
-// settle under the bottom nav / browser chrome" contract rather than
-// inventing a second one.
-const FAB_SIZE = 56;
+// DASH-MOBILE-POLISH-2: the Quick Action remains easy to hit while giving
+// Net Worth more visual priority on compact screens. Positioning math uses
+// the same constant, so drag/clamp/panel placement stay aligned with the
+// rendered 48px control.
+const FAB_SIZE = 48;
 const DRAG_THRESHOLD = 5;
 const ACTION_LIST_GAP = 8; // matches the original flex gap-2 (0.5rem)
 const POSITION_STORAGE_KEY = "myfinance:quick-action-fab-position";
@@ -116,8 +114,8 @@ const POSITION_STORAGE_KEY = "myfinance:quick-action-fab-position";
 // the DOM — the panel's width is enforced via inline style below so this
 // stays true (no risk of the alignment math disagreeing with an
 // auto-sized box), and its height is a stable estimate (2 rows of the
-// fixed min-h-14 cells + row gap + panel padding) since content always
-// truncates to one line and can never grow the box taller in practice.
+// compact min-h-12 cells + row gap + panel padding) since content is kept
+// on one line and can never grow the box taller in practice.
 const MOBILE_PANEL_WIDTH = 272;
 const MOBILE_PANEL_HEIGHT = 144;
 const MOBILE_PANEL_GAP = 10;
@@ -511,10 +509,10 @@ export default function QuickActionFab() {
     // and the open/close rotate), which lives on a different element than
     // the drag-position transform below, so the two can never fight over
     // the same animated property.
-    "flex size-14 touch-none select-none items-center justify-center rounded-[1.25rem] shadow-xl transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing",
+    "flex size-12 touch-none select-none items-center justify-center rounded-2xl shadow-[0_6px_18px_rgba(37,99,235,0.22)] transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing",
     isQuickActionOpen
-      ? "bg-slate-700 shadow-slate-300/50 hover:bg-slate-800 rotate-45"
-      : "bg-blue-600 shadow-blue-300/60 hover:bg-blue-700 hover:scale-105",
+      ? "bg-[#4B6B88] hover:bg-[#3E5D78] rotate-45"
+      : "bg-[#1677FF] hover:bg-[#0F6EEB] hover:scale-105",
   ].join(" ");
 
   function renderFabButton() {
@@ -533,9 +531,9 @@ export default function QuickActionFab() {
         className={fabButtonClassName}
       >
         {isQuickActionOpen ? (
-          <X size={22} className="text-white" />
+          <X size={20} className="text-white" />
         ) : (
-          <Zap size={22} className="text-white" />
+          <Zap size={20} className="text-white" />
         )}
       </button>
     );

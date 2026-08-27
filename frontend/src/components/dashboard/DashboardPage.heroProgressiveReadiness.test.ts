@@ -43,7 +43,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
 
   it("the headline value is gated on isDashboardReady, not a shared heroReady flag", () => {
     const start = source.indexOf(
-      "DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.",
+      "DASH-MOBILE-POLISH-2: soft financial hierarchy on mobile.",
     );
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf(
@@ -65,7 +65,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
 
   it("the cash-flow badge is gated on cashFlowReady alone, independent of the headline's own gate", () => {
     const start = source.indexOf(
-      "DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.",
+      "DASH-MOBILE-POLISH-2: soft financial hierarchy on mobile.",
     );
     const end = source.indexOf(
       "Mobile uses a flatter financial breakdown",
