@@ -3,13 +3,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * REPORTS-MOBILE-POLISH-1 — Compact Report Hierarchy & iPhone Chart Ergonomics.
+ * REPORTS-MOBILE-POLISH-1 / 1.1 — Compact Report Hierarchy, iPhone Chart Ergonomics & Semantic Stat Readability.
  *
  * Source-inspection contract. The repo intentionally avoids adding a React
  * mounting stack only for these layout regressions, so this suite locks the
  * responsive class contract and preserves REPORTS-CORRECTNESS-1 semantics.
  */
-describe("ReportsPage mobile first-viewport contract (REPORTS-MOBILE-POLISH-1)", () => {
+describe("ReportsPage mobile first-viewport contract (REPORTS-MOBILE-POLISH-1 / 1.1)", () => {
   const source = readFileSync(path.resolve(__dirname, "ReportsPage.tsx"), "utf8");
   const normalized = source.replace(/\s+/g, " ");
 
@@ -126,6 +126,46 @@ describe("ReportsPage mobile first-viewport contract (REPORTS-MOBILE-POLISH-1)",
     expect(source).not.toContain('className="truncate font-black text-slate-900"');
   });
 
+
+  it("gives StatMini semantic variants so descriptive text is never forced into the numeric one-line contract", () => {
+    const start = source.indexOf("function StatMini({");
+    const end = source.indexOf("function SectionHeader({", start);
+    const statMini = source.slice(start, end);
+
+    expect(statMini).toContain('variant?: "numeric" | "descriptive" | "periodAmount"');
+    expect(statMini).toContain('variant === "periodAmount"');
+    expect(statMini).toContain('variant === "descriptive"');
+    expect(statMini).toContain("whitespace-normal break-words");
+    expect(statMini).toContain("secondaryValue");
+    expect(statMini).not.toContain("truncate");
+  });
+
+  it("splits strongest-income period and amount instead of squeezing both into one mobile line", () => {
+    expect(normalized).toContain(
+      'label="Tháng cao nhất" value={strongestIncomeMonth.periodLabel ?? strongestIncomeMonth.month} secondaryValue={formatVND(strongestIncomeMonth.income)} variant="periodAmount"',
+    );
+    expect(source).not.toContain(
+      'value={`${strongestIncomeMonth.periodLabel ?? strongestIncomeMonth.month} · ${formatVND(strongestIncomeMonth.income)}`}',
+    );
+  });
+
+  it("renders the largest expense category as descriptive wrapping text instead of a nowrap numeric value", () => {
+    const marker = source.indexOf('label="Danh mục lớn nhất"');
+    expect(marker).toBeGreaterThan(-1);
+    const region = source.slice(marker, marker + 360);
+    expect(region).toContain('variant="descriptive"');
+  });
+
+  it("removes hero subtitle ellipsis and shortens saving allocation copy on the KPI rail", () => {
+    const start = source.indexOf("function KpiCard({");
+    const end = source.indexOf("function StatMini({", start);
+    const kpiCard = source.slice(start, end);
+
+    expect(kpiCard).toContain("whitespace-normal break-words");
+    expect(kpiCard).not.toContain("line-clamp-1");
+    expect(source).toContain('sub={"Phân bổ kỳ " + formatCompactVND(summary.savingAllocation)}');
+    expect(source).toContain('sub="Snapshot hiện tại · Tài sản − Nợ"');
+  });
   it("keeps REPORTS-CORRECTNESS-1 stock/flow and export semantics intact", () => {
     expect(normalized).toContain("cashFlowAfterExpense");
     expect(normalized).toContain("allocationRate");

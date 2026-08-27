@@ -1474,10 +1474,7 @@ export default function ReportsPage() {
             <KpiCard
               label="Tiết kiệm hiện tại"
               value={formatVND(summary.savingAssets)}
-              sub={
-                "Phân bổ tiết kiệm trong kỳ " +
-                formatVND(summary.savingAllocation)
-              }
+              sub={"Phân bổ kỳ " + formatCompactVND(summary.savingAllocation)}
               gradient="from-emerald-500 to-teal-500"
               iconBg="bg-white/20"
               icon={<ShieldCheck size={16} />}
@@ -1486,7 +1483,7 @@ export default function ReportsPage() {
               label="Danh mục đầu tư hiện tại"
               value={formatVND(summary.investmentAssets)}
               sub={
-                "Snapshot hiện tại · ROI " +
+                "Hiện tại · ROI " +
                 (investmentROI >= 0 ? "+" : "") +
                 investmentROI +
                 "%"
@@ -2071,7 +2068,9 @@ export default function ReportsPage() {
             />
             <StatMini
               label="Tháng cao nhất"
-              value={`${strongestIncomeMonth.periodLabel ?? strongestIncomeMonth.month} · ${formatVND(strongestIncomeMonth.income)}`}
+              value={strongestIncomeMonth.periodLabel ?? strongestIncomeMonth.month}
+              secondaryValue={formatVND(strongestIncomeMonth.income)}
+              variant="periodAmount"
               color="text-indigo-600"
               bg="bg-indigo-50"
               border="border-indigo-100"
@@ -2274,6 +2273,7 @@ export default function ReportsPage() {
             <StatMini
               label="Danh mục lớn nhất"
               value={topExpenseCategory ? topExpenseCategory.name : "Chưa có"}
+              variant="descriptive"
               color="text-slate-700"
               bg="bg-slate-50"
               border="border-slate-200"
@@ -3390,7 +3390,7 @@ function KpiCard({
       >
         {value}
       </p>
-      <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-white/75 sm:line-clamp-2">
+      <p className="mt-1 min-h-8 whitespace-normal break-words text-[10px] leading-4 text-white/75 sm:min-h-0">
         {sub}
       </p>
     </div>
@@ -3400,27 +3400,72 @@ function KpiCard({
 function StatMini({
   label,
   value,
+  secondaryValue,
+  variant = "numeric",
   color,
   bg,
   border,
 }: {
   label: string;
   value: string;
+  secondaryValue?: string;
+  variant?: "numeric" | "descriptive" | "periodAmount";
   color: string;
   bg: string;
   border: string;
 }) {
+  const numericSizeClass =
+    value.length > 13
+      ? "text-[clamp(0.72rem,3.3vw,1rem)]"
+      : "text-[clamp(0.8rem,3.8vw,1.25rem)]";
+
   return (
-    <div className={"min-w-0 rounded-2xl border p-3 sm:p-4 " + bg + " " + border}>
-      <p className="text-[10px] font-bold leading-4 text-slate-500 sm:text-xs">{label}</p>
-      <p
-        className={
-          "mt-1.5 whitespace-nowrap text-[clamp(0.8rem,3.8vw,1.25rem)] font-black leading-tight tracking-tight tabular-nums sm:mt-2 sm:text-xl sm:tracking-normal " +
-          color
-        }
-      >
-        {value}
+    <div
+      className={
+        "min-w-0 rounded-2xl border p-3 sm:p-4 " + bg + " " + border
+      }
+    >
+      <p className="text-[10px] font-bold leading-4 text-slate-500 sm:text-xs">
+        {label}
       </p>
+
+      {variant === "periodAmount" ? (
+        <div className="mt-1.5 min-w-0 sm:mt-2">
+          <p className={"whitespace-nowrap text-sm font-black leading-tight sm:text-base " + color}>
+            {value}
+          </p>
+          {secondaryValue && (
+            <p
+              className={
+                "mt-0.5 whitespace-nowrap text-[clamp(0.72rem,3.3vw,1rem)] font-black leading-tight tracking-tight tabular-nums sm:text-lg sm:tracking-normal " +
+                color
+              }
+            >
+              {secondaryValue}
+            </p>
+          )}
+        </div>
+      ) : variant === "descriptive" ? (
+        <p
+          className={
+            "mt-1.5 whitespace-normal break-words text-[clamp(0.9rem,4vw,1.1rem)] font-black leading-snug tracking-tight sm:mt-2 sm:text-xl sm:tracking-normal " +
+            color
+          }
+        >
+          {value}
+        </p>
+      ) : (
+        <p
+          className={
+            "mt-1.5 whitespace-nowrap font-black leading-tight tracking-tight tabular-nums sm:mt-2 sm:text-xl sm:tracking-normal " +
+            numericSizeClass +
+            " " +
+            color
+          }
+        >
+          {value}
+        </p>
+      )}
     </div>
   );
 }

@@ -100,7 +100,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(source).toContain("snapshot hiện tại");
     expect(source).toContain('sub="Snapshot hiện tại · Tài sản − Nợ"');
     expect(source).toContain('label="Tiết kiệm hiện tại"');
-    expect(source).toContain("formatVND(summary.savingAllocation)");
+    expect(source).toContain("summary.savingAllocation");
     expect(source).toContain('label="Danh mục đầu tư hiện tại"');
     expect(source).toContain("value={formatVND(summary.investmentAssets)}");
     expect(source).not.toContain("displayedInvestmentCapital");
