@@ -1855,16 +1855,16 @@ export default function TransactionsPage() {
         </div>
       )}
       {/* SECTION 1 · Transaction Summary */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
+      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
           <div className="min-w-0">
-            <p className="whitespace-nowrap text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+            <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">
               Transaction Center
             </p>
-            <h1 className="mt-1 whitespace-nowrap text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-0.5 whitespace-nowrap text-2xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
               Giao dịch
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-0.5 line-clamp-2 text-[12px] leading-5 text-slate-500 sm:mt-1 sm:line-clamp-none sm:text-sm">
               {hasActiveFilters
                 ? `Đang hiển thị các giao dịch phù hợp với bộ lọc trong ${effectiveRangeLabel}.`
                 : `Tổng quan thu, chi và chuyển tiền trong ${effectiveRangeLabel}.`}
@@ -1873,14 +1873,14 @@ export default function TransactionsPage() {
 
           <button
             onClick={openCreateForm}
-            className="flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700 active:scale-[.98] xl:w-auto"
+            className="flex min-h-11 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-md shadow-blue-200/60 transition hover:bg-blue-700 active:scale-[.98] sm:py-3 sm:shadow-lg xl:w-auto"
           >
             <Plus size={16} />
             Thêm giao dịch
           </button>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-3 sm:mt-5">
           <LiquidityHeroCard
             value={formatVND(totalLiquidity)}
             walletCount={wallets.length}
@@ -1888,7 +1888,7 @@ export default function TransactionsPage() {
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none sm:mx-0 sm:mt-4 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4">
           <SummaryCard
             label="Thu nhập"
             value={formatVND(totalIncome)}
@@ -3358,51 +3358,69 @@ function LiquidityHeroCard({
   const positiveFlow = netCashFlow >= 0;
 
   return (
-    <div className="relative overflow-hidden rounded-[26px] border border-blue-300 bg-linear-to-r from-sky-500 via-blue-600 to-indigo-600 px-5 py-5 text-white shadow-xl shadow-blue-200/60 sm:px-6 sm:py-6">
-      <div className="absolute -right-16 -top-20 size-52 rounded-full bg-white/10" />
-      <div className="absolute -bottom-24 right-8 size-56 rounded-full bg-indigo-400/25" />
-      <div className="absolute left-[42%] top-0 h-full w-px bg-white/10 max-lg:hidden" />
+    <div className="relative overflow-hidden rounded-2xl border border-blue-300 bg-linear-to-r from-blue-600 via-blue-600 to-indigo-600 px-4 py-3.5 text-white shadow-lg shadow-blue-200/50 sm:rounded-[26px] sm:from-sky-500 sm:px-6 sm:py-6 sm:shadow-xl sm:shadow-blue-200/60">
+      <div className="absolute -right-16 -top-20 hidden size-52 rounded-full bg-white/10 sm:block" />
+      <div className="absolute -bottom-24 right-8 hidden size-56 rounded-full bg-indigo-400/25 sm:block" />
+      <div className="absolute left-[42%] top-0 hidden h-full w-px bg-white/10 lg:block" />
 
-      <div className="relative grid gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-center">
-        <div className="flex min-w-0 items-start gap-4">
-          <div className="mt-1 flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-lg shadow-blue-950/10">
-            <WalletCards size={22} strokeWidth={2.4} />
+      <div className="relative grid gap-2.5 sm:gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-center">
+        <div className="flex min-w-0 items-center gap-3 sm:items-start sm:gap-4">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-md shadow-blue-950/10 sm:mt-1 sm:size-12 sm:rounded-2xl sm:shadow-lg">
+            <WalletCards size={19} strokeWidth={2.4} className="sm:hidden" />
+            <WalletCards size={22} strokeWidth={2.4} className="hidden sm:block" />
           </div>
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center justify-between gap-2 sm:flex-wrap sm:justify-start">
               <div className="min-w-0">
-                <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">
+                <p className="hidden whitespace-nowrap text-[10px] font-black uppercase tracking-[0.2em] text-blue-100 sm:block">
                   Số tiền khả dụng
                 </p>
-                <h3 className="mt-1 whitespace-nowrap text-sm font-black text-white">
+                <h3 className="whitespace-nowrap text-[13px] font-black text-white sm:mt-1 sm:text-sm">
                   Thanh khoản hiện tại
                 </h3>
               </div>
-              <span className="whitespace-nowrap rounded-full border border-white/15 bg-white/12 px-3 py-1 text-[10px] font-black text-white backdrop-blur">
-                {walletCount} ví đang hoạt động
+              <span className="shrink-0 whitespace-nowrap rounded-full border border-white/15 bg-white/12 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur sm:px-3 sm:py-1 sm:text-[10px]">
+                <span className="sm:hidden">{walletCount} ví</span>
+                <span className="hidden sm:inline">
+                  {walletCount} ví đang hoạt động
+                </span>
               </span>
             </div>
 
-            <p className="mt-3 whitespace-nowrap text-[clamp(1.9rem,7.5vw,2.35rem)] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[2.7rem]">
+            <p className="mt-1.5 whitespace-nowrap text-[1.75rem] font-black leading-none tracking-[-0.04em] tabular-nums sm:mt-3 sm:text-[2.7rem] sm:tracking-[-0.045em]">
               {value}
             </p>
 
-            <p className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-blue-50/95 sm:text-sm">
+            <p className="mt-2 hidden max-w-2xl text-sm font-semibold leading-5 text-blue-50/95 sm:block">
               Tổng số dư có thể dùng ngay để chi tiêu, thanh toán hoặc thực hiện
               giao dịch.
             </p>
           </div>
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm lg:ml-2">
-          <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.18em] text-blue-100">
-            Dòng tiền kỳ này
-          </p>
-          <p className="mt-2 whitespace-nowrap text-2xl font-black leading-none tabular-nums text-white">
-            {getSignedAmountText(netCashFlow)}
-          </p>
-          <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold">
+        <div className="min-w-0 border-t border-white/15 pt-2.5 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/10 sm:px-4 sm:py-4 sm:backdrop-blur-sm lg:ml-2">
+          <div className="flex items-center justify-between gap-3 sm:block">
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.14em] text-blue-100 sm:text-[10px] sm:tracking-[0.18em]">
+                Dòng tiền kỳ này
+              </p>
+              <p className="mt-1 whitespace-nowrap text-lg font-black leading-none tabular-nums text-white sm:mt-2 sm:text-2xl">
+                {getSignedAmountText(netCashFlow)}
+              </p>
+            </div>
+            <span
+              className={
+                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black sm:hidden " +
+                (positiveFlow
+                  ? "bg-emerald-500/25 text-emerald-100"
+                  : "bg-rose-500/25 text-rose-100")
+              }
+            >
+              {positiveFlow ? "Ổn định" : "Cần kiểm soát"}
+            </span>
+          </div>
+          <div className="mt-3 hidden items-center justify-between gap-3 text-xs font-bold sm:flex">
             <span className="text-blue-100">Trạng thái</span>
             <span
               className={
@@ -3507,32 +3525,32 @@ function SummaryCard({
   return (
     <div
       className={
-        "flex min-w-0 flex-col rounded-3xl border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
+        "flex min-w-[9.25rem] flex-col rounded-2xl border p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:min-w-0 sm:rounded-3xl sm:p-4 " +
         style.shell
       }
     >
       <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
         <span
           className={
-            "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-black sm:size-8 " +
+            "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-black sm:size-8 sm:text-sm " +
             style.icon
           }
         >
           {style.symbol}
         </span>
-        <p className="min-w-0 whitespace-nowrap text-[clamp(0.5625rem,2.3vw,0.625rem)] font-black uppercase tracking-[0.02em] sm:text-[10px] sm:tracking-[0.16em]">
+        <p className="min-w-0 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.02em] sm:text-[10px] sm:tracking-[0.16em]">
           {label}
         </p>
       </div>
 
-      <p className="mt-4 whitespace-nowrap text-[clamp(0.85rem,4vw,1.38rem)] font-black leading-none tracking-tight tabular-nums">
+      <p className="mt-2 whitespace-nowrap text-[0.95rem] font-black leading-none tracking-tight tabular-nums sm:mt-4 sm:text-[clamp(0.85rem,4vw,1.38rem)]">
         {value}
       </p>
-      <p className="mt-1 truncate text-xs font-bold opacity-75">{note}</p>
+      <p className="mt-1 truncate text-[10px] font-bold opacity-75 sm:text-xs">{note}</p>
 
       <div
         className={
-          "mt-auto flex items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[9px] font-black sm:justify-between sm:gap-3 sm:px-3 sm:py-2 sm:text-[10px] " +
+          "mt-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-[8px] font-black sm:mt-auto sm:justify-between sm:gap-3 sm:rounded-xl sm:px-3 sm:py-2 sm:text-[10px] " +
           style.footer
         }
       >
