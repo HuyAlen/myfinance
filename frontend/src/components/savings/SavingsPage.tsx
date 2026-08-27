@@ -2450,7 +2450,7 @@ export default function SavingsPage({
                     {formError}
                   </div>
                 ) : null}
-              </div>
+                </div>
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:flex sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-3.5">
@@ -2521,8 +2521,10 @@ export default function SavingsPage({
               </button>
             </div>
 
-            <div className="flex min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-[#F8FBFF] px-3 py-3 [-webkit-overflow-scrolling:touch] sm:bg-white flex-col justify-between sm:block sm:px-6 sm:py-4">
-              <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-[#E3EBF3] bg-[#F3F7FB] p-1 sm:rounded-2xl">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain bg-[#F8FBFF] px-3 py-3 [-webkit-overflow-scrolling:touch] sm:bg-white sm:px-6 sm:py-4">
+              {/* SAVINGS-UX-1.5: natural iPhone rhythm — cohesive content stack, no artificial viewport spreading. */}
+              <div className="mx-auto flex w-full max-w-md flex-col gap-3.5 sm:block sm:max-w-none">
+                <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-[#E3EBF3] bg-[#F3F7FB] p-1 sm:rounded-2xl">
                 {(["deposit", "withdraw", "settlement"] as const).map((type) => (
                   <button
                     key={type}
@@ -2539,13 +2541,13 @@ export default function SavingsPage({
                               : current.amount,
                       }))
                     }
-                    className={`inline-flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-bold whitespace-nowrap transition sm:h-10 sm:gap-1.5 sm:rounded-xl sm:px-2 sm:text-xs ${
+                    className={`inline-flex min-h-10 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 text-[11px] font-bold whitespace-nowrap transition sm:min-h-10 sm:gap-1.5 sm:rounded-xl sm:px-2 sm:text-xs ${
                       transactionForm.type === type
                         ? type === "deposit"
-                          ? "bg-white text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                          ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
                           : type === "withdraw"
-                            ? "bg-white text-[#2F80ED] ring-1 ring-inset ring-blue-200"
-                            : "bg-white text-rose-600 ring-1 ring-inset ring-rose-200"
+                            ? "bg-blue-50 text-[#2F80ED] ring-1 ring-inset ring-blue-200"
+                            : "bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-200"
                         : "text-[#7890A6] hover:bg-white hover:text-[#4A6783]"
                     }`}
                   >
@@ -2555,12 +2557,21 @@ export default function SavingsPage({
                 ))}
               </div>
 
-              <div className="mt-2.5 grid shrink-0 grid-cols-2 gap-x-2.5 gap-y-2.5 sm:mt-4 sm:gap-3">
+                <section className="rounded-2xl border border-[#E3EBF3] bg-white p-3.5 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3 sm:hidden">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8196AA]">
+                      Chi tiết giao dịch
+                    </p>
+                    <span className="text-[10px] font-semibold text-[#A0B1C2]">
+                      Nhập thông tin
+                    </span>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3">
                 <label className="min-w-0">
                   <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     Số tiền
                   </span>
-                  <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
+                  <div className="mt-1.5 flex min-h-12 items-center gap-2 rounded-xl border border-slate-200 bg-[#FBFDFF] px-3 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
                     <Banknote size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                     <input
                       value={transactionForm.amount}
@@ -2596,7 +2607,7 @@ export default function SavingsPage({
                     onChange={(event) =>
                       updateTransactionForm("walletId", event.target.value)
                     }
-                    className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-[#4A6783] outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:rounded-2xl sm:px-4 sm:text-sm"
+                    className="mt-1.5 min-h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-[#FBFDFF] px-3 text-base font-semibold text-[#4A6783] outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:rounded-2xl sm:px-4 sm:text-sm"
                   >
                     <option value="">Chọn ví</option>
                     {wallets.map((wallet) => (
@@ -2612,11 +2623,11 @@ export default function SavingsPage({
                   ) : null}
                 </label>
 
-                <label className="col-span-2">
+                <label className="sm:col-span-2">
                   <span className="text-[10px] font-bold uppercase tracking-wide text-[#64748B] sm:text-xs">
                     Ghi chú
                   </span>
-                  <div className="mt-1 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 transition focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
+                  <div className="mt-1.5 flex min-h-12 items-center gap-2 rounded-xl border border-slate-200 bg-[#FBFDFF] px-3 transition focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100 sm:mt-1.5 sm:min-h-12 sm:gap-3 sm:rounded-2xl sm:px-4">
                     <MessageSquareText size={16} className="shrink-0 text-blue-500 sm:size-[18px]" />
                     <input
                       value={transactionForm.note}
@@ -2628,10 +2639,11 @@ export default function SavingsPage({
                     />
                   </div>
                 </label>
-              </div>
+                  </div>
+                </section>
 
-              <div className="shrink-0">
-                <div className="mt-3 rounded-2xl border border-[#E3EBF3] bg-white p-3 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
+                <div className="shrink-0">
+                <div className="rounded-2xl border border-[#E3EBF3] bg-white p-3.5 shadow-sm sm:mt-4 sm:rounded-3xl sm:p-4">
                   <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#8196AA] sm:text-[10px] sm:tracking-[0.16em]">
                     {transactionForm.type === "deposit"
                       ? "Sau khi nạp"
@@ -2639,12 +2651,12 @@ export default function SavingsPage({
                         ? "Sau khi rút"
                         : "Sau khi tất toán"}
                   </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-3">
-                    <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                  <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:mt-3 sm:gap-3">
+                    <div className="rounded-xl border border-[#EDF3F8] bg-[#F8FBFF] px-3 py-3 sm:rounded-2xl sm:p-3">
                       <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
                         Tiết kiệm
                       </p>
-                      <p className="mt-0.5 wrap-break-word text-sm font-black text-[#2F80ED] sm:mt-1 sm:text-base">
+                      <p className="mt-0.5 wrap-break-word text-[15px] font-black text-[#2F80ED] sm:mt-1 sm:text-base">
                         {transactionSavingBalanceAfter !== null
                           ? formatCurrency(transactionSavingBalanceAfter)
                           : "-"}
@@ -2660,11 +2672,11 @@ export default function SavingsPage({
                         {formatCurrency(transactionPreviewAmount)}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-[#F8FBFF] px-3 py-2.5 sm:rounded-2xl sm:p-3">
+                    <div className="rounded-xl border border-[#EDF3F8] bg-[#F8FBFF] px-3 py-3 sm:rounded-2xl sm:p-3">
                       <p className="text-[9px] font-bold uppercase tracking-wide text-[#8196AA] sm:text-[10px]">
                         {transactionForm.type === "deposit" ? "Ví nguồn" : "Ví nhận"}
                       </p>
-                      <p className="mt-0.5 wrap-break-word text-sm font-black text-[#4A6783] sm:mt-1 sm:text-base">
+                      <p className="mt-0.5 wrap-break-word text-[15px] font-black text-[#4A6783] sm:mt-1 sm:text-base">
                         {transactionWalletBalanceAfter !== null
                           ? formatCurrency(transactionWalletBalanceAfter)
                           : "Chọn ví"}
@@ -2689,6 +2701,7 @@ export default function SavingsPage({
                   </div>
                 ) : null}
               </div>
+            </div>
             </div>
 
             <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-6 sm:pb-4 sm:pt-3">

@@ -3,13 +3,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * SAVINGS-UX-1.4 — Mobile Transaction Vertical Distribution.
+ * SAVINGS-UX-1.5 — Natural Mobile Transaction Rhythm.
  *
- * The full-screen mobile transaction surface should use its available height:
- * selector at the top, form in the middle, impact/validation at the bottom.
- * Desktop keeps the compact modal flow.
+ * Real iPhone layouts should not use justify-between to force equal empty
+ * bands between controls. Keep the transaction content cohesive, readable,
+ * touch-friendly, and let any remaining space live after the content stack.
  */
-describe("SavingsPage distributes mobile transaction content vertically", () => {
+describe("SavingsPage uses a natural mobile transaction rhythm", () => {
   const source = readFileSync(
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
@@ -23,59 +23,58 @@ describe("SavingsPage distributes mobile transaction content vertically", () => 
   );
   const movementSource = source.slice(movementStart, historyStart);
 
-  it("uses the entire transaction body as a vertical flex layout on mobile", () => {
+  it("removes the artificial justify-between viewport spreading from 1.4", () => {
+    expect(movementSource).not.toContain("flex-col justify-between sm:block");
     expect(movementSource).toContain(
-      "flex min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",
-    );
-    expect(movementSource).toContain("flex-col justify-between sm:block");
-  });
-
-  it("keeps the three meaningful mobile sections from collapsing", () => {
-    expect(movementSource).toContain(
-      "grid shrink-0 grid-cols-3 gap-1",
-    );
-    expect(movementSource).toContain(
-      "mt-2.5 grid shrink-0 grid-cols-2 gap-x-2.5 gap-y-2.5",
-    );
-    expect(movementSource).toContain(
-      '<div className="shrink-0">\n                <div className="mt-3 rounded-2xl',
+      "mx-auto flex w-full max-w-md flex-col gap-3.5",
     );
   });
 
-  it("keeps impact and validation together as the bottom visual anchor", () => {
-    const bottomAnchorStart = movementSource.indexOf(
-      '<div className="shrink-0">\n                <div className="mt-3 rounded-2xl',
+  it("groups transaction inputs into one cohesive mobile card", () => {
+    expect(movementSource).toContain("Chi tiết giao dịch");
+    expect(movementSource).toContain(
+      "rounded-2xl border border-[#E3EBF3] bg-white p-3.5 shadow-sm",
     );
-    const impactStart = movementSource.indexOf('"Sau khi nạp"', bottomAnchorStart);
-    const errorStart = movementSource.indexOf("{transactionError ? (", bottomAnchorStart);
-    const bottomAnchorEnd = movementSource.indexOf(
-      "</div>\n            </div>\n\n            <div className=\"grid shrink-0 grid-cols-2",
-      bottomAnchorStart,
+    expect(movementSource).toContain(
+      "mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-2",
     );
-
-    expect(bottomAnchorStart).toBeGreaterThan(-1);
-    expect(impactStart).toBeGreaterThan(bottomAnchorStart);
-    expect(errorStart).toBeGreaterThan(impactStart);
-    expect(bottomAnchorEnd).toBeGreaterThan(errorStart);
+    expect(movementSource).toContain("sm:col-span-2");
   });
 
-  it("preserves the full-screen architecture and fixed footer", () => {
+  it("uses iPhone-sized controls and full-width wallet selection", () => {
+    expect(movementSource).toContain("min-h-12");
+    expect(movementSource).toContain(
+      "mt-1.5 min-h-12 w-full min-w-0 rounded-xl",
+    );
+    expect(movementSource).toContain(
+      "focus-within:bg-white focus-within:ring-4",
+    );
+  });
+
+  it("keeps the impact summary directly after the form instead of pinning it to the viewport bottom", () => {
+    const formStart = movementSource.indexOf("Chi tiết giao dịch");
+    const impactStart = movementSource.indexOf('"Sau khi nạp"', formStart);
+    const footerStart = movementSource.indexOf(
+      'className="grid shrink-0 grid-cols-2 gap-2 border-t',
+      impactStart,
+    );
+
+    expect(formStart).toBeGreaterThan(-1);
+    expect(impactStart).toBeGreaterThan(formStart);
+    expect(footerStart).toBeGreaterThan(impactStart);
+  });
+
+  it("preserves full-screen mobile architecture, safe areas, and 1.3 color semantics", () => {
     expect(movementSource).toContain(
       "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
     );
     expect(movementSource).toContain(
-      "grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white",
-    );
-    expect(movementSource).toContain(
       "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
     );
-  });
-
-  it("keeps the 1.3 visual semantics intact", () => {
     expect(movementSource).toContain(
-      'type === "withdraw"\n                            ? "bg-white text-[#2F80ED]',
+      'type === "withdraw"\n                            ? "bg-blue-50 text-[#2F80ED]',
     );
-    expect(movementSource).toContain('"Sau khi rút"');
+    expect(movementSource).toContain('"bg-rose-50 text-rose-600');
     expect(movementSource).toContain('"Xác nhận rút"');
   });
 });

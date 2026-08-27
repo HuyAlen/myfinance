@@ -42,10 +42,10 @@ describe("SavingsPage balances the mobile money-movement screen", () => {
 
   it("treats withdraw as a normal blue movement and reserves rose for settlement", () => {
     expect(movementSource).toContain(
-      'type === "withdraw"\n                            ? "bg-white text-[#2F80ED] ring-1 ring-inset ring-blue-200"',
+      'type === "withdraw"\n                            ? "bg-blue-50 text-[#2F80ED] ring-1 ring-inset ring-blue-200"',
     );
     expect(movementSource).toContain(
-      '"bg-white text-rose-600 ring-1 ring-inset ring-rose-200"',
+      '"bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-200"',
     );
     expect(movementSource).toContain(
       'type === "withdraw"\n                      ? "bg-[#2F80ED] shadow-blue-100 hover:bg-[#2676DE]"',
@@ -57,7 +57,7 @@ describe("SavingsPage balances the mobile money-movement screen", () => {
 
   it("keeps the segmented control compact and avoids wrapping its labels", () => {
     expect(movementSource).toContain(
-      "h-9 min-w-0 items-center justify-center",
+      "min-h-10 min-w-0 items-center justify-center",
     );
     expect(movementSource).toContain("font-bold whitespace-nowrap");
   });
