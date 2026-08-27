@@ -3,48 +3,76 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * FINANCE-DATA-1B — Consumer Failure-State Correctness.
- *
- * Source-inspection, not component mounting — no React Testing Library in
- * this project (see AGENTS.md). Whitespace is normalized before matching
- * multi-line JSX conditionals since this repo's files are CRLF.
- *
- * Proves an INITIAL load failure on WalletsPage cannot render as "Chưa có
- * ví tiền nào" (a validated, successful-empty conclusion). The page must
- * distinguish loading / failure / legitimate-empty instead of collapsing
- * them all into one empty-state block.
+ * WALLETS-CORRECTNESS-1 / FINANCE-DATA-1B — Wallet snapshot loading must
+ * distinguish unknown / failure / legitimate-empty, and secondary reads must
+ * not be able to suppress a successful Wallet snapshot.
  */
-describe("WalletsPage distinguishes load failure from legitimate empty (FINANCE-DATA-1B)", () => {
+describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
   const source = readFileSync(
     path.resolve(__dirname, "WalletsPage.tsx"),
     "utf8",
   );
   const normalized = source.replace(/\s+/g, " ");
 
-  it("declares isLoadingWallets and walletsLoadError state", () => {
-    expect(source).toContain("useState(true)");
-    expect(source).toContain("isLoadingWallets");
-    expect(source).toContain("walletsLoadError");
+  it("tracks explicit Wallet and monthly-analytics readiness instead of treating initial [] as zero", () => {
+    expect(source).toContain("walletSnapshotReady");
+    expect(source).toContain("monthlyAnalyticsReady");
+    expect(source).toContain(
+      "const walletAnalyticsReady = walletSnapshotReady && monthlyAnalyticsReady;",
+    );
+    expect(source).toContain("isLoadingMonthAnalytics");
+    expect(source).toContain("monthAnalyticsError");
   });
 
-  it("reloadData clears the error on success and sets a message on failure, without touching wallet state", () => {
+  it("applies critical Wallet, monthly analytics, and caption-only link counts independently", () => {
     const start = source.indexOf("const reloadData = useCallback(async () => {");
-    expect(start).toBeGreaterThan(-1);
     const end = source.indexOf("}, []);", start);
+    expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const fnSource = source.slice(start, end);
 
-    expect(fnSource).toContain("setWalletsLoadError(null)");
-    const catchIdx = fnSource.indexOf("} catch (error) {");
-    expect(catchIdx).toBeGreaterThan(-1);
-    const catchSource = fnSource.slice(catchIdx);
-    expect(catchSource).toContain("setWalletsLoadError(");
-    // The catch branch must never reset the wallets array itself.
-    expect(catchSource).not.toContain("setWallets([])");
-    expect(catchSource).toContain("setIsLoadingWallets(false)");
+    expect(fnSource).toContain("const walletTask = getWallets()");
+    expect(fnSource).toContain(
+      "const monthlyAnalyticsTask = getTransactionsInRange(startDate, endDate)",
+    );
+    expect(fnSource).toContain("const linkCountsTask = Promise.all([");
+    expect(fnSource).toContain("getTransactionWalletLinks()");
+    expect(fnSource).toContain("getForexCashWalletLinks()");
+    expect(fnSource).toContain(
+      "await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask])",
+    );
+    expect(fnSource).not.toContain(
+      "const [w, monthTxns, txnLinks, forexLinks] = await Promise.all",
+    );
   });
 
-  it("splits the empty-state block into loading / error / legitimate-empty conditionals", () => {
+  it("a caption-only link-count failure never becomes a Wallet load error", () => {
+    const start = source.indexOf("const linkCountsTask = Promise.all([");
+    const end = source.indexOf(
+      "await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask])",
+      start,
+    );
+    const linkSource = source.slice(start, end);
+
+    expect(linkSource).toContain("wallet link-count reload failed");
+    expect(linkSource).not.toContain("setWalletsLoadError(");
+    expect(linkSource).not.toContain("setWallets([])");
+  });
+
+  it("Wallet summary and classification surfaces are readiness-gated, so unknown never renders as 0đ/0 wallets", () => {
+    expect(source).toContain(
+      'value={walletSnapshotReady ? formatVND(totalAssets) : "—"}',
+    );
+    expect(source).toContain(
+      "isLoading={!walletSnapshotReady && isLoadingWallets}",
+    );
+    expect(normalized).toContain(
+      '{walletSnapshotReady ? `${spendableWallets.length} ví` : isLoadingWallets ? "Đang tải..." : "—"}',
+    );
+    expect(source).toContain("!walletSnapshotReady ? (");
+  });
+
+  it("keeps the list empty-state split between loading / failure / legitimate-empty", () => {
     expect(normalized).toContain(
       "{spendableWallets.length === 0 && isLoadingWallets && (",
     );
@@ -54,9 +82,6 @@ describe("WalletsPage distinguishes load failure from legitimate empty (FINANCE-
     expect(normalized).toContain(
       "{spendableWallets.length === 0 && !isLoadingWallets && !walletsLoadError && (",
     );
-  });
-
-  it("the legitimate-empty branch still shows the original create-wallet CTA copy", () => {
     expect(source).toContain("Chưa có ví tiền nào");
   });
 });

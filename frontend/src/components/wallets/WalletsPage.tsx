@@ -92,6 +92,22 @@ function getLocalDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function isValidLocalDateInputValue(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
 /**
  * [startDate, endDate] (inclusive, "YYYY-MM-DD") for the CURRENT local
  * calendar month — Wallets page analytics intentionally follow the actual
@@ -169,6 +185,26 @@ function isWalletTransfer(transaction: Transaction) {
   return referenceType === "wallet";
 }
 
+function isSpendableWalletTransaction(
+  transaction: Transaction,
+  spendableWalletIds: ReadonlySet<string>,
+) {
+  if (!spendableWalletIds.has(transaction.walletId)) return false;
+
+  // A wallet-to-wallet transfer belongs to this page only when BOTH ends are
+  // spendable Wallet-domain accounts. This prevents a legacy investment wallet
+  // from leaking into Wallet monthly totals merely because the other side is
+  // cash/bank/e-wallet.
+  if (isWalletTransfer(transaction)) {
+    return Boolean(
+      transaction.transferToWalletId &&
+        spendableWalletIds.has(transaction.transferToWalletId),
+    );
+  }
+
+  return true;
+}
+
 // Bursts of realtime events from a single multi-table write (e.g. a
 // transfer touching both source and destination wallets) are coalesced
 // within this window instead of triggering one reload per event.
@@ -187,9 +223,18 @@ export default function WalletsPage() {
   const [walletsLoadError, setWalletsLoadError] = useState<string | null>(
     null,
   );
+  // WALLETS-CORRECTNESS-1: readiness is explicit. An initial [] is "unknown",
+  // not a proven zero balance. Once a successful snapshot has loaded, later
+  // transient refresh failures keep rendering that last-known-good snapshot.
+  const [walletSnapshotReady, setWalletSnapshotReady] = useState(false);
   const [currentMonthTransactions, setCurrentMonthTransactions] = useState<
     Transaction[]
   >([]);
+  const [isLoadingMonthAnalytics, setIsLoadingMonthAnalytics] = useState(true);
+  const [monthAnalyticsError, setMonthAnalyticsError] = useState<string | null>(
+    null,
+  );
+  const [monthlyAnalyticsReady, setMonthlyAnalyticsReady] = useState(false);
   // All-time per-wallet linked-record count, for the wallet card caption
   // only. Built from a narrow id-only projection (see
   // getTransactionWalletLinks/getForexCashWalletLinks) instead of full
@@ -197,6 +242,7 @@ export default function WalletsPage() {
   const [walletLinkCounts, setWalletLinkCounts] = useState<
     Map<string, number>
   >(new Map());
+  const [walletLinkCountsReady, setWalletLinkCountsReady] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -215,53 +261,73 @@ export default function WalletsPage() {
   // follow the actual current calendar month (not a user-selectable prop),
   // so reloadData never needs to change identity across renders.
   const reloadData = useCallback(async () => {
-    // FINANCE-DATA-1: getWallets/getTransactionsInRange/etc. now reject on
-    // a genuine query failure instead of silently resolving to [] — this
-    // try/catch keeps that rejection from becoming an unhandled promise
-    // rejection at every caller (mount effect, realtime refresh). Every
-    // state setter below only runs after a successful resolve, so a
-    // caught failure simply leaves the previously-loaded wallets/counts
-    // on screen instead of clearing them to an empty list.
-    // FINANCE-DATA-1B: `walletsLoadError` is cleared on success (so a
-    // later successful reload after a transient failure doesn't leave a
-    // stale error around) and set — WITHOUT touching `wallets` — on
-    // failure, so the empty-state gate below can tell "genuinely no
-    // wallets" apart from "we don't actually know yet".
-    try {
-      const { startDate, endDate } = getCurrentMonthRange();
-      const [w, monthTxns, txnLinks, forexLinks] = await Promise.all([
-        getWallets(),
-        getTransactionsInRange(startDate, endDate),
-        getTransactionWalletLinks(),
-        getForexCashWalletLinks(),
-      ]);
+    const { startDate, endDate } = getCurrentMonthRange();
 
-      const counts = new Map<string, number>();
-      for (const link of txnLinks) {
-        counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-        if (link.transferToWalletId) {
-          counts.set(
-            link.transferToWalletId,
-            (counts.get(link.transferToWalletId) ?? 0) + 1,
-          );
+    // WALLETS-CORRECTNESS-1: fire every domain concurrently, but apply each
+    // result independently as soon as it settles. Wallet rows are critical;
+    // monthly analytics are secondary; all-time link counts are tertiary.
+    // A slow/failed caption query must never delay or fail the Wallet snapshot.
+    const walletTask = getWallets()
+      .then((loadedWallets) => {
+        setWallets(loadedWallets);
+        setWalletsLoadError(null);
+        setWalletSnapshotReady(true);
+      })
+      .catch((error) => {
+        console.error("[WalletsPage] wallet snapshot reload failed:", error);
+        setWalletsLoadError(
+          "Không thể tải dữ liệu ví. Vui lòng tải lại trang.",
+        );
+      })
+      .finally(() => {
+        setIsLoadingWallets(false);
+      });
+
+    const monthlyAnalyticsTask = getTransactionsInRange(startDate, endDate)
+      .then((monthTransactions) => {
+        setCurrentMonthTransactions(monthTransactions);
+        setMonthAnalyticsError(null);
+        setMonthlyAnalyticsReady(true);
+      })
+      .catch((error) => {
+        console.error("[WalletsPage] monthly analytics reload failed:", error);
+        setMonthAnalyticsError(
+          "Không thể tải dữ liệu dòng tiền tháng này.",
+        );
+      })
+      .finally(() => {
+        setIsLoadingMonthAnalytics(false);
+      });
+
+    const linkCountsTask = Promise.all([
+      getTransactionWalletLinks(),
+      getForexCashWalletLinks(),
+    ])
+      .then(([txnLinks, forexLinks]) => {
+        const counts = new Map<string, number>();
+        for (const link of txnLinks) {
+          counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+          if (link.transferToWalletId) {
+            counts.set(
+              link.transferToWalletId,
+              (counts.get(link.transferToWalletId) ?? 0) + 1,
+            );
+          }
         }
-      }
-      for (const link of forexLinks) {
-        counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-      }
+        for (const link of forexLinks) {
+          counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
+        }
 
-      setWallets(w);
-      setCurrentMonthTransactions(monthTxns);
-      setWalletLinkCounts(counts);
-      setWalletsLoadError(null);
-    } catch (error) {
-      console.error("[WalletsPage] reloadData failed:", error);
-      setWalletsLoadError(
-        "Không thể tải dữ liệu ví. Vui lòng tải lại trang.",
-      );
-    } finally {
-      setIsLoadingWallets(false);
-    }
+        setWalletLinkCounts(counts);
+        setWalletLinkCountsReady(true);
+      })
+      .catch((error) => {
+        // Caption-only metadata is best effort. Keep the previous counts (if
+        // any) and never turn this into a Wallet-page load failure.
+        console.error("[WalletsPage] wallet link-count reload failed:", error);
+      });
+
+    await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask]);
   }, []);
 
   // ── Reload coordinator ──────────────────────────────────────────────────
@@ -333,6 +399,11 @@ export default function WalletsPage() {
     [spendableWallets],
   );
 
+  const spendableWalletIds = useMemo(
+    () => new Set(spendableWallets.map((wallet) => wallet.id)),
+    [spendableWallets],
+  );
+
   const walletStats = useMemo(
     () =>
       walletTypeOptions.map((o) => ({
@@ -350,12 +421,27 @@ export default function WalletsPage() {
   const currentMonth =
     now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
 
+  // Monthly Wallet analytics need BOTH datasets: transactions and the Wallet
+  // snapshot that defines the accepted spendable id set. A successful
+  // transaction query alone cannot prove a zero when getWallets() failed.
+  const walletAnalyticsReady = walletSnapshotReady && monthlyAnalyticsReady;
+  const walletAnalyticsLoading =
+    !walletAnalyticsReady && (isLoadingWallets || isLoadingMonthAnalytics);
+  const walletAnalyticsError = !walletSnapshotReady
+    ? walletsLoadError
+    : monthAnalyticsError;
+
   // currentMonthTransactions is already fetched scoped to the current month
   // (see getCurrentMonthRange/getTransactionsInRange in reloadData); this
   // filter is a cheap defensive re-check, not the primary scoping mechanism.
   const currentMonthTxns = useMemo(
-    () => currentMonthTransactions.filter((t) => t.date.startsWith(currentMonth)),
-    [currentMonthTransactions, currentMonth],
+    () =>
+      currentMonthTransactions.filter(
+        (transaction) =>
+          transaction.date.startsWith(currentMonth) &&
+          isSpendableWalletTransaction(transaction, spendableWalletIds),
+      ),
+    [currentMonthTransactions, currentMonth, spendableWalletIds],
   );
   const currentMonthNet = useMemo(
     () => getTotalIncome(currentMonthTxns) - getTotalExpense(currentMonthTxns),
@@ -492,6 +578,17 @@ export default function WalletsPage() {
       return;
     }
 
+    const transferDate = transferForm.date.trim();
+    if (!isValidLocalDateInputValue(transferDate)) {
+      setSaveError("Vui lòng chọn ngày chuyển hợp lệ");
+      return;
+    }
+
+    if (transferDate > getLocalDateInputValue()) {
+      setSaveError("Ngày chuyển không được ở tương lai");
+      return;
+    }
+
     if (fromWallet.balance < amount) {
       setSaveError("Ví nguồn không đủ số dư để chuyển tiền");
       return;
@@ -511,7 +608,7 @@ export default function WalletsPage() {
       note:
         transferForm.note.trim() ||
         `Chuyển tiền từ ${fromWallet.name} sang ${toWallet.name}`,
-      date: transferForm.date,
+      date: transferDate,
       transferReferenceType: "wallet",
       transfer_reference_type: "wallet",
       sourceType: "wallet",
@@ -732,29 +829,61 @@ export default function WalletsPage() {
         <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
           <WalletSummaryCard
             label="Tổng số dư"
-            value={formatVND(totalAssets)}
-            note={`${spendableWallets.length} ví đang quản lý`}
+            value={walletSnapshotReady ? formatVND(totalAssets) : "—"}
+            note={
+              walletSnapshotReady
+                ? `${spendableWallets.length} ví đang quản lý`
+                : walletsLoadError ?? "Đang tải dữ liệu ví"
+            }
             tone="blue"
+            isLoading={!walletSnapshotReady && isLoadingWallets}
           />
           <WalletSummaryCard
             label="Tiền vào tháng này"
-            value={formatVND(getTotalIncome(currentMonthTxns))}
-            note={`Tháng ${now.getMonth() + 1}/${now.getFullYear()}`}
+            value={
+              walletAnalyticsReady
+                ? formatVND(getTotalIncome(currentMonthTxns))
+                : "—"
+            }
+            note={
+              walletAnalyticsReady
+                ? `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`
+                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
+            }
             tone="emerald"
+            isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
             label="Tiền ra tháng này"
-            value={formatVND(getTotalExpense(currentMonthTxns))}
+            value={
+              walletAnalyticsReady
+                ? formatVND(getTotalExpense(currentMonthTxns))
+                : "—"
+            }
             note={
-              currentMonthNet >= 0 ? "Dòng tiền đang dương" : "Chi lớn hơn thu"
+              walletAnalyticsReady
+                ? currentMonthNet >= 0
+                  ? "Dòng tiền đang dương"
+                  : "Chi lớn hơn thu"
+                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
             }
             tone="rose"
+            isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
             label="Chuyển giữa ví"
-            value={formatVND(currentMonthTransferTotal)}
-            note={`${currentMonthTransfers.length} giao dịch`}
+            value={
+              walletAnalyticsReady
+                ? formatVND(currentMonthTransferTotal)
+                : "—"
+            }
+            note={
+              walletAnalyticsReady
+                ? `${currentMonthTransfers.length} giao dịch`
+                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
+            }
             tone="indigo"
+            isLoading={walletAnalyticsLoading}
           />
         </div>
       </section>
@@ -770,64 +899,77 @@ export default function WalletsPage() {
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-            {spendableWallets.length} ví
+            {walletSnapshotReady
+              ? `${spendableWallets.length} ví`
+              : isLoadingWallets
+                ? "Đang tải..."
+                : "—"}
           </span>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {walletStats.map((stat) => {
-            const percentage =
-              totalAssets > 0
-                ? Math.round((stat.total / totalAssets) * 100)
-                : 0;
-            return (
-              <button
-                key={stat.value}
-                type="button"
-                onClick={() => {
-                  const wallet = spendableWallets.find(
-                    (item) => item.type === stat.value,
-                  );
-                  if (wallet) openEditForm(wallet);
-                  else {
-                    setForm({ ...emptyForm, type: stat.value });
-                    setSaveError(null);
-                    setIsFormOpen(true);
-                  }
-                }}
-                className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <WalletIcon type={stat.value} compact />
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        {stat.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {stat.count} ví
-                      </p>
+          {!walletSnapshotReady ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm font-semibold text-slate-500 md:col-span-3">
+              {isLoadingWallets
+                ? "Đang tải phân loại ví..."
+                : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
+            </div>
+          ) : (
+            walletStats.map((stat) => {
+              const percentage =
+                totalAssets > 0
+                  ? Math.round((stat.total / totalAssets) * 100)
+                  : 0;
+
+              return (
+                <button
+                  key={stat.value}
+                  type="button"
+                  onClick={() => {
+                    const wallet = spendableWallets.find(
+                      (item) => item.type === stat.value,
+                    );
+                    if (wallet) openEditForm(wallet);
+                    else {
+                      setForm({ ...emptyForm, type: stat.value });
+                      setSaveError(null);
+                      setIsFormOpen(true);
+                    }
+                  }}
+                  className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <WalletIcon type={stat.value} compact />
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          {stat.label}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {stat.count} ví
+                        </p>
+                      </div>
                     </div>
+                    <span className="text-sm font-black text-slate-700">
+                      {percentage}%
+                    </span>
                   </div>
-                  <span className="text-sm font-black text-slate-700">
-                    {percentage}%
-                  </span>
-                </div>
-                <p className="mt-4 whitespace-nowrap text-xl font-black tabular-nums text-slate-900">
-                  {formatVND(stat.total)}
-                </p>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(percentage, 100)}%`,
-                      background: TYPE_COLORS[stat.value],
-                    }}
-                  />
-                </div>
-              </button>
-            );
-          })}
+                  <p className="mt-4 whitespace-nowrap text-xl font-black tabular-nums text-slate-900">
+                    {formatVND(stat.total)}
+                  </p>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(percentage, 100)}%`,
+                        background: TYPE_COLORS[stat.value],
+                      }}
+                    />
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
       </section>
 
@@ -853,7 +995,9 @@ export default function WalletsPage() {
               transferOut: 0,
             };
             const net = flow.income - flow.expense;
-            const txCount = walletLinkCounts.get(wallet.id) ?? 0;
+            const txCount = walletLinkCountsReady
+              ? (walletLinkCounts.get(wallet.id) ?? 0)
+              : null;
             const color = TYPE_COLORS[wallet.type];
 
             return (
@@ -916,56 +1060,70 @@ export default function WalletsPage() {
                 </div>
 
                 {/* Monthly flow */}
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-center">
-                    <p className="text-[9px] font-bold text-emerald-600 uppercase">
-                      Thu
-                    </p>
-                    <p className="mt-0.5 text-xs font-black text-emerald-700">
-                      {flow.income > 0
-                        ? Math.round(flow.income / 1e3) + "K"
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-rose-50 px-2.5 py-2 text-center">
-                    <p className="text-[9px] font-bold text-rose-500 uppercase">
-                      Chi
-                    </p>
-                    <p className="mt-0.5 text-xs font-black text-rose-600">
-                      {flow.expense > 0
-                        ? Math.round(flow.expense / 1e3) + "K"
-                        : "—"}
-                    </p>
-                  </div>
-                  <div
-                    className={
-                      "rounded-xl px-2.5 py-2 text-center " +
-                      (net >= 0 ? "bg-blue-50" : "bg-rose-50")
-                    }
-                  >
-                    <p
+                {walletAnalyticsReady ? (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-center">
+                      <p className="text-[9px] font-bold text-emerald-600 uppercase">
+                        Thu
+                      </p>
+                      <p className="mt-0.5 text-xs font-black text-emerald-700">
+                        {flow.income > 0
+                          ? Math.round(flow.income / 1e3) + "K"
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-rose-50 px-2.5 py-2 text-center">
+                      <p className="text-[9px] font-bold text-rose-500 uppercase">
+                        Chi
+                      </p>
+                      <p className="mt-0.5 text-xs font-black text-rose-600">
+                        {flow.expense > 0
+                          ? Math.round(flow.expense / 1e3) + "K"
+                          : "—"}
+                      </p>
+                    </div>
+                    <div
                       className={
-                        "text-[9px] font-bold uppercase " +
-                        (net >= 0 ? "text-blue-600" : "text-rose-500")
+                        "rounded-xl px-2.5 py-2 text-center " +
+                        (net >= 0 ? "bg-blue-50" : "bg-rose-50")
                       }
                     >
-                      Ròng
-                    </p>
-                    <p
-                      className={
-                        "mt-0.5 flex items-center justify-center gap-0.5 text-xs font-black " +
-                        (net >= 0 ? "text-blue-700" : "text-rose-600")
-                      }
-                    >
-                      {net > 0 ? (
-                        <ArrowUpRight size={9} />
-                      ) : net < 0 ? (
-                        <ArrowDownRight size={9} />
-                      ) : null}
-                      {net !== 0 ? Math.round(Math.abs(net) / 1e3) + "K" : "—"}
-                    </p>
+                      <p
+                        className={
+                          "text-[9px] font-bold uppercase " +
+                          (net >= 0 ? "text-blue-600" : "text-rose-500")
+                        }
+                      >
+                        Ròng
+                      </p>
+                      <p
+                        className={
+                          "mt-0.5 flex items-center justify-center gap-0.5 text-xs font-black " +
+                          (net >= 0 ? "text-blue-700" : "text-rose-600")
+                        }
+                      >
+                        {net > 0 ? (
+                          <ArrowUpRight size={9} />
+                        ) : net < 0 ? (
+                          <ArrowDownRight size={9} />
+                        ) : null}
+                        {net !== 0
+                          ? Math.round(Math.abs(net) / 1e3) + "K"
+                          : "—"}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : walletAnalyticsLoading ? (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-semibold text-slate-500">
+                    {walletAnalyticsError ?? "Chưa có dữ liệu dòng tiền tháng này."}
+                  </div>
+                )}
 
                 {/* Contribution bar */}
                 <div className="mt-3">
@@ -974,7 +1132,7 @@ export default function WalletsPage() {
                     <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
                       <span className="font-black text-slate-700">{pct}%</span>
                       <span className="text-slate-400">
-                        · {txCount} giao dịch
+                        · {txCount === null ? "—" : txCount} giao dịch
                       </span>
                     </div>
                   </div>
@@ -1155,6 +1313,8 @@ export default function WalletsPage() {
                         label="Ngày chuyển"
                         type="date"
                         value={transferForm.date}
+                        max={getLocalDateInputValue()}
+                        required
                         onChange={(value) =>
                           setTransferForm((prev) => ({ ...prev, date: value }))
                         }
@@ -1423,11 +1583,13 @@ function WalletSummaryCard({
   value,
   note,
   tone,
+  isLoading = false,
 }: {
   label: string;
   value: string;
   note: string;
   tone: "blue" | "emerald" | "rose" | "indigo";
+  isLoading?: boolean;
 }) {
   const styles = {
     blue: "border-blue-200 bg-blue-50 text-blue-700",
@@ -1441,9 +1603,13 @@ function WalletSummaryCard({
       <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
         {label}
       </p>
-      <p className="mt-2 whitespace-nowrap text-[clamp(0.85rem,4.2vw,1.25rem)] leading-none font-black tabular-nums sm:text-xl">
-        {value}
-      </p>
+      {isLoading ? (
+        <div className="mt-2 h-5 w-24 animate-pulse rounded-lg bg-white/60 sm:h-6" />
+      ) : (
+        <p className="mt-2 whitespace-nowrap text-[clamp(0.85rem,4.2vw,1.25rem)] leading-none font-black tabular-nums sm:text-xl">
+          {value}
+        </p>
+      )}
       <p className="mt-1 text-xs font-bold opacity-70">{note}</p>
     </div>
   );
@@ -1664,12 +1830,16 @@ function FormInput({
   onChange,
   placeholder,
   type = "text",
+  max,
+  required = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  max?: string;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -1681,6 +1851,8 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        max={max}
+        required={required}
         className="min-h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-base outline-none focus:border-blue-400 focus:bg-white sm:min-h-11 sm:px-4 sm:py-2.5 sm:text-sm"
       />
     </label>
