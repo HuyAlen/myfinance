@@ -2378,31 +2378,55 @@ export default function TransactionsPage() {
                   );
                 return (
                   <div key={date}>
-                    <div className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-4 py-2.5 backdrop-blur sm:px-6">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="shrink-0 text-sm font-black text-slate-800">
+                    <div className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 backdrop-blur sm:px-6 sm:py-2.5">
+                      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span className="whitespace-nowrap text-[12px] font-black text-slate-800 sm:text-sm">
                             {formatTransactionDayLabel(date)}
                           </span>
-                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-400 ring-1 ring-slate-200">
-                            {txns.length} giao dịch
+                          <span
+                            className="shrink-0 whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200 sm:px-2 sm:text-[11px]"
+                            title={`${txns.length} giao dịch`}
+                          >
+                            <span className="sm:hidden">{txns.length}</span>
+                            <span className="hidden sm:inline">
+                              {txns.length} giao dịch
+                            </span>
                           </span>
                         </div>
 
-                        <div className="hidden items-center gap-2 text-[11px] font-bold sm:flex">
+                        <div className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto text-[9px] font-black scrollbar-none sm:hidden">
                           {dayIncome > 0 && (
-                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600 ring-1 ring-emerald-100">
                               +{formatVND(dayIncome)}
                             </span>
                           )}
                           {dayExpense > 0 && (
-                            <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-600">
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-rose-50 px-2 py-0.5 text-rose-600 ring-1 ring-rose-100">
+                              -{formatVND(dayExpense)}
+                            </span>
+                          )}
+                          {dayTransferTurnover > 0 && (
+                            <span className="shrink-0 whitespace-nowrap rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-600 ring-1 ring-indigo-100">
+                              ⇄ {formatVND(dayTransferTurnover)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="ml-auto hidden items-center gap-2 text-[11px] font-bold sm:flex">
+                          {dayIncome > 0 && (
+                            <span className="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
+                              +{formatVND(dayIncome)}
+                            </span>
+                          )}
+                          {dayExpense > 0 && (
+                            <span className="whitespace-nowrap rounded-full bg-rose-50 px-2 py-1 text-rose-600">
                               -{formatVND(dayExpense)}
                             </span>
                           )}
                           {dayTransferTurnover > 0 && (
                             <span
-                              className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-600"
+                              className="whitespace-nowrap rounded-full bg-indigo-50 px-2 py-1 text-indigo-600"
                               title={
                                 "Luân chuyển nội bộ: " +
                                 formatVND(dayTransferTurnover)
@@ -2412,24 +2436,6 @@ export default function TransactionsPage() {
                             </span>
                           )}
                         </div>
-                      </div>
-
-                      <div className="mt-2 flex max-w-full gap-1.5 overflow-x-auto pb-0.5 text-[10px] font-black scrollbar-none sm:hidden">
-                        {dayIncome > 0 && (
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-600 ring-1 ring-emerald-100">
-                            Thu +{formatVND(dayIncome)}
-                          </span>
-                        )}
-                        {dayExpense > 0 && (
-                          <span className="shrink-0 rounded-full bg-rose-50 px-2.5 py-1 text-rose-600 ring-1 ring-rose-100">
-                            Chi -{formatVND(dayExpense)}
-                          </span>
-                        )}
-                        {dayTransferTurnover > 0 && (
-                          <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-600 ring-1 ring-indigo-100">
-                            Chuyển ⇄ {formatVND(dayTransferTurnover)}
-                          </span>
-                        )}
                       </div>
                     </div>
 
@@ -2484,7 +2490,7 @@ export default function TransactionsPage() {
 
                             <div
                               className={
-                                "grid gap-2 border-l-4 px-3 py-3 transition-all duration-200 hover:bg-blue-50/40 sm:px-6 sm:py-4 lg:grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] lg:items-center " +
+                                "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0 border-l-2 px-3 py-2.5 transition-all duration-200 hover:bg-blue-50/40 sm:border-l-4 sm:px-6 sm:py-4 lg:grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] lg:items-center lg:gap-x-2 " +
                                 getTransactionAccentClass(t) +
                                 " " +
                                 (isSelected ? "bg-blue-50" : "bg-white") +
@@ -2515,11 +2521,11 @@ export default function TransactionsPage() {
                                 />
                               </div>
 
-                              {/* Note + icon */}
-                              <div className="flex min-w-0 items-center gap-3.5">
+                              {/* Mobile ledger identity: icon + two single-line text levels */}
+                              <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
                                 <div
                                   className={
-                                    "flex size-10 shrink-0 items-center justify-center rounded-2xl shadow-sm sm:size-11 " +
+                                    "flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm sm:size-11 sm:rounded-2xl " +
                                     (isIncome
                                       ? "bg-emerald-100 text-emerald-600"
                                       : isForex
@@ -2543,11 +2549,11 @@ export default function TransactionsPage() {
                                     />
                                   )}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="max-w-46 truncate text-[15px] font-black leading-5 text-slate-900 sm:max-w-65 sm:text-sm">
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate whitespace-nowrap text-[13px] font-black leading-4 text-slate-900 sm:max-w-65 sm:text-sm sm:leading-5">
                                     {getTransactionDisplayNote(t)}
                                   </p>
-                                  <p className="mt-0.5 max-w-52 truncate text-[11px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs lg:hidden">
+                                  <p className="mt-0.5 truncate whitespace-nowrap text-[10px] font-medium leading-3.5 text-slate-400 sm:max-w-none sm:text-xs sm:leading-4 lg:hidden">
                                     {isTransfer
                                       ? getTransferWalletLabel(
                                           t,
@@ -2671,34 +2677,16 @@ export default function TransactionsPage() {
                                 </button>
                               </div>
 
-                              {/* Mobile: compact amount + actions */}
-                              <div className="flex items-center justify-between gap-3 pl-13 lg:hidden">
-                                <span
-                                  className={
-                                    "truncate text-[17px] font-black leading-none " +
-                                    getTransactionAmountColorClass(t)
-                                  }
-                                >
-                                  {getTransactionAmountPrefix(t)}
-                                  {formatVND(t.amount)}
-                                </span>
-                                <div className="flex shrink-0 gap-1">
-                                  <button
-                                    onClick={() => openEditForm(t)}
-                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400"
-                                    aria-label="Sửa giao dịch"
-                                  >
-                                    <Edit3 size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(t.id)}
-                                    className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400"
-                                    aria-label="Xóa giao dịch"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              </div>
+                              {/* Mobile ledger amount: same visual row; actions stay in swipe drawer */}
+                              <span
+                                className={
+                                  "shrink-0 whitespace-nowrap text-right text-[clamp(0.78rem,3.5vw,0.95rem)] font-black leading-none tracking-[-0.02em] tabular-nums lg:hidden " +
+                                  getTransactionAmountColorClass(t)
+                                }
+                              >
+                                {getTransactionAmountPrefix(t)}
+                                {formatVND(t.amount)}
+                              </span>
                             </div>
                           </div>
                         );

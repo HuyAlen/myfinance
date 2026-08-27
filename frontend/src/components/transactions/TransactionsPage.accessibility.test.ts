@@ -12,8 +12,8 @@ import { describe, expect, it } from "vitest";
  * name on the modal close button and the Timeline-view row Edit/Delete
  * buttons, plus a handful of icon-only controls relying on `title` alone
  * (a weaker, less consistently-surfaced accessible name than `aria-label`
- * — see the mobile compact row's Edit/Delete, which already got this
- * right pre-TXN-UX-1 and served as the established convention followed
+ * — see the mobile swipe controls, which already got this right pre-TXN-UX-1
+ * and served as the established convention followed
  * here). It also found the Create/Edit modal had no `role="dialog"`,
  * `aria-modal`, or Escape/focus handling.
  */
@@ -35,18 +35,18 @@ describe("Icon-only control accessible names (F-11)", () => {
     expect(source).toContain('aria-label="Xóa tìm kiếm"');
   });
 
-  it("every Edit/Delete row-action pair (desktop, mobile-compact, swipe, Timeline) has an accessible name — 4 Edit + 4 Delete occurrences", () => {
+  it("every remaining Edit/Delete row-action pair (swipe, desktop, Timeline) has an accessible name — 3 Edit + 3 Delete occurrences", () => {
     const editOccurrences =
       source.split('aria-label="Sửa giao dịch"').length - 1;
     const deleteOccurrences =
       source.split('aria-label="Xóa giao dịch"').length - 1;
-    expect(editOccurrences).toBe(4);
-    expect(deleteOccurrences).toBe(4);
+    expect(editOccurrences).toBe(3);
+    expect(deleteOccurrences).toBe(3);
   });
 
-  it("Timeline-view row Edit/Delete specifically had ZERO accessible name before this fix — regression-proof it independent of the other 3 locations", () => {
-    // The Timeline row is the last of the 4 openEditForm/handleDelete
-    // pairs in the file (swipe, desktop, mobile-compact, then Timeline).
+  it("Timeline-view row Edit/Delete specifically had ZERO accessible name before this fix — regression-proof it independent of the other row-action locations", () => {
+    // The Timeline row is the last of the 3 openEditForm/handleDelete
+    // pairs in the file (swipe, desktop, then Timeline).
     const lastEditIdx = source.lastIndexOf("onClick={() => openEditForm(t)}");
     const lastDeleteIdx = source.lastIndexOf("onClick={() => handleDelete(t.id)}");
     expect(lastEditIdx).toBeGreaterThan(-1);
