@@ -24,6 +24,8 @@ import {
   Bot,
   Brain,
   BriefcaseBusiness,
+  CalendarDays,
+  ChevronDown,
   Download,
   FileText,
   Landmark,
@@ -1374,43 +1376,79 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Bright Hero + 5 KPI cards
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-5 pt-5 sm:px-8 sm:pb-7 sm:pt-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
+      <section className="overflow-hidden rounded-3xl border border-blue-100 shadow-sm sm:rounded-4xl">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-4 pt-4 sm:px-8 sm:pb-7 sm:pt-6">
+          <div className="flex items-start justify-between gap-3 sm:flex-wrap sm:gap-4">
+            <div className="min-w-0">
+              <p className="hidden text-[11px] font-black uppercase tracking-widest text-blue-500 sm:block">
                 Financial Report Center
               </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-4xl">
                 Báo cáo tài chính
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 flex items-center gap-1.5 text-xs font-bold text-blue-700 sm:hidden">
+                <CalendarDays size={13} />
+                {label}
+                <span className="font-medium text-slate-400">· dòng tiền</span>
+              </p>
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                 Dòng tiền theo {label} · Tài sản, nợ, đầu tư, mục tiêu và sức
                 khỏe tài chính là snapshot hiện tại
               </p>
             </div>
-            <div className="flex gap-2 print:hidden">
-              <button
-                onClick={exportCSV}
-                disabled={!isReportPeriodValid}
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <Download size={15} />
-                CSV
-              </button>
-              <button
-                onClick={exportPDF}
-                disabled={!isReportPeriodValid}
-                className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 hover:bg-blue-700"
-              >
-                <FileText size={15} />
-                PDF
-              </button>
+
+            <div className="print:hidden">
+              <details className="group relative sm:hidden">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-2xl border border-blue-100 bg-white px-3 text-sm font-black text-blue-700 shadow-sm [&::-webkit-details-marker]:hidden">
+                  <Download size={15} />
+                  Xuất
+                  <ChevronDown size={14} className="transition group-open:rotate-180" />
+                </summary>
+                <div className="absolute right-0 top-12 z-30 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={exportCSV}
+                    disabled={!isReportPeriodValid}
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Download size={14} />
+                    CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportPDF}
+                    disabled={!isReportPeriodValid}
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <FileText size={14} />
+                    PDF
+                  </button>
+                </div>
+              </details>
+
+              <div className="hidden gap-2 sm:flex">
+                <button
+                  onClick={exportCSV}
+                  disabled={!isReportPeriodValid}
+                  className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Download size={15} />
+                  CSV
+                </button>
+                <button
+                  onClick={exportPDF}
+                  disabled={!isReportPeriodValid}
+                  className="flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200/60 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <FileText size={15} />
+                  PDF
+                </button>
+              </div>
             </div>
           </div>
 
           {/* 5 KPI cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="no-scrollbar -mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mt-6 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
             <KpiCard
               label="Tài sản ròng"
               value={formatVND(summary.netWorth)}
@@ -1460,7 +1498,7 @@ export default function ReportsPage() {
             {/* Health Score card */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
+                "w-[168px] shrink-0 snap-start rounded-2xl bg-linear-to-br p-3 shadow-sm sm:w-auto sm:p-4 " +
                 healthGrade.gradient
               }
             >
@@ -1485,7 +1523,115 @@ export default function ReportsPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4 print:hidden">
+        <details className="group border-t border-slate-100 bg-slate-50/80 print:hidden sm:hidden">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm [&::-webkit-details-marker]:hidden">
+            <span className="flex min-w-0 items-center gap-2">
+              <CalendarDays size={15} className="shrink-0 text-blue-600" />
+              <span className="text-xs font-bold text-slate-500">Kỳ báo cáo</span>
+              <span className="whitespace-nowrap font-black text-slate-900">{label}</span>
+            </span>
+            <ChevronDown size={16} className="shrink-0 text-slate-400 transition group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+            <div className="grid grid-cols-4 gap-2">
+              {(["month", "quarter", "year", "custom"] as PeriodMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPeriodMode(m)}
+                  className={
+                    "min-h-10 rounded-xl px-2 text-[11px] font-black transition " +
+                    (periodMode === m
+                      ? "bg-blue-600 text-white"
+                      : "border border-slate-200 bg-white text-slate-600")
+                  }
+                >
+                  {m === "month"
+                    ? "Tháng"
+                    : m === "quarter"
+                      ? "Quý"
+                      : m === "year"
+                        ? "Năm"
+                        : "Tuỳ chọn"}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 grid gap-2">
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-700 outline-none"
+              >
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              {periodMode === "month" && (
+                <select
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-700 outline-none"
+                >
+                  {MONTHS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {periodMode === "quarter" && (
+                <select
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-700 outline-none"
+                >
+                  {QUARTERS.map((q) => (
+                    <option key={q.value} value={q.value}>
+                      {q.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {periodMode === "custom" && (
+                <div className="grid gap-2">
+                  <input
+                    type="date"
+                    value={customStart}
+                    max={customEnd || undefined}
+                    aria-invalid={!isReportPeriodValid}
+                    onChange={(e) => {
+                      const nextStart = e.target.value;
+                      setCustomStart(nextStart);
+                      if (customEnd && nextStart > customEnd) {
+                        setCustomEnd(nextStart);
+                      }
+                    }}
+                    className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-700 outline-none"
+                  />
+                  <input
+                    type="date"
+                    value={customEnd}
+                    min={customStart || undefined}
+                    aria-invalid={!isReportPeriodValid}
+                    onChange={(e) => {
+                      const nextEnd = e.target.value;
+                      setCustomEnd(nextEnd);
+                      if (customStart && nextEnd < customStart) {
+                        setCustomStart(nextEnd);
+                      }
+                    }}
+                    className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-700 outline-none"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </details>
+
+        <div className="hidden flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4 print:hidden sm:flex">
           <span className="text-xs font-bold text-slate-500">Kỳ báo cáo:</span>
           {(["month", "quarter", "year", "custom"] as PeriodMode[]).map((m) => (
             <button
@@ -1585,14 +1731,14 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 · Report Tab Navigation
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="sticky top-0 z-20 rounded-3xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur print:hidden">
+      <section className="sticky top-0 z-20 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-sm backdrop-blur print:hidden sm:rounded-3xl sm:p-2">
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {REPORT_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setReportTab(tab.id)}
               className={
-                "shrink-0 rounded-2xl border px-4 py-2.5 text-sm font-bold transition-all " +
+                "shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all sm:rounded-2xl sm:px-4 sm:py-2.5 sm:text-sm " +
                 (reportTab === tab.id
                   ? "border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200"
                   : "border-transparent bg-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700")
@@ -1604,7 +1750,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <section className="hidden rounded-3xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:block">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600">
           {REPORT_TAB_META[reportTab].title}
         </p>
@@ -1618,7 +1764,7 @@ export default function ReportsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       {reportTab === "overview" && (
         <>
-          <section className="grid gap-3 xl:grid-cols-3">
+          <section className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-3">
             <InsightSummaryCard
               icon={<WalletCards size={18} />}
               title="Tài sản ròng"
@@ -1693,7 +1839,7 @@ export default function ReportsPage() {
           </section>
 
           <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<PieChartIcon size={20} />}
                 title="Cấu trúc tài sản"
@@ -1781,7 +1927,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<Brain size={20} />}
                 title="Executive Summary"
@@ -1878,7 +2024,7 @@ export default function ReportsPage() {
           </section>
 
           {/* MoM / QoQ / YoY comparisons */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<BarChart3 size={20} />}
               title="So sánh kỳ"
@@ -1940,14 +2086,14 @@ export default function ReportsPage() {
           </section>
 
           {/* 12-month area chart */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<TrendingUp size={20} />}
               title="Xu hướng thu nhập"
               subtitle={"12 tháng năm " + year}
             />
-            <div className="mt-5">
-              <ResponsiveContainer width="100%" height={280} minWidth={0}>
+            <div className="mt-4 h-[220px] sm:mt-5 sm:h-[280px]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart
                   data={monthly}
                   margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
@@ -1971,7 +2117,8 @@ export default function ReportsPage() {
                     dataKey="month"
                     axisLine={false}
                     tickLine={false}
-                    fontSize={11}
+                    minTickGap={12}
+                    fontSize={10}
                   />
                   <YAxis axisLine={false} tickLine={false} fontSize={11} />
                   <Tooltip formatter={(value) => formatMillionTooltip(value)} />
@@ -1993,7 +2140,8 @@ export default function ReportsPage() {
                   />
                 </AreaChart>
               </ResponsiveContainer>
-              <div className="mt-4 flex gap-4 text-xs text-slate-500">
+            </div>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500 sm:mt-4 sm:gap-4">
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-emerald-500" />
                   Thu nhập (M)
@@ -2003,18 +2151,17 @@ export default function ReportsPage() {
                   Dòng tiền ròng (M)
                 </span>
               </div>
-            </div>
           </section>
 
           {/* Income Statement table */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<FileText size={20} />}
               title="Kết quả kinh doanh"
               subtitle={label}
             />
             <div className="mt-5 overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="min-w-[520px] w-full text-sm sm:min-w-0">
                 <thead>
                   <tr className="border-b border-slate-100">
                     <th className="pb-3 text-left font-black text-slate-700">
@@ -2146,7 +2293,7 @@ export default function ReportsPage() {
 
           <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             {/* Pie chart */}
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<PieChartIcon size={20} />}
                 title="Chi tiêu theo danh mục"
@@ -2214,14 +2361,14 @@ export default function ReportsPage() {
             </div>
 
             {/* Monthly comparison bar chart */}
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<BarChart3 size={20} />}
                 title="Thu chi theo tháng"
                 subtitle={"Đơn vị: triệu đồng — Năm " + year}
               />
-              <div className="mt-5">
-                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+              <div className="mt-4 h-[220px] sm:mt-5 sm:h-[300px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart
                     data={monthly}
                     barGap={3}
@@ -2237,7 +2384,8 @@ export default function ReportsPage() {
                       dataKey="month"
                       axisLine={false}
                       tickLine={false}
-                      fontSize={11}
+                    minTickGap={12}
+                    fontSize={10}
                     />
                     <YAxis
                       axisLine={false}
@@ -2257,11 +2405,11 @@ export default function ReportsPage() {
                     />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 sm:mt-4">
                   <span className="size-2 rounded-full bg-rose-500" />
                   Chi phí thật theo từng tháng
                 </div>
-              </div>
             </div>
           </section>
         </>
@@ -2308,13 +2456,13 @@ export default function ReportsPage() {
           </section>
 
           {/* Cash flow statement tabs */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<FileText size={20} />}
               title="Báo cáo tài chính"
               subtitle="Income Statement · Cash Flow · Net Worth"
             />
-            <div className="mt-5 flex gap-2 border-b border-slate-100 pb-0">
+            <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto border-b border-slate-100 pb-0 sm:mt-5 sm:gap-2">
               {(
                 [
                   ["income", "Kết quả kinh doanh"],
@@ -2326,7 +2474,7 @@ export default function ReportsPage() {
                   key={id}
                   onClick={() => setStmtTab(id)}
                   className={
-                    "rounded-t-xl px-4 py-2.5 text-sm font-bold transition " +
+                    "shrink-0 whitespace-nowrap rounded-t-xl px-3 py-2 text-xs font-bold transition sm:px-4 sm:py-2.5 sm:text-sm " +
                     (stmtTab === id
                       ? "bg-blue-50 text-blue-700 border-b-2 border-blue-600"
                       : "text-slate-500 hover:text-slate-700")
@@ -2338,8 +2486,9 @@ export default function ReportsPage() {
             </div>
 
             {stmtTab === "cashflow" && (
-              <div className="mt-5">
-                <ResponsiveContainer width="100%" height={280} minWidth={0}>
+              <div className="mt-4 sm:mt-5">
+                <div className="h-[220px] sm:h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart
                     data={monthly}
                     barGap={3}
@@ -2355,7 +2504,8 @@ export default function ReportsPage() {
                       dataKey="month"
                       axisLine={false}
                       tickLine={false}
-                      fontSize={11}
+                    minTickGap={12}
+                    fontSize={10}
                     />
                     <YAxis
                       axisLine={false}
@@ -2386,8 +2536,9 @@ export default function ReportsPage() {
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
-                </ResponsiveContainer>
-                <div className="mt-4 flex gap-4 text-xs text-slate-500">
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500 sm:mt-4 sm:gap-4">
                   <span className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-emerald-500" />
                     Thu nhập
@@ -2402,7 +2553,7 @@ export default function ReportsPage() {
                   </span>
                 </div>
                 <div className="mt-6 overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="min-w-[460px] w-full text-xs sm:min-w-0">
                     <thead>
                       <tr className="border-b border-slate-100">
                         {[
@@ -2454,7 +2605,7 @@ export default function ReportsPage() {
 
             {stmtTab === "income" && (
               <div className="mt-5 overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="min-w-[520px] w-full text-sm sm:min-w-0">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <th className="pb-3 text-left font-black text-slate-700">
@@ -2649,7 +2800,7 @@ export default function ReportsPage() {
 
           <section className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
             {/* Per-investment cards */}
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<BriefcaseBusiness size={20} />}
                 title="Chi tiết danh mục đầu tư"
@@ -2689,7 +2840,7 @@ export default function ReportsPage() {
                               style={{ background: color }}
                             />
                             <div className="min-w-0">
-                              <p className="truncate font-black text-slate-900">
+                              <p className="font-black leading-snug text-slate-900 break-words">
                                 {inv.name}
                               </p>
                               <span
@@ -2741,7 +2892,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Allocation pie */}
-            <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <h2 className="mb-4 text-base font-black text-slate-900">
                 Phân bổ loại tài sản
               </h2>
@@ -2835,7 +2986,7 @@ export default function ReportsPage() {
             />
           </section>
 
-          <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<Target size={20} />}
               title="Tiến độ mục tiêu"
@@ -2928,7 +3079,7 @@ export default function ReportsPage() {
       {reportTab === "ai" && (
         <>
           {/* 4 engine insight blocks */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-violet-600 to-indigo-500 text-white shadow-lg shadow-violet-100">
                 <Bot size={20} />
@@ -3036,7 +3187,7 @@ export default function ReportsPage() {
           </section>
 
           {/* Health score factors */}
-          <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <SectionHeader
               icon={<Zap size={20} />}
               title="Chi tiết điểm sức khoẻ tài chính"
@@ -3144,7 +3295,7 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           Export Center (always visible)
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 print:hidden">
+      <section className="hidden rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-6 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-slate-600 to-slate-700 text-white shadow-sm">
@@ -3214,7 +3365,8 @@ function KpiCard({
   return (
     <div
       className={
-        "min-w-0 rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient
+        "w-[168px] shrink-0 snap-start rounded-2xl bg-linear-to-br p-3 shadow-sm sm:w-auto sm:min-w-0 sm:p-4 " +
+        gradient
       }
     >
       <div className="flex min-w-0 items-start justify-between gap-2">
@@ -3238,7 +3390,7 @@ function KpiCard({
       >
         {value}
       </p>
-      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/75">
+      <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-white/75 sm:line-clamp-2">
         {sub}
       </p>
     </div>
@@ -3259,11 +3411,12 @@ function StatMini({
   border: string;
 }) {
   return (
-    <div className={"rounded-2xl border p-4 " + bg + " " + border}>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
+    <div className={"min-w-0 rounded-2xl border p-3 sm:p-4 " + bg + " " + border}>
+      <p className="text-[10px] font-bold leading-4 text-slate-500 sm:text-xs">{label}</p>
       <p
         className={
-          "mt-2 wrap-break-word text-xl font-black leading-tight " + color
+          "mt-1.5 whitespace-nowrap text-[clamp(0.8rem,3.8vw,1.25rem)] font-black leading-tight tracking-tight tabular-nums sm:mt-2 sm:text-xl sm:tracking-normal " +
+          color
         }
       >
         {value}
@@ -3282,13 +3435,13 @@ function SectionHeader({
   subtitle: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+    <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100 sm:size-11 sm:rounded-2xl sm:shadow-lg">
         {icon}
       </div>
-      <div>
-        <h2 className="text-lg font-black text-slate-900">{title}</h2>
-        <p className="text-sm text-slate-500">{subtitle}</p>
+      <div className="min-w-0">
+        <h2 className="text-base font-black leading-tight text-slate-900 sm:text-lg">{title}</h2>
+        <p className="mt-0.5 text-xs leading-4 text-slate-500 sm:mt-0 sm:text-sm sm:leading-normal">{subtitle}</p>
       </div>
     </div>
   );
@@ -3315,7 +3468,7 @@ function TrendCard({
   const up = delta !== null && delta > 0;
   const chartData = data.map((d, i) => ({ i, v: d.v }));
   return (
-    <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-black text-slate-900">{title}</p>
         {delta !== null && (
@@ -3482,19 +3635,19 @@ function InsightSummaryCard({
   };
 
   return (
-    <div className={"rounded-3xl border p-5 shadow-sm " + styles[tone]}>
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-2xl bg-white/70">
+    <div className={"w-[252px] shrink-0 snap-start rounded-3xl border p-4 shadow-sm sm:w-auto sm:p-5 " + styles[tone]}>
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/70 sm:size-10 sm:rounded-2xl">
           {icon}
         </div>
         <div>
           <p className="text-xs font-black uppercase tracking-wide opacity-70">
             {title}
           </p>
-          <p className="mt-0.5 text-2xl font-black">{value}</p>
+          <p className="mt-0.5 whitespace-nowrap text-xl font-black tabular-nums sm:text-2xl">{value}</p>
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 opacity-90">{note}</p>
+      <p className="mt-2 line-clamp-2 text-xs leading-5 opacity-90 sm:mt-3 sm:line-clamp-none sm:text-sm sm:leading-6">{note}</p>
     </div>
   );
 }
