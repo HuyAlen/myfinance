@@ -3,12 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * DASH-MOBILE-POLISH-1 — professional HeroMini density.
+ * DASH-MOBILE-POLISH-1 + DASH-COLOR-POLISH-1.1.
  *
- * The previous V2 contract intentionally enlarged the mobile cards. The
- * professional-density pass supersedes that visual contract: mobile cards
- * are now shorter/flatter while preserving responsive safety and business
- * wiring. Desktop-specific sizes remain explicit at sm+.
+ * Source-inspection regression contract for the compact HeroMini sizing and
+ * refined light financial palette. Business wiring/readiness is intentionally
+ * outside this visual contract.
  */
 describe("DashboardPage HeroMini mobile KPI professional density", () => {
   const source = readFileSync(
@@ -85,15 +84,15 @@ describe("DashboardPage HeroMini mobile KPI professional density", () => {
     expect(source).toContain("value={formatVND(summary.totalDebt)}");
   });
 
-  it("keeps Net Worth visually dominant under the new professional hierarchy", () => {
+  it("keeps Net Worth visually dominant with refined navy typography", () => {
     expect(source).toContain(
-      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-white",
+      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-[#173A6A] sm:text-5xl",
     );
   });
 
-  it("keeps the Hero outer mobile padding at p-4", () => {
+  it("keeps the refined light Hero surface and mobile p-4 spacing", () => {
     expect(source).toContain(
-      'className="bg-linear-to-br from-[#2F6FF7] via-[#4A78F2] to-[#675BF5] p-4 sm:p-7"',
+      'className="bg-linear-to-br from-white via-[#F8FBFF] to-[#EEF5FF] p-4 sm:p-7"',
     );
   });
 });

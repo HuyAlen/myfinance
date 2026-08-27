@@ -2695,24 +2695,24 @@ export default function DashboardPage() {
           gating, and instrumentation below are unchanged; only its position
           in the page moved. */}
       {/* Executive overview */}
-      <section className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white/95 shadow-[0_18px_44px_rgba(37,99,235,0.12)] sm:rounded-4xl">
-        <div className="bg-linear-to-br from-[#2F6FF7] via-[#4A78F2] to-[#675BF5] p-4 sm:p-7">
+      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_14px_36px_rgba(37,99,235,0.08)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-white via-[#F8FBFF] to-[#EEF5FF] p-4 sm:p-7">
           {/* DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.
               Net Worth is the focal value; Reports is a compact secondary action,
               and supporting copy no longer sits between the title and amount. */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-100 sm:text-xs">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:text-xs">
                 Tài sản & nợ
               </p>
-              <h1 className="mt-1.5 text-[22px] font-black tracking-tight text-white sm:mt-2 sm:text-3xl">
+              <h1 className="mt-1.5 text-[22px] font-black tracking-tight text-[#23466F] sm:mt-2 sm:text-3xl">
                 Tài sản ròng
               </h1>
             </div>
             <button
               type="button"
               onClick={() => router.push("/reports")}
-              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-white/45 bg-white/12 px-3 text-xs font-black text-white backdrop-blur-sm transition hover:bg-white/20 sm:h-10 sm:px-4 sm:text-sm"
+              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white/90 px-3 text-xs font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:h-10 sm:px-4 sm:text-sm"
             >
               Xem báo cáo&nbsp;›
             </button>
@@ -2722,7 +2722,7 @@ export default function DashboardPage() {
             {/* PERF-4B: headline remains gated only on isDashboardReady. */}
             {isDashboardReady ? (
               <p
-                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-white drop-shadow-[0_2px_10px_rgba(30,64,175,0.22)] sm:text-5xl"
+                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-[#173A6A] sm:text-5xl"
                 title={formatVND(summary.netWorth)}
               >
                 {formatVND(summary.netWorth)}
@@ -2731,7 +2731,7 @@ export default function DashboardPage() {
               <div className="h-10 w-52 animate-pulse rounded-lg bg-slate-200/80 sm:h-12 sm:w-64" />
             )}
 
-            <p className="mt-2 max-w-xl text-[13px] leading-5 text-blue-50/90 sm:text-sm">
+            <p className="mt-2 max-w-xl text-[13px] leading-5 text-slate-600 sm:text-sm">
               Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
             </p>
 
@@ -2768,7 +2768,7 @@ export default function DashboardPage() {
             />
             <HeroMini
               icon={<PiggyBank size={16} />}
-              iconClass="bg-emerald-50 text-emerald-600"
+              iconClass="bg-blue-50 text-blue-600"
               label="Tiết kiệm"
               value={formatVND(savingsSnapshot.totalSavings)}
               valueClass="text-[#173A6A]"
@@ -2776,7 +2776,7 @@ export default function DashboardPage() {
             />
             <HeroMini
               icon={<Landmark size={16} />}
-              iconClass="bg-violet-50 text-violet-600"
+              iconClass="bg-blue-50 text-blue-600"
               label="Vốn Forex"
               value={formatVND(forexSnapshot.balance)}
               valueClass="text-[#173A6A]"
@@ -2784,7 +2784,7 @@ export default function DashboardPage() {
             />
             <HeroMini
               icon={<Briefcase size={16} />}
-              iconClass="bg-amber-50 text-amber-600"
+              iconClass="bg-blue-50 text-blue-600"
               label="Đầu tư khác"
               value={formatVND(summary.investmentAssets)}
               valueClass="text-[#173A6A]"
@@ -2792,7 +2792,7 @@ export default function DashboardPage() {
             />
             <HeroMini
               icon={<CreditCard size={16} />}
-              iconClass="bg-rose-50 text-rose-500"
+              iconClass="bg-blue-50 text-blue-600"
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
               valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#173A6A]"}
@@ -2800,7 +2800,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/70 bg-white/95 p-3.5 shadow-[0_8px_24px_rgba(30,64,175,0.08)] sm:mt-5 sm:rounded-3xl sm:p-4">
+          <div className="mt-4 rounded-2xl border border-blue-100/80 bg-[#F9FBFF] p-3.5 shadow-[0_6px_18px_rgba(37,99,235,0.05)] sm:mt-5 sm:rounded-3xl sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-black text-[#23466F]">
@@ -3711,7 +3711,7 @@ function HeroMini({
   isLoading?: boolean;
 }) {
   return (
-    <div className="min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-white/55 bg-white/95 p-3 shadow-[0_8px_24px_rgba(30,64,175,0.10)] backdrop-blur sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:shadow-md">
+    <div className="min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-slate-200/70 bg-white p-3 shadow-[0_6px_18px_rgba(37,99,235,0.06)] sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:shadow-md">
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
         <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-7 ${iconClass}`}>
           {icon}

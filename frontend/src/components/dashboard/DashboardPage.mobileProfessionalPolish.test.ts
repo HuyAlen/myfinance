@@ -46,20 +46,28 @@ describe("DASH-MOBILE-POLISH-1 professional hierarchy and density", () => {
 });
 
 
-describe("DASH-COLOR-POLISH-1 blue finance palette", () => {
+describe("DASH-COLOR-POLISH-1.1 refined light financial palette", () => {
   const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
 
-  it("removes near-black text tokens from the Dashboard page", () => {
+  it("keeps the Dashboard free of pure/near-black text tokens", () => {
     expect(source).not.toContain("text-black");
     expect(source).not.toContain("text-slate-950");
     expect(source).not.toContain("text-slate-900");
   });
 
-  it("uses the premium blue-violet Net Worth hero and purpose-specific pastel asset icons", () => {
-    expect(source).toContain("from-[#2F6FF7] via-[#4A78F2] to-[#675BF5]");
-    expect(source).toContain('iconClass="bg-emerald-50 text-emerald-600"');
-    expect(source).toContain('iconClass="bg-violet-50 text-violet-600"');
-    expect(source).toContain('iconClass="bg-amber-50 text-amber-600"');
-    expect(source).toContain('iconClass="bg-rose-50 text-rose-500"');
+  it("replaces the saturated hero with a light blue-white financial surface", () => {
+    expect(source).toContain("from-white via-[#F8FBFF] to-[#EEF5FF]");
+    expect(source).not.toContain("from-[#2F6FF7] via-[#4A78F2] to-[#675BF5]");
+    expect(source).toContain("text-[#173A6A] sm:text-5xl");
+    expect(source).toContain("border border-blue-200 bg-white/90");
+  });
+
+  it("uses one restrained blue icon family for HeroMini assets", () => {
+    const blueIcons = source.split('iconClass="bg-blue-50 text-blue-600"').length - 1;
+    expect(blueIcons).toBe(5);
+    expect(source).not.toContain('iconClass="bg-emerald-50 text-emerald-600"');
+    expect(source).not.toContain('iconClass="bg-violet-50 text-violet-600"');
+    expect(source).not.toContain('iconClass="bg-amber-50 text-amber-600"');
+    expect(source).not.toContain('iconClass="bg-rose-50 text-rose-500"');
   });
 });
