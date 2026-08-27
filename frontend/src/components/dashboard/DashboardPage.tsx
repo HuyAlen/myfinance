@@ -2695,107 +2695,119 @@ export default function DashboardPage() {
           gating, and instrumentation below are unchanged; only its position
           in the page moved. */}
       {/* Executive overview */}
-      <section className="overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 shadow-sm transition-all duration-200 hover:shadow-md">
-        <div className="bg-linear-to-br from-blue-50/80 via-white to-sky-50/80 p-4 sm:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-blue-50/65 via-white to-sky-50/55 p-4 sm:p-7">
+          {/* DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.
+              Net Worth is the focal value; Reports is a compact secondary action,
+              and supporting copy no longer sits between the title and amount. */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:text-xs">
                 Tài sản & nợ
               </p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+              <h1 className="mt-1.5 text-[22px] font-black tracking-tight text-slate-950 sm:mt-2 sm:text-3xl">
                 Tài sản ròng
               </h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
-              </p>
             </div>
             <button
               type="button"
               onClick={() => router.push("/reports")}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/95 px-4 text-sm font-black text-blue-600 transition-all duration-200 hover:bg-blue-50"
+              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-white/80 px-3 text-xs font-black text-blue-600 transition hover:border-blue-200 hover:bg-blue-50 sm:h-10 sm:px-4 sm:text-sm"
             >
-              Xem báo cáo
+              Xem báo cáo&nbsp;›
             </button>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-end gap-3">
-            {/* PERF-4B: headline is gated on isDashboardReady alone —
-                calculateNetWorth has no transactions/categories dependency,
-                so it must not wait on the separate cash-flow badge below. */}
+          <div className="mt-4">
+            {/* PERF-4B: headline remains gated only on isDashboardReady. */}
             {isDashboardReady ? (
               <p
-                className="whitespace-nowrap text-[clamp(1.05rem,5vw,1.875rem)] font-black leading-none tracking-[-0.04em] tabular-nums text-blue-600 sm:text-5xl"
+                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-slate-950 sm:text-5xl"
                 title={formatVND(summary.netWorth)}
               >
                 {formatVND(summary.netWorth)}
               </p>
             ) : (
-              <div className="h-9 w-48 animate-pulse rounded-lg bg-slate-200/80 sm:h-11 sm:w-64" />
+              <div className="h-10 w-52 animate-pulse rounded-lg bg-slate-200/80 sm:h-12 sm:w-64" />
             )}
-            {/* PERF-4B: badge is gated on cashFlowReady alone — netCashFlow
-                is periodFlowSummary's income/expense, independent of the
-                headline's Net Worth bundle. */}
-            {cashFlowReady ? (
-              <span className="mb-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-                {formatVND(netCashFlow)}
-              </span>
-            ) : (
-              <div className="mb-1 h-6 w-32 animate-pulse rounded-full bg-slate-100" />
-            )}
+
+            <p className="mt-2 max-w-xl text-[13px] leading-5 text-slate-500 sm:text-sm">
+              Tổng tài sản đang sở hữu sau khi trừ toàn bộ nợ phải trả.
+            </p>
+
+            {/* PERF-4B: badge still depends on cashFlowReady alone. */}
+            <div className="mt-3">
+              {cashFlowReady ? (
+                <span
+                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black sm:px-3 sm:text-xs ${
+                    netCashFlow >= 0
+                      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                      : "border-rose-100 bg-rose-50 text-rose-600"
+                  }`}
+                >
+                  {netCashFlow >= 0 ? "↑" : "↓"}{" "}
+                  {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
+                  {formatVND(netCashFlow)}
+                </span>
+              ) : (
+                <div className="h-6 w-36 animate-pulse rounded-full bg-slate-100" />
+              )}
+            </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+          {/* Mobile uses a flatter financial breakdown instead of visually
+              heavy nested cards; desktop keeps a familiar 5-column layout. */}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-5">
             <HeroMini
               icon={<Wallet size={16} />}
               label="Thanh khoản"
               value={formatVND(summary.liquidBalance)}
-              valueClass="text-blue-600"
+              valueClass="text-slate-900"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<PiggyBank size={16} />}
               label="Tiết kiệm"
               value={formatVND(savingsSnapshot.totalSavings)}
-              valueClass="text-cyan-600"
+              valueClass="text-slate-900"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Landmark size={16} />}
               label="Vốn Forex"
               value={formatVND(forexSnapshot.balance)}
-              valueClass="text-violet-600"
+              valueClass="text-slate-900"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Briefcase size={16} />}
               label="Đầu tư khác"
               value={formatVND(summary.investmentAssets)}
-              valueClass="text-emerald-600"
+              valueClass="text-slate-900"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<CreditCard size={16} />}
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
-              valueClass="text-rose-500"
+              valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-slate-900"}
               isLoading={!isDashboardReady}
             />
           </div>
 
-          <div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+          <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/70 p-3.5 sm:mt-5 sm:rounded-3xl sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-black text-slate-900">
                   Biến động tài sản ròng
                 </p>
-                <p className="mt-1 text-xs text-slate-600">
-                  Lịch sử snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
+                <p className="mt-1 text-[11px] leading-4 text-slate-500 sm:text-xs">
+                  Snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
                 </p>
               </div>
 
               {netWorthTrendReady && hasNetWorthHistoryComparison ? (
-                <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
+                <div className="rounded-xl bg-slate-50 px-3 py-2 text-right">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                     So với snapshot trước
                   </p>
@@ -2814,49 +2826,45 @@ export default function DashboardPage() {
             </div>
 
             {!netWorthTrendReady ? (
-              <div className="mt-3 h-32 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="mt-3 h-24 animate-pulse rounded-xl bg-slate-100 sm:h-32 sm:rounded-2xl" />
             ) : !hasNetWorthHistoryData ? (
-              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+              <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3.5 sm:rounded-2xl sm:p-4">
                 <p className="text-sm font-black text-slate-700">
                   Chưa có lịch sử tài sản ròng
                 </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-slate-500 sm:text-xs sm:leading-5">
                   Chưa có snapshot Net Worth nào được ghi nhận cho kỳ đang xem.
                   Hệ thống không tự dựng số liệu cho các tháng chưa từng được lưu.
                 </p>
               </div>
             ) : netWorthHistorySummary.snapshotCount === 1 ? (
-              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/45 p-3.5 sm:rounded-2xl sm:p-4">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
                       Snapshot đã ghi nhận
                     </p>
-                    <p className="mt-2 text-xl font-black tracking-tight tabular-nums text-slate-950">
+                    <p className="mt-1.5 text-lg font-black tracking-tight tabular-nums text-slate-950 sm:text-xl">
                       {formatVND(Number(netWorthHistorySummary.latestPoint!.value))}
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500 sm:text-xs">
                       Tháng {String(netWorthHistorySummary.latestPoint!.month).padStart(2, "0")}/{selectedYear}
                     </p>
                   </div>
-                  <div className="max-w-56 text-left sm:text-right">
+                  <div className="sm:max-w-56 sm:text-right">
                     <p className="text-xs font-bold text-slate-600">
                       Chưa đủ dữ liệu để so sánh
                     </p>
-                    <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                      Cần ít nhất 2 snapshot ở các tháng khác nhau để hiển thị biến động.
+                    <p className="mt-1 text-[10px] leading-4 text-slate-500 sm:text-[11px]">
+                      Cần ít nhất 2 snapshot ở các tháng khác nhau.
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 border-t border-blue-100 pt-3 text-[11px] leading-4 text-slate-500">
-                  Lịch sử Net Worth bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedYear}; các tháng chưa được ghi nhận vẫn là dữ liệu chưa biết.
+                <p className="mt-2.5 border-t border-blue-100 pt-2.5 text-[10px] leading-4 text-slate-500 sm:text-[11px]">
+                  Lịch sử bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedYear}; tháng chưa ghi nhận vẫn là dữ liệu chưa biết.
                 </p>
               </div>
             ) : (
-              /* NETWORTH-HISTORY-1.1: only render the trend chart once at
-                 least two canonical snapshots exist. Sparse/unknown months
-                 stay null; a single point is shown as a compact factual
-                 snapshot instead of a misleading 12-month chart. */
               <NetWorthTrendChart trend={netWorthTrend} />
             )}
           </div>
@@ -3696,21 +3704,21 @@ function HeroMini({
   isLoading?: boolean;
 }) {
   return (
-    <div className="min-w-0 min-h-[100px] overflow-hidden rounded-2xl border border-white/70 bg-white/95/85 p-3 shadow-sm transition-all duration-200 hover:shadow-md backdrop-blur sm:min-h-0 sm:overflow-visible sm:px-2.5 sm:py-3">
+    <div className="min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-slate-200/70 bg-white/65 p-3 shadow-none backdrop-blur sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:border-white/70 sm:bg-white/85 sm:px-2.5 sm:py-3 sm:shadow-sm sm:transition-all sm:duration-200 sm:hover:shadow-md">
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 sm:size-7">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50/90 text-blue-600 sm:size-7">
           {icon}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="whitespace-nowrap text-[12.5px] font-semibold leading-tight tracking-[-0.01em] text-slate-600 sm:tracking-normal sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 xl:text-[8px] 2xl:text-[10px]">
+          <p className="whitespace-nowrap text-[11.5px] font-semibold leading-tight tracking-[-0.01em] text-slate-500 sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           {isLoading ? (
             <div className="mt-1.5 h-4 w-16 animate-pulse rounded-md bg-slate-200/80 sm:mt-1 sm:h-3.5" />
           ) : (
             <p
-              className={`mt-1 whitespace-nowrap text-[clamp(12px,3.5vw,16px)] font-black leading-5 tracking-[-0.03em] tabular-nums sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.045em] ${valueClass}`}
+              className={`mt-1 whitespace-nowrap text-[clamp(12px,3.3vw,15px)] font-black leading-5 tracking-[-0.035em] tabular-nums sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.045em] ${valueClass}`}
               title={value}
             >
               {value}

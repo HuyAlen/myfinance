@@ -43,11 +43,11 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
 
   it("the headline value is gated on isDashboardReady, not a shared heroReady flag", () => {
     const start = source.indexOf(
-      '<div className="mt-5 flex flex-wrap items-end gap-3">',
+      "DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.",
     );
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf(
-      '<div className="mt-5 grid grid-cols-2 gap-2.5',
+      "Mobile uses a flatter financial breakdown",
       start,
     );
     expect(end).toBeGreaterThan(start);
@@ -65,10 +65,10 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
 
   it("the cash-flow badge is gated on cashFlowReady alone, independent of the headline's own gate", () => {
     const start = source.indexOf(
-      '<div className="mt-5 flex flex-wrap items-end gap-3">',
+      "DASH-MOBILE-POLISH-1: financial hierarchy first on mobile.",
     );
     const end = source.indexOf(
-      '<div className="mt-5 grid grid-cols-2 gap-2.5',
+      "Mobile uses a flatter financial breakdown",
       start,
     );
     const headlineRegion = source.slice(start, end);
@@ -110,7 +110,7 @@ describe("Net Worth comparison + chart use canonical history readiness (NETWORTH
 
   it("keeps sparse-history comparison and chart behind canonical history readiness", () => {
     const panelStart = source.indexOf(
-      '<div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85',
+      '<div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/70',
     );
     expect(panelStart).toBeGreaterThan(-1);
     const panelEnd = source.indexOf("</section>", panelStart);

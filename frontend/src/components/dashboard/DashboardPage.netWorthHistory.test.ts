@@ -108,10 +108,10 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
 
   it("explains sparse history truthfully instead of implying all twelve months are known", () => {
     expect(source).toContain(
-      "Lịch sử Net Worth bắt đầu từ tháng",
+      "Lịch sử bắt đầu từ tháng",
     );
     expect(source).toContain(
-      "các tháng chưa được ghi nhận vẫn là dữ liệu chưa biết",
+      "tháng chưa ghi nhận vẫn là dữ liệu chưa biết",
     );
   });
 

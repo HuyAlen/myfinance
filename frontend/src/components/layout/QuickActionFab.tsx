@@ -160,7 +160,7 @@ function getViewportBounds() {
     viewportHeight: window.innerHeight,
     fabSize: FAB_SIZE,
     marginX: 12,
-    marginTop: 76,
+    marginTop: window.innerWidth < 1024 ? 216 : 76,
     marginBottom: window.innerWidth >= 1024 ? 16 : 104,
   };
 }
