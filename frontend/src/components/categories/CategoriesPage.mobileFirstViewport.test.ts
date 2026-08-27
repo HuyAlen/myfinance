@@ -85,8 +85,10 @@ describe("CategoriesPage mobile first-viewport contract (CATEGORIES-MOBILE-POLIS
     );
 
     expect(card).toContain("rounded-3xl border border-slate-200 bg-white p-3");
-    expect(card).toContain("truncate text-sm font-black");
-    expect(card).toContain("mt-2.5 flex items-end justify-between");
+    expect(card).toContain("line-clamp-2 text-[15px] font-black");
+    expect(card).toContain("flex flex-wrap items-center gap-x-2 gap-y-1");
+    expect(card).toContain("mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-4");
+    expect(card).not.toContain("max-w-[11rem] truncate");
     expect(card).not.toContain("{meta.description}");
   });
 

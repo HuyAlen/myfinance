@@ -1000,22 +1000,22 @@ export default function CategoriesPage() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-black leading-tight text-slate-900 sm:whitespace-normal sm:text-base sm:wrap-anywhere">
+                      <h3 className="line-clamp-2 text-[15px] font-black leading-5 text-slate-900 sm:line-clamp-none sm:text-base sm:leading-tight sm:wrap-anywhere">
                         {category.name}
                       </h3>
-                      <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[10px]">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] sm:mt-1 sm:gap-1.5">
                         <span
                           className={`shrink-0 rounded-full border px-1.5 py-0.5 font-bold sm:px-2 ${meta.bg} ${meta.color} ${meta.border}`}
                         >
                           {meta.shortLabel}
                         </span>
                         <span
-                          className={`inline-flex min-w-0 items-center gap-1 font-bold ${category.isActive ? "text-emerald-700" : "text-slate-400"}`}
+                          className={`inline-flex items-center gap-1 font-bold ${category.isActive ? "text-emerald-700" : "text-slate-400"}`}
                         >
                           <span
                             className={`size-1.5 shrink-0 rounded-full ${category.isActive ? "bg-emerald-500" : "bg-slate-300"}`}
                           />
-                          <span className="truncate">
+                          <span>
                             {category.isActive ? "Đang sử dụng" : "Chưa sử dụng"}
                           </span>
                         </span>
@@ -1076,7 +1076,7 @@ export default function CategoriesPage() {
                   </div>
                 </div>
 
-                <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-slate-100 pt-2.5 sm:mt-4 sm:rounded-2xl sm:border-0 sm:bg-slate-50 sm:p-3">
+                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-4 border-t border-slate-100 pt-2.5 sm:mt-4 sm:grid-cols-2 sm:rounded-2xl sm:border-0 sm:bg-slate-50 sm:p-3">
                   <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Giao dịch
@@ -1090,7 +1090,7 @@ export default function CategoriesPage() {
                       Tổng tiền
                     </p>
                     <p
-                      className={`mt-0.5 max-w-[11rem] truncate text-sm font-black tabular-nums tracking-tight sm:text-base ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
+                      className={`mt-0.5 whitespace-nowrap text-xs font-black tabular-nums tracking-tight sm:text-base ${category.type === "income" ? "text-emerald-600" : category.total > 0 ? "text-slate-900" : "text-slate-300"}`}
                     >
                       {category.total > 0 ? formatVND(category.total) : "—"}
                     </p>
