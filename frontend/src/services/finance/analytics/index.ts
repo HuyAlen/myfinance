@@ -63,7 +63,7 @@ export {
 
 export {
   computeSmartBudget,
-  type AllocationBucket,
+
   type BudgetStatus,
   type BudgetViolation,
   type CategoryBudgetAnalysis,

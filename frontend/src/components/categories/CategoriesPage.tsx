@@ -31,7 +31,7 @@ import type {
   Category,
   CategoryPlanningGroup,
   CategoryType,
-  FinancialGroup,
+
   RecurrenceFrequency,
   Transaction,
   Wallet,
@@ -63,7 +63,7 @@ type FormState = {
   name: string;
   type: CategoryType;
   group: CategoryGroup;
-  financialGroup: FinancialGroup | "";
+  legacyFinancialGroup?: Category["financialGroup"];
   isRecurring: boolean;
   recurrence: RecurrenceFrequency;
   defaultAmount: string;
@@ -75,7 +75,7 @@ const emptyForm: FormState = {
   name: "",
   type: "expense",
   group: "variable",
-  financialGroup: "",
+
   isRecurring: false,
   recurrence: "monthly",
   defaultAmount: "",
@@ -127,49 +127,6 @@ const GROUP_META: Record<CategoryGroup, GroupMeta> = {
     iconBg: "bg-orange-500",
     bar: "#f97316",
   },
-};
-
-type FinancialGroupOption = {
-  value: FinancialGroup | "";
-  label: string;
-  description: string;
-};
-
-const FINANCIAL_GROUP_OPTIONS: FinancialGroupOption[] = [
-  {
-    value: "",
-    label: "Chưa phân loại",
-    description: "Giữ nguyên dữ liệu cũ và phân loại sau.",
-  },
-  {
-    value: "needs",
-    label: "Nhu cầu thiết yếu",
-    description: "Nhà ở, thực phẩm, điện nước, y tế và nghĩa vụ cần thiết.",
-  },
-  {
-    value: "wants",
-    label: "Mong muốn",
-    description: "Du lịch, giải trí, mua sắm và chi tiêu không bắt buộc.",
-  },
-  {
-    value: "saving",
-    label: "Tiết kiệm & Đầu tư",
-    description: "Quỹ dự phòng, tiết kiệm, đầu tư và tích lũy dài hạn.",
-  },
-];
-
-const FINANCIAL_GROUP_LABELS: Record<FinancialGroup, string> = {
-  income: "Thu nhập",
-  needs: "Nhu cầu thiết yếu",
-  wants: "Mong muốn",
-  saving: "Tiết kiệm & Đầu tư",
-};
-
-const FINANCIAL_GROUP_BADGE: Record<FinancialGroup, string> = {
-  income: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  needs: "border-blue-200 bg-blue-50 text-blue-700",
-  wants: "border-amber-200 bg-amber-50 text-amber-700",
-  saving: "border-violet-200 bg-violet-50 text-violet-700",
 };
 
 function normalizeText(value: string) {
@@ -433,7 +390,7 @@ export default function CategoriesPage() {
       name: "",
       group,
       type: getTypeFromGroup(group),
-      financialGroup: group === "income" ? "income" : "",
+
       isRecurring: false,
       recurrence: "monthly",
       defaultAmount: "",
@@ -452,8 +409,7 @@ export default function CategoriesPage() {
       name: category.name,
       type: category.type,
       group,
-      financialGroup:
-        category.financialGroup ?? (category.type === "income" ? "income" : ""),
+      legacyFinancialGroup: category.financialGroup,
       isRecurring: category.isRecurring ?? false,
       recurrence: category.recurrence ?? "monthly",
       defaultAmount:
@@ -505,8 +461,7 @@ export default function CategoriesPage() {
       name,
       type: getTypeFromGroup(form.group),
       planningGroup: form.group,
-      financialGroup:
-        form.group === "income" ? "income" : form.financialGroup || undefined,
+      financialGroup: form.legacyFinancialGroup,
       isRecurring: form.isRecurring,
       recurrence: form.isRecurring ? form.recurrence : undefined,
       defaultAmount: form.isRecurring ? recurringAmount : undefined,
@@ -581,8 +536,7 @@ export default function CategoriesPage() {
               Danh mục thu chi
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Quản lý loại giao dịch và phân nhóm 50/30/20 độc lập, không làm
-              thay đổi dữ liệu cũ.
+              Quản lý loại giao dịch, nhóm vận hành và cấu hình định kỳ.
             </p>
           </div>
           <button
@@ -811,17 +765,7 @@ export default function CategoriesPage() {
                         >
                           {meta.shortLabel}
                         </span>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-                            category.financialGroup
-                              ? FINANCIAL_GROUP_BADGE[category.financialGroup]
-                              : "border-slate-200 bg-white text-slate-400"
-                          }`}
-                        >
-                          {category.financialGroup
-                            ? FINANCIAL_GROUP_LABELS[category.financialGroup]
-                            : "Chưa phân loại 50/30/20"}
-                        </span>
+
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${category.isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}
                         >
@@ -1000,12 +944,6 @@ export default function CategoriesPage() {
                             ...current,
                             group,
                             type: getTypeFromGroup(group),
-                            financialGroup:
-                              group === "income"
-                                ? "income"
-                                : current.financialGroup === "income"
-                                  ? ""
-                                  : current.financialGroup,
                           }))
                         }
                         className={`flex items-start gap-3 rounded-2xl border p-2.5 text-left transition ${selected ? `${meta.border} ${meta.bg} ring-2 ring-blue-100` : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"}`}
@@ -1033,70 +971,6 @@ export default function CategoriesPage() {
                     );
                   })}
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="block text-sm font-black text-slate-700">
-                      Nhóm 50/30/20
-                    </span>
-                    <p className="mt-0.5 text-[11px] leading-4 text-slate-400">
-                      Dùng riêng cho phân tích ngân sách. Không thay đổi loại
-                      danh mục hiện tại.
-                    </p>
-                  </div>
-                  {form.group !== "income" && (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">
-                      Không bắt buộc
-                    </span>
-                  )}
-                </div>
-
-                {form.group === "income" ? (
-                  <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
-                    <p className="text-sm font-black text-emerald-700">
-                      Thu nhập
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-4 text-emerald-600">
-                      Danh mục thu nhập được tự động xếp vào nhóm Thu nhập.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {FINANCIAL_GROUP_OPTIONS.map((option) => {
-                      const selected = form.financialGroup === option.value;
-                      return (
-                        <button
-                          key={option.value || "unclassified"}
-                          type="button"
-                          onClick={() =>
-                            setForm((current) => ({
-                              ...current,
-                              financialGroup: option.value,
-                            }))
-                          }
-                          className={`rounded-2xl border p-3 text-left transition ${
-                            selected
-                              ? "border-blue-300 bg-blue-50 ring-2 ring-blue-100"
-                              : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"
-                          }`}
-                        >
-                          <span
-                            className={`block text-sm font-black ${
-                              selected ? "text-blue-700" : "text-slate-700"
-                            }`}
-                          >
-                            {option.label}
-                          </span>
-                          <span className="mt-1 block text-[11px] leading-4 text-slate-400">
-                            {option.description}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               <div className="mt-4 rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4">

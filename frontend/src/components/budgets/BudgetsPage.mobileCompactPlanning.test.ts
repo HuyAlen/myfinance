@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
  * BUDGETS-MOBILE-POLISH-1 — Compact Planning Hierarchy & Mobile Action Access.
  *
  * Source-inspection contract only: mobile presentation is compacted without
- * changing budget calculations, CRUD, or FINANCE-DATA-1B/1C semantics.
+ * changing budget calculations, CRUD, or FINANCE-DATA-1B semantics.
  */
 describe("BudgetsPage compacts planning hierarchy on mobile", () => {
   const source = readFileSync(
@@ -74,7 +74,7 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(actionSource).toContain("handleDelete(budget.id)");
   });
 
-  it("retains FINANCE-DATA-1B/1C data-path semantics after the UI removal", () => {
+  it("retains FINANCE-DATA-1B semantics without retired allocation-only reads", () => {
     expect(normalized).toContain(
       "{filteredBudgets.length === 0 && isLoadingBudgets && (",
     );
@@ -84,11 +84,10 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(normalized).toContain(
       "{filteredBudgets.length === 0 && !isLoadingBudgets && !budgetsLoadError && (",
     );
-    expect(source).toContain("if (savingsResult.error) {");
-    expect(source).toContain("throw savingsResult.error;");
-    expect(source).toContain("if (investmentsResult.error) {");
-    expect(source).toContain("throw investmentsResult.error;");
-    expect(source).toContain("calculateRule503020({");
+    expect(source).not.toContain("calculateRule503020");
+    expect(source).not.toContain("v7Allocation");
+    expect(source).not.toContain('from("saving_transactions")');
+    expect(source).not.toContain('from("forex_cash_transactions")');
     expect(source).toContain(
       "computeSmartBudget(transactions, categories, budgets)",
     );

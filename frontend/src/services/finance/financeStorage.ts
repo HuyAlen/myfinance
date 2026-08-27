@@ -375,7 +375,7 @@ function getLocalUiDemoData() {
 
 // ─── Category planning group mapping ─────────────────────────────────────────
 // `planning_group` remains the operational classification.
-// `financial_group` is an optional, backward-compatible 50/30/20 classification.
+// `financial_group` is retained only for backward-compatible row round-tripping.
 // Existing rows with NULL financial_group remain valid and are not backfilled here.
 
 type CategoryDbRow = Omit<

@@ -26,13 +26,9 @@ export type CategoryPlanningGroup =
   | "investment";
 
 /**
- * 50/30/20 financial classification.
- *
- * This field is intentionally separate from `CategoryPlanningGroup`:
- * - planningGroup describes bookkeeping/operating behavior.
- * - financialGroup describes financial analysis under the 50/30/20 model.
- *
- * It is optional for backward compatibility with existing category rows.
+ * Legacy classification value retained only so existing Supabase rows can
+ * round-trip without a destructive schema migration. No active product rule
+ * consumes this type.
  */
 export type FinancialGroup = "income" | "needs" | "wants" | "saving";
 
@@ -71,16 +67,9 @@ export type Category = {
   planningGroup?: CategoryPlanningGroup;
 
   /**
-   * Optional 50/30/20 classification.
-   * Stored in Supabase as `financial_group`.
-   *
-   * income -> income category
-   * needs  -> essential spending
-   * wants  -> discretionary spending
-   * saving -> saving and investment allocation
-   *
-   * Optional by design so existing category data remains valid until each
-   * category is classified.
+   * Legacy classification field retained only for storage compatibility.
+   * Stored in Supabase as `financial_group` and intentionally not exposed
+   * as an active budgeting rule.
    */
   financialGroup?: FinancialGroup;
 

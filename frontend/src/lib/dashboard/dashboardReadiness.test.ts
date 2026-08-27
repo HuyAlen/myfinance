@@ -337,7 +337,7 @@ describe("isNewPeriodContext", () => {
 /**
  * PERF-3 Final Period Surface Correctness patch: the positive-form
  * predicate that justifies gating netWorthTrend/netWorthChartStats, the
- * Cash Flow panel (income/expense/chart/50-30-20), and top-spending
+ * Cash Flow panel (income/expense/chart), and top-spending
  * categories on the existing cashFlowReady/heroReady flags instead of
  * rendering `transactions` unconditionally. `isPeriodSnapshotCurrent` is
  * the exact logical negation of `isNewPeriodContext` — both must always
@@ -603,7 +603,7 @@ describe("period-loader orchestration (simulates reloadData/reloadPeriod)", () =
    * PERF-3 Final Period Surface Correctness patch.
    *
    * netWorthTrend/netWorthChartStats and the Cash Flow panel (income/
-   * expense/chart/50-30-20) both read `transactions` directly and, prior
+   * expense/chart) both read `transactions` directly and, prior
    * to this patch, rendered unconditionally with no readiness/context
    * gate at all — unlike the KPI cards, which were already gated. These
    * four tests prove that `cashFlowReady` — the flag DashboardPage now

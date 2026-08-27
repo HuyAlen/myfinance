@@ -244,8 +244,8 @@ export function isNewPeriodContext(
  * The positive form of `isNewPeriodContext`: is the transaction snapshot
  * currently in state actually valid for the currently selected year? Any
  * visible surface that derives from `transactions` (Cash Flow KPI,
- * netWorthTrend/netWorthChartStats, the Cash Flow panel, the 50/30/20
- * split, top-spending categories, etc.) must render nothing but a loading
+ * netWorthTrend/netWorthChartStats, the Cash Flow panel, top-spending
+ * categories, etc.) must render nothing but a loading
  * state whenever this is false — otherwise a still-held prior year's
  * transactions could be presented as if they belonged to the newly
  * selected year, which is exactly as invalid as a genuinely failed fetch

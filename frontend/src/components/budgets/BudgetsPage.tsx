@@ -44,7 +44,6 @@ import {
 
 import {
   calculateBudgetSpending,
-  calculateRule503020,
   formatVND,
   getCategoryPlanningGroup,
 } from "@/src/services/finance/financeCalculations";
@@ -55,7 +54,6 @@ import ConfirmDialog, {
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { computeSmartBudget } from "@/src/services/finance/analytics";
-import { supabase } from "@/src/lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -63,18 +61,6 @@ type FormState = {
   categoryId: string;
   month: string;
   limitAmount: string;
-};
-
-type SavingsModuleTransaction = {
-  type: "deposit" | "withdraw" | "interest" | "settlement";
-  amount: number;
-  transactionDate: string;
-};
-
-type InvestmentModuleTransaction = {
-  type: "deposit" | "withdrawal";
-  amount: number;
-  transactionDate: string;
 };
 
 const emptyForm: FormState = {
@@ -268,11 +254,6 @@ export default function BudgetsPage() {
   );
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [savingsModuleTransactions, setSavingsModuleTransactions] = useState<
-    SavingsModuleTransaction[]
-  >([]);
-  const [investmentModuleTransactions, setInvestmentModuleTransactions] =
-    useState<InvestmentModuleTransaction[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -287,55 +268,20 @@ export default function BudgetsPage() {
   const reloadData = useCallback(async () => {
     // FINANCE-DATA-1: getBudgets/getCategories/getTransactions now reject
     // on a genuine query failure instead of silently resolving to [] —
-    // caught here so every caller (mount, realtime, the two raw
-    // postgres_changes handlers below) never sees an unhandled rejection.
+    // caught here so every caller (mount or realtime) never sees an
+    // unhandled rejection.
     // State setters only run after a successful resolve, so a caught
     // failure leaves the previously-loaded budgets/categories/transactions
     // on screen.
     try {
-      const [b, c, t, savingsResult, investmentsResult] = await Promise.all([
+      const [b, c, t] = await Promise.all([
         getBudgets(),
         getCategories(),
         getTransactions(),
-        supabase
-          .from("saving_transactions")
-          .select("type,amount,transaction_date"),
-        supabase
-          .from("forex_cash_transactions")
-          .select("type,amount,transaction_date"),
       ]);
-
-      // FINANCE-DATA-1C: both raw reads are mandatory dependencies of this
-      // load cycle — moduleFutureAllocation (feeding calculateRule503020's
-      // 50/30/20 output) treats their arrays as validated, so a failure
-      // here must not be treated as a successful load (which previously
-      // left the affected array at its stale/initial [] — a false ₫0
-      // saved/invested this month — while clearing budgetsLoadError to
-      // null).
-      if (savingsResult.error) {
-        throw savingsResult.error;
-      }
-      if (investmentsResult.error) {
-        throw investmentsResult.error;
-      }
-
       setBudgets(b);
       setCategories(c);
       setTransactions(t);
-      setSavingsModuleTransactions(
-        (savingsResult.data ?? []).map((row) => ({
-          type: row.type as SavingsModuleTransaction["type"],
-          amount: Number(row.amount ?? 0),
-          transactionDate: String(row.transaction_date ?? ""),
-        })),
-      );
-      setInvestmentModuleTransactions(
-        (investmentsResult.data ?? []).map((row) => ({
-          type: row.type as InvestmentModuleTransaction["type"],
-          amount: Number(row.amount ?? 0),
-          transactionDate: String(row.transaction_date ?? ""),
-        })),
-      );
       setBudgetsLoadError(null);
     } catch (error) {
       console.error("[BudgetsPage] reloadData failed:", error);
@@ -356,34 +302,6 @@ export default function BudgetsPage() {
   }, [reloadData]);
 
   useRealtimeTable(["budgets", "transactions"], reloadData);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("budgets-future-allocation")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "saving_transactions",
-        },
-        () => void reloadData(),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "forex_cash_transactions",
-        },
-        () => void reloadData(),
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [reloadData]);
 
   // ── PRESERVED: expense categories ─────────────────────────────────────────
   const expenseCategories = useMemo(
@@ -768,134 +686,6 @@ export default function BudgetsPage() {
 
   const canClonePreviousBudget =
     filteredBudgets.length === 0 && previousMonthBudgets.length > 0;
-
-  const moduleFutureAllocation = useMemo(() => {
-    const savingsNet = savingsModuleTransactions
-      .filter((item) => item.transactionDate.startsWith(activeMonth))
-      .reduce((sum, item) => {
-        if (item.type === "deposit") return sum + item.amount;
-        if (item.type === "withdraw" || item.type === "settlement") {
-          return sum - item.amount;
-        }
-        return sum;
-      }, 0);
-
-    const investmentNet = investmentModuleTransactions
-      .filter((item) => item.transactionDate.startsWith(activeMonth))
-      .reduce(
-        (sum, item) =>
-          item.type === "deposit" ? sum + item.amount : sum - item.amount,
-        0,
-      );
-
-    return {
-      savingsAmount: Math.max(0, savingsNet),
-      investmentAmount: Math.max(0, investmentNet),
-    };
-  }, [activeMonth, investmentModuleTransactions, savingsModuleTransactions]);
-
-  const v7Allocation = useMemo(() => {
-    const allocation = calculateRule503020({
-      transactions,
-      categories,
-      month: activeMonth,
-      income: financialPlanning.effectiveIncome,
-    });
-
-    const makeBucket = (
-      label: string,
-      actualAmount: number,
-      targetAmount: number,
-      targetPercent: number,
-      percentOfIncome: number,
-      color: string,
-      textColor: string,
-    ) => {
-      const percentOfTarget =
-        targetAmount > 0 ? Math.round((actualAmount / targetAmount) * 100) : 0;
-      const status =
-        percentOfTarget > 100
-          ? "over"
-          : percentOfTarget >= 85
-            ? "near"
-            : "safe";
-      const difference = actualAmount - targetAmount;
-
-      return {
-        label,
-        actualAmount,
-        targetAmount,
-        targetPercent,
-        percentOfIncome,
-        percentOfTarget,
-        status,
-        difference,
-        color,
-        textColor,
-      };
-    };
-
-    const savingsAmount = moduleFutureAllocation.savingsAmount;
-    const investmentAmount = moduleFutureAllocation.investmentAmount;
-    const futureAllocationAmount = savingsAmount + investmentAmount;
-    const futurePercentOfIncome =
-      allocation.income > 0
-        ? Math.round((futureAllocationAmount / allocation.income) * 100)
-        : 0;
-
-    const buckets = [
-      makeBucket(
-        "Nhu cầu thiết yếu",
-        allocation.needsAmount,
-        allocation.needsTargetAmount,
-        50,
-        allocation.needsPercentOfIncome,
-        "#2563eb",
-        "text-blue-700",
-      ),
-      makeBucket(
-        "Muốn & Giải trí",
-        allocation.wantsAmount,
-        allocation.wantsTargetAmount,
-        30,
-        allocation.wantsPercentOfIncome,
-        "#f59e0b",
-        "text-amber-700",
-      ),
-      makeBucket(
-        "Tiết kiệm & Đầu tư",
-        futureAllocationAmount,
-        allocation.savingsTargetAmount,
-        20,
-        futurePercentOfIncome,
-        "#10b981",
-        "text-emerald-700",
-      ),
-    ];
-
-    return {
-      buckets,
-      income: allocation.income,
-      unclassifiedAmount: allocation.unclassifiedAmount,
-      savingsAmount,
-      investmentAmount,
-      futureAllocationAmount,
-      savingsShare:
-        futureAllocationAmount > 0
-          ? Math.round((savingsAmount / futureAllocationAmount) * 100)
-          : 0,
-      investmentShare:
-        futureAllocationAmount > 0
-          ? Math.round((investmentAmount / futureAllocationAmount) * 100)
-          : 0,
-    };
-  }, [
-    activeMonth,
-    categories,
-    financialPlanning.effectiveIncome,
-    moduleFutureAllocation,
-    transactions,
-  ]);
 
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
   const pieData = useMemo(

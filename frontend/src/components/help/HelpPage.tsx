@@ -307,7 +307,7 @@ const FEATURE_GUIDES: Guide[] = [
     tips: [
       "Đặt ngân sách dựa trên chi tiêu thực tế tháng trước",
       "Bắt đầu với 3–5 danh mục chi lớn nhất của bạn",
-      "Quy tắc 50/30/20: 50% nhu cầu, 30% muốn, 20% tiết kiệm",
+      "Theo dõi chi tiêu theo danh mục và ngân sách bạn tự thiết lập",
       "Budget Intelligence phân tích xu hướng và cảnh báo tự động",
     ],
   },

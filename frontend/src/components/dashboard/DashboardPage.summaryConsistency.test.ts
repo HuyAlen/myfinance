@@ -50,25 +50,17 @@ describe("DashboardPage canonical Financial Structure consistency (DASH-POLISH-1
     expect(body).not.toContain("transactions: filteredTransactions,");
   });
 
-  it("the 50/30/20 allocation also reuses the shared collection instead of re-deriving its own transfer filter", () => {
-    const start = source.indexOf("const allocation5030 = useMemo(");
-    expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf("const financialStructure = useMemo(", start);
-    expect(end).toBeGreaterThan(start);
-    const body = source.slice(start, end);
-
-    expect(body).toContain("transactions: nonTransferFilteredTransactions");
-    expect(body).not.toContain("isInternalTransferTransaction(transaction)");
+  it("does not compute or render a 50/30/20 allocation on Dashboard", () => {
+    expect(source).not.toContain("calculateRule503020");
+    expect(source).not.toContain("allocation5030");
+    expect(source).not.toContain("AllocationRow");
+    expect(source).not.toContain("50/30/20");
   });
 
-  it("no formula inside calculateFinancialStructureSummary/calculateRule503020 was touched — only the input transaction set changed", () => {
-    // The canonical functions themselves are imported, never redefined
-    // locally — a redefinition would indicate the formulas were rewritten
-    // rather than just fed a different (correctly-filtered) input.
+  it("keeps canonical Financial Structure independent from the removed allocation rule", () => {
     expect(source).toContain("calculateFinancialStructureSummary,");
-    expect(source).toContain("calculateRule503020,");
     expect(source).not.toContain("function calculateFinancialStructureSummary");
-    expect(source).not.toContain("function calculateRule503020");
+    expect(source).not.toContain("calculateRule503020,");
   });
 });
 

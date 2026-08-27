@@ -4,8 +4,7 @@
  * Smart Budget AI — Sprint 17.5.
  *
  * Analyses actual spending vs. budgets, detects violations and trends,
- * generates recommended budget limits, and classifies spending into the
- * 50/30/20 framework (Needs / Wants / Savings).
+ * and generates recommended budget limits and budget-native insights.
  *
  * Input: plain data arrays. No side effects. Unit-test-ready.
  */
@@ -14,7 +13,7 @@ import type { Budget, Category, Transaction } from "@/src/types/finance";
 
 import {
   calculateBudgetSpending,
-  getTotalIncome,
+
 } from "@/src/services/finance/financeCalculations";
 
 import { groupByMonth, lastNMonths, linearRegression, mean } from "./shared";
@@ -69,23 +68,6 @@ export type RecommendedBudget = {
   reasoning: string; // Vietnamese explanation
 };
 
-/** 50/30/20 rule bucket. */
-export type AllocationBucket = {
-  /** Vietnamese label. */
-  label: string;
-  /** Target % of income (50, 30, or 20). */
-  targetPercent: number;
-  /** Actual % of income spent in this bucket. */
-  actualPercent: number;
-  /** Actual monthly amount (VND). */
-  actualAmount: number;
-  /** Target monthly amount based on income (VND). */
-  targetAmount: number;
-  /** Variance: positive = over-allocated, negative = under-allocated. */
-  variance: number;
-  status: "over" | "on-track" | "under";
-};
-
 export type SmartBudgetAnalysis = {
   /** Budget adherence score 0–100. */
   adherenceScore: number;
@@ -99,51 +81,11 @@ export type SmartBudgetAnalysis = {
   overspendingTrend: CategoryBudgetAnalysis[];
   /** AI-recommended budget limits per category. */
   recommendedBudgets: RecommendedBudget[];
-  /** 50/30/20 rule allocation analysis. */
-  allocation: {
-    needs: AllocationBucket;
-    wants: AllocationBucket;
-    savings: AllocationBucket;
-  };
   /** Pre-formed insights for injection into the advisor insights list. */
   insights: InsightData[];
 };
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
-
-/** Heuristic classifier: is a category a "need" or a "want"? */
-const NEED_KEYWORDS = [
-  "ăn",
-  "thực phẩm",
-  "food",
-  "rent",
-  "thuê",
-  "điện",
-  "nước",
-  "gas",
-  "internet",
-  "điện thoại",
-  "phone",
-  "y tế",
-  "sức khỏe",
-  "health",
-  "giáo dục",
-  "học",
-  "education",
-  "xăng",
-  "xe",
-  "transport",
-  "đi lại",
-  "bảo hiểm",
-  "insurance",
-  "grocery",
-  "siêu thị",
-];
-
-function isNeedCategory(name: string): boolean {
-  const lower = name.toLowerCase();
-  return NEED_KEYWORDS.some((kw) => lower.includes(kw));
-}
 
 /** Round to nearest 10,000 VND. */
 function round10k(value: number): number {
@@ -175,11 +117,6 @@ export function computeSmartBudget(
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const months = lastNMonths(lookbackMonths + 1); // +1 so current month is always included
   const byMonth = groupByMonth(transactions);
-
-  const allMonthlyIncome = months.map((m) =>
-    getTotalIncome(byMonth.get(m) ?? []),
-  );
-  const avgMonthlyIncome = mean(allMonthlyIncome.filter((v) => v > 0));
 
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
@@ -317,44 +254,6 @@ export function computeSmartBudget(
     })
     .slice(0, 6);
 
-  // ── 50/30/20 allocation ───────────────────────────────────────────────────
-  const totalExpense = categoryAnalysis.reduce((s, c) => s + c.actualSpend, 0);
-
-  const needsAmount = categoryAnalysis
-    .filter((c) => isNeedCategory(c.categoryName))
-    .reduce((s, c) => s + c.actualSpend, 0);
-  const savingsAmount =
-    avgMonthlyIncome > 0 ? Math.max(0, avgMonthlyIncome - totalExpense) : 0;
-  const wantsAmount = Math.max(0, totalExpense - needsAmount);
-
-  function makeBucket(
-    label: string,
-    targetPercent: number,
-    actualAmount: number,
-  ): AllocationBucket {
-    const targetAmount =
-      avgMonthlyIncome > 0 ? (avgMonthlyIncome * targetPercent) / 100 : 0;
-    const actualPercent =
-      avgMonthlyIncome > 0
-        ? Math.round((actualAmount / avgMonthlyIncome) * 100)
-        : 0;
-    const variance = actualAmount - targetAmount;
-    return {
-      label,
-      targetPercent,
-      actualPercent,
-      actualAmount: Math.round(actualAmount),
-      targetAmount: Math.round(targetAmount),
-      variance: Math.round(variance),
-      status:
-        variance > targetAmount * 0.1
-          ? "over"
-          : variance < -targetAmount * 0.2
-            ? "under"
-            : "on-track",
-    };
-  }
-
   // ── Adherence score ───────────────────────────────────────────────────────
   const budgetedCategories = categoryAnalysis.filter((c) => c.budgetLimit > 0);
   const adherentCount = budgetedCategories.filter(
@@ -404,17 +303,6 @@ export function computeSmartBudget(
     });
   }
 
-  const needsBucket = makeBucket("Nhu cầu thiết yếu", 50, needsAmount);
-  if (needsBucket.status === "over") {
-    insightsOut.push({
-      key: "needs-over-50",
-      title: "Chi cho nhu cầu vượt 50% thu nhập",
-      text: `Chi tiêu thiết yếu chiếm ${needsBucket.actualPercent}% thu nhập (mục tiêu ≤ 50%). Nên tìm cách tối ưu các chi phí cố định.`,
-      tone: "warning",
-      iconType: "alert-triangle",
-    });
-  }
-
   return {
     adherenceScore,
     currentMonth,
@@ -422,11 +310,6 @@ export function computeSmartBudget(
     violations,
     overspendingTrend,
     recommendedBudgets,
-    allocation: {
-      needs: needsBucket,
-      wants: makeBucket("Muốn & Giải trí", 30, wantsAmount),
-      savings: makeBucket("Tiết kiệm & Đầu tư", 20, savingsAmount),
-    },
     insights: insightsOut,
   };
 }

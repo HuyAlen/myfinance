@@ -72,7 +72,6 @@ import {
   buildMonthlyCashFlowData,
   calculateDashboardSummary,
   calculateFinancialStructureSummary,
-  calculateRule503020,
   filterTransactionsByDateRange,
   formatVND,
   getForexAssetValue,
@@ -2009,39 +2008,9 @@ export default function DashboardPage() {
 
   // ── Spending ──────────────────────────────────────────────────────────────
 
-  // ── 50/30/20 ─────────────────────────────────────────────────────────────
-  const allocation5030 = useMemo(() => {
-    // DASH-POLISH-1: reuses the shared nonTransferFilteredTransactions
-    // collection instead of re-applying the same isInternalTransferTransaction
-    // filter independently — same result, one source of truth.
-    const allocation = calculateRule503020({
-      transactions: nonTransferFilteredTransactions,
-      categories,
-      income: summary.income,
-    });
-
-    const savingsAmount = periodFutureAllocation.totalAmount;
-    const savings =
-      summary.income > 0
-        ? Math.round((savingsAmount / summary.income) * 100)
-        : 0;
-
-    return {
-      needs: allocation.needsPercentOfIncome,
-      wants: allocation.wantsPercentOfIncome,
-      savings,
-      needsAmount: allocation.needsAmount,
-      wantsAmount: allocation.wantsAmount,
-      savingsAmount,
-      unclassifiedAmount: allocation.unclassifiedAmount,
-    };
-  }, [
-    nonTransferFilteredTransactions,
-    categories,
-    periodFutureAllocation.totalAmount,
-    summary.income,
-  ]);
-
+  // RULE-503020-RETIRE-1.3: these are factual Dashboard derivations that are
+  // independent of the retired percentage-allocation rule. The earlier patch
+  // removed them accidentally because they sat next to the old allocation memo.
   const cashFlowData = useMemo(() => {
     const now = new Date();
     const latestActualMonth =
@@ -2100,15 +2069,6 @@ export default function DashboardPage() {
     return savingsSnapshot.emergencyFund / summary.monthlyExpense;
   }, [savingsSnapshot.emergencyFund, summary.monthlyExpense]);
 
-  // ── V11.1 Financial Structure ───────────────────────────────────────────
-  // DASH-POLISH-1: reuses `nonTransferFilteredTransactions` — the SAME
-  // accepted transaction set periodFlowSummary uses — instead of the raw
-  // `filteredTransactions`, so income/expense/fixedCost/variableCost (and
-  // every ratio calculateFinancialStructureSummary derives from them)
-  // can no longer disagree with the Cash Flow/Saving Rate KPIs over
-  // whether a given transaction is an internal transfer. No formula
-  // inside calculateFinancialStructureSummary changed — only which
-  // already-filtered transaction collection it receives.
   const financialStructure = useMemo(
     () =>
       calculateFinancialStructureSummary({
@@ -3145,7 +3105,7 @@ export default function DashboardPage() {
           title="Dòng tiền trong kỳ"
           subtitle="Thu nhập, chi tiêu và phần tiền còn lại theo bộ lọc thời gian"
         >
-          {/* summary.income/expense, cashFlowData, and allocation5030 are all
+          {/* summary.income/expense and cashFlowData are both
               derived from `transactions`, a period (year-scoped) dataset —
               gate on cashFlowReady (the existing "transactions belong to the
               currently selected year" signal) so a still-held prior year's
@@ -3185,49 +3145,6 @@ export default function DashboardPage() {
             </>
           )}
 
-          <div className="mt-5 rounded-2xl bg-slate-50/80 p-4">
-            <p className="text-sm font-black text-[#23466F]">
-              Quy tắc 50/30/20
-            </p>
-            <p className="mt-1 text-xs text-slate-600">
-              So sánh phân bổ thu nhập theo quy tắc 50% Thiết yếu · 30% Mong
-              muốn · 20% Tiết kiệm & Đầu tư.
-            </p>
-            {cashFlowReady ? (
-              <div className="mt-4">
-                <AllocationRow
-                  kind="needs"
-                  label="Thiết yếu"
-                  actual={allocation5030.needs}
-                  target={50}
-                  amount={allocation5030.needsAmount}
-                  color="bg-blue-500"
-                />
-                <AllocationRow
-                  kind="wants"
-                  label="Mong muốn"
-                  actual={allocation5030.wants}
-                  target={30}
-                  amount={allocation5030.wantsAmount}
-                  color="bg-violet-500"
-                />
-                <AllocationRow
-                  kind="savings"
-                  label="Tiết kiệm & Đầu tư"
-                  actual={allocation5030.savings}
-                  target={20}
-                  amount={allocation5030.savingsAmount}
-                  color="bg-emerald-500"
-                />
-              </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
-                <div className="h-8 animate-pulse rounded-xl bg-slate-100" />
-              </div>
-            )}
-          </div>
         </Panel>
 
         <Panel
@@ -3889,73 +3806,6 @@ function MiniStat({
       >
         {value}
       </p>
-    </div>
-  );
-}
-
-type AllocationKind = "needs" | "wants" | "savings";
-
-function AllocationRow({
-  kind,
-  label,
-  actual,
-  target,
-  amount,
-  color,
-}: {
-  kind: AllocationKind;
-  label: string;
-  actual: number;
-  target: number;
-  amount: number;
-  color: string;
-}) {
-  const roundedActual = Math.max(0, Math.round(actual));
-  const roundedTarget = Math.max(0, Math.round(target));
-  const difference = Math.abs(roundedActual - roundedTarget);
-  const isSavings = kind === "savings";
-  const isPositive = isSavings
-    ? roundedActual >= roundedTarget
-    : roundedActual <= roundedTarget;
-
-  const statusText = (() => {
-    if (roundedActual === roundedTarget) return "Đạt mục tiêu";
-
-    if (isSavings) {
-      return roundedActual > roundedTarget
-        ? `Vượt mục tiêu ${difference}%`
-        : `Thiếu ${difference}%`;
-    }
-
-    return roundedActual > roundedTarget
-      ? `Cần giảm ${difference}%`
-      : `Còn dư ${difference}%`;
-  })();
-
-  const statusClass = isPositive ? "text-emerald-600" : "text-rose-500";
-  const barClass = isPositive ? color : "bg-rose-500";
-
-  return (
-    <div className="mb-3">
-      <div className="mb-1 flex flex-col gap-1.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <span className="font-medium text-slate-600">
-          {label}: {roundedActual}% / {roundedTarget}%
-          <span className="ml-1 text-slate-500">({formatVND(amount)})</span>
-        </span>
-        <span className={`shrink-0 font-bold ${statusClass}`}>
-          {statusText}
-        </span>
-      </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-white/95">
-        <div
-          className="absolute top-0 z-10 h-full border-l border-slate-400/60"
-          style={{ left: `${Math.min(roundedTarget, 100)}%` }}
-        />
-        <div
-          className={`h-full rounded-full ${barClass} transition-all duration-300`}
-          style={{ width: `${Math.min(roundedActual, 100)}%` }}
-        />
-      </div>
     </div>
   );
 }

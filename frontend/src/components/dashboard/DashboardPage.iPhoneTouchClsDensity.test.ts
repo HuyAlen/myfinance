@@ -128,7 +128,8 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
   it("keeps MiniStat presentation reusable for the full-width mobile 'Còn lại' row", () => {
     const start = source.indexOf("function MiniStat({");
     expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf("type AllocationKind", start);
+    const nextFunction = source.indexOf("\nfunction ", start + 1);
+    const end = nextFunction === -1 ? source.length : nextFunction;
     expect(end).toBeGreaterThan(start);
     const miniStatSource = source.slice(start, end);
 
