@@ -613,7 +613,7 @@ export default function CategoriesPage() {
             <p className="hidden text-[11px] font-black uppercase tracking-[0.2em] text-blue-600 sm:block">
               Category Management
             </p>
-            <h1 className="truncate text-xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
+            <h1 className="whitespace-nowrap text-xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
               Danh mục thu chi
             </h1>
             <p className="mt-1 hidden text-sm text-slate-500 sm:block">
@@ -727,7 +727,7 @@ export default function CategoriesPage() {
                       {stat ? stat.count : "—"}
                     </span>
                   </div>
-                  <p className={`mt-2 truncate text-[11px] font-black sm:mt-3 sm:text-sm ${meta.color}`}>
+                  <p className={`mt-2 whitespace-nowrap text-[10px] font-black tracking-tight sm:mt-3 sm:text-sm sm:tracking-normal ${meta.color}`}>
                     <span className="sm:hidden">{meta.shortLabel}</span>
                     <span className="hidden sm:inline">{meta.label}</span>
                   </p>
@@ -988,10 +988,10 @@ export default function CategoriesPage() {
                 key={category.id}
                 className="group rounded-3xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-blue-200 hover:shadow-md sm:rounded-4xl sm:p-5 lg:hover:-translate-y-0.5"
               >
-                <div className="flex items-center justify-between gap-2.5 sm:items-start sm:gap-3">
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+                <div className="flex items-center justify-between gap-2 sm:items-start sm:gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                     <div
-                      className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm sm:size-11 sm:rounded-2xl ${meta.iconBg}`}
+                      className={`flex size-8 shrink-0 items-center justify-center rounded-xl text-white shadow-sm sm:size-11 sm:rounded-2xl ${meta.iconBg}`}
                     >
                       {category.group === "income" ? (
                         <Tag size={16} />
@@ -1000,7 +1000,7 @@ export default function CategoriesPage() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-2 text-[15px] font-black leading-5 text-slate-900 sm:line-clamp-none sm:text-base sm:leading-tight sm:wrap-anywhere">
+                      <h3 className="whitespace-nowrap text-[clamp(12px,3.6vw,14px)] font-black leading-5 tracking-[-0.025em] text-slate-900 sm:whitespace-normal sm:text-base sm:leading-tight sm:tracking-normal sm:wrap-anywhere">
                         {category.name}
                       </h3>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] sm:mt-1 sm:gap-1.5">
@@ -1031,10 +1031,10 @@ export default function CategoriesPage() {
 
                   <details className="relative shrink-0 sm:hidden">
                     <summary
-                      className="flex size-9 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 text-slate-500 [&::-webkit-details-marker]:hidden"
+                      className="flex size-8 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 text-slate-500 [&::-webkit-details-marker]:hidden"
                       aria-label={`Thao tác cho ${category.name}`}
                     >
-                      <MoreHorizontal size={17} />
+                      <MoreHorizontal size={16} />
                     </summary>
                     <div className="absolute right-0 top-10 z-20 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
                       <button
@@ -1422,7 +1422,7 @@ export default function CategoriesPage() {
 function OverviewCardSkeleton() {
   return (
     <div
-      className="h-[72px] min-w-[112px] snap-start animate-pulse rounded-2xl border border-slate-200 bg-slate-50 sm:h-[94px] sm:min-w-0 sm:rounded-3xl"
+      className="h-[72px] min-w-[136px] snap-start animate-pulse rounded-2xl border border-slate-200 bg-slate-50 sm:h-[94px] sm:min-w-0 sm:rounded-3xl"
       aria-hidden="true"
     />
   );
@@ -1448,15 +1448,15 @@ function OverviewCard({
   }[tone];
 
   return (
-    <div className={`min-w-[112px] snap-start rounded-2xl border p-3 sm:min-w-0 sm:rounded-3xl sm:p-4 ${toneClass}`}>
-      <div className="flex items-center justify-between gap-2 sm:gap-3">
+    <div className={`min-w-[136px] snap-start rounded-2xl border p-3 sm:min-w-0 sm:rounded-3xl sm:p-4 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-1.5 sm:gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[9px] font-black uppercase tracking-wide opacity-70 sm:text-[10px]">
+          <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.02em] opacity-70 sm:text-[10px] sm:tracking-wide">
             {label}
           </p>
           <p className="mt-0.5 text-xl font-black tabular-nums sm:mt-1 sm:text-2xl">{value}</p>
         </div>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm sm:size-10 sm:rounded-2xl">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm sm:size-10 sm:rounded-2xl">
           {icon}
         </div>
       </div>
