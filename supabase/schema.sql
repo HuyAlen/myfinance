@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS public.wallets (
   created_at timestamptz   NOT NULL DEFAULT now(),
   updated_at timestamptz   NOT NULL DEFAULT now(),
   CONSTRAINT wallets_pkey PRIMARY KEY (id),
+  -- Composite uniqueness lets transaction FKs enforce both wallet identity
+  -- and same-user ownership instead of only checking a globally unique id.
+  CONSTRAINT wallets_user_id_id_key UNIQUE (user_id, id),
   CONSTRAINT wallets_name_nonempty CHECK (trim(name) <> ''),
   CONSTRAINT wallets_balance_nn CHECK (balance >= 0)
 );
@@ -133,6 +136,12 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   created_at              timestamptz      NOT NULL DEFAULT now(),
   updated_at              timestamptz      NOT NULL DEFAULT now(),
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_wallet_id_fkey
+    FOREIGN KEY (user_id, "walletId")
+    REFERENCES public.wallets(user_id, id) ON DELETE RESTRICT,
+  CONSTRAINT transactions_transfer_to_wallet_id_fkey
+    FOREIGN KEY (user_id, "transferToWalletId")
+    REFERENCES public.wallets(user_id, id) ON DELETE RESTRICT,
   CONSTRAINT transactions_amount_positive CHECK (amount > 0),
   CONSTRAINT transactions_recurring_needs_freq CHECK (
     "isRecurring" = false OR recurrence IS NOT NULL
@@ -456,6 +465,7 @@ CREATE INDEX IF NOT EXISTS idx_categories_user_type ON public.categories (user_i
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON public.transactions (user_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_type ON public.transactions (user_id, type);
 CREATE INDEX IF NOT EXISTS idx_transactions_wallet ON public.transactions (user_id, "walletId");
+CREATE INDEX IF NOT EXISTS idx_transactions_transfer_to_wallet ON public.transactions (user_id, "transferToWalletId") WHERE "transferToWalletId" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON public.transactions (user_id, "categoryId");
 CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON public.transactions (user_id, "isRecurring", "nextRunDate") WHERE "isRecurring" = true;
 CREATE INDEX IF NOT EXISTS idx_debts_user_id ON public.debts (user_id);
@@ -1592,6 +1602,76 @@ $$;
 
 REVOKE ALL ON FUNCTION public.delete_finance_transaction FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_finance_transaction TO authenticated;
+
+
+-- ============================================================================
+-- WALLETS-INTEGRITY-2 - Atomic Wallet Delete & Reference Guard
+--
+-- A client-side `hasWalletReferences()` check is necessarily racy: a new
+-- transaction can be created between the check and a direct DELETE. This RPC
+-- moves the authoritative check beside the DELETE in the same PostgreSQL
+-- transaction. Locking the wallet serializes against Finance/Savings/Forex
+-- mutation RPCs, which also lock wallet rows before committing money movement.
+-- Foreign keys remain the independent final backstop for direct/legacy writes.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.delete_wallet_atomic(p_wallet_id text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFW01';
+  END IF;
+
+  IF p_wallet_id IS NULL OR trim(p_wallet_id) = '' THEN
+    RAISE EXCEPTION 'Wallet not found' USING ERRCODE = 'MFW03';
+  END IF;
+
+  -- Authoritative serialization point. A concurrent Finance/Savings/Forex
+  -- write that targets this wallet must acquire the same row lock.
+  PERFORM 1
+  FROM public.wallets
+  WHERE id = p_wallet_id AND user_id = v_user_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Wallet not found' USING ERRCODE = 'MFW03';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.transactions
+    WHERE user_id = v_user_id
+      AND ("walletId" = p_wallet_id OR "transferToWalletId" = p_wallet_id)
+  ) OR EXISTS (
+    SELECT 1 FROM public.forex_cash_transactions
+    WHERE user_id = v_user_id AND wallet_id = p_wallet_id
+  ) OR EXISTS (
+    SELECT 1 FROM public.savings
+    WHERE user_id = v_user_id AND wallet_id = p_wallet_id
+  ) OR EXISTS (
+    SELECT 1 FROM public.saving_transactions
+    WHERE user_id = v_user_id AND wallet_id = p_wallet_id
+  ) THEN
+    RAISE EXCEPTION 'Wallet has financial references' USING ERRCODE = 'MFW02';
+  END IF;
+
+  BEGIN
+    DELETE FROM public.wallets
+    WHERE id = p_wallet_id AND user_id = v_user_id;
+  EXCEPTION
+    WHEN foreign_key_violation THEN
+      -- Covers a concurrent/legacy/otherwise hidden reference not observed by
+      -- the explicit UX-oriented queries above. Never cascade financial data.
+      RAISE EXCEPTION 'Wallet has financial references' USING ERRCODE = 'MFW02';
+  END;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.delete_wallet_atomic(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.delete_wallet_atomic(text) TO authenticated;
 
 -- ============================================================================
 -- FINANCE-ENGINE-3 canonical Savings RPC definitions

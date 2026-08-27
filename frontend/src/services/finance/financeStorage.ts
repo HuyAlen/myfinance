@@ -1754,31 +1754,72 @@ export async function updateWallet(
   return { error: null };
 }
 
+export type WalletDeleteErrorCode = "referenced" | "not_found";
+
+type WalletDeleteResult = {
+  error: string | null;
+  code?: WalletDeleteErrorCode;
+};
+
+function mapWalletDeleteError(error: {
+  code?: string;
+  message: string;
+}): WalletDeleteResult {
+  switch (error.code) {
+    case "MFW01":
+      return { error: ERR_NO_AUTH };
+    case "MFW02":
+    // Existing/legacy FK backstop. The RPC normally converts this to MFW02,
+    // but keeping 23503 here makes the client safe against deployment drift.
+    case "23503":
+      return {
+        error:
+          "Không thể xóa ví vì vẫn còn dữ liệu tài chính liên kết. Hãy xóa hoặc chuyển các liên kết trước.",
+        code: "referenced",
+      };
+    case "MFW03":
+      return { error: "Không tìm thấy ví cần xóa.", code: "not_found" };
+    case "PGRST202":
+      // Fail closed: never fall back to a direct table DELETE because that
+      // would reopen the check-then-delete race WALLETS-INTEGRITY-2 removes.
+      return {
+        error:
+          "Không thể xóa ví an toàn lúc này. Vui lòng thử lại sau.",
+      };
+    default:
+      return { error: error.message };
+  }
+}
+
 export async function deleteWallet(
   walletId: string,
-): Promise<{ error: string | null }> {
+): Promise<WalletDeleteResult> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
-    .from("wallets")
-    .delete()
-    .eq("id", walletId)
-    .eq("user_id", userId);
+
+  // WALLETS-INTEGRITY-2: the authoritative dependency check and DELETE now
+  // live in one PostgreSQL transaction. There is intentionally no direct
+  // table-delete fallback here: if the RPC is unavailable,
+  // deletion must fail closed rather than re-introduce the old race window.
+  const { error } = await supabase.rpc("delete_wallet_atomic", {
+    p_wallet_id: walletId,
+  });
+
   if (error) {
     console.error("[financeStorage] deleteWallet:", error.message);
-    return { error: error.message };
+    return mapWalletDeleteError(error);
   }
+
   return { error: null };
 }
 
 /**
- * On-demand, lightweight dependency check for wallet deletion. Uses
- * head-only exact counts (no rows transferred) instead of downloading full
- * transaction history — safe to call once per delete attempt.
+ * Lightweight UX preflight for wallet deletion. Uses head-only exact counts
+ * (no rows transferred) instead of downloading full financial history.
  *
- * No DB foreign key enforces this (walletId/transferToWalletId → wallets is
- * intentionally omitted; see /supabase/schema.sql), so this application-layer
- * check remains the only integrity guard before delete.
+ * This check is NOT the correctness boundary: references can appear after it
+ * returns. `delete_wallet_atomic` re-checks the same domains after locking the
+ * wallet row, while DB foreign keys provide an independent final backstop.
  */
 export async function hasWalletReferences(
   walletId: string,
@@ -1786,7 +1827,13 @@ export async function hasWalletReferences(
   const userId = await getAuthUserId();
   if (!userId) return { hasReferences: false, error: ERR_NO_AUTH };
 
-  const [sourceResult, destinationResult, forexResult] = await Promise.all([
+  const [
+    sourceResult,
+    destinationResult,
+    forexResult,
+    savingsResult,
+    savingTransactionsResult,
+  ] = await Promise.all([
     supabase
       .from("transactions")
       .select("id", { count: "exact", head: true })
@@ -1802,9 +1849,25 @@ export async function hasWalletReferences(
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("wallet_id", walletId),
+    supabase
+      .from("savings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("wallet_id", walletId),
+    supabase
+      .from("saving_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("wallet_id", walletId),
   ]);
 
-  const results = [sourceResult, destinationResult, forexResult];
+  const results = [
+    sourceResult,
+    destinationResult,
+    forexResult,
+    savingsResult,
+    savingTransactionsResult,
+  ];
   const firstError = results.find((result) => result.error)?.error;
   if (firstError) {
     console.error("[financeStorage] hasWalletReferences:", firstError.message);

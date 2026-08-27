@@ -604,7 +604,15 @@ export type Database = {
         Update: CategoryUpdate;
         Relationships: [{ foreignKeyName: "categories_default_wallet_fk"; columns: ["default_wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }];
       };
-      transactions: { Row: TransactionRow; Insert: TransactionInsert; Update: TransactionUpdate; Relationships: [] };
+      transactions: {
+        Row: TransactionRow;
+        Insert: TransactionInsert;
+        Update: TransactionUpdate;
+        Relationships: [
+          { foreignKeyName: "transactions_wallet_id_fkey"; columns: ["user_id", "walletId"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["user_id", "id"] },
+          { foreignKeyName: "transactions_transfer_to_wallet_id_fkey"; columns: ["user_id", "transferToWalletId"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["user_id", "id"] }
+        ];
+      };
       debts: { Row: DebtRow; Insert: DebtInsert; Update: DebtUpdate; Relationships: [] };
       goals: { Row: GoalRow; Insert: GoalInsert; Update: GoalUpdate; Relationships: [] };
       budgets: {
@@ -703,6 +711,7 @@ export type Database = {
         Args: { p_id: string; p_expected_amount: number; p_expected_wallet_id: string; p_expected_type: string; p_expected_transfer_to_wallet_id?: string | null; p_effect_wallet_id_1?: string | null; p_effect_delta_1?: number | null; p_effect_wallet_id_2?: string | null; p_effect_delta_2?: number | null };
         Returns: undefined;
       };
+      delete_wallet_atomic: { Args: { p_wallet_id: string }; Returns: undefined };
       create_saving_account: {
         Args: { p_saving_id: string; p_name: string; p_type: string; p_balance: number; p_wallet_id: string; p_saving_transaction_id: string; p_transaction_date: string; p_interest_rate?: number | null; p_maturity_date?: string | null; p_notes?: string | null };
         Returns: { saving: SavingRow; wallet: WalletRow; saving_transaction: SavingTransactionRow }[];

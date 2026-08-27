@@ -20,7 +20,7 @@ const aiTables = [
 
 const requiredRpcs = [
   "create_finance_transaction", "update_finance_transaction",
-  "delete_finance_transaction", "create_saving_account",
+  "delete_finance_transaction", "delete_wallet_atomic", "create_saving_account",
   "create_saving_movement", "delete_saving_account",
   "create_forex_cash_transaction", "update_forex_cash_transaction",
   "delete_forex_cash_transaction", "export_finance_backup",

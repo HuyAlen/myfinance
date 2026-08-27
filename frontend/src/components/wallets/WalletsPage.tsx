@@ -746,19 +746,17 @@ export default function WalletsPage() {
       return;
     }
 
-    // On-demand, lightweight dependency check (head-only counts, no row
-    // data) instead of relying on in-memory current-month data — an old
-    // transaction from a prior month/year would otherwise be missed. No DB
-    // FK enforces this (walletId/transferToWalletId → wallets is
-    // intentionally omitted; see /supabase/schema.sql), so this remains the
-    // integrity guard before delete.
+    // WALLETS-INTEGRITY-2: this is only an early UX preflight. It avoids
+    // opening a confirmation dialog when known references already exist, but
+    // correctness does not depend on it: deleteWallet() calls an atomic RPC
+    // that locks the wallet and re-checks all reference domains server-side.
     setIsCheckingDelete(true);
     try {
       const { hasReferences, error } = await hasWalletReferences(id);
       if (error) {
         toast({
           variant: "error",
-          message: "Không thể kiểm tra giao dịch liên kết: " + error,
+          message: "Không thể kiểm tra dữ liệu tài chính liên kết: " + error,
         });
         return;
       }
@@ -766,7 +764,7 @@ export default function WalletsPage() {
       if (hasReferences) {
         toast({
           variant: "warning",
-          message: `Không thể xóa ví "${wallet.name}" vì đang có giao dịch liên kết. Hãy xóa hoặc chuyển các giao dịch trước.`,
+          message: `Không thể xóa ví "${wallet.name}" vì đang có dữ liệu tài chính liên kết. Hãy xóa hoặc chuyển các liên kết trước.`,
         });
         return;
       }
@@ -784,9 +782,33 @@ export default function WalletsPage() {
     setIsDeleting(true);
 
     try {
-      const { error } = await deleteWallet(walletToDelete.id);
+      const { error, code } = await deleteWallet(walletToDelete.id);
 
       if (error) {
+        if (code === "referenced") {
+          // A reference may have been created after the lightweight preflight
+          // but before confirmation. The server-side RPC is authoritative.
+          setDeleteTarget(null);
+          toast({
+            variant: "warning",
+            message: `Không thể xóa ví "${walletToDelete.name}" vì vẫn còn hoặc vừa phát sinh dữ liệu tài chính liên kết. Hãy xóa hoặc chuyển các liên kết trước.`,
+          });
+          await runReload();
+          return;
+        }
+
+        if (code === "not_found") {
+          // Another tab/device may already have deleted the wallet. Reconcile
+          // instead of leaving a stale confirmation dialog open.
+          setDeleteTarget(null);
+          toast({
+            variant: "warning",
+            message: error,
+          });
+          await runReload();
+          return;
+        }
+
         toast({
           variant: "error",
           message: "Lỗi xóa ví: " + error,
