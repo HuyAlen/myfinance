@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * DASH-MOBILE-POLISH-2 + DASH-COLOR-POLISH-1.1.
+ * DASH-MOBILE-POLISH-2.1 + DASH-COLOR-POLISH-1.1.
  *
  * Source-inspection regression contract for the compact HeroMini sizing and
  * refined light financial palette. Business wiring/readiness is intentionally
@@ -86,13 +86,13 @@ describe("DashboardPage HeroMini mobile KPI professional density", () => {
 
   it("keeps Net Worth visually dominant with soft blue-slate typography", () => {
     expect(source).toContain(
-      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-bold leading-none tracking-[-0.045em] tabular-nums text-[#274A6D] sm:text-5xl",
+      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-bold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED] sm:text-5xl",
     );
   });
 
   it("keeps the refined light Hero surface and mobile p-4 spacing", () => {
     expect(source).toContain(
-      'className="bg-linear-to-br from-white via-[#FBFDFF] to-[#F3F8FF] p-4 sm:p-7"',
+      'className="bg-linear-to-br from-[#F8FBFF] via-[#FCFEFF] to-[#EDF6FF] p-4 sm:p-7"',
     );
   });
 });
