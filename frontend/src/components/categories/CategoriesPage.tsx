@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowDownRight,
@@ -217,9 +217,13 @@ export default function CategoriesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [hasLoadedCategorySnapshot, setHasLoadedCategorySnapshot] =
+    useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
@@ -233,40 +237,64 @@ export default function CategoriesPage() {
   const { toast } = useToast();
 
   const reloadData = useCallback(async () => {
-    // FINANCE-DATA-1 / CATEGORY-INTEGRITY-1: all dependency reads reject on
-    // genuine query failure. Budgets are loaded with categories/transactions
-    // so delete eligibility is never decided from a partial dependency view.
-    // State setters only run after every read succeeds, preserving the last
-    // known-good snapshot on a reload failure.
+    // CATEGORIES-CORRECTNESS-1: categories + transactions + budgets form one
+    // critical snapshot. Never commit a partial dependency view because both
+    // activity state and delete eligibility depend on transaction/budget reads.
+    // On failure, keep the last-known-good snapshot intact.
+    setIsLoadingCategories(true);
     try {
-      const [categoryData, transactionData, budgetData, walletData] =
-        await Promise.all([
-          getCategories(),
-          getTransactions(),
-          getBudgets(),
-          getWallets(),
-        ]);
+      const [categoryData, transactionData, budgetData] = await Promise.all([
+        getCategories(),
+        getTransactions(),
+        getBudgets(),
+      ]);
       setCategories(categoryData);
       setTransactions(transactionData);
       setBudgets(budgetData);
-      setWallets(walletData);
+      setHasLoadedCategorySnapshot(true);
       setCategoriesLoadError(null);
     } catch (error) {
       console.error("[CategoriesPage] reloadData failed:", error);
       setCategoriesLoadError(
-        "Không thể tải dữ liệu danh mục. Vui lòng tải lại trang.",
+        "Không thể tải hoặc làm mới dữ liệu danh mục. Vui lòng thử lại.",
       );
     } finally {
       setIsLoadingCategories(false);
     }
   }, []);
 
+  const reloadWallets = useCallback(async () => {
+    // Wallet availability is useful for recurring-category editing, but it must
+    // not poison the critical category snapshot when the wallet read fails.
+    try {
+      const walletData = await getWallets();
+      setWallets(walletData);
+    } catch (error) {
+      console.error("[CategoriesPage] reloadWallets failed:", error);
+    }
+  }, []);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => void reloadData(), 0);
+    const timer = window.setTimeout(() => {
+      void reloadData();
+      void reloadWallets();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [reloadData]);
+  }, [reloadData, reloadWallets]);
+
+  useEffect(() => {
+    if (!isFormOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFormOpen]);
 
   useRealtimeTable(["categories", "transactions", "budgets"], reloadData);
+  useRealtimeTable(["wallets"], reloadWallets);
 
   const transactionSummaryByCategory = useMemo(() => {
     const summary = new Map<string, { count: number; total: number }>();
@@ -307,7 +335,10 @@ export default function CategoriesPage() {
             count: usage.count,
             total: usage.total,
             budgetCount,
-            isActive: usage.count > 0 || budgetCount > 0,
+            isActive:
+              category.isRecurring === true ||
+              usage.count > 0 ||
+              budgetCount > 0,
           },
         ];
       }),
@@ -385,6 +416,14 @@ export default function CategoriesPage() {
   }
 
   function openCreateForm(group: CategoryGroup = "variable") {
+    if (!hasLoadedCategorySnapshot || categoriesLoadError) {
+      toast({
+        variant: "warning",
+        message: "Chưa thể tạo danh mục cho tới khi dữ liệu tải thành công.",
+      });
+      return;
+    }
+
     setSaveError(null);
     setForm({
       name: "",
@@ -424,6 +463,14 @@ export default function CategoriesPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitInFlightRef.current) return;
+    if (!hasLoadedCategorySnapshot || categoriesLoadError) {
+      setSaveError(
+        "Chưa thể xác minh dữ liệu danh mục. Hãy đợi lần tải thành công trước khi lưu.",
+      );
+      return;
+    }
+
     const name = form.name.trim();
     if (!name) {
       setSaveError("Vui lòng nhập tên danh mục");
@@ -469,26 +516,50 @@ export default function CategoriesPage() {
       nextRunDate: form.isRecurring ? form.nextRunDate : undefined,
     };
 
+    submitInFlightRef.current = true;
+    setIsSubmitting(true);
     setSaveError(null);
-    const { error } = form.id
-      ? await updateCategory(category)
-      : await addCategory(category);
 
-    if (error) {
-      setSaveError(error);
-      return;
+    try {
+      const { error } = form.id
+        ? await updateCategory(category)
+        : await addCategory(category);
+
+      if (error) {
+        setSaveError(error);
+        return;
+      }
+
+      await reloadData();
+      setIsFormOpen(false);
+      setForm(emptyForm);
+      toast({
+        variant: "success",
+        message: form.id ? "Đã cập nhật danh mục." : "Đã thêm danh mục mới.",
+      });
+    } catch (error) {
+      console.error("[CategoriesPage] handleSubmit failed:", error);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu danh mục. Vui lòng thử lại.",
+      );
+    } finally {
+      submitInFlightRef.current = false;
+      setIsSubmitting(false);
     }
-
-    await reloadData();
-    setIsFormOpen(false);
-    setForm(emptyForm);
-    toast({
-      variant: "success",
-      message: form.id ? "Đã cập nhật danh mục." : "Đã thêm danh mục mới.",
-    });
   }
 
   function handleDelete(category: Category) {
+    if (!hasLoadedCategorySnapshot || categoriesLoadError) {
+      toast({
+        variant: "warning",
+        message:
+          "Chưa thể xác minh giao dịch/ngân sách liên kết. Hãy đợi dữ liệu tải thành công trước khi xóa danh mục.",
+      });
+      return;
+    }
+
     const usage = transactionSummaryByCategory.get(category.id);
     if ((usage?.count ?? 0) > 0) {
       toast({
@@ -542,7 +613,8 @@ export default function CategoriesPage() {
           <button
             type="button"
             onClick={() => openCreateForm("variable")}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/70 transition hover:bg-blue-700 active:scale-95"
+            disabled={!hasLoadedCategorySnapshot || Boolean(categoriesLoadError)}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/70 transition hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none disabled:hover:bg-slate-300"
           >
             <Plus size={17} />
             Thêm danh mục
@@ -550,37 +622,54 @@ export default function CategoriesPage() {
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <OverviewCard
-            label="Tổng danh mục"
-            value={overview.total}
-            icon={<Layers3 size={18} />}
-          />
-          <OverviewCard
-            label="Thu nhập"
-            value={overview.income}
-            icon={<ArrowUpRight size={18} />}
-            tone="income"
-          />
-          <OverviewCard
-            label="Chi tiêu"
-            value={overview.expense}
-            icon={<ArrowDownRight size={18} />}
-            tone="expense"
-          />
-          <OverviewCard
-            label="Đang sử dụng"
-            value={overview.active}
-            icon={<CheckCircle2 size={18} />}
-            tone="active"
-          />
-          <OverviewCard
-            label="Chưa sử dụng"
-            value={overview.unused}
-            icon={<Archive size={18} />}
-            tone="unused"
-          />
+          {hasLoadedCategorySnapshot ? (
+            <>
+              <OverviewCard
+                label="Tổng danh mục"
+                value={overview.total}
+                icon={<Layers3 size={18} />}
+              />
+              <OverviewCard
+                label="Thu nhập"
+                value={overview.income}
+                icon={<ArrowUpRight size={18} />}
+                tone="income"
+              />
+              <OverviewCard
+                label="Chi tiêu"
+                value={overview.expense}
+                icon={<ArrowDownRight size={18} />}
+                tone="expense"
+              />
+              <OverviewCard
+                label="Đang sử dụng"
+                value={overview.active}
+                icon={<CheckCircle2 size={18} />}
+                tone="active"
+              />
+              <OverviewCard
+                label="Chưa sử dụng"
+                value={overview.unused}
+                icon={<Archive size={18} />}
+                tone="unused"
+              />
+            </>
+          ) : (
+            Array.from({ length: 5 }, (_, index) => (
+              <OverviewCardSkeleton key={index} />
+            ))
+          )}
         </div>
       </section>
+
+      {hasLoadedCategorySnapshot && categoriesLoadError && (
+        <div
+          role="alert"
+          className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          <b>Đang hiển thị dữ liệu gần nhất.</b> {categoriesLoadError}
+        </div>
+      )}
 
       <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -597,8 +686,9 @@ export default function CategoriesPage() {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {GROUP_ORDER.map((group) => {
             const meta = GROUP_META[group];
-            const stat = groupStats[group];
-            const selected = groupFilter === group;
+            const stat = hasLoadedCategorySnapshot ? groupStats[group] : null;
+            const selected =
+              hasLoadedCategorySnapshot && groupFilter === group;
             return (
               <div
                 key={group}
@@ -612,7 +702,8 @@ export default function CategoriesPage() {
                 <button
                   type="button"
                   onClick={() => setGroupFilter(selected ? "all" : group)}
-                  className="w-full text-left"
+                  disabled={!hasLoadedCategorySnapshot}
+                  className="w-full text-left disabled:cursor-not-allowed"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div
@@ -625,7 +716,7 @@ export default function CategoriesPage() {
                       )}
                     </div>
                     <span className="text-2xl font-black text-slate-900">
-                      {stat.count}
+                      {stat ? stat.count : "—"}
                     </span>
                   </div>
                   <p className={`mt-3 text-sm font-black ${meta.color}`}>
@@ -635,18 +726,25 @@ export default function CategoriesPage() {
                     {meta.description}
                   </p>
                   <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400">
-                    <span>{stat.active} đang dùng</span>
                     <span>
-                      {stat.amount > 0
-                        ? formatVND(stat.amount)
-                        : "Chưa phát sinh"}
+                      {stat ? `${stat.active} đang dùng` : "Đang tải"}
+                    </span>
+                    <span>
+                      {stat
+                        ? stat.amount > 0
+                          ? formatVND(stat.amount)
+                          : "Chưa phát sinh"
+                        : "—"}
                     </span>
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => openCreateForm(group)}
-                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                  disabled={
+                    !hasLoadedCategorySnapshot || Boolean(categoriesLoadError)
+                  }
+                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Plus size={12} />
                   Thêm vào nhóm
@@ -669,7 +767,8 @@ export default function CategoriesPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Tìm danh mục..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
+              disabled={!hasLoadedCategorySnapshot}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             />
             {search && (
               <button
@@ -683,15 +782,22 @@ export default function CategoriesPage() {
             )}
           </div>
           <div className="text-xs text-slate-500">
-            Hiển thị{" "}
-            <b className="text-slate-800">{filteredCategories.length}</b>/
-            {overview.total} danh mục
+            {hasLoadedCategorySnapshot ? (
+              <>
+                Hiển thị{" "}
+                <b className="text-slate-800">{filteredCategories.length}</b>/
+                {overview.total} danh mục
+              </>
+            ) : (
+              "Đang tải dữ liệu..."
+            )}
           </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <FilterSelect
             label="Loại"
+            disabled={!hasLoadedCategorySnapshot}
             value={typeFilter}
             onChange={(value) => setTypeFilter(value as TypeFilter)}
             options={[
@@ -702,18 +808,22 @@ export default function CategoriesPage() {
           />
           <FilterSelect
             label="Loại danh mục"
+            disabled={!hasLoadedCategorySnapshot}
             value={groupFilter}
             onChange={(value) => setGroupFilter(value as GroupFilter)}
             options={[
               { value: "all", label: "Tất cả nhóm" },
               ...GROUP_ORDER.map((group) => ({
                 value: group,
-                label: `${GROUP_META[group].label} (${groupStats[group].count})`,
+                label: hasLoadedCategorySnapshot
+                  ? `${GROUP_META[group].label} (${groupStats[group].count})`
+                  : GROUP_META[group].label,
               })),
             ]}
           />
           <FilterSelect
             label="Trạng thái"
+            disabled={!hasLoadedCategorySnapshot}
             value={activityFilter}
             onChange={(value) => setActivityFilter(value as ActivityFilter)}
             options={[
@@ -724,6 +834,7 @@ export default function CategoriesPage() {
           />
           <FilterSelect
             label="Sắp xếp"
+            disabled={!hasLoadedCategorySnapshot}
             value={sortBy}
             onChange={(value) => setSortBy(value as SortOption)}
             options={[
@@ -830,7 +941,7 @@ export default function CategoriesPage() {
 
           {/* FINANCE-DATA-1B: an initial read failure must not present as
               "Không tìm thấy danh mục" with a misleading "clear filter" CTA. */}
-          {filteredCategories.length === 0 && isLoadingCategories && (
+          {!hasLoadedCategorySnapshot && isLoadingCategories && (
             <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-400">
                 <Folder size={22} />
@@ -841,7 +952,7 @@ export default function CategoriesPage() {
             </div>
           )}
 
-          {filteredCategories.length === 0 &&
+          {!hasLoadedCategorySnapshot &&
             !isLoadingCategories &&
             categoriesLoadError && (
               <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
@@ -857,9 +968,7 @@ export default function CategoriesPage() {
               </div>
             )}
 
-          {filteredCategories.length === 0 &&
-            !isLoadingCategories &&
-            !categoriesLoadError && (
+          {hasLoadedCategorySnapshot && filteredCategories.length === 0 && (
               <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
                 <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
                   <Folder size={22} />
@@ -883,8 +992,8 @@ export default function CategoriesPage() {
       </section>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex min-h-0 items-stretch justify-center overflow-hidden bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex h-dvh min-h-0 w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
@@ -897,7 +1006,8 @@ export default function CategoriesPage() {
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200"
+                disabled={isSubmitting}
+                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Đóng"
               >
                 <X size={16} />
@@ -906,7 +1016,8 @@ export default function CategoriesPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3 sm:max-h-[calc(100dvh-8rem)] sm:overflow-y-auto sm:p-6"
+              aria-busy={isSubmitting}
+              className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto overscroll-contain px-4 py-3 [-webkit-overflow-scrolling:touch] sm:max-h-[calc(100dvh-8rem)] sm:p-6"
             >
               <label className="block">
                 <span className="mb-1.5 block text-sm font-black text-slate-700">
@@ -1117,15 +1228,21 @@ export default function CategoriesPage() {
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                  disabled={isSubmitting}
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98]"
+                  disabled={isSubmitting}
+                  className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:bg-blue-400 disabled:shadow-none"
                 >
-                  {form.id ? "Lưu thay đổi" : "Thêm danh mục"}
+                  {isSubmitting
+                    ? "Đang lưu..."
+                    : form.id
+                      ? "Lưu thay đổi"
+                      : "Thêm danh mục"}
                 </button>
               </div>
             </form>
@@ -1138,6 +1255,15 @@ export default function CategoriesPage() {
         onCancel={() => setPendingAction(null)}
       />
     </div>
+  );
+}
+
+function OverviewCardSkeleton() {
+  return (
+    <div
+      className="h-[94px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50"
+      aria-hidden="true"
+    />
   );
 }
 
@@ -1182,11 +1308,13 @@ function FilterSelect({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
@@ -1196,7 +1324,8 @@ function FilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white"
+        disabled={disabled}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
