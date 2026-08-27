@@ -34,28 +34,28 @@ export default function CashFlowChart({
           barCategoryGap={12}
           margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E6EDF5" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0F7" />
           <XAxis
             dataKey="label"
             axisLine={false}
             tickLine={false}
             fontSize={11}
-            tick={{ fill: "#64748B" }}
+            tick={{ fill: "#8AA0B5" }}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
             width={46}
             fontSize={10}
-            tick={{ fill: "#64748B" }}
+            tick={{ fill: "#8AA0B5" }}
             tickFormatter={(value) => formatCompactVND(Number(value))}
           />
           <Tooltip
             contentStyle={{
               borderRadius: "0.9rem",
-              border: "1px solid #E6EDF5",
-              boxShadow: "0 12px 32px -16px rgb(37 99 235 / 0.18)",
-              color: "#334E68",
+              border: "1px solid #E8F0F7",
+              boxShadow: "0 12px 32px -16px rgb(47 128 237 / 0.14)",
+              color: "#4A6783",
               fontSize: "12px",
             }}
             formatter={(value, name) => [
@@ -65,13 +65,13 @@ export default function CashFlowChart({
               String(name),
             ]}
           />
-          <Bar dataKey="thu" name="Thu nhập" fill="#34D399" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="chi" name="Chi tiêu" fill="#FB7185" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="thu" name="Thu nhập" fill="#6EDFB4" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="chi" name="Chi tiêu" fill="#F8A1AE" radius={[6, 6, 0, 0]} />
           <Line
             type="monotone"
             dataKey="dongTienRong"
             name="Dòng tiền ròng"
-            stroke="#1677FF"
+            stroke="#60A5FA"
             strokeWidth={2.5}
             connectNulls={false}
             dot={{ r: 3 }}

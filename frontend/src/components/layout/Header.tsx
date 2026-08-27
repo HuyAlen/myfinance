@@ -859,7 +859,7 @@ export default function Header({
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <header className="sticky top-0 z-30 h-auto shrink-0 border-b border-[#E6EDF5] bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-18 lg:px-8">
+    <header className="sticky top-0 z-30 h-auto shrink-0 border-b border-[#EDF3F8] bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-18 lg:px-8">
       <div className="flex h-18 items-center justify-between gap-3 sm:gap-5 lg:h-full">
         {/* ══ LEFT ══ */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
@@ -869,7 +869,7 @@ export default function Header({
             aria-label="Mở menu"
             aria-expanded={sidebarOpen}
             aria-controls="sidebar"
-            className="min-h-11 min-w-11 rounded-xl p-2 text-[#64748B] transition hover:bg-[#F8FAFC] lg:hidden"
+            className="min-h-11 min-w-11 rounded-xl p-2 text-[#718AA1] transition hover:bg-[#F6FAFD] lg:hidden"
           >
             <span className="flex h-5.5 w-5.5 flex-col items-center justify-center gap-1.25">
               <span
@@ -895,7 +895,7 @@ export default function Header({
 
           {/* Page title */}
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-bold tracking-tight text-[#334E68] sm:text-[22px] sm:leading-7">
+            <h2 className="truncate text-[15px] font-bold tracking-tight text-[#526D87] sm:text-[22px] sm:leading-7">
               {pageMeta.title}
             </h2>
             <p className="hidden truncate text-[11px] font-medium text-slate-400 lg:block">
@@ -1338,7 +1338,7 @@ export default function Header({
                 setDropdownOpen(false);
                 setMonthOpen(false);
               }}
-              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-[#E6EDF5] bg-white p-0 text-[#64748B] shadow-[0_2px_10px_rgba(37,99,235,0.05)] transition hover:bg-[#EFF6FF] hover:text-[#1677FF]"
+              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-[#E8F0F7] bg-white p-0 text-[#718AA1] shadow-[0_2px_8px_rgba(47,128,237,0.025)] transition hover:bg-[#F3F8FF] hover:text-[#2F80ED]"
               aria-label="Thông báo"
             >
               <Bell size={17} />
@@ -1461,7 +1461,7 @@ export default function Header({
                 setNotifOpen(false);
                 setMonthOpen(false);
               }}
-              className="flex h-11 items-center gap-2 rounded-2xl border border-[#E6EDF5] bg-white py-1.5 pl-1.5 pr-2 shadow-[0_2px_10px_rgba(37,99,235,0.05)] transition hover:bg-[#F8FAFC] active:scale-[.98] sm:pr-3"
+              className="flex h-11 items-center gap-2 rounded-2xl border border-[#E8F0F7] bg-white py-1.5 pl-1.5 pr-2 shadow-[0_2px_8px_rgba(47,128,237,0.025)] transition hover:bg-[#F8FBFF] active:scale-[.98] sm:pr-3"
             >
               <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-cyan-500 text-sm font-black text-white">
                 {avatarLetter}
@@ -1538,7 +1538,7 @@ export default function Header({
       </div>
 
       {/* Mobile/PWA period picker */}
-      <div className="border-t border-[#EEF2F7] bg-white/95 pb-3 pt-2 md:hidden">
+      <div className="border-t border-[#F0F4F8] bg-white/95 pb-3 pt-2 md:hidden">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -1546,15 +1546,15 @@ export default function Header({
               setFilterMode("month");
               shiftMonth(-1);
             }}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E6EDF5] bg-[#F8FAFC] text-[#64748B] shadow-[0_2px_10px_rgba(37,99,235,0.05)] transition active:scale-[.98]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E8F0F7] bg-[#FAFCFE] text-[#7D93A8] shadow-[0_2px_8px_rgba(47,128,237,0.025)] transition active:scale-[.98]"
             aria-label="Tháng trước"
           >
             <ChevronLeft size={18} />
           </button>
 
-          <label className="relative flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-[#E6EDF5] bg-[#F8FAFC] px-3 text-sm font-bold text-[#334E68] shadow-[0_2px_10px_rgba(37,99,235,0.05)] active:scale-[.99]">
-            <CalendarDays size={16} className="shrink-0 text-[#1677FF]" />
-            <span className="pointer-events-none min-w-0 flex-1 text-center text-[16px] font-bold text-[#334E68]">
+          <label className="relative flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-[#E8F0F7] bg-[#FAFCFE] px-3 text-sm font-semibold text-[#52718F] shadow-[0_2px_8px_rgba(47,128,237,0.025)] active:scale-[.99]">
+            <CalendarDays size={16} className="shrink-0 text-[#2F80ED]" />
+            <span className="pointer-events-none min-w-0 flex-1 text-center text-[16px] font-semibold text-[#52718F]">
               {formatCompactMonth(selectedMonth)}
             </span>
             <input
@@ -1575,7 +1575,7 @@ export default function Header({
               setFilterMode("month");
               shiftMonth(1);
             }}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E6EDF5] bg-[#F8FAFC] text-[#64748B] shadow-[0_2px_10px_rgba(37,99,235,0.05)] transition active:scale-[.98]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E8F0F7] bg-[#FAFCFE] text-[#7D93A8] shadow-[0_2px_8px_rgba(47,128,237,0.025)] transition active:scale-[.98]"
             aria-label="Tháng sau"
           >
             <ChevronRight size={18} />

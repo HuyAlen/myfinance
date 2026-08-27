@@ -509,10 +509,10 @@ export default function QuickActionFab() {
     // and the open/close rotate), which lives on a different element than
     // the drag-position transform below, so the two can never fight over
     // the same animated property.
-    "flex size-12 touch-none select-none items-center justify-center rounded-2xl shadow-[0_6px_18px_rgba(37,99,235,0.22)] transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing",
+    "flex size-12 touch-none select-none items-center justify-center rounded-2xl shadow-[0_6px_18px_rgba(47,128,237,0.20)] transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing",
     isQuickActionOpen
-      ? "bg-[#4B6B88] hover:bg-[#3E5D78] rotate-45"
-      : "bg-[#1677FF] hover:bg-[#0F6EEB] hover:scale-105",
+      ? "bg-[#6F8AA3] hover:bg-[#617D96] rotate-45"
+      : "bg-[#2F80ED] hover:bg-[#2676DE] hover:scale-105",
   ].join(" ");
 
   function renderFabButton() {

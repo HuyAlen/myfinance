@@ -181,9 +181,12 @@ describe("QuickActionFab mobile panel follows the draggable FAB", () => {
     expect(source).toContain("computeDraggedPosition(");
   });
 
-  it("keeps the same FAB icon/rotate toggle while using the softer reduced-prominence treatment", () => {
+  it("keeps the same FAB icon/rotate toggle while using the true soft-blue reduced-prominence treatment", () => {
     expect(source).toContain(
-      '"bg-[#4B6B88] hover:bg-[#3E5D78] rotate-45"',
+      '"bg-[#6F8AA3] hover:bg-[#617D96] rotate-45"',
+    );
+    expect(source).toContain(
+      '"bg-[#2F80ED] hover:bg-[#2676DE] hover:scale-105"',
     );
     expect(source).toContain("const FAB_SIZE = 48;");
     expect(source).toContain("flex size-12 touch-none");

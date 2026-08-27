@@ -2695,24 +2695,24 @@ export default function DashboardPage() {
           gating, and instrumentation below are unchanged; only its position
           in the page moved. */}
       {/* Executive overview */}
-      <section className="overflow-hidden rounded-3xl border border-[#E6EDF5] bg-white shadow-[0_10px_28px_rgba(37,99,235,0.06)] sm:rounded-4xl">
-        <div className="bg-linear-to-br from-white via-[#FBFDFF] to-[#F3F8FF] p-4 sm:p-7">
-          {/* DASH-MOBILE-POLISH-2: soft financial hierarchy on mobile.
-              Net Worth stays dominant through scale and whitespace instead of near-black
-              ink; Reports and supporting metrics intentionally recede into softer blue/slate. */}
+      <section className="overflow-hidden rounded-3xl border border-[#E8F0F7] bg-white shadow-[0_8px_24px_rgba(47,128,237,0.045)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-[#F8FBFF] via-[#FCFEFF] to-[#EDF6FF] p-4 sm:p-7">
+          {/* DASH-MOBILE-POLISH-2.1: True Soft Blue hierarchy.
+              Mobile uses visibly lighter blue/slate ink rather than dark navy; the
+              headline carries emphasis through scale while support surfaces stay airy. */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#1677FF] sm:text-xs">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2F80ED] sm:text-xs">
                 Tài sản & nợ
               </p>
-              <h1 className="mt-1.5 text-[22px] font-bold tracking-tight text-[#334E68] sm:mt-2 sm:text-3xl">
+              <h1 className="mt-1.5 text-[22px] font-semibold tracking-tight text-[#4F6B85] sm:mt-2 sm:text-3xl">
                 Tài sản ròng
               </h1>
             </div>
             <button
               type="button"
               onClick={() => router.push("/reports")}
-              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-blue-50/70 px-2.5 text-xs font-bold text-[#1677FF] transition hover:bg-blue-100 sm:h-10 sm:px-3 sm:text-sm"
+              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[#F3F8FF] px-2.5 text-xs font-semibold text-[#2F80ED] transition hover:bg-[#EAF3FF] sm:h-10 sm:px-3 sm:text-sm"
             >
               Báo cáo&nbsp;→
             </button>
@@ -2722,7 +2722,7 @@ export default function DashboardPage() {
             {/* PERF-4B: headline remains gated only on isDashboardReady. */}
             {isDashboardReady ? (
               <p
-                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-bold leading-none tracking-[-0.045em] tabular-nums text-[#274A6D] sm:text-5xl"
+                className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-bold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED] sm:text-5xl"
                 title={formatVND(summary.netWorth)}
               >
                 {formatVND(summary.netWorth)}
@@ -2731,7 +2731,7 @@ export default function DashboardPage() {
               <div className="h-10 w-52 animate-pulse rounded-lg bg-slate-200/80 sm:h-12 sm:w-64" />
             )}
 
-            <p className="mt-2 max-w-xl text-[13px] leading-5 text-[#64748B] sm:text-sm">
+            <p className="mt-2 max-w-xl text-[13px] leading-5 text-[#879AAF] sm:text-sm">
               Tổng tài sản sau khi trừ nợ phải trả.
             </p>
 
@@ -2741,7 +2741,7 @@ export default function DashboardPage() {
                 <span
                   className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:text-xs ${
                     netCashFlow >= 0
-                      ? "border-emerald-100/80 bg-[#ECFDF5] text-[#059669]"
+                      ? "border-emerald-100/70 bg-[#EEFBF6] text-[#0F9F70]"
                       : "border-rose-100 bg-rose-50 text-rose-600"
                   }`}
                 >
@@ -2760,54 +2760,54 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-5">
             <HeroMini
               icon={<Wallet size={16} />}
-              iconClass="bg-[#EFF6FF] text-[#1677FF]"
+              iconClass="bg-[#F0F7FF] text-[#2F80ED]"
               label="Thanh khoản"
               value={formatVND(summary.liquidBalance)}
-              valueClass="text-[#334E68]"
+              valueClass="text-[#4A6783]"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<PiggyBank size={16} />}
-              iconClass="bg-[#EFF6FF] text-[#1677FF]"
+              iconClass="bg-[#F0F7FF] text-[#2F80ED]"
               label="Tiết kiệm"
               value={formatVND(savingsSnapshot.totalSavings)}
-              valueClass="text-[#334E68]"
+              valueClass="text-[#4A6783]"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Landmark size={16} />}
-              iconClass="bg-[#EFF6FF] text-[#1677FF]"
+              iconClass="bg-[#F0F7FF] text-[#2F80ED]"
               label="Vốn Forex"
               value={formatVND(forexSnapshot.balance)}
-              valueClass="text-[#334E68]"
+              valueClass="text-[#4A6783]"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<Briefcase size={16} />}
-              iconClass="bg-[#EFF6FF] text-[#1677FF]"
+              iconClass="bg-[#F0F7FF] text-[#2F80ED]"
               label="Đầu tư khác"
               value={formatVND(summary.investmentAssets)}
-              valueClass="text-[#334E68]"
+              valueClass="text-[#4A6783]"
               isLoading={!isDashboardReady}
             />
             <HeroMini
               icon={<CreditCard size={16} />}
-              iconClass="bg-[#EFF6FF] text-[#1677FF]"
+              iconClass="bg-[#F0F7FF] text-[#2F80ED]"
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
-              valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#334E68]"}
+              valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#4A6783]"}
               className="col-span-2 sm:col-span-1"
               isLoading={!isDashboardReady}
             />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-[#E6EDF5] bg-[#FBFDFF] p-3.5 shadow-[0_4px_16px_rgba(37,99,235,0.04)] sm:mt-5 sm:rounded-3xl sm:p-4">
+          <div className="mt-4 rounded-2xl border border-[#E8F0F7] bg-white/75 p-3.5 shadow-[0_2px_10px_rgba(47,128,237,0.025)] sm:mt-5 sm:rounded-3xl sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-[#334E68]">
+                <p className="text-sm font-semibold text-[#4F6B85]">
                   Biến động tài sản ròng
                 </p>
-                <p className="mt-1 text-[11px] leading-4 text-slate-500 sm:text-xs">
+                <p className="mt-1 text-[11px] leading-4 text-[#879AAF] sm:text-xs">
                   Snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
                 </p>
               </div>
@@ -2838,7 +2838,7 @@ export default function DashboardPage() {
                 <p className="text-sm font-black text-slate-700">
                   Chưa có lịch sử tài sản ròng
                 </p>
-                <p className="mt-1 text-[11px] leading-4 text-slate-500 sm:text-xs sm:leading-5">
+                <p className="mt-1 text-[11px] leading-4 text-[#879AAF] sm:text-xs sm:leading-5">
                   Chưa có snapshot Net Worth nào được ghi nhận cho kỳ đang xem.
                   Hệ thống không tự dựng số liệu cho các tháng chưa từng được lưu.
                 </p>
@@ -2850,7 +2850,7 @@ export default function DashboardPage() {
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
                       Snapshot đã ghi nhận
                     </p>
-                    <p className="mt-1.5 text-lg font-black tracking-tight tabular-nums text-[#334E68] sm:text-xl">
+                    <p className="mt-1.5 text-lg font-bold tracking-tight tabular-nums text-[#4A6783] sm:text-xl">
                       {formatVND(Number(netWorthHistorySummary.latestPoint!.value))}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold text-slate-500 sm:text-xs">
@@ -3698,7 +3698,7 @@ function DailyMetric({
 
 function HeroMini({
   icon,
-  iconClass = "bg-[#EFF6FF] text-[#1677FF]",
+  iconClass = "bg-[#F0F7FF] text-[#2F80ED]",
   label,
   value,
   valueClass,
@@ -3715,7 +3715,7 @@ function HeroMini({
 }) {
   return (
     <div
-      className={`min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#E6EDF5] bg-white p-3 shadow-[0_4px_14px_rgba(37,99,235,0.045)] sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:shadow-md ${className}`}
+      className={`min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#E8F0F7] bg-white/95 p-3 shadow-[0_2px_10px_rgba(47,128,237,0.025)] sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:shadow-md ${className}`}
     >
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
         <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-7 ${iconClass}`}>
@@ -3723,7 +3723,7 @@ function HeroMini({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="whitespace-nowrap text-[11.5px] font-semibold leading-tight tracking-[-0.01em] text-[#64748B] sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
+          <p className="whitespace-nowrap text-[11.5px] font-semibold leading-tight tracking-[-0.01em] text-[#8196AA] sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
             {label}
           </p>
           {isLoading ? (
