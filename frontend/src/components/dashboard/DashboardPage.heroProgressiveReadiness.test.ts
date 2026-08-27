@@ -109,12 +109,12 @@ describe("Net Worth comparison + chart use canonical history readiness (NETWORTH
   });
 
   it("keeps sparse-history comparison and chart behind canonical history readiness", () => {
-    const panelStart = source.indexOf(
-      '<div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/70',
-    );
+    const headingIndex = source.indexOf("Biến động tài sản ròng");
+    expect(headingIndex).toBeGreaterThan(-1);
+    const panelStart = source.lastIndexOf('<div className="', headingIndex);
     expect(panelStart).toBeGreaterThan(-1);
-    const panelEnd = source.indexOf("</section>", panelStart);
-    expect(panelEnd).toBeGreaterThan(panelStart);
+    const panelEnd = source.indexOf("</section>", headingIndex);
+    expect(panelEnd).toBeGreaterThan(headingIndex);
     const panelSource = source.slice(panelStart, panelEnd);
 
     expect(panelSource).toContain("!netWorthTrendReady ? (");

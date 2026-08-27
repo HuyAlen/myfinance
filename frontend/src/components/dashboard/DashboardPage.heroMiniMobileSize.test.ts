@@ -87,13 +87,13 @@ describe("DashboardPage HeroMini mobile KPI professional density", () => {
 
   it("keeps Net Worth visually dominant under the new professional hierarchy", () => {
     expect(source).toContain(
-      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-slate-950 sm:text-5xl",
+      "text-[clamp(1.85rem,8.8vw,2.35rem)] font-black leading-none tracking-[-0.055em] tabular-nums text-white",
     );
   });
 
   it("keeps the Hero outer mobile padding at p-4", () => {
     expect(source).toContain(
-      'className="bg-linear-to-br from-blue-50/65 via-white to-sky-50/55 p-4 sm:p-7"',
+      'className="bg-linear-to-br from-[#2F6FF7] via-[#4A78F2] to-[#675BF5] p-4 sm:p-7"',
     );
   });
 });

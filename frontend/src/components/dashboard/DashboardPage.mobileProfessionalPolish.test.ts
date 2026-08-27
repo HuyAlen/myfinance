@@ -26,9 +26,8 @@ describe("DASH-MOBILE-POLISH-1 professional hierarchy and density", () => {
     expect(source).not.toContain('className="inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/95 px-4');
   });
 
-  it("flattens mobile HeroMini surfaces while preserving responsive desktop polish", () => {
+  it("keeps mobile HeroMini surfaces compact while preserving responsive desktop polish", () => {
     expect(source).toContain("min-h-[78px]");
-    expect(source).toContain("shadow-none");
     expect(source).toContain("sm:hover:shadow-md");
     expect(source).not.toContain("min-h-[100px]");
   });
@@ -41,7 +40,26 @@ describe("DASH-MOBILE-POLISH-1 professional hierarchy and density", () => {
   });
 
   it("uses neutral asset values and reserves semantic debt color for real debt", () => {
-    expect(source).toContain('valueClass="text-slate-900"');
-    expect(source).toContain('valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-slate-900"}');
+    expect(source).toContain('valueClass="text-[#173A6A]"');
+    expect(source).toContain('valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#173A6A]"}');
+  });
+});
+
+
+describe("DASH-COLOR-POLISH-1 blue finance palette", () => {
+  const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
+
+  it("removes near-black text tokens from the Dashboard page", () => {
+    expect(source).not.toContain("text-black");
+    expect(source).not.toContain("text-slate-950");
+    expect(source).not.toContain("text-slate-900");
+  });
+
+  it("uses the premium blue-violet Net Worth hero and purpose-specific pastel asset icons", () => {
+    expect(source).toContain("from-[#2F6FF7] via-[#4A78F2] to-[#675BF5]");
+    expect(source).toContain('iconClass="bg-emerald-50 text-emerald-600"');
+    expect(source).toContain('iconClass="bg-violet-50 text-violet-600"');
+    expect(source).toContain('iconClass="bg-amber-50 text-amber-600"');
+    expect(source).toContain('iconClass="bg-rose-50 text-rose-500"');
   });
 });
