@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("DASH-MOBILE-POLISH-2.1 — True Soft Blue Palette", () => {
+describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth", () => {
   const dashboard = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
@@ -33,10 +33,10 @@ describe("DASH-MOBILE-POLISH-2.1 — True Soft Blue Palette", () => {
     const end = dashboard.indexOf("{/* Operating KPIs */}", start);
     const hero = dashboard.slice(start, end);
 
-    expect(hero).toContain("text-[#4F6B85]");
+    expect(hero).toContain("text-[#36536B]");
     expect(hero).toContain("text-[#2F80ED]");
-    expect(hero).toContain("text-[#879AAF]");
-    expect(hero).toContain("text-[#4A6783]");
+    expect(hero).toContain("text-[#687E93]");
+    expect(hero).toContain("text-[#3F5F79]");
     expect(hero).not.toContain("text-[#274A6D]");
     expect(hero).not.toContain("text-[#334E68]");
     expect(hero).not.toContain("text-black");
@@ -47,16 +47,16 @@ describe("DASH-MOBILE-POLISH-2.1 — True Soft Blue Palette", () => {
 
   it("demotes Reports and balances the mobile asset grid with a full-width debt row", () => {
     expect(dashboard).toContain("Báo cáo&nbsp;→");
-    expect(dashboard).toContain("bg-[#F3F8FF]");
+    expect(dashboard).toContain("border border-[#D9E7F4] bg-white");
     expect(dashboard).toContain('className="col-span-2 sm:col-span-1"');
     expect(dashboard).toContain('label="Nợ phải trả"');
   });
 
   it("softens mobile Header and BottomNav chrome", () => {
-    expect(header).toContain('text-[#526D87] sm:text-[22px]');
-    expect(header).toContain('bg-[#FAFCFE] text-[#7D93A8]');
+    expect(header).toContain('text-[#36536B] sm:text-[22px]');
+    expect(header).toContain('bg-white text-[#61788F]');
     expect(header).toContain('text-[#2F80ED]');
-    expect(bottomNav).toContain('text-[#A0B1C2] active:bg-[#F8FBFF]');
+    expect(bottomNav).toContain('text-[#7C91A5] active:bg-[#F3F7FB]');
     expect(bottomNav).toContain('? "font-bold text-[#2F80ED]"');
     expect(bottomNav).not.toContain("rgba(15,23,42,0.08)");
   });

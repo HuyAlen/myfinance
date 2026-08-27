@@ -92,7 +92,7 @@ describe("DashboardPage HeroMini mobile KPI professional density", () => {
 
   it("keeps the refined light Hero surface and mobile p-4 spacing", () => {
     expect(source).toContain(
-      'className="bg-linear-to-br from-[#F8FBFF] via-[#FCFEFF] to-[#EDF6FF] p-4 sm:p-7"',
+      'className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F6FB] p-4 sm:p-7"',
     );
   });
 });

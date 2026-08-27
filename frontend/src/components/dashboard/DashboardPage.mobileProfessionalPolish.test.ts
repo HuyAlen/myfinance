@@ -40,8 +40,8 @@ describe("DASH-MOBILE-POLISH-2.1 true soft-blue hierarchy and density", () => {
   });
 
   it("uses neutral asset values and reserves semantic debt color for real debt", () => {
-    expect(source).toContain('valueClass="text-[#4A6783]"');
-    expect(source).toContain('valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#4A6783]"}');
+    expect(source).toContain('valueClass="text-[#3F5F79]"');
+    expect(source).toContain('valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#3F5F79]"}');
     expect(source).toContain('className="col-span-2 sm:col-span-1"');
   });
 });
@@ -57,15 +57,15 @@ describe("DASH-COLOR-POLISH-1.1 refined light financial palette", () => {
   });
 
   it("replaces the saturated hero with a light blue-white financial surface", () => {
-    expect(source).toContain("from-[#F8FBFF] via-[#FCFEFF] to-[#EDF6FF]");
+    expect(source).toContain("from-white via-[#F9FCFF] to-[#F1F6FB]");
     expect(source).not.toContain("from-[#2F6FF7] via-[#4A78F2] to-[#675BF5]");
     expect(source).toContain("text-[#2F80ED] sm:text-5xl");
-    expect(source).toContain("bg-[#F3F8FF]");
+    expect(source).toContain("border border-[#D9E7F4] bg-white");
     expect(source).not.toContain("Xem báo cáo&nbsp;›");
   });
 
   it("uses one restrained blue icon family for HeroMini assets", () => {
-    const blueIcons = source.split('iconClass="bg-[#F0F7FF] text-[#2F80ED]"').length - 1;
+    const blueIcons = source.split('iconClass="bg-[#EAF3FC] text-[#2F80ED]"').length - 1;
     expect(blueIcons).toBe(5);
     expect(source).not.toContain('iconClass="bg-emerald-50 text-emerald-600"');
     expect(source).not.toContain('iconClass="bg-violet-50 text-violet-600"');

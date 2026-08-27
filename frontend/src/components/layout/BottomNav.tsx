@@ -44,7 +44,7 @@ export default function BottomNav() {
       aria-label="Điều hướng chính"
       className={[
         "fixed inset-x-0 bottom-0 z-50 lg:hidden",
-        "border-t border-[#EDF3F8] bg-white/95 shadow-[0_-6px_20px_rgba(47,128,237,0.04)] backdrop-blur-xl",
+        "border-t border-[#DDE7F0] bg-white/95 shadow-[0_-8px_22px_rgba(54,83,107,0.08)] backdrop-blur-xl",
         "pb-[max(env(safe-area-inset-bottom),0.5rem)]",
       ].join(" ")}
     >
@@ -60,7 +60,7 @@ export default function BottomNav() {
                 "flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] transition-all duration-200",
                 isActive
                   ? "font-bold text-[#2F80ED]"
-                  : "font-medium text-[#A0B1C2] active:bg-[#F8FBFF]",
+                  : "font-medium text-[#7C91A5] active:bg-[#F3F7FB]",
               ].join(" ")}
               aria-current={isActive ? "page" : undefined}
             >
@@ -68,7 +68,7 @@ export default function BottomNav() {
                 className={[
                   "flex size-9 items-center justify-center rounded-2xl transition-all duration-200",
                   isActive
-                    ? "bg-[#F0F7FF]"
+                    ? "bg-[#EAF3FC]"
                     : "bg-transparent",
                 ].join(" ")}
               >
