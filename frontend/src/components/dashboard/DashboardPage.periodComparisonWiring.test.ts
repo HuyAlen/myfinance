@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 /**
  * Dashboard KPI period-comparison UI was intentionally removed.
  *
- * Keep Net Worth's own chart comparison (`changeFromPrevious`) intact, but
- * prevent the two red-highlighted KPI footer rows ("so với kỳ trước") from
- * being reintroduced on Net Cash Flow / Saving & Investment.
+ * NETWORTH-HISTORY-1.1 keeps Net Worth comparison semantics only when at least
+ * two canonical snapshots exist. Sparse history must never manufacture a
+ * "So với kỳ trước +0" comparison.
  */
 describe("DashboardPage KPI period comparison removal", () => {
   const source = readFileSync(
@@ -56,10 +56,13 @@ describe("DashboardPage KPI period comparison removal", () => {
     expect(kpiCardSource).not.toContain("toneStyles[comparison.tone]");
   });
 
-  it("keeps the existing Net Worth chart comparison untouched", () => {
+  it("keeps Net Worth comparison sparse-history-safe", () => {
     expect(source).toContain("changeFromPrevious");
-    expect(source).toContain("So với kỳ trước");
-    expect(source).toContain("netWorthChartStats.changeFromPrevious");
+    expect(source).toContain("netWorthHistorySummary.hasComparison");
+    expect(source).toContain("hasNetWorthHistoryComparison");
+    expect(source).toContain("Chưa đủ dữ liệu để so sánh");
+    expect(source).toContain("So với snapshot trước");
+    expect(source).not.toContain("So với kỳ trước");
   });
 
   it("KPI contextual navigation remains intact", () => {

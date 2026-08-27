@@ -81,4 +81,38 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
     expect(window).not.toContain("cashFlowReady");
     expect(window).not.toContain("savingInvestmentReady");
   });
+  it("uses the sparse-history summary instead of treating a lone snapshot as zero change", () => {
+    expect(source).toContain("summarizeCanonicalNetWorthHistory");
+    expect(source).toContain("const hasNetWorthHistoryComparison =");
+    expect(source).toContain("netWorthHistorySummary.hasComparison");
+    expect(source).not.toContain("changeFromPrevious: previousPoint");
+  });
+
+  it("renders zero, one, and multi-snapshot history as distinct UX states", () => {
+    expect(source).toContain("Chưa có lịch sử tài sản ròng");
+    expect(source).toContain("netWorthHistorySummary.snapshotCount === 1");
+    expect(source).toContain("Chưa đủ dữ liệu để so sánh");
+    expect(source).toContain("Cần ít nhất 2 snapshot ở các tháng khác nhau");
+    expect(source).toContain("<NetWorthTrendChart trend={netWorthTrend} />");
+  });
+
+  it("does not show a fake +0 comparison when only one snapshot exists", () => {
+    const comparisonStart = source.indexOf(
+      "netWorthTrendReady && hasNetWorthHistoryComparison",
+    );
+    expect(comparisonStart).toBeGreaterThanOrEqual(0);
+    const comparisonWindow = source.slice(comparisonStart, comparisonStart + 900);
+    expect(comparisonWindow).toContain("changeFromPrevious!");
+    expect(comparisonWindow).not.toContain("?? 0");
+  });
+
+  it("explains sparse history truthfully instead of implying all twelve months are known", () => {
+    expect(source).toContain(
+      "Lịch sử Net Worth bắt đầu từ tháng",
+    );
+    expect(source).toContain(
+      "các tháng chưa được ghi nhận vẫn là dữ liệu chưa biết",
+    );
+  });
+
 });

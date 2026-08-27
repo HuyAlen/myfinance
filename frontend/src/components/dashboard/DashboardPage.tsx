@@ -28,7 +28,10 @@ import {
   shouldMarkReady,
 } from "@/src/lib/dashboard/dashboardReadiness";
 import { buildDashboardBudgetAttention } from "@/src/lib/dashboard/dashboardBudgetAttention";
-import { buildCanonicalNetWorthTrend } from "@/src/lib/dashboard/netWorthHistory";
+import {
+  buildCanonicalNetWorthTrend,
+  summarizeCanonicalNetWorthHistory,
+} from "@/src/lib/dashboard/netWorthHistory";
 import {
   buildBudgetsHref,
   buildGoalsHref,
@@ -1976,38 +1979,10 @@ export default function DashboardPage() {
     [netWorthSnapshots, selectedMonth, selectedYear],
   );
 
-  const netWorthChartStats = useMemo(() => {
-    const points = netWorthTrend.filter(
-      (point) =>
-        typeof point.value === "number" && Number.isFinite(point.value),
-    );
-    const currentPoint =
-      points.find((point) => point.isSnapshotMonth) ?? points.at(-1) ?? null;
-    const previousPoint = currentPoint
-      ? ([...points]
-          .reverse()
-          .find((point) => point.month < currentPoint.month) ?? null)
-      : null;
-    const currentValue = currentPoint ? Number(currentPoint.value) : 0;
-    const highestValue = points.length
-      ? Math.max(...points.map((point) => Number(point.value)))
-      : currentValue;
-    const lowestValue = points.length
-      ? Math.min(...points.map((point) => Number(point.value)))
-      : currentValue;
-
-    return {
-      currentLabel: currentPoint
-        ? `Hiện tại • ${currentPoint.label}`
-        : "Snapshot hiện tại",
-      currentValue,
-      highestValue,
-      lowestValue,
-      changeFromPrevious: previousPoint
-        ? currentValue - Number(previousPoint.value)
-        : 0,
-    };
-  }, [netWorthTrend]);
+  const netWorthHistorySummary = useMemo(
+    () => summarizeCanonicalNetWorthHistory(netWorthTrend),
+    [netWorthTrend],
+  );
 
   // ── Cash-flow trend (real monthly transaction data) ───────────────────────
   const selectedYearTransactions = useMemo(
@@ -2404,7 +2379,10 @@ export default function DashboardPage() {
   //     alone. The chart now reads the year-scoped persisted snapshot table and
   //     no longer waits on cash-flow or saving-transaction ledgers.
   const netWorthTrendReady = netWorthHistoryReady;
-  const hasNetWorthHistoryData = netWorthTrend.some((point) => point.hasData);
+  const hasNetWorthHistoryData = netWorthHistorySummary.snapshotCount > 0;
+  const hasNetWorthHistoryComparison =
+    netWorthHistorySummary.hasComparison &&
+    netWorthHistorySummary.changeFromPrevious !== null;
 
   // ── Compact operating KPIs ───────────────────────────────────────────────
   // `ready` is per-card: only "Dòng tiền ròng" (periodFlowSummary — pure
@@ -2812,42 +2790,74 @@ export default function DashboardPage() {
                   Biến động tài sản ròng
                 </p>
                 <p className="mt-1 text-xs text-slate-600">
-                  Dùng snapshot Net Worth theo tháng đã được hệ thống ghi nhận trong năm {selectedYear}.
+                  Lịch sử snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
                 </p>
               </div>
-              <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                  So với kỳ trước
-                </p>
-                {netWorthTrendReady ? (
-                  hasNetWorthHistoryData ? (
-                    <p
-                      className={`text-sm font-black ${
-                        netWorthChartStats.changeFromPrevious >= 0
-                          ? "text-emerald-600"
-                          : "text-rose-500"
-                      }`}
-                    >
-                      {netWorthChartStats.changeFromPrevious >= 0 ? "+" : ""}
-                      {formatVND(netWorthChartStats.changeFromPrevious)}
-                    </p>
-                  ) : (
-                    <p className="text-xs font-bold text-slate-500">
-                      Chưa có dữ liệu
-                    </p>
-                  )
-                ) : (
-                  <div className="ml-auto h-5 w-20 animate-pulse rounded bg-slate-200/80" />
-                )}
-              </div>
+
+              {netWorthTrendReady && hasNetWorthHistoryComparison ? (
+                <div className="rounded-xl bg-slate-50/80 px-3 py-2 text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    So với snapshot trước
+                  </p>
+                  <p
+                    className={`text-sm font-black ${
+                      netWorthHistorySummary.changeFromPrevious! >= 0
+                        ? "text-emerald-600"
+                        : "text-rose-500"
+                    }`}
+                  >
+                    {netWorthHistorySummary.changeFromPrevious! >= 0 ? "+" : ""}
+                    {formatVND(netWorthHistorySummary.changeFromPrevious!)}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
-            {/* NETWORTH-HISTORY-1: the chart reads persisted monthly snapshots
-                only. Unknown months stay null and never inherit today's Net Worth. */}
-            {netWorthTrendReady ? (
-              <NetWorthTrendChart trend={netWorthTrend} />
+            {!netWorthTrendReady ? (
+              <div className="mt-3 h-32 animate-pulse rounded-2xl bg-slate-100" />
+            ) : !hasNetWorthHistoryData ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-sm font-black text-slate-700">
+                  Chưa có lịch sử tài sản ròng
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Chưa có snapshot Net Worth nào được ghi nhận cho kỳ đang xem.
+                  Hệ thống không tự dựng số liệu cho các tháng chưa từng được lưu.
+                </p>
+              </div>
+            ) : netWorthHistorySummary.snapshotCount === 1 ? (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
+                      Snapshot đã ghi nhận
+                    </p>
+                    <p className="mt-2 text-xl font-black tracking-tight tabular-nums text-slate-950">
+                      {formatVND(Number(netWorthHistorySummary.latestPoint!.value))}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                      Tháng {String(netWorthHistorySummary.latestPoint!.month).padStart(2, "0")}/{selectedYear}
+                    </p>
+                  </div>
+                  <div className="max-w-56 text-left sm:text-right">
+                    <p className="text-xs font-bold text-slate-600">
+                      Chưa đủ dữ liệu để so sánh
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                      Cần ít nhất 2 snapshot ở các tháng khác nhau để hiển thị biến động.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 border-t border-blue-100 pt-3 text-[11px] leading-4 text-slate-500">
+                  Lịch sử Net Worth bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedYear}; các tháng chưa được ghi nhận vẫn là dữ liệu chưa biết.
+                </p>
+              </div>
             ) : (
-              <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+              /* NETWORTH-HISTORY-1.1: only render the trend chart once at
+                 least two canonical snapshots exist. Sparse/unknown months
+                 stay null; a single point is shown as a compact factual
+                 snapshot instead of a misleading 12-month chart. */
+              <NetWorthTrendChart trend={netWorthTrend} />
             )}
           </div>
         </div>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { NetWorthSnapshot } from "@/src/types/finance";
-import { buildCanonicalNetWorthTrend } from "./netWorthHistory";
+import {
+  buildCanonicalNetWorthTrend,
+  summarizeCanonicalNetWorthHistory,
+} from "./netWorthHistory";
 
 function snapshot(month: string, netWorth: number): NetWorthSnapshot {
   return {
@@ -106,4 +109,88 @@ describe("NETWORTH-HISTORY-1 canonical Dashboard trend", () => {
     expect(trend[0].value).toBe(126);
     expect(trend.filter((point) => point.hasData)).toHaveLength(1);
   });
+  it("caps visible history at the selected month for past-period review", () => {
+    const trend = buildCanonicalNetWorthTrend({
+      snapshots: [
+        snapshot("2026-06-01", 60),
+        snapshot("2026-07-01", 70),
+        snapshot("2026-08-01", 80),
+      ],
+      selectedYear: 2026,
+      selectedMonth: 7,
+      now,
+    });
+
+    expect(trend[5]).toMatchObject({ value: 60, hasData: true });
+    expect(trend[6]).toMatchObject({ value: 70, hasData: true });
+    expect(trend[7]).toMatchObject({ value: null, hasData: false });
+  });
+
+  it("future selected months still stop at the latest real calendar month", () => {
+    const trend = buildCanonicalNetWorthTrend({
+      snapshots: [
+        snapshot("2026-08-01", 80),
+        snapshot("2026-09-01", 90),
+      ],
+      selectedYear: 2026,
+      selectedMonth: 9,
+      now,
+    });
+
+    expect(trend[7]).toMatchObject({ value: 80, hasData: true });
+    expect(trend[8]).toMatchObject({ value: null, hasData: false });
+  });
+
+  it("reports no comparison for zero or one canonical snapshot", () => {
+    const empty = summarizeCanonicalNetWorthHistory(
+      buildCanonicalNetWorthTrend({
+        snapshots: [],
+        selectedYear: 2026,
+        selectedMonth: 8,
+        now,
+      }),
+    );
+    expect(empty).toMatchObject({
+      snapshotCount: 0,
+      firstPoint: null,
+      latestPoint: null,
+      previousPoint: null,
+      hasComparison: false,
+      changeFromPrevious: null,
+    });
+
+    const single = summarizeCanonicalNetWorthHistory(
+      buildCanonicalNetWorthTrend({
+        snapshots: [snapshot("2026-08-01", 80)],
+        selectedYear: 2026,
+        selectedMonth: 8,
+        now,
+      }),
+    );
+    expect(single.snapshotCount).toBe(1);
+    expect(single.hasComparison).toBe(false);
+    expect(single.changeFromPrevious).toBeNull();
+    expect(single.latestPoint?.value).toBe(80);
+  });
+
+  it("compares the two latest recorded snapshots, not missing calendar months", () => {
+    const summary = summarizeCanonicalNetWorthHistory(
+      buildCanonicalNetWorthTrend({
+        snapshots: [
+          snapshot("2026-05-01", 50),
+          snapshot("2026-08-01", 80),
+        ],
+        selectedYear: 2026,
+        selectedMonth: 8,
+        now,
+      }),
+    );
+
+    expect(summary.snapshotCount).toBe(2);
+    expect(summary.previousPoint?.month).toBe(5);
+    expect(summary.latestPoint?.month).toBe(8);
+    expect(summary.hasComparison).toBe(true);
+    expect(summary.changeFromPrevious).toBe(30);
+  });
+
 });

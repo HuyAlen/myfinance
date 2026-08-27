@@ -108,7 +108,7 @@ describe("Net Worth comparison + chart use canonical history readiness (NETWORTH
     expect(declarationWindow).not.toContain("savingInvestmentReady");
   });
 
-  it("both the comparison and chart remain gated on netWorthTrendReady", () => {
+  it("keeps sparse-history comparison and chart behind canonical history readiness", () => {
     const panelStart = source.indexOf(
       '<div className="mt-5 rounded-3xl border border-slate-200/80 bg-white/95/85',
     );
@@ -117,9 +117,13 @@ describe("Net Worth comparison + chart use canonical history readiness (NETWORTH
     expect(panelEnd).toBeGreaterThan(panelStart);
     const panelSource = source.slice(panelStart, panelEnd);
 
-    const occurrences =
-      panelSource.split("{netWorthTrendReady ? (").length - 1;
-    expect(occurrences).toBe(2);
+    expect(panelSource).toContain("!netWorthTrendReady ? (");
+    expect(panelSource).toContain(
+      "netWorthTrendReady && hasNetWorthHistoryComparison",
+    );
+    expect(panelSource).toContain(
+      "netWorthHistorySummary.snapshotCount === 1",
+    );
     expect(panelSource).toContain("<NetWorthTrendChart trend={netWorthTrend} />");
   });
 
