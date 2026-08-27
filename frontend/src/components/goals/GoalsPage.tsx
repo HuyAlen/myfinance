@@ -172,6 +172,28 @@ const getSupabaseSavingAmountForGoal = (
   }, 0);
 };
 
+// GOALS-MOBILE-POLISH-2: keep financial card text single-line on iPhone
+// without hiding information behind ellipsis. Long labels shrink
+// progressively instead of wrapping or truncating.
+function getMobileSingleLineNameSize(value: string) {
+  const length = value.trim().length;
+  if (length >= 40) return "text-[8px] tracking-[-0.045em]";
+  if (length >= 34) return "text-[9px] tracking-[-0.04em]";
+  if (length >= 28) return "text-[10px] tracking-[-0.035em]";
+  if (length >= 22) return "text-[11px] tracking-[-0.025em]";
+  if (length >= 17) return "text-[12px] tracking-[-0.015em]";
+  return "text-[15px]";
+}
+
+function getMobileSummaryPairSize(value: string) {
+  if (value.length >= 42) return "text-[9px] tracking-[-0.055em]";
+  if (value.length >= 36) return "text-[10px] tracking-[-0.05em]";
+  if (value.length >= 30) return "text-[11px] tracking-[-0.045em]";
+  if (value.length >= 25) return "text-[12px] tracking-[-0.035em]";
+  if (value.length >= 21) return "text-[13px] tracking-[-0.025em]";
+  return "text-[17px]";
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -436,6 +458,7 @@ export default function GoalsPage() {
   return (
     <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
       {/* GOALS-MOBILE-POLISH-1 · Compact Goal Hierarchy & Scroll Efficiency */}
+      {/* GOALS-MOBILE-POLISH-2 · Single-Line Card Value Integrity */}
       {/* SECTION 1 · Goal Command Center */}
       <section className="overflow-hidden rounded-3xl border border-[#DCE6EF] bg-white shadow-[0_8px_24px_rgba(54,83,107,0.07)] sm:rounded-4xl">
         <div className="bg-linear-to-br from-white via-[#F8FBFF] to-[#F1F7FC] px-3.5 py-4 sm:px-6 sm:py-6">
@@ -512,7 +535,14 @@ export default function GoalsPage() {
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#8CA0B3]">
                   Tiến độ tổng thể
                 </p>
-                <h2 className="mt-1 text-[17px] font-black leading-6 text-[#36536B] sm:text-xl">
+                <h2
+                  className={
+                    "mt-1 whitespace-nowrap font-black leading-6 text-[#36536B] sm:text-xl " +
+                    getMobileSummaryPairSize(
+                      `${formatVND(summary.totalCurrent)} / ${formatVND(summary.totalTarget)}`,
+                    )
+                  }
+                >
                   {formatVND(summary.totalCurrent)} /{" "}
                   {formatVND(summary.totalTarget)}
                 </h2>
@@ -577,7 +607,12 @@ export default function GoalsPage() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-[#36536B]">
+                      <p
+                        className={
+                          "whitespace-nowrap font-black text-[#36536B] sm:text-sm " +
+                          getMobileSingleLineNameSize(goal.name)
+                        }
+                      >
                         {goal.name}
                       </p>
                       <p className="mt-0.5 text-[11px] text-[#61788F] sm:text-xs">
@@ -654,7 +689,12 @@ export default function GoalsPage() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="truncate text-[15px] font-black text-[#36536B] sm:text-base">
+                      <h3
+                        className={
+                          "whitespace-nowrap font-black text-[#36536B] sm:text-base " +
+                          getMobileSingleLineNameSize(g.name)
+                        }
+                      >
                         {g.name}
                       </h3>
                       <span
@@ -690,7 +730,7 @@ export default function GoalsPage() {
                     <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Mục tiêu
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-black text-[#2F80ED] sm:text-xs">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black text-[#2F80ED] sm:text-xs">
                       {g.targetAmount >= 1_000_000
                         ? Math.round(g.targetAmount / 1_000_000) + "M"
                         : Math.round(g.targetAmount / 1_000) + "K"}
@@ -700,7 +740,7 @@ export default function GoalsPage() {
                     <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Đã có
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-black text-emerald-600 sm:text-xs">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black text-emerald-600 sm:text-xs">
                       {g.effectiveCurrentAmount >= 1_000_000
                         ? Math.round(g.effectiveCurrentAmount / 1_000_000) + "M"
                         : Math.round(g.effectiveCurrentAmount / 1_000) + "K"}
@@ -710,7 +750,7 @@ export default function GoalsPage() {
                     <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Còn lại
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-black text-[#61788F] sm:text-xs">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black text-[#61788F] sm:text-xs">
                       {g.remaining >= 1_000_000
                         ? Math.round(g.remaining / 1_000_000) + "M"
                         : Math.round(g.remaining / 1_000) + "K"}
@@ -725,7 +765,7 @@ export default function GoalsPage() {
                   </p>
                   <p
                     className={
-                      "mt-0.5 text-xl font-black tracking-tight sm:mt-1 sm:text-2xl " +
+                      "mt-0.5 whitespace-nowrap text-xl font-black tracking-tight sm:mt-1 sm:text-2xl " +
                       (g.tier === "completed"
                         ? "text-emerald-600"
                         : "text-[#2F80ED]")
@@ -733,16 +773,16 @@ export default function GoalsPage() {
                   >
                     {formatVND(g.effectiveCurrentAmount)}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-[#8CA0B3] sm:text-xs">
+                  <p className="mt-0.5 whitespace-nowrap text-[11px] text-[#8CA0B3] sm:text-xs">
                     / {formatVND(g.targetAmount)}
                   </p>
                   {g.supabaseSavingAmount > 0 && (
-                    <p className="mt-1 text-[11px] font-semibold text-cyan-600">
+                    <p className="mt-1 whitespace-nowrap text-[9.5px] font-semibold tracking-[-0.015em] text-cyan-600 sm:text-[11px]">
                       Đã đồng bộ {formatVND(g.supabaseSavingAmount)} từ Savings
                     </p>
                   )}
                   {g.linkedSavingAmount > 0 && (
-                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">
+                    <p className="mt-1 whitespace-nowrap text-[9.5px] font-semibold tracking-[-0.015em] text-emerald-600 sm:text-[11px]">
                       Đã tự động cộng {formatVND(g.linkedSavingAmount)} từ danh
                       mục tiết kiệm
                     </p>
@@ -789,7 +829,7 @@ export default function GoalsPage() {
                       <p className="text-[9px] font-black uppercase tracking-wide text-[#2F80ED] sm:text-[10px]">
                         Dự kiến hoàn thành
                       </p>
-                      <p className="mt-0.5 text-[13px] font-black text-[#36536B] sm:mt-1 sm:text-sm">
+                      <p className="mt-0.5 whitespace-nowrap text-[12px] font-black text-[#36536B] sm:mt-1 sm:text-sm">
                         {g.remaining <= 0
                           ? "Đã hoàn thành"
                           : `~${g.monthsLeft} tháng`}
@@ -799,7 +839,7 @@ export default function GoalsPage() {
                       <p className="text-[9px] font-bold text-[#8CA0B3] sm:text-[10px]">
                         Góp đề xuất
                       </p>
-                      <p className="mt-0.5 text-[13px] font-black text-[#2F80ED] sm:mt-1 sm:text-sm">
+                      <p className="mt-0.5 whitespace-nowrap text-[11px] font-black tracking-[-0.02em] text-[#2F80ED] sm:mt-1 sm:text-sm sm:tracking-normal">
                         {g.remaining <= 0
                           ? "0 đ"
                           : formatVND(g.suggestedMonthly) + "/tháng"}
@@ -983,24 +1023,57 @@ function KpiCard({
     indigo: "border-indigo-200 bg-[#F5F6FF] text-indigo-700",
   };
 
+  const mobileValueSize =
+    value.length >= 20
+      ? "text-[10px] tracking-[-0.055em]"
+      : value.length >= 17
+        ? "text-[11px] tracking-[-0.05em]"
+        : value.length >= 14
+          ? "text-[12px] tracking-[-0.04em]"
+          : value.length >= 11
+            ? "text-[14px] tracking-[-0.03em]"
+            : "text-[17px] tracking-[-0.02em]";
+
+  const mobileSubSize =
+    sub.length >= 38
+      ? "text-[7.5px] tracking-[-0.035em]"
+      : sub.length >= 32
+        ? "text-[8px] tracking-[-0.03em]"
+        : sub.length >= 26
+          ? "text-[8.5px] tracking-[-0.02em]"
+          : "text-[9.5px]";
+
   return (
-    <div className={"min-h-[108px] rounded-2xl border p-3 shadow-[0_3px_10px_rgba(54,83,107,0.05)] sm:min-h-0 sm:rounded-3xl sm:p-4 " + styles[tone]}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-[0.13em] opacity-75 sm:text-[10px] sm:tracking-[0.16em]">
-            {label}
-          </p>
-          <p className="mt-1.5 wrap-break-word text-[17px] font-black leading-5 tracking-tight sm:mt-2 sm:text-xl sm:leading-normal">
-            {value}
-          </p>
-          <p className="mt-1 line-clamp-1 text-[9.5px] font-semibold leading-4 opacity-75 sm:line-clamp-2 sm:text-[11px]">
-            {sub}
-          </p>
-        </div>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/85 shadow-sm sm:size-9 sm:rounded-2xl">
+    <div
+      className={
+        "min-h-[108px] min-w-0 rounded-2xl border p-3 shadow-[0_3px_10px_rgba(54,83,107,0.05)] sm:min-h-0 sm:rounded-3xl sm:p-4 " +
+        styles[tone]
+      }
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.11em] opacity-75 sm:text-[10px] sm:tracking-[0.16em]">
+          {label}
+        </p>
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/85 shadow-sm sm:size-9 sm:rounded-2xl">
           {icon}
         </div>
       </div>
+      <p
+        className={
+          "mt-1.5 whitespace-nowrap font-black leading-5 tabular-nums sm:mt-2 sm:text-xl sm:leading-normal " +
+          mobileValueSize
+        }
+      >
+        {value}
+      </p>
+      <p
+        className={
+          "mt-1 whitespace-nowrap font-semibold leading-4 opacity-75 sm:text-[11px] " +
+          mobileSubSize
+        }
+      >
+        {sub}
+      </p>
     </div>
   );
 }
@@ -1085,7 +1158,12 @@ function SavingAccountSelector({
                 }
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-xs font-black">
+                  <span
+                    className={
+                      "whitespace-nowrap font-black sm:text-xs " +
+                      getMobileSingleLineNameSize(saving.name)
+                    }
+                  >
                     {saving.name}
                   </span>
                   <span

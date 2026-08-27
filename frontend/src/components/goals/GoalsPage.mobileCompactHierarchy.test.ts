@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * GOALS-MOBILE-POLISH-1 — Compact Goal Hierarchy & Scroll Efficiency.
+ * GOALS-MOBILE-POLISH-1/2 — Compact hierarchy plus single-line card value integrity.
  *
  * Source-inspection contract: preserve goal/data semantics while making the
  * iPhone layout materially denser — 2x2 KPIs, compact overview counters,
@@ -32,9 +32,12 @@ describe("GoalsPage compacts the mobile financial hierarchy", () => {
       'className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-4"',
     );
     expect(source).toContain(
-      'className={"min-h-[108px] rounded-2xl border p-3',
+      "GOALS-MOBILE-POLISH-2 · Single-Line Card Value Integrity",
     );
-    expect(source).toContain("line-clamp-1");
+    expect(source).toContain("min-h-[108px] min-w-0 rounded-2xl border p-3");
+    expect(source).toContain("mobileValueSize");
+    expect(source).toContain("mobileSubSize");
+    expect(source).toContain("whitespace-nowrap");
   });
 
   it("turns overall tier counters into a compact 2x2 mobile grid", () => {
@@ -59,6 +62,9 @@ describe("GoalsPage compacts the mobile financial hierarchy", () => {
     expect(source).not.toContain(
       'className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3"',
     );
+    expect(source).toContain(
+      '"whitespace-nowrap font-black text-[#36536B] sm:text-sm " +',
+    );
   });
 
   it("keeps each goal card dense with three stats on the first mobile row", () => {
@@ -74,6 +80,10 @@ describe("GoalsPage compacts the mobile financial hierarchy", () => {
     expect(source).not.toContain(
       'mt-5 grid grid-cols-1 gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3',
     );
+    expect(source).toContain("getMobileSingleLineNameSize(g.name)");
+    expect(source).toContain(
+      'whitespace-nowrap text-[11px] font-black text-[#2F80ED]',
+    );
   });
 
   it("keeps precise progress and forecast values while hiding explanatory forecast copy on mobile", () => {
@@ -83,6 +93,17 @@ describe("GoalsPage compacts the mobile financial hierarchy", () => {
     expect(source).toContain(
       'className="mt-2 hidden text-[11px] leading-5 text-[#61788F] sm:block"',
     );
+    expect(source).toContain(
+      'whitespace-nowrap text-[11px] font-black tracking-[-0.02em] text-[#2F80ED]',
+    );
+  });
+
+  it("never hides card text behind truncation or line-clamp utilities", () => {
+    expect(source).not.toContain("truncate");
+    expect(source).not.toContain("line-clamp");
+    expect(source).not.toContain("wrap-break-word");
+    expect(source).toContain("getMobileSummaryPairSize(");
+    expect(source).toContain("getMobileSingleLineNameSize(");
   });
 
   it("does not change authoritative goal balance, savings-linking, CRUD, or failure-state semantics", () => {
