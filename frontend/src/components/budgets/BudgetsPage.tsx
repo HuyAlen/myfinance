@@ -1124,28 +1124,28 @@ export default function BudgetsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 overflow-x-hidden sm:space-y-6">
+    <div className="space-y-3.5 overflow-x-hidden sm:space-y-6">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm sm:rounded-4xl">
-        <div className="bg-linear-to-br from-blue-50/70 via-white to-cyan-50/60 px-4 py-4 sm:px-7 sm:py-7">
+      <section className="overflow-hidden rounded-2xl border border-[#DCE6EF] bg-white shadow-[0_6px_18px_rgba(54,83,107,0.07)] sm:rounded-4xl">
+        <div className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F6FB] px-3.5 py-3.5 sm:px-7 sm:py-7">
           {/* Top row */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
                 Budget Intelligence
               </p>
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              <h1 className="mt-1 text-[22px] font-black tracking-tight text-[#36536B] sm:text-4xl">
                 Ngân sách chi tiêu
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 hidden text-sm text-[#61788F] sm:block">
                 Thiết lập hạn mức và theo dõi chi tiêu theo từng danh mục.
               </p>
             </div>
             <button
               onClick={openCreateForm}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/50 transition-all hover:bg-blue-700 active:scale-[.98] sm:w-auto"
+              className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-sm font-bold text-white shadow-[0_5px_14px_rgba(47,128,237,0.20)] transition-all hover:bg-[#2676DE] active:scale-[.98] sm:min-h-12 sm:w-auto sm:rounded-2xl sm:px-5 sm:py-3"
             >
               <Plus size={17} />
               Tạo ngân sách
@@ -1153,7 +1153,7 @@ export default function BudgetsPage() {
           </div>
 
           {/* Executive KPI cards */}
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
@@ -1206,30 +1206,30 @@ export default function BudgetsPage() {
               }
               icon={<ChartPie size={16} />}
             />
-            <div className="col-span-2 rounded-3xl border border-rose-200 bg-linear-to-br from-rose-50 to-white p-4 shadow-sm xl:col-span-1">
+            <div className="col-span-2 rounded-2xl border border-rose-200 bg-linear-to-br from-rose-50 to-white p-3 shadow-sm xl:col-span-1 xl:rounded-3xl xl:p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">
                     Budget Health
                   </p>
-                  <p className="mt-2 text-2xl font-black tracking-tight text-rose-700">
+                  <p className="mt-1 text-xl font-black tracking-tight text-rose-700 sm:text-2xl">
                     {budgetHealthScore}
                     <span className="text-sm text-rose-400">/100</span>
                   </p>
                 </div>
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600 sm:size-9 sm:rounded-2xl">
                   <ShieldCheck size={16} />
                 </span>
               </div>
 
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-rose-100">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-rose-100 sm:mt-3 sm:h-2">
                 <div
                   className="h-full rounded-full bg-rose-500"
                   style={{ width: Math.min(budgetHealthScore, 100) + "%" }}
                 />
               </div>
 
-              <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-4 text-rose-500/80">
+              <p className="mt-1.5 line-clamp-1 text-[10px] font-semibold leading-4 text-rose-600/80 sm:mt-2 sm:line-clamp-2 sm:text-[11px]">
                 {filteredSummary.remaining < 0
                   ? `${realExpenseViolations.length} danh mục cần rà soát · ${healthGrade.label}`
                   : `${healthGrade.label} · ngân sách đang được kiểm soát`}
@@ -1240,25 +1240,25 @@ export default function BudgetsPage() {
       </section>
 
       {filteredSummary.totalLimit > 0 && (
-        <section className="grid gap-4 sm:gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid gap-3 sm:gap-5 lg:grid-cols-[0.9fr_1.1fr]">
           <div
             className={
-              "rounded-3xl border p-4 shadow-sm sm:rounded-4xl sm:p-5 " +
+              "rounded-2xl border p-3.5 shadow-sm sm:rounded-4xl sm:p-5 " +
               financialPlanning.fixedStatus.bg +
               " " +
               financialPlanning.fixedStatus.border
             }
           >
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm sm:size-10 sm:rounded-2xl">
                   <ShieldCheck size={17} />
                 </div>
                 <div>
-                  <h2 className="text-base font-black text-slate-900">
+                  <h2 className="text-base font-black text-[#36536B]">
                     Chi phí cố định
                   </h2>
-                  <p className="text-xs text-slate-500">
+                  <p className="hidden text-xs text-[#61788F] sm:block">
                     Nhà ở · điện nước · phí định kỳ
                   </p>
                 </div>
@@ -1266,7 +1266,7 @@ export default function BudgetsPage() {
               <div className="text-right">
                 <p
                   className={
-                    "text-2xl font-black " + financialPlanning.fixedStatus.color
+                    "text-xl font-black sm:text-2xl " + financialPlanning.fixedStatus.color
                   }
                 >
                   {financialPlanning.fixedRatio}%
@@ -1277,7 +1277,7 @@ export default function BudgetsPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <MetricTile
                 label="Đã chi cố định"
                 value={formatVND(financialPlanning.fixedSpent)}
@@ -1295,11 +1295,11 @@ export default function BudgetsPage() {
               />
             </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="mt-3 space-y-1.5 sm:mt-4 sm:space-y-2">
               {financialPlanning.fixedItems.slice(0, 3).map((item) => (
                 <div
                   key={item.categoryId}
-                  className="flex items-center justify-between rounded-2xl bg-white/75 px-3 py-2.5 text-xs"
+                  className="flex items-center justify-between rounded-xl bg-white/80 px-2.5 py-2 text-[11px] sm:rounded-2xl sm:px-3 sm:py-2.5 sm:text-xs"
                 >
                   <span className="font-bold text-slate-700">
                     {item.categoryName}
@@ -1318,30 +1318,30 @@ export default function BudgetsPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-violet-100 bg-linear-to-br from-violet-50 via-white to-indigo-50 p-4 shadow-sm sm:rounded-4xl sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="rounded-2xl border border-[#DCE6EF] bg-linear-to-br from-[#FAFCFF] via-white to-[#F6F8FC] p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-500 text-white shadow-sm shadow-violet-100">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] shadow-sm sm:size-11 sm:rounded-2xl sm:bg-linear-to-br sm:from-indigo-500 sm:to-violet-500 sm:text-white">
                   <ShieldCheck size={18} />
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-500">
                     Quy tắc phân bổ
                   </p>
-                  <h2 className="mt-1 text-lg font-black text-slate-900">
+                  <h2 className="mt-0.5 text-base font-black text-[#36536B] sm:mt-1 sm:text-lg">
                     Khung 50/30/20
                   </h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                  <p className="mt-1 hidden text-xs leading-5 text-[#61788F] sm:block">
                     Cân bằng nhu cầu thiết yếu, mong muốn và tích lũy tương lai.
                   </p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-right shadow-sm">
+              <div className="shrink-0 rounded-xl border border-[#DCE6EF] bg-white px-2.5 py-2 text-right shadow-sm sm:rounded-2xl sm:px-4 sm:py-3">
                 <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                   Điểm tuân thủ
                 </p>
-                <p className="mt-1 text-2xl font-black text-violet-700">
+                <p className="mt-0.5 text-lg font-black text-violet-700 sm:mt-1 sm:text-2xl">
                   {Math.max(
                     0,
                     Math.round(
@@ -1364,7 +1364,7 @@ export default function BudgetsPage() {
               </div>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-3 space-y-2.5 sm:mt-5 sm:space-y-3">
               {v7Allocation.buckets.map((bucket, index) => {
                 const rowStyles = [
                   {
@@ -1436,37 +1436,37 @@ export default function BudgetsPage() {
                 return (
                   <div
                     key={bucket.label}
-                    className={`rounded-3xl border p-4 ${rowStyles.shell}`}
+                    className={`rounded-2xl border p-3 sm:rounded-3xl sm:p-4 ${rowStyles.shell}`}
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <span
-                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-black ${rowStyles.icon}`}
+                          className={`flex size-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-black sm:size-9 sm:rounded-xl sm:text-xs ${rowStyles.icon}`}
                         >
                           {rowStyles.iconText}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-black text-slate-900">
+                          <p className="text-[13px] font-black leading-4 text-[#36536B] sm:text-sm">
                             {bucket.label}
                           </p>
-                          <p className="mt-1 text-xs font-bold text-slate-600">
+                          <p className="mt-0.5 text-[11px] font-bold text-[#61788F] sm:mt-1 sm:text-xs">
                             {bucket.percentOfIncome}% thu nhập
                           </p>
-                          <p className="mt-1 text-[11px] text-slate-500">
+                          <p className="mt-0.5 hidden text-[11px] text-[#8CA0B3] sm:mt-1 sm:block">
                             Đã sử dụng {bucket.percentOfTarget}% hạn mức{" "}
                             {bucket.targetPercent}%
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 sm:block sm:text-right">
+                      <div className="shrink-0 text-right">
                         <span
                           className={`rounded-full px-2.5 py-1 text-[10px] font-black ${statusStyles.badge}`}
                         >
                           {statusStyles.label}
                         </span>
                         <p
-                          className={`mt-1 text-sm font-black tabular-nums ${statusStyles.value}`}
+                          className={`mt-1 max-w-[108px] text-[10px] font-black leading-4 tabular-nums sm:max-w-none sm:text-sm ${statusStyles.value}`}
                         >
                           {formatVND(bucket.actualAmount)} /{" "}
                           {formatVND(bucket.targetAmount)}
@@ -1474,7 +1474,7 @@ export default function BudgetsPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-white shadow-inner">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white shadow-inner sm:mt-4 sm:h-3">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${statusStyles.bar}`}
                         style={{
@@ -1484,73 +1484,73 @@ export default function BudgetsPage() {
                     </div>
 
                     {index === 2 && (
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3">
                         <Link
                           href="/savings"
-                          className="rounded-2xl border border-blue-100 bg-white/90 p-3 transition hover:border-blue-300 hover:bg-blue-50"
+                          className="min-w-0 rounded-xl border border-blue-100 bg-white/90 p-2.5 transition hover:border-blue-300 hover:bg-blue-50 sm:rounded-2xl sm:p-3"
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                            <span className="flex size-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 sm:size-9 sm:rounded-xl">
                               <PiggyBank size={16} />
                             </span>
                             <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
                               {v7Allocation.savingsShare}% nhóm 20%
                             </span>
                           </div>
-                          <p className="mt-3 text-xs font-black text-slate-900">
+                          <p className="mt-2 text-[11px] font-black text-[#36536B] sm:mt-3 sm:text-xs">
                             Tiết kiệm
                           </p>
-                          <p className="mt-1 text-base font-black text-blue-700">
+                          <p className="mt-0.5 truncate text-[13px] font-black text-blue-700 sm:mt-1 sm:text-base">
                             {formatVND(v7Allocation.savingsAmount)}
                           </p>
-                          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                          <p className="mt-1 hidden text-[11px] leading-4 text-slate-500 sm:block">
                             Đồng bộ từ giao dịch nạp/rút tại trang Tiết kiệm
                           </p>
                         </Link>
 
                         <Link
                           href="/investments"
-                          className="rounded-2xl border border-sky-100 bg-white/90 p-3 transition hover:border-sky-300 hover:bg-sky-50"
+                          className="min-w-0 rounded-xl border border-sky-100 bg-white/90 p-2.5 transition hover:border-sky-300 hover:bg-sky-50 sm:rounded-2xl sm:p-3"
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                            <span className="flex size-8 items-center justify-center rounded-lg bg-sky-50 text-sky-600 sm:size-9 sm:rounded-xl">
                               <Landmark size={16} />
                             </span>
                             <span className="rounded-full bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-700">
                               {v7Allocation.investmentShare}% nhóm 20%
                             </span>
                           </div>
-                          <p className="mt-3 text-xs font-black text-slate-900">
+                          <p className="mt-2 text-[11px] font-black text-[#36536B] sm:mt-3 sm:text-xs">
                             Đầu tư
                           </p>
-                          <p className="mt-1 text-base font-black text-sky-700">
+                          <p className="mt-0.5 truncate text-[13px] font-black text-sky-700 sm:mt-1 sm:text-base">
                             {formatVND(v7Allocation.investmentAmount)}
                           </p>
-                          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                          <p className="mt-1 hidden text-[11px] leading-4 text-slate-500 sm:block">
                             Đồng bộ từ giao dịch nạp/rút tại trang Đầu tư
                           </p>
                         </Link>
                       </div>
                     )}
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                    <div className="mt-2.5 grid grid-cols-3 gap-1.5 sm:mt-3 sm:gap-2">
+                      <div className="min-w-0 rounded-xl bg-white/85 px-2 py-2 sm:rounded-2xl sm:px-3 sm:py-2.5">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                           Mục tiêu
                         </p>
-                        <p className="mt-1 text-xs font-black text-slate-700">
+                        <p className="mt-0.5 truncate text-[10px] font-black text-[#3F5F79] sm:mt-1 sm:text-xs">
                           {formatVND(bucket.targetAmount)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                      <div className="min-w-0 rounded-xl bg-white/85 px-2 py-2 sm:rounded-2xl sm:px-3 sm:py-2.5">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                           Thực tế
                         </p>
-                        <p className="mt-1 text-xs font-black text-slate-700">
+                        <p className="mt-0.5 truncate text-[10px] font-black text-[#3F5F79] sm:mt-1 sm:text-xs">
                           {formatVND(bucket.actualAmount)}
                         </p>
                       </div>
-                      <div className="rounded-2xl bg-white/80 px-3 py-2.5">
+                      <div className="min-w-0 rounded-xl bg-white/85 px-2 py-2 sm:rounded-2xl sm:px-3 sm:py-2.5">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                           {isFutureBucket
                             ? bucket.difference >= 0
@@ -1562,7 +1562,7 @@ export default function BudgetsPage() {
                         </p>
                         <p
                           className={
-                            "mt-1 text-xs font-black " +
+                            "mt-0.5 truncate text-[10px] font-black sm:mt-1 sm:text-xs " +
                             (isFutureBucket
                               ? bucket.difference >= 0
                                 ? "text-emerald-700"
@@ -1582,8 +1582,8 @@ export default function BudgetsPage() {
             </div>
 
             {v7Allocation.unclassifiedAmount > 0 && (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:mt-4 sm:rounded-3xl sm:p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                       Chưa phân bổ
@@ -1592,7 +1592,7 @@ export default function BudgetsPage() {
                       {formatVND(v7Allocation.unclassifiedAmount)} chưa được gán
                       nhóm 50/30/20
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500 sm:line-clamp-none sm:text-xs sm:leading-5">
                       Số tiền vẫn được tính bằng fallback để không làm thay đổi
                       dữ liệu cũ. Hãy phân loại danh mục để báo cáo chính xác
                       hơn.
@@ -1605,11 +1605,11 @@ export default function BudgetsPage() {
               </div>
             )}
 
-            <div className="mt-4 rounded-3xl border border-violet-100 bg-white p-4">
+            <div className="mt-3 rounded-2xl border border-[#DCE6EF] bg-white p-3 sm:mt-4 sm:rounded-3xl sm:p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-500">
                 Gợi ý điều chỉnh
               </p>
-              <p className="mt-2 text-sm font-black leading-6 text-slate-900">
+              <p className="mt-1.5 line-clamp-3 text-[12px] font-bold leading-5 text-[#36536B] sm:mt-2 sm:line-clamp-none sm:text-sm sm:font-black sm:leading-6">
                 {v7Allocation.buckets
                   .slice(0, 2)
                   .some((bucket) => bucket.status === "over")
@@ -1624,13 +1624,13 @@ export default function BudgetsPage() {
       )}
 
       {budgets.length > 0 && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+        <section className="rounded-2xl border border-[#DCE6EF] bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
+          <div className="mb-3 flex items-center gap-2.5 sm:mb-5 sm:gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] shadow-sm sm:size-10 sm:rounded-2xl sm:bg-linear-to-br sm:from-blue-600 sm:to-cyan-500 sm:text-white">
               <ChartPie size={17} />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900">
+              <h2 className="text-base font-black text-[#36536B]">
                 Phân bổ ngân sách
               </h2>
               <p className="text-xs text-slate-500">
@@ -1640,14 +1640,14 @@ export default function BudgetsPage() {
           </div>
 
           {pieData.length > 0 ? (
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+            <div className="flex flex-col gap-3 sm:gap-6 lg:flex-row lg:items-center">
               <div className="flex shrink-0 justify-center">
-                <PieChart width={180} height={180}>
+                <PieChart width={152} height={152}>
                   <Pie
                     data={pieData}
                     dataKey="value"
-                    innerRadius={54}
-                    outerRadius={80}
+                    innerRadius={44}
+                    outerRadius={68}
                     paddingAngle={3}
                     startAngle={90}
                     endAngle={-270}
@@ -1658,7 +1658,7 @@ export default function BudgetsPage() {
                   </Pie>
                 </PieChart>
               </div>
-              <div className="grid flex-1 gap-x-8 gap-y-3 md:grid-cols-2">
+              <div className="grid flex-1 gap-x-6 gap-y-2 md:grid-cols-2 md:gap-x-8 md:gap-y-3">
                 {pieData.map((item) => {
                   const percent =
                     filteredSummary.totalLimit > 0
@@ -1717,14 +1717,14 @@ export default function BudgetsPage() {
           ══════════════════════════════════════════════════════════════════ */}
       <section>
         {/* Section label */}
-        <div className="mb-4 flex items-center gap-2 px-1">
+        <div className="mb-3 flex items-center gap-2 px-1 sm:mb-4">
           <div className="size-1.5 rounded-full bg-blue-600" />
           <p className="text-sm font-black text-slate-700">
             {filteredBudgets.length} ngân sách · tháng {activeMonth}
           </p>
         </div>
 
-        <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredBudgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
             const spent = getSpent(budget);
@@ -1752,7 +1752,7 @@ export default function BudgetsPage() {
                 key={budget.id}
                 id={`budget-card-${budget.id}`}
                 className={
-                  "group relative rounded-3xl border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5 " +
+                  "group relative rounded-2xl border bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-5 " +
                   s.border +
                   (highlightedBudgetId === budget.id
                     ? " ring-2 ring-blue-400 ring-offset-2"
@@ -1761,11 +1761,11 @@ export default function BudgetsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-sm shadow-blue-100">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] shadow-sm sm:size-11 sm:rounded-2xl sm:bg-linear-to-br sm:from-blue-600 sm:to-cyan-500 sm:text-white">
                       <ChartPie size={18} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="line-clamp-2 text-base font-black leading-snug text-slate-900">
+                      <h3 className="line-clamp-2 text-[15px] font-black leading-snug text-[#36536B] sm:text-base">
                         {category?.name ?? "Danh mục"}
                       </h3>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -1817,14 +1817,14 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5">
+                <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-5 sm:gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
                       Đã chi
                     </p>
                     <p
                       className={
-                        "mt-1 wrap-break-word text-lg font-black leading-tight sm:text-xl " +
+                        "mt-1 wrap-break-word text-base font-black leading-tight sm:text-xl " +
                         (status === "over" ? "text-rose-600" : "text-slate-900")
                       }
                     >
@@ -1841,7 +1841,7 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-3 sm:mt-4">
                   <div className="mb-1.5 flex items-center justify-between text-xs">
                     <span
                       className={
@@ -1867,9 +1867,9 @@ export default function BudgetsPage() {
                       {pct}%
                     </span>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100 sm:h-2.5">
                     <div
-                      className="h-2.5 rounded-full transition-all duration-500"
+                      className="h-2 rounded-full transition-all duration-500 sm:h-2.5"
                       style={{
                         width: Math.min(pct, 100) + "%",
                         background: s.bar,
@@ -1878,18 +1878,28 @@ export default function BudgetsPage() {
                   </div>
                 </div>
 
-                {/* Mobile edit row */}
-                <div className="mt-4 flex gap-2 lg:hidden">
+                {/* BUDGETS-MOBILE-POLISH-1: mobile keeps the same direct action access as desktop. */}
+                <div className="mt-3 grid grid-cols-3 gap-2 lg:hidden">
+                  <Link
+                    href={buildTransactionsHref({
+                      categoryId: budget.categoryId,
+                      month: budget.month,
+                    })}
+                    className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-emerald-100 bg-emerald-50/40 px-1 text-[11px] font-bold text-emerald-700"
+                  >
+                    <ArrowUpRight size={12} />
+                    Giao dịch
+                  </Link>
                   <button
                     onClick={() => openEditForm(budget)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500"
+                    className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-slate-200 px-1 text-[11px] font-bold text-[#61788F]"
                   >
                     <Edit3 size={12} />
                     Sửa
                   </button>
                   <button
                     onClick={() => handleDelete(budget.id)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-100 py-2 text-xs font-bold text-rose-500"
+                    className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-rose-100 px-1 text-[11px] font-bold text-rose-500"
                   >
                     <Trash2 size={12} />
                     Xóa
@@ -1985,7 +1995,7 @@ export default function BudgetsPage() {
         <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex max-h-[calc(var(--app-height,100dvh)-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ngân sách" : "Tạo ngân sách"}
@@ -2004,7 +2014,7 @@ export default function BudgetsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:p-6"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6"
             >
               <div className="space-y-4">
                 {/* Category select */}
@@ -2017,7 +2027,7 @@ export default function BudgetsPage() {
                     onChange={(e) =>
                       setForm((p) => ({ ...p, categoryId: e.target.value }))
                     }
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:bg-white"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-blue-400 focus:bg-white sm:text-sm"
                   >
                     <option value="">Chọn danh mục</option>
                     {expenseCategories.map((c) => (
@@ -2094,10 +2104,10 @@ function MetricTile({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl bg-white/80 p-3 shadow-sm shadow-slate-100/40">
-      <p className="text-[10px] font-black uppercase text-slate-400">{label}</p>
-      <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500">{sub}</p>
+    <div className="min-w-0 rounded-xl bg-white/85 p-2.5 shadow-sm shadow-slate-100/40 sm:rounded-2xl sm:p-3">
+      <p className="line-clamp-2 min-h-7 text-[8px] font-black uppercase leading-3.5 tracking-[0.04em] text-[#8CA0B3] sm:min-h-0 sm:text-[10px]">{label}</p>
+      <p className="mt-1 truncate text-[11px] font-black tracking-[-0.035em] text-[#36536B] sm:text-lg sm:tracking-normal">{value}</p>
+      <p className="mt-0.5 hidden text-xs text-[#61788F] sm:block">{sub}</p>
     </div>
   );
 }
@@ -2185,7 +2195,7 @@ function KpiCard({
   return (
     <div
       className={
-        "min-w-0 overflow-hidden rounded-3xl border p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:p-4 " +
+        "min-w-0 overflow-hidden rounded-2xl border p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-4 " +
         style.shell
       }
     >
@@ -2193,7 +2203,7 @@ function KpiCard({
         <div className="min-w-0 flex-1 overflow-hidden">
           <p
             className={
-              "line-clamp-2 min-h-8 text-[9px] font-black uppercase leading-4 tracking-[0.11em] sm:min-h-0 sm:text-[10px] sm:tracking-[0.16em] " +
+              "line-clamp-2 min-h-7 text-[8.5px] font-black uppercase leading-3.5 tracking-[0.09em] sm:min-h-0 sm:text-[10px] sm:leading-4 sm:tracking-[0.16em] " +
               style.label
             }
           >
@@ -2201,7 +2211,7 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-2 block w-full whitespace-nowrap font-black leading-none tabular-nums sm:text-[clamp(13px,1vw,20px)] sm:tracking-[-0.03em] " +
+              "mt-1.5 block w-full whitespace-nowrap font-black leading-none tabular-nums sm:mt-2 sm:text-[clamp(13px,1vw,20px)] sm:tracking-[-0.03em] " +
               mobileValueSize +
               " " +
               style.value
@@ -2212,7 +2222,7 @@ function KpiCard({
           </p>
           <p
             className={
-              "mt-1 line-clamp-2 min-h-8 text-[10px] font-semibold leading-4 sm:text-[11px] " +
+              "mt-1 line-clamp-1 min-h-4 text-[9.5px] font-semibold leading-4 sm:line-clamp-2 sm:min-h-8 sm:text-[11px] " +
               style.note
             }
           >
@@ -2222,7 +2232,7 @@ function KpiCard({
 
         <div
           className={
-            "flex size-7 shrink-0 items-center justify-center rounded-xl sm:size-9 sm:rounded-2xl " +
+            "flex size-6.5 shrink-0 items-center justify-center rounded-lg sm:size-9 sm:rounded-2xl " +
             style.icon
           }
         >
@@ -2256,7 +2266,7 @@ function Input({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:bg-white"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-blue-400 focus:bg-white sm:text-sm"
       />
     </label>
   );
