@@ -52,7 +52,7 @@ describe("WALLETS-CORRECTNESS-1 — Wallet domain correctness", () => {
       "const txCount = walletLinkCountsReady",
     );
     expect(source).toContain(
-      '· {txCount === null ? "—" : txCount} giao dịch',
+      '· {txCount === null ? "—" : txCount} GD liên kết',
     );
   });
 

@@ -13,6 +13,7 @@ import {
   Banknote,
   Edit3,
   Landmark,
+  MoreHorizontal,
   Plus,
   ReceiptText,
   Trash2,
@@ -106,6 +107,26 @@ function isValidLocalDateInputValue(value: string) {
     date.getMonth() === month - 1 &&
     date.getDate() === day
   );
+}
+
+function formatCompactWalletAmount(value: number) {
+  const normalized = Number.isFinite(value) ? value : 0;
+  const absolute = Math.abs(normalized);
+  const formatter = new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 1,
+  });
+
+  if (absolute >= 1_000_000_000) {
+    return `${formatter.format(absolute / 1_000_000_000)}tỷ`;
+  }
+  if (absolute >= 1_000_000) {
+    return `${formatter.format(absolute / 1_000_000)}tr`;
+  }
+  if (absolute >= 1_000) {
+    return `${formatter.format(absolute / 1_000)}N`;
+  }
+
+  return formatter.format(Math.round(absolute));
 }
 
 /**
@@ -791,23 +812,24 @@ export default function WalletsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
+    <div className="space-y-3.5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
+      {/* WALLETS-MOBILE-POLISH-1: mobile prioritizes balances + wallet list over chrome. */}
       {/* SECTION 1 · Wallet Overview */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="flex flex-col gap-3.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
               Wallet Center
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-1 text-[26px] font-black tracking-tight text-slate-900 sm:text-3xl">
               Ví tiền
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 hidden text-sm text-slate-500 sm:block">
               Quản lý tiền mặt, tài khoản ngân hàng và ví điện tử.
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row">
             <button
               onClick={() => openTransferForm()}
               disabled={spendableWallets.length < 2}
@@ -826,7 +848,7 @@ export default function WalletsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-4">
           <WalletSummaryCard
             label="Tổng số dư"
             value={walletSnapshotReady ? formatVND(totalAssets) : "—"}
@@ -888,17 +910,17 @@ export default function WalletsPage() {
         </div>
       </section>
       {/* SECTION 2 · Wallet Types */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-black text-slate-900">
+      <section className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-black text-slate-900 sm:text-base">
               Phân loại ví
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
               Tổng số dư theo loại ví đang sử dụng.
             </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 sm:px-3 sm:text-xs">
             {walletSnapshotReady
               ? `${spendableWallets.length} ví`
               : isLoadingWallets
@@ -907,9 +929,9 @@ export default function WalletsPage() {
           </span>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3">
           {!walletSnapshotReady ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm font-semibold text-slate-500 md:col-span-3">
+            <div className="col-span-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:rounded-3xl sm:p-4 sm:text-sm">
               {isLoadingWallets
                 ? "Đang tải phân loại ví..."
                 : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
@@ -922,42 +944,31 @@ export default function WalletsPage() {
                   : 0;
 
               return (
-                <button
+                <div
                   key={stat.value}
-                  type="button"
-                  onClick={() => {
-                    const wallet = spendableWallets.find(
-                      (item) => item.type === stat.value,
-                    );
-                    if (wallet) openEditForm(wallet);
-                    else {
-                      setForm({ ...emptyForm, type: stat.value });
-                      setSaveError(null);
-                      setIsFormOpen(true);
-                    }
-                  }}
-                  className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/50"
+                  className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <WalletIcon type={stat.value} compact />
-                      <div>
-                        <p className="text-sm font-black text-slate-900">
-                          {stat.label}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {stat.count} ví
-                        </p>
-                      </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <WalletIcon type={stat.value} compact />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-black leading-4 text-slate-900 sm:text-sm">
+                        {stat.label}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-500 sm:mt-0.5 sm:text-xs">
+                        {stat.count} ví · {percentage}%
+                      </p>
                     </div>
-                    <span className="text-sm font-black text-slate-700">
-                      {percentage}%
-                    </span>
                   </div>
-                  <p className="mt-4 whitespace-nowrap text-xl font-black tabular-nums text-slate-900">
-                    {formatVND(stat.total)}
+                  <p
+                    className="mt-2 truncate text-xs font-black tabular-nums text-slate-900 sm:mt-4 sm:text-xl"
+                    title={formatVND(stat.total)}
+                  >
+                    <span className="sm:hidden">
+                      {formatCompactWalletAmount(stat.total)}
+                    </span>
+                    <span className="hidden sm:inline">{formatVND(stat.total)}</span>
                   </p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white sm:mt-3 sm:h-2">
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -966,7 +977,7 @@ export default function WalletsPage() {
                       }}
                     />
                   </div>
-                </button>
+                </div>
               );
             })
           )}
@@ -977,12 +988,19 @@ export default function WalletsPage() {
           SECTION 3 · Wallet List
           ══════════════════════════════════════════════════════════════════ */}
       <section>
-        <div className="mb-4 flex items-center gap-2 px-1">
-          <div className="size-1.5 rounded-full bg-blue-600" />
-          <p className="text-sm font-black text-slate-700">Danh sách ví</p>
+        <div className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
+          <div className="flex items-center gap-2">
+            <div className="size-1.5 rounded-full bg-blue-600" />
+            <p className="text-sm font-black text-slate-700">Danh sách ví</p>
+          </div>
+          {walletSnapshotReady ? (
+            <span className="text-[11px] font-bold text-slate-400">
+              {spendableWallets.length} ví
+            </span>
+          ) : null}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
           {spendableWallets.map((wallet) => {
             const pct =
               totalAssets > 0
@@ -1003,10 +1021,10 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group relative rounded-4xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md"
+                className="group relative rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md sm:rounded-4xl sm:p-5"
               >
                 {/* Header */}
-                <div className="min-w-0 pr-24 sm:pr-20">
+                <div className="min-w-0 pr-12 sm:pr-20">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="shrink-0">
                       <WalletIcon type={wallet.type} />
@@ -1028,123 +1046,183 @@ export default function WalletsPage() {
                     </div>
                   </div>
 
-                  <div className="absolute right-5 top-5 z-10 flex shrink-0 gap-1.5 opacity-100 transition-opacity sm:right-6 sm:top-6 sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => openEditForm(wallet)}
-                      className="flex size-10 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:size-8 sm:rounded-xl"
-                      aria-label="Sửa ví"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(wallet.id)}
-                      disabled={isCheckingDelete}
-                      className="flex size-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:size-8 sm:rounded-xl sm:border-slate-200 sm:bg-white/95 sm:text-slate-400 sm:hover:border-rose-200 sm:hover:bg-rose-50 sm:hover:text-rose-500"
-                      aria-label="Xóa ví"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                  <div className="absolute right-3.5 top-3.5 z-20 sm:right-6 sm:top-6">
+                    <details className="group/actions relative sm:hidden">
+                      <summary
+                        aria-label={`Tùy chọn ví ${wallet.name}`}
+                        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition active:scale-95 [&::-webkit-details-marker]:hidden"
+                      >
+                        <MoreHorizontal size={17} />
+                      </summary>
+                      <div className="absolute right-0 mt-1.5 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.currentTarget.closest("details")?.removeAttribute("open");
+                            openEditForm(wallet);
+                          }}
+                          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          <Edit3 size={14} />
+                          Sửa ví
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.currentTarget.closest("details")?.removeAttribute("open");
+                            void handleDelete(wallet.id);
+                          }}
+                          disabled={isCheckingDelete}
+                          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 size={14} />
+                          Xóa ví
+                        </button>
+                      </div>
+                    </details>
+
+                    <div className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity sm:flex sm:group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(wallet)}
+                        className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                        aria-label="Sửa ví"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(wallet.id)}
+                        disabled={isCheckingDelete}
+                        className="flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white/95 text-slate-400 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 sm:hover:border-rose-200 sm:hover:bg-rose-50 sm:hover:text-rose-500"
+                        aria-label="Xóa ví"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Balance */}
-                <div className="mt-3">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                <div className="mt-2.5 sm:mt-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400 sm:text-[10px] sm:tracking-wide">
                     Số dư hiện tại
                   </p>
-                  <p className="mt-1 whitespace-nowrap text-2xl font-black tabular-nums text-blue-700">
+                  <p className="mt-1 whitespace-nowrap text-[22px] font-black leading-none tabular-nums text-blue-700 sm:text-2xl">
                     {formatVND(wallet.balance)}
                   </p>
                 </div>
 
                 {/* Monthly flow */}
                 {walletAnalyticsReady ? (
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-center">
-                      <p className="text-[9px] font-bold text-emerald-600 uppercase">
-                        Thu
-                      </p>
-                      <p className="mt-0.5 text-xs font-black text-emerald-700">
-                        {flow.income > 0
-                          ? Math.round(flow.income / 1e3) + "K"
-                          : "—"}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-rose-50 px-2.5 py-2 text-center">
-                      <p className="text-[9px] font-bold text-rose-500 uppercase">
-                        Chi
-                      </p>
-                      <p className="mt-0.5 text-xs font-black text-rose-600">
-                        {flow.expense > 0
-                          ? Math.round(flow.expense / 1e3) + "K"
-                          : "—"}
-                      </p>
-                    </div>
-                    <div
-                      className={
-                        "rounded-xl px-2.5 py-2 text-center " +
-                        (net >= 0 ? "bg-blue-50" : "bg-rose-50")
-                      }
-                    >
-                      <p
+                  <>
+                    <div className="mt-3 flex min-w-0 items-center justify-between gap-1 rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] sm:hidden">
+                      <span className="min-w-0 whitespace-nowrap font-bold text-emerald-600">
+                        Thu <strong className="font-black text-emerald-700">{flow.income > 0 ? formatCompactWalletAmount(flow.income) : "—"}</strong>
+                      </span>
+                      <span className="text-slate-300">·</span>
+                      <span className="min-w-0 whitespace-nowrap font-bold text-rose-500">
+                        Chi <strong className="font-black text-rose-600">{flow.expense > 0 ? formatCompactWalletAmount(flow.expense) : "—"}</strong>
+                      </span>
+                      <span className="text-slate-300">·</span>
+                      <span
                         className={
-                          "text-[9px] font-bold uppercase " +
+                          "min-w-0 whitespace-nowrap font-bold " +
                           (net >= 0 ? "text-blue-600" : "text-rose-500")
                         }
                       >
-                        Ròng
-                      </p>
-                      <p
+                        Ròng <strong className="font-black">{net > 0 ? "+" : net < 0 ? "−" : ""}{net !== 0 ? formatCompactWalletAmount(net) : "—"}</strong>
+                      </span>
+                    </div>
+
+                    <div className="mt-4 hidden grid-cols-3 gap-2 sm:grid">
+                      <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-center">
+                        <p className="text-[9px] font-bold uppercase text-emerald-600">
+                          Thu
+                        </p>
+                        <p className="mt-0.5 text-xs font-black text-emerald-700">
+                          {flow.income > 0
+                            ? formatCompactWalletAmount(flow.income)
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-rose-50 px-2.5 py-2 text-center">
+                        <p className="text-[9px] font-bold uppercase text-rose-500">
+                          Chi
+                        </p>
+                        <p className="mt-0.5 text-xs font-black text-rose-600">
+                          {flow.expense > 0
+                            ? formatCompactWalletAmount(flow.expense)
+                            : "—"}
+                        </p>
+                      </div>
+                      <div
                         className={
-                          "mt-0.5 flex items-center justify-center gap-0.5 text-xs font-black " +
-                          (net >= 0 ? "text-blue-700" : "text-rose-600")
+                          "rounded-xl px-2.5 py-2 text-center " +
+                          (net >= 0 ? "bg-blue-50" : "bg-rose-50")
                         }
                       >
-                        {net > 0 ? (
-                          <ArrowUpRight size={9} />
-                        ) : net < 0 ? (
-                          <ArrowDownRight size={9} />
-                        ) : null}
-                        {net !== 0
-                          ? Math.round(Math.abs(net) / 1e3) + "K"
-                          : "—"}
-                      </p>
+                        <p
+                          className={
+                            "text-[9px] font-bold uppercase " +
+                            (net >= 0 ? "text-blue-600" : "text-rose-500")
+                          }
+                        >
+                          Ròng
+                        </p>
+                        <p
+                          className={
+                            "mt-0.5 flex items-center justify-center gap-0.5 text-xs font-black " +
+                            (net >= 0 ? "text-blue-700" : "text-rose-600")
+                          }
+                        >
+                          {net > 0 ? (
+                            <ArrowUpRight size={9} />
+                          ) : net < 0 ? (
+                            <ArrowDownRight size={9} />
+                          ) : null}
+                          {net !== 0
+                            ? formatCompactWalletAmount(net)
+                            : "—"}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 ) : walletAnalyticsLoading ? (
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-                    <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-                  </div>
+                  <>
+                    <div className="mt-3 h-9 animate-pulse rounded-xl bg-slate-100 sm:hidden" />
+                    <div className="mt-4 hidden grid-cols-3 gap-2 sm:grid">
+                      <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                      <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                      <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                    </div>
+                  </>
                 ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-semibold text-slate-500">
+                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-semibold text-slate-500 sm:mt-4">
                     {walletAnalyticsError ?? "Chưa có dữ liệu dòng tiền tháng này."}
                   </div>
                 )}
 
                 {/* Contribution bar */}
-                <div className="mt-3">
-                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs">
+                <div className="mt-2.5 sm:mt-3">
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] sm:mb-1.5 sm:text-xs">
                     <span className="text-slate-500">Tỷ trọng tài sản</span>
-                    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+                    <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                       <span className="font-black text-slate-700">{pct}%</span>
                       <span className="text-slate-400">
-                        · {txCount === null ? "—" : txCount} giao dịch
+                        · {txCount === null ? "—" : txCount} GD liên kết
                       </span>
                     </div>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 sm:h-2.5">
                     <div
-                      className="h-2.5 rounded-full transition-all duration-500"
+                      className="h-full rounded-full transition-all duration-500"
                       style={{ width: pct + "%", background: color }}
                     />
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
                   <button
                     type="button"
                     onClick={() => openTransferForm(wallet.id)}
@@ -1152,7 +1230,8 @@ export default function WalletsPage() {
                     className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ArrowLeftRight size={13} />
-                    Chuyển tiền
+                    <span className="sm:hidden">Chuyển</span>
+                    <span className="hidden sm:inline">Chuyển tiền</span>
                   </button>
                   <Link
                     href={buildTransactionsHref({ walletId: wallet.id })}
@@ -1599,18 +1678,18 @@ function WalletSummaryCard({
   };
 
   return (
-    <div className={"rounded-3xl border p-3 sm:p-4 " + styles[tone]}>
+    <div className={"rounded-2xl border p-2.5 sm:rounded-3xl sm:p-4 " + styles[tone]}>
       <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-70">
         {label}
       </p>
       {isLoading ? (
         <div className="mt-2 h-5 w-24 animate-pulse rounded-lg bg-white/60 sm:h-6" />
       ) : (
-        <p className="mt-2 whitespace-nowrap text-[clamp(0.85rem,4.2vw,1.25rem)] leading-none font-black tabular-nums sm:text-xl">
+        <p className="mt-1.5 whitespace-nowrap text-[clamp(0.82rem,4vw,1.15rem)] leading-none font-black tabular-nums sm:mt-2 sm:text-xl">
           {value}
         </p>
       )}
-      <p className="mt-1 text-xs font-bold opacity-70">{note}</p>
+      <p className="mt-1 line-clamp-1 text-[10px] font-bold leading-4 opacity-70 sm:text-xs">{note}</p>
     </div>
   );
 }
@@ -1623,13 +1702,13 @@ function WalletIcon({
   compact?: boolean;
 }) {
   const base = compact
-    ? "flex size-10 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm"
-    : "flex size-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm";
+    ? "flex size-8 shrink-0 items-center justify-center rounded-xl text-white shadow-sm sm:size-10 sm:rounded-2xl"
+    : "flex size-10 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm sm:size-12";
 
   if (type === "bank") {
     return (
       <div className={base + " bg-linear-to-br from-blue-600 to-cyan-500"}>
-        <Landmark size={20} />
+        <Landmark size={compact ? 16 : 18} />
       </div>
     );
   }
@@ -1637,14 +1716,14 @@ function WalletIcon({
   if (type === "ewallet") {
     return (
       <div className={base + " bg-linear-to-br from-violet-500 to-indigo-500"}>
-        <Wallet size={20} />
+        <Wallet size={compact ? 16 : 18} />
       </div>
     );
   }
 
   return (
     <div className={base + " bg-linear-to-br from-amber-400 to-orange-500"}>
-      <Banknote size={20} />
+      <Banknote size={compact ? 16 : 18} />
     </div>
   );
 }
