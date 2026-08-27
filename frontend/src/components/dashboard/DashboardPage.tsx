@@ -2716,7 +2716,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => router.push("/reports")}
-              className="mt-0.5 inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-[#D9E7F4] bg-white px-2.5 text-xs font-semibold text-[#2F80ED] shadow-[0_2px_7px_rgba(47,128,237,0.08)] transition hover:bg-[#F3F8FF] sm:h-10 sm:px-3 sm:text-sm"
+              className="mt-0.5 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-[#D9E7F4] bg-white px-2.5 text-xs font-semibold text-[#2F80ED] shadow-[0_2px_7px_rgba(47,128,237,0.08)] transition hover:bg-[#F3F8FF] sm:px-3 sm:text-sm"
             >
               Báo cáo&nbsp;→
             </button>
@@ -2836,7 +2836,7 @@ export default function DashboardPage() {
             </div>
 
             {!netWorthTrendReady ? (
-              <div className="mt-3 h-24 animate-pulse rounded-xl bg-slate-100 sm:h-32 sm:rounded-2xl" />
+              <div className="mt-3 h-44 animate-pulse rounded-xl bg-slate-100 sm:rounded-2xl" />
             ) : !hasNetWorthHistoryData ? (
               <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3.5 sm:rounded-2xl sm:p-4">
                 <p className="text-sm font-black text-slate-700">
@@ -2883,7 +2883,7 @@ export default function DashboardPage() {
 
       {/* Operating KPIs */}
       <section>
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
+        <div className="-mx-4 flex snap-x snap-proximity gap-3 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-2 scrollbar-none md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
           {kpiCards.map((item) => (
             <KpiCard
               key={item.title}
@@ -3058,7 +3058,7 @@ export default function DashboardPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                Tiến độ tháng
+                Theo thời gian
               </p>
               <h2 className="mt-2 text-xl font-black text-[#23466F]">
                 Tiến độ tháng {monthlyPulse.month}
@@ -3140,7 +3140,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Cash flow and structure */}
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <Panel
           title="Dòng tiền trong kỳ"
           subtitle="Thu nhập, chi tiêu và phần tiền còn lại theo bộ lọc thời gian"
@@ -3153,7 +3153,7 @@ export default function DashboardPage() {
               year switch's period fetch is still pending. */}
           {cashFlowReady ? (
             <>
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
                 <MiniStat
                   label="Thu nhập"
                   value={formatVND(summary.income)}
@@ -3168,6 +3168,7 @@ export default function DashboardPage() {
                   label="Còn lại"
                   value={formatVND(netCashFlow)}
                   color={netCashFlow >= 0 ? "text-blue-600" : "text-rose-500"}
+                  className="col-span-2 sm:col-span-1"
                 />
               </div>
 
@@ -3175,12 +3176,12 @@ export default function DashboardPage() {
             </>
           ) : (
             <>
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
                 <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
                 <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
-                <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="col-span-2 h-16 animate-pulse rounded-2xl bg-slate-100 sm:col-span-1" />
               </div>
-              <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="mt-5 h-52 animate-pulse rounded-2xl bg-slate-100" />
             </>
           )}
 
@@ -3348,7 +3349,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Danh mục chi tiêu lớn nhất"
-          subtitle="Top danh mục trong tháng hiện tại để nhận diện nơi cần tối ưu"
+          subtitle="Top danh mục trong tháng đang xem để nhận diện nơi cần tối ưu"
         >
           <div className="mt-4 space-y-3">
             {!cashFlowReady ? (
@@ -3359,7 +3360,7 @@ export default function DashboardPage() {
               </>
             ) : topSpendingCategories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
-                Chưa có chi tiêu trong tháng này.
+                Chưa có chi tiêu trong tháng đang xem.
               </div>
             ) : (
               topSpendingCategories.map((item, index) => {
@@ -3826,7 +3827,7 @@ function KpiCard({
         type="button"
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
-        className={`min-w-52 cursor-pointer overflow-hidden rounded-2xl border bg-white/95 p-3.5 text-left shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
+        className={`min-w-52 snap-start cursor-pointer overflow-hidden rounded-2xl border bg-white/95 p-3.5 text-left shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
       >
         {content}
       </button>
@@ -3835,7 +3836,7 @@ function KpiCard({
 
   return (
     <div
-      className={`min-w-52 overflow-hidden rounded-2xl border bg-white/95 p-3.5 shadow-sm transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
+      className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-white/95 p-3.5 shadow-sm transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       {content}
     </div>
@@ -3857,7 +3858,7 @@ function Panel({
         <h3 className="wrap-break-word text-lg font-black leading-tight text-[#23466F]">
           {title}
         </h3>
-        <p className="mt-1 min-h-10 max-w-full wrap-break-word text-sm leading-5 text-slate-600">
+        <p className="mt-1 max-w-full wrap-break-word text-sm leading-5 text-slate-600 xl:min-h-10">
           {subtitle}
         </p>
       </div>
@@ -3870,13 +3871,17 @@ function MiniStat({
   label,
   value,
   color,
+  className = "",
 }: {
   label: string;
   value: string;
   color: string;
+  className?: string;
 }) {
   return (
-    <div className="min-w-0 max-w-full overflow-hidden rounded-2xl bg-slate-50/80 px-2.5 py-3 sm:px-3">
+    <div
+      className={`min-w-0 max-w-full overflow-hidden rounded-2xl bg-slate-50/80 px-2.5 py-3 sm:px-3 ${className}`}
+    >
       <p className="truncate text-xs text-slate-600">{label}</p>
       <p
         className={`mt-1 whitespace-nowrap text-[clamp(10px,2.9vw,14px)] font-black leading-5 tracking-[-0.04em] tabular-nums ${color}`}
