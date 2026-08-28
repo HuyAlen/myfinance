@@ -453,3 +453,120 @@ SELECT
     'EXECUTE'
   ) AS anon_cannot_execute_stamp;
 -- END AUDIT-TRAIL-1 VERIFICATION
+
+-- BEGIN AUDIT-MUTATION-1 VERIFICATION
+-- AUDIT-MUTATION-1 Atomic Actor Attribution Across Finance Mutations
+-- Read-only checks. All booleans below should be true and every required table
+-- should report one enabled AFTER ROW INSERT/UPDATE/DELETE capture trigger.
+WITH required(table_name, trigger_name) AS (
+  VALUES
+    ('wallets', 'trg_wallets_finance_audit'),
+    ('categories', 'trg_categories_finance_audit'),
+    ('transactions', 'trg_transactions_finance_audit'),
+    ('debts', 'trg_debts_finance_audit'),
+    ('goals', 'trg_goals_finance_audit'),
+    ('budgets', 'trg_budgets_finance_audit'),
+    ('investments', 'trg_investments_finance_audit'),
+    ('savings', 'trg_savings_finance_audit'),
+    ('saving_transactions', 'trg_saving_transactions_finance_audit'),
+    ('forex_accounts', 'trg_forex_accounts_finance_audit'),
+    ('forex_cash_transactions', 'trg_forex_cash_transactions_finance_audit')
+)
+SELECT
+  r.table_name,
+  r.trigger_name,
+  t.oid IS NOT NULL AS has_audit_trigger,
+  COALESCE(t.tgenabled = 'O', false) AS trigger_enabled,
+  COALESCE((t.tgtype & 1) = 1, false) AS is_row_level,
+  COALESCE((t.tgtype & 2) = 0 AND (t.tgtype & 64) = 0, false) AS is_after_trigger,
+  COALESCE((t.tgtype & 4) = 4, false) AS captures_insert,
+  COALESCE((t.tgtype & 8) = 8, false) AS captures_delete,
+  COALESCE((t.tgtype & 16) = 16, false) AS captures_update,
+  COALESCE(p.proname = 'capture_finance_audit_row', false) AS uses_capture_function
+FROM required r
+LEFT JOIN pg_namespace n ON n.nspname = 'public'
+LEFT JOIN pg_class c
+  ON c.relnamespace = n.oid
+ AND c.relname = r.table_name
+LEFT JOIN pg_trigger t
+  ON t.tgrelid = c.oid
+ AND t.tgname = r.trigger_name
+ AND NOT t.tgisinternal
+LEFT JOIN pg_proc p ON p.oid = t.tgfoid
+ORDER BY r.table_name;
+
+WITH expected(table_name, trigger_name) AS (
+  VALUES
+    ('wallets', 'trg_wallets_finance_audit'),
+    ('categories', 'trg_categories_finance_audit'),
+    ('transactions', 'trg_transactions_finance_audit'),
+    ('debts', 'trg_debts_finance_audit'),
+    ('goals', 'trg_goals_finance_audit'),
+    ('budgets', 'trg_budgets_finance_audit'),
+    ('investments', 'trg_investments_finance_audit'),
+    ('savings', 'trg_savings_finance_audit'),
+    ('saving_transactions', 'trg_saving_transactions_finance_audit'),
+    ('forex_accounts', 'trg_forex_accounts_finance_audit'),
+    ('forex_cash_transactions', 'trg_forex_cash_transactions_finance_audit')
+), attached AS (
+  SELECT c.relname AS table_name, t.tgname AS trigger_name
+  FROM pg_trigger t
+  JOIN pg_class c ON c.oid = t.tgrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_proc p ON p.oid = t.tgfoid
+  WHERE n.nspname = 'public'
+    AND NOT t.tgisinternal
+    AND p.proname = 'capture_finance_audit_row'
+)
+SELECT
+  (SELECT count(*) FROM expected) AS expected_audit_trigger_count,
+  (SELECT count(*) FROM attached) AS actual_audit_trigger_count,
+  NOT EXISTS (
+    SELECT 1
+    FROM expected e
+    LEFT JOIN attached a
+      ON a.table_name = e.table_name
+     AND a.trigger_name = e.trigger_name
+    WHERE a.trigger_name IS NULL
+  ) AS all_required_audit_triggers_attached,
+  NOT EXISTS (
+    SELECT 1
+    FROM attached a
+    LEFT JOIN expected e
+      ON e.table_name = a.table_name
+     AND e.trigger_name = a.trigger_name
+    WHERE e.trigger_name IS NULL
+  ) AS no_unexpected_capture_attachments;
+
+SELECT
+  strpos(
+    pg_get_functiondef('public.capture_finance_audit_row()'::regprocedure),
+    'current_finance_scope_owner_user_id'
+  ) > 0 AS capture_uses_household_owner_scope,
+  strpos(
+    pg_get_functiondef('public.capture_finance_audit_row()'::regprocedure),
+    'MFA06'
+  ) > 0 AS capture_has_mfa06_scope_guard,
+  strpos(
+    pg_get_functiondef('public.capture_finance_audit_row()'::regprocedure),
+    'bootstrap_default_categories'
+  ) > 0
+  AND strpos(
+    pg_get_functiondef('public.capture_finance_audit_row()'::regprocedure),
+    'MFA07'
+  ) > 0 AS bootstrap_suppression_is_narrow,
+  strpos(
+    pg_get_functiondef('public.seed_default_categories_for_user(uuid)'::regprocedure),
+    'myfinance.audit_mode'
+  ) > 0 AS default_category_seed_sets_private_audit_mode,
+  NOT has_function_privilege(
+    'authenticated',
+    'public.capture_finance_audit_row()',
+    'EXECUTE'
+  ) AS capture_function_remains_private,
+  NOT has_function_privilege(
+    'authenticated',
+    'public.seed_default_categories_for_user(uuid)',
+    'EXECUTE'
+  ) AS bootstrap_seed_function_remains_private;
+-- END AUDIT-MUTATION-1 VERIFICATION
