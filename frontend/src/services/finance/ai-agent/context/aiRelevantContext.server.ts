@@ -1,4 +1,5 @@
 import type {
+  Category,
   Debt,
   ForexAccount,
   ForexCashTransaction,
@@ -9,8 +10,11 @@ import type {
   Wallet,
 } from "@/src/types/finance";
 import {
+  buildCategorySpendingData,
   calculateBalanceSheetSnapshot,
   calculateGoalFundingSnapshot,
+  getTotalExpense,
+  getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import type { AIFinanceToolContext } from "../tools/aiToolTypes";
 import { detectAIFinanceContextIntent } from "./aiContextIntent.server";
@@ -96,34 +100,43 @@ async function queryRows(input: {
   return rowsOf(data);
 }
 
-function summarizeTransactions(transactions: Record<string, unknown>[]) {
-  let income = 0;
-  let expense = 0;
-  const byCategory = new Map<string, number>();
+function summarizeTransactions(
+  transactions: Record<string, unknown>[],
+  categories: Record<string, unknown>[],
+) {
+  const domainCategories: Category[] = categories.map((category) => ({
+    id: stringOf(category.id),
+    name: stringOf(category.name) || "Unknown",
+    type: stringOf(category.type) as Category["type"],
+    planningGroup: (
+      category.planningGroup ?? category.planning_group ?? undefined
+    ) as Category["planningGroup"],
+  }));
+  const domainTransactions: Transaction[] = transactions.map((transaction) => ({
+    id: stringOf(transaction.id),
+    type: stringOf(transaction.type) as Transaction["type"],
+    amount: numberOf(transaction.amount),
+    categoryId: stringOf(transaction.categoryId ?? transaction.category_id),
+    walletId: stringOf(transaction.walletId ?? transaction.wallet_id),
+    date: stringOf(transaction.date),
+    note: stringOf(transaction.note),
+  }));
 
-  for (const transaction of transactions) {
-    const amount = numberOf(transaction.amount);
-    const type = stringOf(transaction.type);
-    const categoryId = stringOf(
-      transaction.categoryId ?? transaction.category_id,
-    );
-
-    if (type === "income") {
-      income += amount;
-    } else if (type === "expense") {
-      expense += amount;
-      byCategory.set(categoryId, (byCategory.get(categoryId) ?? 0) + amount);
-    }
-  }
+  const income = getTotalIncome(domainTransactions);
+  const expense = getTotalExpense(domainTransactions, domainCategories);
+  const byCategory = buildCategorySpendingData(
+    domainTransactions,
+    domainCategories,
+  );
 
   return {
     income,
     expense,
     cashFlow: income - expense,
-    topCategoryIds: [...byCategory.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([categoryId, amount]) => ({ categoryId, amount })),
+    topCategoryIds: byCategory.slice(0, 5).map((item) => ({
+      categoryId: item.id,
+      amount: item.value,
+    })),
     recent: transactions.slice(0, MAX_RECENT_TRANSACTIONS).map((item) => ({
       id: item.id,
       type: item.type,
@@ -378,8 +391,8 @@ export async function buildAIFinanceRelevantContext(input: {
   const loadedDomains = new Set<AIFinanceContextDomain>();
 
   const categoryPromise =
+    intent.needsRecentTransactions ||
     intent.domains.includes("budgets") ||
-    intent.domains.includes("transactions") ||
     intent.action !== "read"
       ? queryRows({
           context: input.context,
@@ -519,7 +532,7 @@ export async function buildAIFinanceRelevantContext(input: {
   }
 
   if (transactions.length > 0 || intent.needsRecentTransactions) {
-    snapshot.transactions = summarizeTransactions(transactions);
+    snapshot.transactions = summarizeTransactions(transactions, categories);
     loadedDomains.add("transactions");
   }
 

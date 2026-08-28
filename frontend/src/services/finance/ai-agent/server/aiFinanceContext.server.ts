@@ -13,10 +13,12 @@ import type {
   Transaction,
   Wallet,
 } from "@/src/types/finance";
+import { formatYearMonthInTimeZone } from "@/src/lib/date/calendarDate";
 import {
   calculateBalanceSheetSnapshot,
   calculateBudgetSpendingCollection,
   calculateGoalFundingSnapshot,
+  buildCategorySpendingData,
   getSavingRate,
   getTotalExpense,
   getTotalIncome,
@@ -236,8 +238,10 @@ type FinanceContext = {
   }>;
 };
 
+const FINANCE_TIMEZONE = "Asia/Ho_Chi_Minh";
+
 function monthKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return formatYearMonthInTimeZone(date, FINANCE_TIMEZONE);
 }
 
 export async function buildServerFinanceContext(
@@ -321,22 +325,15 @@ export async function buildServerFinanceContext(
   const income = getTotalIncome(domainMonthTransactions);
   const expense = getTotalExpense(domainMonthTransactions, domainCategories);
 
-  const expenseByCategory = new Map<string, number>();
-  for (const item of monthTransactions) {
-    if (item.type !== "expense") continue;
-    expenseByCategory.set(
-      item.categoryId,
-      (expenseByCategory.get(item.categoryId) ?? 0) + item.amount,
-    );
-  }
-
-  const topExpenseCategories = [...expenseByCategory.entries()]
-    .map(([categoryId, amount]) => ({
-      category: categoryById.get(categoryId) ?? "Khác",
-      amount,
-    }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 8);
+  const topExpenseCategories = buildCategorySpendingData(
+    domainMonthTransactions,
+    domainCategories,
+  )
+    .slice(0, 8)
+    .map((item) => ({
+      category: item.name,
+      amount: item.value,
+    }));
 
   const currentBudgets = budgets.filter((item) => item.month === currentMonth);
 

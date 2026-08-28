@@ -14,6 +14,49 @@ const YEAR_MONTH_SHAPE = /^(\d{4})-(\d{2})$/;
 const ISO_DATE_SHAPE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
+ * Formats a Date using the host/browser LOCAL calendar day. Use this for
+ * user-entered finance dates; unlike `toISOString()`, it never converts the
+ * wall clock to UTC before choosing YYYY-MM-DD.
+ */
+export function formatLocalISODate(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Local calendar month derived from the same wall-clock semantics. */
+export function formatLocalYearMonth(date = new Date()): string {
+  return formatLocalISODate(date).slice(0, 7);
+}
+
+/**
+ * Formats the calendar day in an explicit IANA timezone. Server-side finance
+ * readers use this instead of inheriting the deployment host's timezone.
+ */
+export function formatISODateInTimeZone(
+  date = new Date(),
+  timeZone = "Asia/Ho_Chi_Minh",
+): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
+
+/** Explicit-timezone calendar month, e.g. `2026-08`. */
+export function formatYearMonthInTimeZone(
+  date = new Date(),
+  timeZone = "Asia/Ho_Chi_Minh",
+): string {
+  return formatISODateInTimeZone(date, timeZone).slice(0, 7);
+}
+
+/**
  * Semantic "YYYY-MM" validation — shape AND a real calendar month (01-12).
  * No year-range restriction is imposed; none exists elsewhere in the
  * domain, so none is invented here.

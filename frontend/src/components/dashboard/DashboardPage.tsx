@@ -247,7 +247,7 @@ const mapSavingTransactionRow = (
   date:
     row.transaction_date ??
     row.created_at ??
-    new Date().toISOString().slice(0, 10),
+    toLocalDateKey(new Date()),
   createdAt: row.created_at ?? undefined,
   note: row.note ?? "Giao dịch tiết kiệm",
 });

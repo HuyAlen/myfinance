@@ -22,6 +22,7 @@ import {
   calculateBudgetSpending,
   calculateGoalFundingSnapshot,
   calculateBalanceSheetSnapshot,
+  buildCategorySpendingData,
   getDebtRatio,
   getEmergencyMonths,
   getTotalExpense,
@@ -216,13 +217,9 @@ export function computeHealthScoreV2(
   });
 
   // ── 6. Spending concentration (largest category share) ───────────────────
-  const catExpenses = categories
-    .filter((c) => c.type === "expense")
-    .map((c) => ({
-      amount: transactions
-        .filter((t) => t.type === "expense" && t.categoryId === c.id)
-        .reduce((s, t) => s + t.amount, 0),
-    }));
+  const catExpenses = buildCategorySpendingData(transactions, categories).map(
+    (category) => ({ amount: category.value }),
+  );
   const totalExp = catExpenses.reduce((s, c) => s + c.amount, 0);
   const topCatShare =
     totalExp > 0 && catExpenses.length > 0

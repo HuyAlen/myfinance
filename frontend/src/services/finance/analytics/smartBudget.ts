@@ -16,7 +16,7 @@ import {
 
 } from "@/src/services/finance/financeCalculations";
 
-import { groupByMonth, lastNMonths, linearRegression, mean } from "./shared";
+import { lastNMonths, linearRegression, mean } from "./shared";
 import type { InsightData } from "./types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,8 +116,6 @@ export function computeSmartBudget(
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const months = lastNMonths(lookbackMonths + 1); // +1 so current month is always included
-  const byMonth = groupByMonth(transactions);
-
   const expenseCategories = categories.filter((c) => c.type === "expense");
 
   // ── Per-category analysis ─────────────────────────────────────────────────
@@ -143,12 +141,18 @@ export function computeSmartBudget(
       }).spent;
 
       // 3-month historical spending for trend
-      const lookbackSpend = months.slice(0, lookbackMonths).map((m) => {
-        const txs = byMonth.get(m) ?? [];
-        return txs
-          .filter((t) => t.type === "expense" && t.categoryId === cat.id)
-          .reduce((s, t) => s + t.amount, 0);
-      });
+      const lookbackSpend = months.slice(0, lookbackMonths).map((month) =>
+        calculateBudgetSpending({
+          budget: {
+            id: `${cat.id}-${month}-history`,
+            categoryId: cat.id,
+            month,
+            limitAmount: 0,
+          },
+          transactions,
+          categories,
+        }).spent,
+      );
 
       // Trend from linear regression slope
       const reg = linearRegression(lookbackSpend.reverse()); // oldest→newest
@@ -214,14 +218,18 @@ export function computeSmartBudget(
     .map((c): RecommendedBudget => {
       // Base: 3-month average spend + 10% buffer
       const lookbackAvg = mean(
-        months.slice(0, lookbackMonths).map((m) => {
-          const txs = byMonth.get(m) ?? [];
-          return txs
-            .filter(
-              (t) => t.type === "expense" && t.categoryId === c.categoryId,
-            )
-            .reduce((s, t) => s + t.amount, 0);
-        }),
+        months.slice(0, lookbackMonths).map((month) =>
+          calculateBudgetSpending({
+            budget: {
+              id: `${c.categoryId}-${month}-recommendation`,
+              categoryId: c.categoryId,
+              month,
+              limitAmount: 0,
+            },
+            transactions,
+            categories,
+          }).spent,
+        ),
       );
       const base = Math.max(lookbackAvg * 1.1, c.actualSpend);
       const recommended = round10k(base);

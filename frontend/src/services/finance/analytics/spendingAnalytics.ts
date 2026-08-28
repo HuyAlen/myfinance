@@ -6,6 +6,7 @@
  */
 
 import type { Category, Transaction } from "@/src/types/finance";
+import { getRealExpenseTransactions } from "@/src/services/finance/financeCalculations";
 
 import { groupByMonth, lastNMonths, mean, stddev } from "./shared";
 
@@ -44,14 +45,16 @@ export function detectSpendingAnomalies(
   lookbackMonths = 6,
 ): SpendingAnomaly[] {
   const months = lastNMonths(lookbackMonths);
-  const byMonth = groupByMonth(transactions);
+  const byMonth = groupByMonth(
+    getRealExpenseTransactions(transactions, categories),
+  );
   const anomalies: SpendingAnomaly[] = [];
 
   for (const category of categories.filter((c) => c.type === "expense")) {
     const monthlySpend = months.map((m) => {
       const txs = byMonth.get(m) ?? [];
       return txs
-        .filter((t) => t.type === "expense" && t.categoryId === category.id)
+        .filter((t) => t.categoryId === category.id)
         .reduce((s, t) => s + t.amount, 0);
     });
 

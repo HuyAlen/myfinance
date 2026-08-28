@@ -507,7 +507,6 @@ export default function BudgetsPage() {
     ): CategoryPlanningGroup | null => {
       const transactionType = String(transaction.type);
       const category = categoryById.get(transaction.categoryId);
-      const categoryName = (category?.name ?? "").toLowerCase();
       const categoryGroup = getCategoryPlanningGroup(category);
 
       if (transactionType === "income" || transactionType === "transfer") {
@@ -531,32 +530,7 @@ export default function BudgetsPage() {
         return categoryGroup;
       }
 
-      if (
-        categoryName.includes("tiết kiệm") ||
-        categoryName.includes("tiet kiem") ||
-        categoryName.includes("quỹ") ||
-        categoryName.includes("quy") ||
-        categoryName.includes("dự phòng") ||
-        categoryName.includes("du phong")
-      ) {
-        return "saving";
-      }
-
-      if (
-        categoryName.includes("đầu tư") ||
-        categoryName.includes("dau tu") ||
-        categoryName.includes("vàng") ||
-        categoryName.includes("vang") ||
-        categoryName.includes("crypto") ||
-        categoryName.includes("coin") ||
-        categoryName.includes("cổ phiếu") ||
-        categoryName.includes("co phieu") ||
-        categoryName.includes("trading")
-      ) {
-        return "investment";
-      }
-
-      return null;
+      return categoryGroup === "income" ? null : categoryGroup;
     };
 
     const actualPlanningSpent = periodTransactions.reduce(

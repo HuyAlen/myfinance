@@ -2,6 +2,8 @@ import { supabase } from "@/src/lib/supabase";
 
 import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
 
+import { inferCategoryPlanningGroup } from "@/src/services/finance/financeCalculations";
+
 import type {
   Budget,
   Category,
@@ -403,43 +405,7 @@ type CategoryDbRow = Omit<
 function inferDefaultPlanningGroup(
   category: Pick<Category, "type" | "name">,
 ): CategoryPlanningGroup {
-  const name = category.name.toLowerCase();
-
-  if (category.type === "income") return "income";
-
-  if (
-    name.includes("nhà") ||
-    name.includes("điện") ||
-    name.includes("nước") ||
-    name.includes("gửi xe") ||
-    name.includes("phí quản lý") ||
-    name.includes("internet") ||
-    name.includes("bảo hiểm") ||
-    name.includes("học phí")
-  ) {
-    return "fixed";
-  }
-
-  if (
-    name.includes("trading") ||
-    name.includes("đầu tư") ||
-    name.includes("crypto") ||
-    name.includes("cổ phiếu") ||
-    name.includes("etf") ||
-    name.includes("vàng")
-  ) {
-    return "investment";
-  }
-
-  if (
-    name.includes("tiết kiệm") ||
-    name.includes("quỹ") ||
-    name.includes("dự phòng")
-  ) {
-    return "saving";
-  }
-
-  return "variable";
+  return inferCategoryPlanningGroup(category);
 }
 
 function fromCategoryRow(row: CategoryDbRow): Category {

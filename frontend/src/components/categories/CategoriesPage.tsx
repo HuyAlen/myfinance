@@ -49,7 +49,10 @@ import {
   updateCategory,
 } from "@/src/services/finance/financeStorage";
 
-import { formatVND } from "@/src/services/finance/financeCalculations";
+import {
+  formatVND,
+  getCategoryPlanningGroup,
+} from "@/src/services/finance/financeCalculations";
 
 type CategoryGroup = Extract<
   CategoryPlanningGroup,
@@ -154,52 +157,10 @@ function formatCurrencyInput(value: string) {
 function inferCategoryGroup(
   category: Pick<Category, "name" | "type" | "planningGroup">,
 ): CategoryGroup | null {
-  if (category.planningGroup === "income") return "income";
-  if (category.planningGroup === "fixed") return "fixed";
-  if (category.planningGroup === "variable") return "variable";
-  if (
-    category.planningGroup === "saving" ||
-    category.planningGroup === "investment"
-  ) {
-    return null;
-  }
-  if (category.type === "income") return "income";
-
-  const name = normalizeText(category.name);
-  if (
-    [
-      "tiet kiem",
-      "quy khan cap",
-      "du phong",
-      "saving",
-      "trading",
-      "capital",
-      "dau tu",
-      "co phieu",
-      "crypto",
-      "etf",
-      "vang",
-    ].some((keyword) => name.includes(keyword))
-  ) {
-    return null;
-  }
-  if (
-    [
-      "nha",
-      "dien",
-      "nuoc",
-      "internet",
-      "wifi",
-      "bao hiem",
-      "hoc phi",
-      "tra gop",
-      "vay",
-      "phi",
-    ].some((keyword) => name.includes(keyword))
-  ) {
-    return "fixed";
-  }
-  return "variable";
+  const group = getCategoryPlanningGroup(category);
+  return group === "income" || group === "fixed" || group === "variable"
+    ? group
+    : null;
 }
 
 function getTypeFromGroup(group: CategoryGroup): CategoryType {

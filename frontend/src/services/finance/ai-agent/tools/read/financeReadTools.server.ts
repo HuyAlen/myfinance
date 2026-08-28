@@ -24,8 +24,12 @@ import {
   getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
+  isRealExpenseTransaction,
 } from "@/src/services/finance/financeCalculations";
-import { getMonthDateRange } from "@/src/lib/date/calendarDate";
+import {
+  formatYearMonthInTimeZone,
+  getMonthDateRange,
+} from "@/src/lib/date/calendarDate";
 
 import type {
   AIFinanceToolContext,
@@ -165,7 +169,7 @@ type CategoryRow = {
 };
 
 function currentMonth() {
-  return new Date().toISOString().slice(0, 7);
+  return formatYearMonthInTimeZone(new Date(), FINANCE_TIMEZONE);
 }
 
 function toolError(error: unknown): AIFinanceToolResult {
@@ -488,11 +492,15 @@ function toInclusiveEndDate(value: string) {
 
 function buildTransactionSearchSummary(input: {
   transactions: TransactionRow[];
+  categories: CategoryRow[];
   categoryMap: Map<string, string>;
   walletMap: Map<string, string>;
 }) {
   let totalIncome = 0;
   let totalExpense = 0;
+  const domainCategoryById = new Map(
+    input.categories.map((category) => [category.id, toDomainCategory(category)]),
+  );
   const categoryTotals = new Map<
     string,
     {
@@ -509,9 +517,15 @@ function buildTransactionSearchSummary(input: {
     const walletId = transactionWalletId(item);
     const amount = Number(item.amount || 0);
 
+    const domainTransaction = toDomainTransaction(item);
+    const isRealExpense = isRealExpenseTransaction(
+      domainTransaction,
+      domainCategoryById,
+    );
+
     if (item.type === "income") {
       totalIncome += amount;
-    } else if (item.type === "expense") {
+    } else if (isRealExpense) {
       totalExpense += amount;
     }
 
@@ -525,7 +539,7 @@ function buildTransactionSearchSummary(input: {
 
     if (item.type === "income") {
       current.income += amount;
-    } else if (item.type === "expense") {
+    } else if (isRealExpense) {
       current.expense += amount;
     }
 
@@ -1194,6 +1208,7 @@ export const searchTransactionsTool: AIFinanceToolRegistration<SearchTransaction
 
         const summary = buildTransactionSearchSummary({
           transactions: matchedTransactions,
+          categories,
           categoryMap,
           walletMap,
         });

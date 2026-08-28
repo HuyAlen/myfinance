@@ -16,6 +16,7 @@ import {
   buildBudgetsHref,
   buildGoalsHref,
 } from "@/src/lib/navigation/financeNavigation";
+import { formatLocalISODate } from "@/src/lib/date/calendarDate";
 
 export function formatVND(value: number) {
   const rounded = Math.round(Number.isFinite(value) ? value : 0);
@@ -77,7 +78,7 @@ export function filterBudgetsByDateRange(
 }
 
 export function doesDateRangeIncludeToday(range: DateRangeInput) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalISODate();
   return today >= range.startDate && today <= range.endDate;
 }
 

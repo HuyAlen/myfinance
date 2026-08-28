@@ -12,6 +12,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
+import { formatLocalISODate } from "@/src/lib/date/calendarDate";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -169,7 +170,7 @@ const INITIAL_TRANSACTION_FORM: TransactionFormState = {
   note: "",
 };
 
-const todayInputValue = () => new Date().toISOString().slice(0, 10);
+const todayInputValue = () => formatLocalISODate();
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("vi-VN", {
