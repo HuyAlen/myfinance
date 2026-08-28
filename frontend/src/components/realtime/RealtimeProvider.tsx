@@ -26,6 +26,8 @@ type RealtimeTable =
   | "investments"
   | "forex_accounts"
   | "forex_cash_transactions"
+  | "savings"
+  | "saving_transactions"
   | "net_worth_snapshots";
 
 type ReloadCallback = () => void | Promise<void>;
@@ -96,6 +98,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       "investments",
       "forex_accounts",
       "forex_cash_transactions",
+      "savings",
+      "saving_transactions",
+      "net_worth_snapshots",
     ];
 
     const channel = supabase.channel(`myfinance-global-${user.id}`);

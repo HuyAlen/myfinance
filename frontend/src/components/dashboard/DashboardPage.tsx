@@ -598,6 +598,42 @@ function getDashboardFetchRange(selectedYear: number) {
  */
 const REALTIME_REFRESH_DEBOUNCE_MS = 100;
 
+// DASHBOARD-DATA-READINESS-1: every Dashboard read is bounded. A browser
+// resume / flaky mobile connection can otherwise leave a Supabase promise
+// pending forever, which means its readiness flag never flips and the Hero
+// skeleton can remain on screen indefinitely. The underlying request may still
+// finish later, but this wrapper rejects the Dashboard await-path after the
+// deadline so the normal last-known-good / retry policy can take over.
+const DASHBOARD_QUERY_TIMEOUT_MS = 10_000;
+const DASHBOARD_INITIAL_RETRY_DELAY_MS = 750;
+
+function withDashboardTimeout<T>(
+  promise: PromiseLike<T>,
+  label: string,
+  timeoutMs = DASHBOARD_QUERY_TIMEOUT_MS,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`[DashboardPage] ${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    Promise.resolve(promise).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function waitForDashboardRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const mountedAtRef = useRef<number | null>(null);
@@ -687,6 +723,11 @@ export default function DashboardPage() {
   // isDashboardReady/cashFlowReady — budgets stay secondary/non-blocking
   // per PERF-1.
   const [budgetsLoaded, setBudgetsLoaded] = useState(false);
+  const [dashboardRecoveryError, setDashboardRecoveryError] = useState<string | null>(
+    null,
+  );
+  const [isDashboardRecoveryRetrying, setIsDashboardRecoveryRetrying] =
+    useState(false);
 
   // Tracks whether each readiness domain has EVER completed a successful
   // load. A rejected fetch on the very first load must NOT flip its ready
@@ -957,6 +998,12 @@ export default function DashboardPage() {
       invalidatePeriodReadinessForNewContext();
     }
 
+    // DASHBOARD-DATA-READINESS-1: bound every read that participates in this
+    // logical reload. One hung transport request must not hold `runReload`'s
+    // overlap guard forever or leave a readiness skeleton permanently pending.
+    const bounded = <T,>(label: string, promise: PromiseLike<T>) =>
+      withDashboardTimeout(promise, label);
+
     // Every dataset is fetched exactly ONCE per reload cycle via these named
     // promises, all started concurrently below. Each readiness group further
     // down awaits only the subset it actually needs — a shared dataset
@@ -965,18 +1012,21 @@ export default function DashboardPage() {
     // (a no-op passthrough when diagnostics are disabled) — it calls the
     // underlying query function exactly once, synchronously, so fetch
     // count/ordering/concurrency are unchanged.
-    const walletsPromise = measureDashboardQuery("wallets", ctx, () =>
-      getWallets(),
+    const walletsPromise = bounded(
+      "wallets",
+      measureDashboardQuery("wallets", ctx, () => getWallets()),
     );
-    const investmentsPromise = measureDashboardQuery("investments", ctx, () =>
-      getInvestments(),
+    const investmentsPromise = bounded(
+      "investments",
+      measureDashboardQuery("investments", ctx, () => getInvestments()),
     );
-    const forexAccountsPromise = measureDashboardQuery(
+    const forexAccountsPromise = bounded(
       "forex_accounts",
-      ctx,
-      () => getForexAccounts(),
+      measureDashboardQuery("forex_accounts", ctx, () => getForexAccounts()),
     );
-    const forexEquityPromise = measureDashboardQuery<
+    const forexEquityPromise = bounded(
+      "forex_equity",
+      measureDashboardQuery<
       DashboardSupabaseResult<ForexEquityRow>
     >(
       "forex_equity",
@@ -997,29 +1047,37 @@ export default function DashboardPage() {
       // rather than rejecting — classify a fulfilled error result as
       // "error" telemetry instead of "success" (PERF-4 correctness patch).
       { getStatus: supabaseResultStatus },
+      ),
     );
     // Forex cash transactions feed both the canonical Net Worth fallback
     // (getForexAssetValue falls back to this ledger's net deposits-
     // withdrawals-fees for any account without a manually-entered
     // currentEquity — see the PERF-1 Forex correctness patch, unchanged
     // here) and the narrower Forex-card-only readiness group below.
-    const forexLedgerPromise = measureDashboardQuery(
+    const forexLedgerPromise = bounded(
       "forex_ledger",
-      ctx,
-      () => getForexCashTransactions(),
+      measureDashboardQuery("forex_ledger", ctx, () =>
+        getForexCashTransactions(),
+      ),
     );
-    const categoriesPromise = measureDashboardQuery("categories", ctx, () =>
-      getCategories(),
+    const categoriesPromise = bounded(
+      "categories",
+      measureDashboardQuery("categories", ctx, () => getCategories()),
     );
-    const transactionsPromise = measureDashboardQuery(
+    const transactionsPromise = bounded(
+      "transactions",
+      measureDashboardQuery(
       "transactions",
       ctx,
       () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
       {
         isStale: () => isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
       },
+      ),
     );
-    const netWorthHistoryPromise = measureDashboardQuery(
+    const netWorthHistoryPromise = bounded(
+      "net_worth_history",
+      measureDashboardQuery(
       "net_worth_history",
       ctx,
       () =>
@@ -1031,10 +1089,19 @@ export default function DashboardPage() {
         isStale: () =>
           isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
       },
+      ),
     );
-    const debtsPromise = measureDashboardQuery("debts", ctx, () => getDebts());
-    const goalsPromise = measureDashboardQuery("goals", ctx, () => getGoals());
-    const savingsPromise = measureDashboardQuery<
+    const debtsPromise = bounded(
+      "debts",
+      measureDashboardQuery("debts", ctx, () => getDebts()),
+    );
+    const goalsPromise = bounded(
+      "goals",
+      measureDashboardQuery("goals", ctx, () => getGoals()),
+    );
+    const savingsPromise = bounded(
+      "savings",
+      measureDashboardQuery<
       DashboardSupabaseResult<SavingRow>
     >(
       "savings",
@@ -1054,11 +1121,14 @@ export default function DashboardPage() {
       },
       // Same fulfilled-{data,error} shape as forex_equity above.
       { getStatus: supabaseResultStatus },
+      ),
     );
     // SECONDARY in startup priority (never blocks Net Worth/Cash Flow/
     // Goals/Emergency Fund/Forex), but "Tiết kiệm & Đầu tư" genuinely needs
     // this ledger for a correct allocation % — see savingInvestmentGroup.
-    const savingTransactionsPromise = measureDashboardQuery<
+    const savingTransactionsPromise = bounded(
+      "saving_transactions",
+      measureDashboardQuery<
       DashboardSupabaseResult<SavingTransactionRow>
     >(
       "saving_transactions",
@@ -1081,9 +1151,11 @@ export default function DashboardPage() {
       },
       // Same fulfilled-{data,error} shape as forex_equity above.
       { getStatus: supabaseResultStatus },
+      ),
     );
-    const budgetsPromise = measureDashboardQuery("budgets", ctx, () =>
-      getBudgets(),
+    const budgetsPromise = bounded(
+      "budgets",
+      measureDashboardQuery("budgets", ctx, () => getBudgets()),
     );
 
     // Returns true on success. On a Supabase-level error (not a thrown
@@ -1506,6 +1578,12 @@ export default function DashboardPage() {
       // invariant for every other PERF-2 readiness flag above.
       if (hasLoadedBudgetsRef.current) setBudgetsLoaded(true);
     }
+
+    // Recovery success is based on whether both Hero-critical domains have
+    // ever been validated for this context. They may succeed in different
+    // retry cycles (e.g. Cash Flow succeeds while Net Worth times out, then
+    // vice versa), and that is still a valid complete last-known-good Hero.
+    return hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
   }, [selectedYear, invalidatePeriodReadinessForNewContext]);
 
   // PERF-3 + NETWORTH-HISTORY-1: a year switch reloads exactly the two
@@ -1526,24 +1604,30 @@ export default function DashboardPage() {
     }
 
     const fetchRange = getDashboardFetchRange(year);
-    const transactionsRequest = measureDashboardQuery(
-      "transactions",
-      ctx,
-      () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
-      {
-        isStale: () =>
-          isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
-      },
+    const transactionsRequest = withDashboardTimeout(
+      measureDashboardQuery(
+        "transactions",
+        ctx,
+        () => getTransactionsInRange(fetchRange.startDate, fetchRange.endDate),
+        {
+          isStale: () =>
+            isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+        },
+      ),
+      "period_transactions",
     );
-    const historyRequest = measureDashboardQuery(
-      "net_worth_history",
-      ctx,
-      () =>
-        getNetWorthSnapshotsInRange(`${year}-01-01`, `${year}-12-01`),
-      {
-        isStale: () =>
-          isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
-      },
+    const historyRequest = withDashboardTimeout(
+      measureDashboardQuery(
+        "net_worth_history",
+        ctx,
+        () =>
+          getNetWorthSnapshotsInRange(`${year}-01-01`, `${year}-12-01`),
+        {
+          isStale: () =>
+            isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
+        },
+      ),
+      "period_net_worth_history",
     );
 
     // Both year-dependent reads start before either is awaited. A failure in
@@ -1643,20 +1727,22 @@ export default function DashboardPage() {
   // itself is unchanged from PERF-2.
   const pendingReloadTriggerRef = useRef<DashboardOperationTrigger>("realtime");
   const runReload = useCallback(
-    async (trigger: DashboardOperationTrigger) => {
+    async (trigger: DashboardOperationTrigger): Promise<boolean> => {
       if (isReloadingRef.current) {
         hasPendingReloadRef.current = true;
         pendingReloadTriggerRef.current = trigger;
-        return;
+        return hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
       }
       isReloadingRef.current = true;
+      let ready = hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
       try {
         let currentTrigger = trigger;
         do {
           hasPendingReloadRef.current = false;
-          await reloadData(currentTrigger);
+          ready = await reloadData(currentTrigger);
           currentTrigger = pendingReloadTriggerRef.current;
         } while (hasPendingReloadRef.current);
+        return ready;
       } finally {
         isReloadingRef.current = false;
       }
@@ -1700,10 +1786,75 @@ export default function DashboardPage() {
     runReloadRef.current = runReload;
   }, [runReload]);
   useEffect(() => {
+    let cancelled = false;
+
     void (async () => {
-      await runReloadRef.current("initial");
+      setDashboardRecoveryError(null);
+      const firstAttemptReady = await runReloadRef.current("initial");
+      if (cancelled || firstAttemptReady) return;
+
+      // One bounded automatic retry handles the common mobile-resume case
+      // without requiring the user to kill/reopen the app. The first cycle
+      // has already released runReload's overlap guard because every query is
+      // timeout-bounded above.
+      setIsDashboardRecoveryRetrying(true);
+      await waitForDashboardRetry(DASHBOARD_INITIAL_RETRY_DELAY_MS);
+      if (cancelled) return;
+
+      const retryReady = await runReloadRef.current("initial");
+      if (cancelled) return;
+      setIsDashboardRecoveryRetrying(false);
+
+      if (!retryReady) {
+        setDashboardRecoveryError(
+          "Dữ liệu chưa tải được. Kiểm tra kết nối rồi thử lại.",
+        );
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Recover when an installed/mobile browser returns from background or when
+  // connectivity comes back. This is intentionally a FULL reload: the symptom
+  // being fixed can strand any of the independent readiness domains, and the
+  // existing runReload guard coalesces overlap safely.
+  useEffect(() => {
+    const recover = () => {
+      void runReloadRef.current("realtime").then((ready) => {
+        if (ready) {
+          setDashboardRecoveryError(null);
+          setIsDashboardRecoveryRetrying(false);
+        }
+      });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") recover();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", recover);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", recover);
+    };
+  }, []);
+
+  const retryDashboardLoad = useCallback(() => {
+    setDashboardRecoveryError(null);
+    setIsDashboardRecoveryRetrying(true);
+    void runReload("realtime").then((ready) => {
+      setIsDashboardRecoveryRetrying(false);
+      if (!ready) {
+        setDashboardRecoveryError(
+          "Dữ liệu vẫn chưa tải được. Vui lòng kiểm tra mạng và thử lại.",
+        );
+      }
+    });
+  }, [runReload]);
 
   // PERF-3: a pure year switch reloads only year-dependent data (transactions
   // + canonical Net Worth snapshots) via reloadPeriod, reusing the already-valid current snapshot rather than
@@ -1742,7 +1893,10 @@ export default function DashboardPage() {
   useRealtimeTable(
     [
       "wallets",
+      "categories",
       "transactions",
+      "savings",
+      "saving_transactions",
       "investments",
       "net_worth_snapshots",
       "forex_accounts",
@@ -2654,6 +2808,40 @@ export default function DashboardPage() {
           (see the audit that motivated this reorder). Content, readiness
           gating, and instrumentation below are unchanged; only its position
           in the page moved. */}
+      {(dashboardRecoveryError || isDashboardRecoveryRetrying) && (
+        <section
+          className={`rounded-2xl border px-4 py-3 shadow-sm ${
+            dashboardRecoveryError
+              ? "border-amber-200 bg-amber-50/90"
+              : "border-blue-100 bg-blue-50/80"
+          }`}
+          aria-live="polite"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#36536B]">
+                {dashboardRecoveryError
+                  ? "Chưa thể đồng bộ Dashboard"
+                  : "Đang thử kết nối lại…"}
+              </p>
+              <p className="mt-0.5 text-xs leading-5 text-[#687E93]">
+                {dashboardRecoveryError ??
+                  "Kết nối trước đó chưa hoàn tất. MyFinance đang tự tải lại dữ liệu."}
+              </p>
+            </div>
+            {dashboardRecoveryError && (
+              <button
+                type="button"
+                onClick={retryDashboardLoad}
+                className="min-h-10 shrink-0 rounded-xl border border-amber-200 bg-white px-3 text-xs font-bold text-amber-700 shadow-sm"
+              >
+                Thử lại
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Executive overview */}
       <section className="overflow-hidden rounded-3xl border border-[#D7E3EE] bg-white shadow-[0_12px_30px_rgba(54,83,107,0.10)] sm:rounded-4xl">
         <div className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F6FB] p-4 sm:p-7">
