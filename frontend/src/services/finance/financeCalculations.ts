@@ -562,7 +562,9 @@ export function getTotalSavings(savings: SavingAccount[] = []) {
  * user hasn't entered a current equity yet.
  */
 export function getForexNetCapital(
-  forexCashTransactions: ForexCashTransaction[],
+  forexCashTransactions: Array<
+    Pick<ForexCashTransaction, "type" | "amount" | "fee">
+  >,
 ) {
   const totalDeposited = forexCashTransactions
     .filter((transaction) => transaction.type === "deposit")
@@ -580,9 +582,22 @@ export function getForexNetCapital(
 
 /** Net Forex capital contributed (see `getForexNetCapital`), per account. */
 export function getForexNetCapitalByAccount(
-  forexCashTransactions: ForexCashTransaction[],
+  forexCashTransactions: Array<
+    Pick<
+      ForexCashTransaction,
+      "forexAccountId" | "type" | "amount" | "fee"
+    >
+  >,
 ): Map<string, number> {
-  const byAccount = new Map<string, ForexCashTransaction[]>();
+  const byAccount = new Map<
+    string,
+    Array<
+      Pick<
+        ForexCashTransaction,
+        "forexAccountId" | "type" | "amount" | "fee"
+      >
+    >
+  >();
   for (const transaction of forexCashTransactions) {
     const list = byAccount.get(transaction.forexAccountId) ?? [];
     list.push(transaction);
@@ -606,7 +621,12 @@ export function getForexNetCapitalByAccount(
  */
 export function getForexAssetValue(
   forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">>,
-  forexCashTransactions: ForexCashTransaction[],
+  forexCashTransactions: Array<
+    Pick<
+      ForexCashTransaction,
+      "forexAccountId" | "type" | "amount" | "fee"
+    >
+  >,
 ): number {
   const netCapitalByAccount = getForexNetCapitalByAccount(
     forexCashTransactions,

@@ -13,22 +13,37 @@ import {
   Activity,
   ArrowDownLeft,
   ArrowUpRight,
+  BriefcaseBusiness,
   Edit3,
   Landmark,
   Plus,
   RefreshCw,
   Trash2,
+  TrendingUp,
   WalletCards,
   X,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { supabase } from "@/src/lib/supabase";
-import { getWallets } from "@/src/services/finance/financeStorage";
-import type { Wallet as FinanceWallet } from "@/src/types/finance";
+import { getForexAssetValue } from "@/src/services/finance/financeCalculations";
+import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
+import {
+  addInvestment,
+  deleteInvestment,
+  getInvestments,
+  getWallets,
+  updateInvestment,
+} from "@/src/services/finance/financeStorage";
+import type {
+  Investment,
+  InvestmentType,
+  Wallet as FinanceWallet,
+} from "@/src/types/finance";
 
 type ForexAccountStatus = "active" | "inactive" | "archived";
 type ForexCashTransactionType = "deposit" | "withdrawal";
@@ -114,6 +129,17 @@ type TransactionFormState = {
   notes: string;
 };
 
+type PortfolioFormState = {
+  id: string;
+  name: string;
+  type: InvestmentType;
+  symbol: string;
+  investedAmount: string;
+  currentValue: string;
+  purchaseDate: string;
+  notes: string;
+};
+
 type AccountCashMetric = ForexAccount & {
   deposits: number;
   withdrawals: number;
@@ -124,7 +150,8 @@ type AccountCashMetric = ForexAccount & {
   transactionCount: number;
 };
 
-type ForexPageData = {
+type InvestmentPageData = {
+  investments: Investment[];
   accounts: ForexAccount[];
   transactions: ForexCashTransaction[];
   wallets: FinanceWallet[];
@@ -136,21 +163,21 @@ const isSupabaseConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 );
 
-const FOREX_LOAD_TIMEOUT_MS = 10_000;
-const FOREX_INITIAL_RETRY_DELAY_MS = 750;
+const INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS = 10_000;
+const INVESTMENT_DOMAIN_INITIAL_RETRY_DELAY_MS = 750;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function withForexLoadTimeout<T>(
+function withInvestmentDomainLoadTimeout<T>(
   label: string,
   request: PromiseLike<T>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
       reject(new Error(`${label} phản hồi quá lâu. Vui lòng thử lại.`));
-    }, FOREX_LOAD_TIMEOUT_MS);
+    }, INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS);
 
     Promise.resolve(request).then(
       (value) => {
@@ -208,6 +235,27 @@ function createEmptyTransactionForm(
     transactionTime: nowTime(),
     notes: "",
   };
+}
+
+function createEmptyPortfolioForm(): PortfolioFormState {
+  return {
+    id: "",
+    name: "",
+    type: "stock",
+    symbol: "",
+    investedAmount: "",
+    currentValue: "",
+    purchaseDate: today(),
+    notes: "",
+  };
+}
+
+function getInvestmentTypeLabel(type: InvestmentType): string {
+  if (type === "stock") return "Cổ phiếu";
+  if (type === "crypto") return "Crypto";
+  if (type === "fund") return "Quỹ / ETF";
+  if (type === "gold") return "Vàng";
+  return "Khác";
 }
 
 function toNumber(value: number | string | null | undefined): number {
@@ -288,6 +336,19 @@ function normalizeTimeInput(value: string): string {
   return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 }
 
+function validatePortfolioForm(form: PortfolioFormState): string | null {
+  if (!form.name.trim()) return "Vui lòng nhập tên khoản đầu tư.";
+  const investedAmount = Number(form.investedAmount);
+  const currentValue = Number(form.currentValue);
+  if (!Number.isFinite(investedAmount) || investedAmount < 0) {
+    return "Vốn đầu tư phải là số không âm.";
+  }
+  if (!Number.isFinite(currentValue) || currentValue < 0) {
+    return "Giá trị hiện tại phải là số không âm.";
+  }
+  return null;
+}
+
 function validateAccountForm(form: AccountFormState): string | null {
   if (!form.name.trim()) return "Vui lòng nhập tên tài khoản.";
   if (!form.broker.trim()) return "Vui lòng nhập broker hoặc nền tảng.";
@@ -334,18 +395,24 @@ function getAccountStatusLabel(status: ForexAccount["status"]) {
 }
 
 export default function InvestmentsPage() {
+  const searchParams = useSearchParams();
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [accounts, setAccounts] = useState<ForexAccount[]>([]);
   const [transactions, setTransactions] = useState<ForexCashTransaction[]>([]);
   const [wallets, setWallets] = useState<FinanceWallet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [portfolioForm, setPortfolioForm] = useState<PortfolioFormState>(
+    createEmptyPortfolioForm,
+  );
   const [accountForm, setAccountForm] = useState<AccountFormState>(
     createEmptyAccountForm,
   );
   const [transactionForm, setTransactionForm] = useState<TransactionFormState>(
     () => createEmptyTransactionForm(),
   );
+  const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -360,9 +427,10 @@ export default function InvestmentsPage() {
   const mountedRef = useRef(true);
   const { toast } = useToast();
 
-  const fetchForexPageData = useCallback(async (): Promise<ForexPageData> => {
+  const fetchInvestmentPageData = useCallback(async (): Promise<InvestmentPageData> => {
     if (!isSupabaseConfigured) {
       return {
+        investments: [],
         accounts: [],
         transactions: [],
         wallets: [],
@@ -370,15 +438,19 @@ export default function InvestmentsPage() {
       };
     }
 
-    const walletsRequest = withForexLoadTimeout("Danh sách ví", getWallets());
-    const accountsRequest = withForexLoadTimeout(
+    const investmentsRequest = withInvestmentDomainLoadTimeout(
+      "Danh mục Portfolio",
+      getInvestments(),
+    );
+    const walletsRequest = withInvestmentDomainLoadTimeout("Danh sách ví", getWallets());
+    const accountsRequest = withInvestmentDomainLoadTimeout(
       "Tài khoản Forex",
       supabase
         .from("forex_accounts")
         .select("*")
         .order("created_at", { ascending: false }),
     );
-    const transactionsRequest = withForexLoadTimeout(
+    const transactionsRequest = withInvestmentDomainLoadTimeout(
       "Lịch sử nạp/rút Forex",
       supabase
         .from("forex_cash_transactions")
@@ -387,16 +459,19 @@ export default function InvestmentsPage() {
         .order("transaction_time", { ascending: false }),
     );
 
-    const [loadedWallets, accountResult, transactionResult] = await Promise.all([
-      walletsRequest,
-      accountsRequest,
-      transactionsRequest,
-    ]);
+    const [loadedInvestments, loadedWallets, accountResult, transactionResult] =
+      await Promise.all([
+        investmentsRequest,
+        walletsRequest,
+        accountsRequest,
+        transactionsRequest,
+      ]);
 
     if (accountResult.error) throw accountResult.error;
     if (transactionResult.error) throw transactionResult.error;
 
     return {
+      investments: loadedInvestments,
       accounts: ((accountResult.data ?? []) as ForexAccountRow[]).map(
         mapAccountRow,
       ),
@@ -408,7 +483,8 @@ export default function InvestmentsPage() {
     };
   }, []);
 
-  const applyForexPageData = useCallback((data: ForexPageData) => {
+  const applyInvestmentPageData = useCallback((data: InvestmentPageData) => {
+    setInvestments(data.investments);
     setAccounts(data.accounts);
     setTransactions(data.transactions);
     setWallets(data.wallets);
@@ -444,18 +520,18 @@ export default function InvestmentsPage() {
 
           for (let attempt = 0; attempt < requestedAttempts; attempt += 1) {
             try {
-              const data = await fetchForexPageData();
+              const data = await fetchInvestmentPageData();
               if (!mountedRef.current) return false;
               if (data.loadError) throw new Error(data.loadError);
 
-              applyForexPageData(data);
+              applyInvestmentPageData(data);
               succeeded = true;
               finalSuccess = true;
               break;
             } catch (error) {
               lastError = error;
               if (attempt + 1 < requestedAttempts) {
-                await sleep(FOREX_INITIAL_RETRY_DELAY_MS);
+                await sleep(INVESTMENT_DOMAIN_INITIAL_RETRY_DELAY_MS);
                 if (!mountedRef.current) return false;
               }
             }
@@ -465,7 +541,7 @@ export default function InvestmentsPage() {
             setLoadError(
               lastError instanceof Error
                 ? lastError.message
-                : "Không thể tải dữ liệu Forex.",
+                : "Không thể tải dữ liệu đầu tư.",
             );
           }
 
@@ -479,7 +555,7 @@ export default function InvestmentsPage() {
 
       return finalSuccess;
     },
-    [applyForexPageData, fetchForexPageData],
+    [applyInvestmentPageData, fetchInvestmentPageData],
   );
 
   useEffect(() => {
@@ -512,7 +588,12 @@ export default function InvestmentsPage() {
     if (!isSupabaseConfigured) return;
 
     const channel = supabase
-      .channel("investments-forex-page")
+      .channel("investments-domain-page")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "investments" },
+        () => void reload(),
+      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "forex_accounts" },
@@ -533,6 +614,48 @@ export default function InvestmentsPage() {
       void supabase.removeChannel(channel);
     };
   }, [reload]);
+
+  const focusQuery = searchParams.toString();
+  const focusParams = useMemo(
+    () => new URLSearchParams(focusQuery),
+    [focusQuery],
+  );
+  const focusedInvestmentId = parseFocusId(focusParams, "investmentId");
+  const focusedForexAccountId = parseFocusId(focusParams, "forexAccountId");
+
+  useEffect(() => {
+    if (isLoading) return;
+    const targetId = focusedInvestmentId
+      ? `investment-${focusedInvestmentId}`
+      : focusedForexAccountId
+        ? `forex-account-${focusedForexAccountId}`
+        : null;
+    if (!targetId) return;
+
+    const target = document.getElementById(targetId);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusedForexAccountId, focusedInvestmentId, isLoading]);
+
+  const portfolioSummary = useMemo(() => {
+    const invested = investments.reduce(
+      (sum, investment) => sum + investment.investedAmount,
+      0,
+    );
+    const currentValue = investments.reduce(
+      (sum, investment) => sum + investment.currentValue,
+      0,
+    );
+    const profitLoss = currentValue - invested;
+    const roi = invested > 0 ? (profitLoss / invested) * 100 : null;
+
+    return {
+      count: investments.length,
+      invested,
+      currentValue,
+      profitLoss,
+      roi,
+    };
+  }, [investments]);
 
   const accountMetrics = useMemo<AccountCashMetric[]>(() => {
     return accounts.map((account) => {
@@ -599,6 +722,11 @@ export default function InvestmentsPage() {
       (sum, account) => sum + (account.currentEquity ?? 0),
       0,
     );
+    // Use the same Forex asset-value rule as canonical Net Worth: broker
+    // current equity when available, otherwise net contributed capital after
+    // fees. This intentionally includes archived rows too because the balance
+    // sheet still owns any residual value until the row itself is removed.
+    const currentExposure = getForexAssetValue(accounts, transactions);
     const totalProfitLoss = knownEquityAccounts.reduce(
       (sum, account) => sum + (account.tradingProfitLoss ?? 0),
       0,
@@ -621,11 +749,104 @@ export default function InvestmentsPage() {
       totalFees,
       netCashFlow: totalDeposited - totalWithdrawn,
       totalEquity,
+      currentExposure,
       totalProfitLoss,
       roi,
       hasEquity: knownEquityAccounts.length > 0,
     };
   }, [accounts, accountMetrics]);
+
+  function openCreatePortfolioInvestment() {
+    setPortfolioForm(createEmptyPortfolioForm());
+    setSaveError(null);
+    setPortfolioModalOpen(true);
+  }
+
+  function openEditPortfolioInvestment(investment: Investment) {
+    setPortfolioForm({
+      id: investment.id,
+      name: investment.name,
+      type: investment.type,
+      symbol: investment.symbol ?? "",
+      investedAmount: String(investment.investedAmount),
+      currentValue: String(investment.currentValue),
+      purchaseDate: investment.purchaseDate ?? "",
+      notes: investment.notes ?? "",
+    });
+    setSaveError(null);
+    setPortfolioModalOpen(true);
+  }
+
+  async function submitPortfolioInvestment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSaving) return;
+
+    const validationError = validatePortfolioForm(portfolioForm);
+    if (validationError) {
+      setSaveError(validationError);
+      return;
+    }
+
+    const existing = investments.find(
+      (investment) => investment.id === portfolioForm.id,
+    );
+    const payload: Investment = {
+      ...existing,
+      id: portfolioForm.id || crypto.randomUUID(),
+      name: portfolioForm.name.trim(),
+      type: portfolioForm.type,
+      symbol: portfolioForm.symbol.trim() || undefined,
+      investedAmount: Number(portfolioForm.investedAmount),
+      currentValue: Number(portfolioForm.currentValue),
+      purchaseDate: portfolioForm.purchaseDate || undefined,
+      notes: portfolioForm.notes.trim() || undefined,
+    };
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const result = portfolioForm.id
+        ? await updateInvestment(payload)
+        : await addInvestment(payload);
+      if (result.error) throw new Error(result.error);
+
+      await reload();
+      setPortfolioModalOpen(false);
+      toast({
+        variant: "success",
+        message: portfolioForm.id
+          ? "Đã cập nhật khoản đầu tư."
+          : "Đã thêm khoản đầu tư.",
+      });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Không thể lưu khoản đầu tư.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function requestDeletePortfolioInvestment(investment: Investment) {
+    setPendingAction({
+      title: "Xóa khoản đầu tư?",
+      description: `${investment.name} sẽ bị xóa khỏi Portfolio. Dữ liệu Forex không bị ảnh hưởng.`,
+      variant: "danger",
+      onConfirm: async () => {
+        const result = await deleteInvestment(investment.id);
+        if (result.error) {
+          toast({ variant: "error", message: result.error });
+          return;
+        }
+
+        await reload();
+        toast({ variant: "success", message: "Đã xóa khoản đầu tư." });
+      },
+    });
+  }
 
   function openCreateAccount() {
     setAccountForm(createEmptyAccountForm());
@@ -858,17 +1079,17 @@ export default function InvestmentsPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-12 sm:rounded-2xl">
-              <Landmark size={21} />
+              <BriefcaseBusiness size={21} />
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">
                 Đầu tư
               </p>
               <h1 className="mt-0.5 text-[22px] font-bold tracking-tight text-[#36536B] sm:mt-1 sm:text-3xl">
-                Đầu tư Forex
+                Đầu tư
               </h1>
               <p className="mt-1 max-w-2xl text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm sm:leading-6">
-                Theo dõi vốn, giá trị hiện tại và lời/lỗ Forex.
+                Quản lý Portfolio và Forex trong cùng một không gian đầu tư.
               </p>
             </div>
           </div>
@@ -877,7 +1098,7 @@ export default function InvestmentsPage() {
             <button
               type="button"
               onClick={() => void reload()}
-              aria-label="Làm mới dữ liệu Forex"
+              aria-label="Làm mới dữ liệu đầu tư"
               title="Làm mới"
               className="inline-flex size-11 items-center justify-center rounded-xl border border-[#D9E7F4] bg-white text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:w-auto sm:px-4"
             >
@@ -886,12 +1107,11 @@ export default function InvestmentsPage() {
             </button>
             <button
               type="button"
-              onClick={() => openCreateTransaction()}
-              disabled={accounts.length === 0}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#CFE1F2] bg-[#F3F8FF] px-3 text-[13px] font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC] disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-2xl sm:px-4 sm:text-sm"
+              onClick={openCreatePortfolioInvestment}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#CFE1F2] bg-[#F3F8FF] px-3 text-[13px] font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC] sm:rounded-2xl sm:px-4 sm:text-sm"
             >
-              <ArrowUpRight size={16} />
-              Nạp / rút
+              <BriefcaseBusiness size={16} />
+              Thêm tài sản
             </button>
             <button
               type="button"
@@ -899,7 +1119,7 @@ export default function InvestmentsPage() {
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-3 text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(47,128,237,0.18)] transition hover:bg-blue-600 sm:rounded-2xl sm:px-4 sm:text-sm"
             >
               <Plus size={16} />
-              Thêm TK
+              Thêm Forex
             </button>
           </div>
         </div>
@@ -921,46 +1141,28 @@ export default function InvestmentsPage() {
 
         <div className="-mx-4 mt-4 flex snap-x snap-proximity gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-1 scrollbar-none sm:mx-0 sm:mt-5 sm:grid sm:grid-cols-2 sm:gap-3 sm:px-0 xl:grid-cols-6">
           <SummaryCard
-            label="Tài khoản"
-            value={`${summary.activeCount}/${summary.accountCount}`}
-            note="đang hoạt động"
+            label="Portfolio"
+            value={formatMoney(portfolioSummary.currentValue)}
+            note={`${portfolioSummary.count} tài sản truyền thống`}
             tone="sky"
+            icon={<BriefcaseBusiness size={17} />}
+          />
+          <SummaryCard
+            label="Lời / lỗ Portfolio"
+            value={formatMoney(portfolioSummary.profitLoss)}
+            note={`ROI ${formatPercent(portfolioSummary.roi)}`}
+            tone={portfolioSummary.profitLoss >= 0 ? "emerald" : "rose"}
+            icon={<TrendingUp size={17} />}
+          />
+          <SummaryCard
+            label="Forex"
+            value={formatMoney(summary.currentExposure)}
+            note={`${summary.activeCount}/${summary.accountCount} tài khoản hoạt động`}
+            tone="blue"
             icon={<Landmark size={17} />}
           />
           <SummaryCard
-            label="Tổng đã nạp"
-            value={formatMoney(summary.totalDeposited)}
-            note="Dòng tiền vào Forex"
-            tone="emerald"
-            icon={<ArrowUpRight size={17} />}
-          />
-          <SummaryCard
-            label="Tổng đã rút"
-            value={formatMoney(summary.totalWithdrawn)}
-            note="Dòng tiền về ví"
-            tone="blue"
-            icon={<ArrowDownLeft size={17} />}
-          />
-          <SummaryCard
-            label="Dòng tiền ròng"
-            value={formatMoney(summary.netCashFlow)}
-            note="Tổng nạp trừ tổng rút"
-            tone={summary.netCashFlow >= 0 ? "violet" : "rose"}
-            icon={<WalletCards size={17} />}
-          />
-          <SummaryCard
-            label="Giá trị tài khoản hiện tại"
-            value={
-              summary.hasEquity
-                ? formatMoney(summary.totalEquity)
-                : "Chưa cập nhật"
-            }
-            note="Tổng giá trị hiện tại các tài khoản"
-            tone="amber"
-            icon={<Activity size={17} />}
-          />
-          <SummaryCard
-            label="Lời / lỗ"
+            label="Lời / lỗ Forex"
             value={
               summary.hasEquity
                 ? formatMoney(summary.totalProfitLoss)
@@ -969,7 +1171,7 @@ export default function InvestmentsPage() {
             note={
               summary.hasEquity
                 ? `ROI ${formatPercent(summary.roi)}`
-                : "Nhập giá trị tài khoản để tính"
+                : "Nhập Equity để tính"
             }
             tone={
               !summary.hasEquity
@@ -979,6 +1181,22 @@ export default function InvestmentsPage() {
                   : "rose"
             }
             icon={<Activity size={17} />}
+          />
+          <SummaryCard
+            label="Tổng giá trị đầu tư"
+            value={formatMoney(
+              portfolioSummary.currentValue + summary.currentExposure,
+            )}
+            note="Portfolio + Forex"
+            tone="violet"
+            icon={<WalletCards size={17} />}
+          />
+          <SummaryCard
+            label="Vốn ròng Forex"
+            value={formatMoney(summary.netCashFlow)}
+            note="Tổng nạp trừ tổng rút"
+            tone={summary.netCashFlow >= 0 ? "amber" : "rose"}
+            icon={<ArrowUpRight size={17} />}
           />
         </div>
       </div>
@@ -990,7 +1208,154 @@ export default function InvestmentsPage() {
               Danh mục đầu tư
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
-              Tài khoản Forex
+              Portfolio
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-[#7C91A6] sm:text-sm">
+              Cổ phiếu, quỹ/ETF, crypto, vàng và các tài sản đầu tư khác.
+            </p>
+          </div>
+          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+            {investments.length} tài sản
+          </span>
+        </div>
+
+        {isLoading && investments.length === 0 ? (
+          <div className="mt-4 rounded-3xl bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
+            Đang tải Portfolio...
+          </div>
+        ) : null}
+
+        {!isLoading && loadError && investments.length === 0 ? (
+          <div className="mt-4 rounded-3xl border border-dashed border-rose-200 bg-rose-50/40 p-8 text-center">
+            <BriefcaseBusiness size={24} className="mx-auto text-rose-500" />
+            <p className="mt-4 text-lg font-black text-rose-700">
+              Không thể tải Portfolio
+            </p>
+            <p className="mt-1 text-sm text-slate-500">{loadError}</p>
+          </div>
+        ) : null}
+
+        {!isLoading && !loadError && investments.length === 0 ? (
+          <button
+            type="button"
+            onClick={openCreatePortfolioInvestment}
+            className="mt-4 flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-dashed border-sky-200 bg-sky-50/40 p-8 text-center"
+          >
+            <BriefcaseBusiness size={24} className="text-sky-600" />
+            <p className="mt-4 text-lg font-black text-sky-800">
+              Chưa có tài sản Portfolio
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Thêm cổ phiếu, quỹ, crypto hoặc vàng để quản lý cùng Forex.
+            </p>
+          </button>
+        ) : null}
+
+        {investments.length > 0 ? (
+          <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-2">
+            {investments.map((investment) => {
+              const profitLoss =
+                investment.currentValue - investment.investedAmount;
+              const roi =
+                investment.investedAmount > 0
+                  ? (profitLoss / investment.investedAmount) * 100
+                  : null;
+
+              return (
+                <article
+                  id={`investment-${investment.id}`}
+                  key={investment.id}
+                  className={`rounded-2xl border bg-white p-4 transition sm:rounded-3xl sm:p-5 ${
+                    focusedInvestmentId === investment.id
+                      ? "border-sky-400 ring-4 ring-sky-100 shadow-md"
+                      : "border-[#DCE6EF] hover:border-sky-200 hover:shadow-md"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="min-w-0 break-words text-[15px] font-bold leading-5 text-[#36536B] sm:text-base">
+                          {investment.name}
+                        </h3>
+                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase text-sky-700">
+                          {getInvestmentTypeLabel(investment.type)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        {investment.symbol
+                          ? investment.symbol
+                          : "Không có mã tài sản"}
+                        {investment.purchaseDate
+                          ? ` · ${investment.purchaseDate}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEditPortfolioInvestment(investment)}
+                        aria-label={`Sửa ${investment.name}`}
+                        className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:bg-sky-50 hover:text-sky-600 sm:size-10"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          requestDeletePortfolioInvestment(investment)
+                        }
+                        aria-label={`Xóa ${investment.name}`}
+                        className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:bg-rose-50 hover:text-rose-600 sm:size-10"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Metric
+                      label="Vốn đầu tư"
+                      value={formatMoney(investment.investedAmount)}
+                      tone="violet"
+                    />
+                    <Metric
+                      label="Giá trị hiện tại"
+                      value={formatMoney(investment.currentValue)}
+                      tone="blue"
+                    />
+                    <Metric
+                      label="Lời / lỗ"
+                      value={formatMoney(profitLoss)}
+                      tone={profitLoss >= 0 ? "emerald" : "rose"}
+                    />
+                    <Metric
+                      label="ROI"
+                      value={formatPercent(roi)}
+                      tone={roi === null || roi >= 0 ? "emerald" : "rose"}
+                    />
+                  </div>
+
+                  {investment.notes ? (
+                    <p className="mt-3 break-words rounded-xl bg-[#F6F9FC] px-3 py-2 text-[11px] font-semibold leading-5 text-[#687E93]">
+                      {investment.notes}
+                    </p>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+              Forex
+            </p>
+            <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
+              Tài khoản & vốn Forex
             </h2>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
@@ -1037,8 +1402,13 @@ export default function InvestmentsPage() {
 
           {accountMetrics.map((account) => (
             <article
+              id={`forex-account-${account.id}`}
               key={account.id}
-              className="rounded-2xl border border-[#DCE6EF] bg-white p-4 transition hover:border-sky-200 hover:shadow-md sm:rounded-3xl sm:p-5"
+              className={`rounded-2xl border bg-white p-4 transition sm:rounded-3xl sm:p-5 ${
+                focusedForexAccountId === account.id
+                  ? "border-sky-400 ring-4 ring-sky-100 shadow-md"
+                  : "border-[#DCE6EF] hover:border-sky-200 hover:shadow-md"
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -1254,6 +1624,118 @@ export default function InvestmentsPage() {
           </div>
         )}
       </div>
+
+      {portfolioModalOpen ? (
+        <Modal
+          title={
+            portfolioForm.id
+              ? "Cập nhật tài sản Portfolio"
+              : "Thêm tài sản Portfolio"
+          }
+          description="Portfolio dành cho cổ phiếu, quỹ/ETF, crypto, vàng và các tài sản không thuộc tài khoản Forex."
+          onClose={() => !isSaving && setPortfolioModalOpen(false)}
+        >
+          <form onSubmit={submitPortfolioInvestment} className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field
+                label="Tên tài sản *"
+                value={portfolioForm.name}
+                onChange={(value) =>
+                  setPortfolioForm((current) => ({ ...current, name: value }))
+                }
+                placeholder="FPT"
+              />
+              <SelectField
+                label="Loại tài sản *"
+                value={portfolioForm.type}
+                onChange={(value) =>
+                  setPortfolioForm((current) => ({
+                    ...current,
+                    type: value as InvestmentType,
+                  }))
+                }
+                options={[
+                  { value: "stock", label: "Cổ phiếu" },
+                  { value: "fund", label: "Quỹ / ETF" },
+                  { value: "crypto", label: "Crypto" },
+                  { value: "gold", label: "Vàng" },
+                  { value: "other", label: "Khác" },
+                ]}
+              />
+              <Field
+                label="Mã tài sản"
+                value={portfolioForm.symbol}
+                onChange={(value) =>
+                  setPortfolioForm((current) => ({
+                    ...current,
+                    symbol: value.toUpperCase(),
+                  }))
+                }
+                placeholder="FPT / BTC / ETF"
+              />
+              <label>
+                <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                  Ngày mua
+                </span>
+                <input
+                  type="date"
+                  value={portfolioForm.purchaseDate}
+                  onChange={(event) =>
+                    setPortfolioForm((current) => ({
+                      ...current,
+                      purchaseDate: event.target.value,
+                    }))
+                  }
+                  className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold sm:text-sm"
+                />
+              </label>
+              <CurrencyField
+                label="Vốn đầu tư *"
+                value={portfolioForm.investedAmount}
+                onChange={(value) =>
+                  setPortfolioForm((current) => ({
+                    ...current,
+                    investedAmount: value,
+                  }))
+                }
+              />
+              <CurrencyField
+                label="Giá trị hiện tại *"
+                value={portfolioForm.currentValue}
+                onChange={(value) =>
+                  setPortfolioForm((current) => ({
+                    ...current,
+                    currentValue: value,
+                  }))
+                }
+              />
+              <label className="md:col-span-2">
+                <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                  Ghi chú
+                </span>
+                <textarea
+                  value={portfolioForm.notes}
+                  onChange={(event) =>
+                    setPortfolioForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold sm:text-sm"
+                />
+              </label>
+            </div>
+
+            <FormActions
+              isSaving={isSaving}
+              saveError={saveError}
+              onDismissError={() => setSaveError(null)}
+              onCancel={() => setPortfolioModalOpen(false)}
+            />
+          </form>
+        </Modal>
+      ) : null}
 
       {accountModalOpen ? (
         <Modal

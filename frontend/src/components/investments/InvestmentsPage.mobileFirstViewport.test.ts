@@ -18,15 +18,15 @@ function regionBetween(startMarker: string, endMarker: string) {
 describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MOBILE-POLISH-1)", () => {
   it("uses a compact soft-blue mobile hero instead of the previous heavy dark hierarchy", () => {
     expect(source).toContain('text-[22px] font-bold tracking-tight text-[#36536B]');
-    expect(source).toContain("Theo dõi vốn, giá trị hiện tại và lời/lỗ Forex.");
+    expect(source).toContain("Quản lý Portfolio và Forex trong cùng một không gian đầu tư.");
     expect(source).not.toContain("Forex Management");
   });
 
-  it("keeps all top actions on one compact mobile row with a 44px refresh target", () => {
+  it("keeps Portfolio and Forex creation on one compact mobile row with a 44px refresh target", () => {
     expect(source).toContain('grid grid-cols-[44px_1fr_1fr] gap-2');
-    expect(source).toContain('aria-label="Làm mới dữ liệu Forex"');
-    expect(source).toContain("Nạp / rút");
-    expect(source).toContain("Thêm TK");
+    expect(source).toContain('aria-label="Làm mới dữ liệu đầu tư"');
+    expect(source).toContain("Thêm tài sản");
+    expect(source).toContain("Thêm Forex");
   });
 
   it("turns the six summary cards into a horizontal snap rail on phones", () => {
@@ -111,8 +111,8 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
 
   it("preserves correctness-1 recovery and atomic-delete contracts", () => {
     expect(source).toContain("delete_forex_account_atomic");
-    expect(source).toContain("withForexLoadTimeout");
-    expect(source).toContain("FOREX_LOAD_TIMEOUT_MS");
+    expect(source).toContain("withInvestmentDomainLoadTimeout");
+    expect(source).toContain("INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS");
     expect(source).toContain('window.addEventListener("online"');
     expect(source).toContain('document.addEventListener("visibilitychange"');
     expect(source).toContain('account.status !== "archived"');

@@ -168,11 +168,11 @@ describe("no Header-owned Supabase realtime channel — reuses the existing Real
     expect(source).toContain("useRealtimeTable(");
   });
 
-  it("registers ONLY the tables that can actually affect notification output — transactions/budgets/categories/goals/debts, never wallets/investments/forex (search-index-only data)", () => {
-    const start = source.indexOf("useRealtimeTable(");
-    expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf(");", start);
-    const callSource = source.slice(start, end);
+  it("keeps notification realtime dependencies separate from search-only investment dependencies", () => {
+    const notificationStart = source.indexOf("useRealtimeTable(");
+    expect(notificationStart).toBeGreaterThan(-1);
+    const notificationEnd = source.indexOf(");", notificationStart);
+    const notificationCall = source.slice(notificationStart, notificationEnd);
 
     for (const table of [
       "transactions",
@@ -180,18 +180,28 @@ describe("no Header-owned Supabase realtime channel — reuses the existing Real
       "categories",
       "goals",
       "debts",
+      "savings",
     ]) {
-      expect(callSource).toContain(`"${table}"`);
+      expect(notificationCall).toContain(`"${table}"`);
     }
-    for (const irrelevantTable of [
+    for (const searchOnlyTable of [
       "wallets",
       "investments",
       "forex_accounts",
       "forex_cash_transactions",
     ]) {
-      expect(callSource).not.toContain(`"${irrelevantTable}"`);
+      expect(notificationCall).not.toContain(`"${searchOnlyTable}"`);
     }
-    expect(callSource).toContain("requestHeaderRefresh");
+    expect(notificationCall).toContain("requestHeaderRefresh");
+
+    const searchStart = source.indexOf("useRealtimeTable(", notificationEnd);
+    expect(searchStart).toBeGreaterThan(notificationEnd);
+    const searchEnd = source.indexOf(");", searchStart);
+    const searchCall = source.slice(searchStart, searchEnd);
+    expect(searchCall).toContain('"investments"');
+    expect(searchCall).toContain('"forex_accounts"');
+    expect(searchCall).not.toContain('"forex_cash_transactions"');
+    expect(searchCall).toContain("requestHeaderRefresh");
   });
 
   it("no new polling/interval timer is introduced (setInterval never appears)", () => {

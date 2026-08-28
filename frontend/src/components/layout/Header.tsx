@@ -44,6 +44,7 @@ import {
   type NotificationFirstSeenMap,
 } from "@/src/lib/notifications/notificationOrdering";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
+import { buildInvestmentsHref } from "@/src/lib/navigation/financeNavigation";
 
 import {
   getBudgets,
@@ -51,6 +52,7 @@ import {
   getDebts,
   getGoals,
   getInvestments,
+  getForexAccounts,
   getSavings,
   getTransactions,
   getWallets,
@@ -60,6 +62,7 @@ import type {
   Budget,
   Category,
   Debt,
+  ForexAccount,
   Goal,
   Investment,
   SavingAccount,
@@ -88,7 +91,10 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
     title: "Tiết kiệm",
     desc: "Sổ tiết kiệm, quỹ khẩn cấp & tiền gửi",
   },
-  "/investments": { title: "Đầu Tư", desc: "Danh mục & hiệu suất đầu tư" },
+  "/investments": {
+    title: "Đầu Tư",
+    desc: "Portfolio, Forex & hiệu suất đầu tư",
+  },
   "/debts": {
     title: "Nợ & Khoản Vay",
     desc: "Theo dõi và lập kế hoạch trả nợ",
@@ -128,6 +134,7 @@ type AppData = {
   budgets: Budget[];
   debts: Debt[];
   investments: Investment[];
+  forexAccounts: ForexAccount[];
   savings: SavingAccount[];
 };
 
@@ -139,6 +146,7 @@ const EMPTY: AppData = {
   budgets: [],
   debts: [],
   investments: [],
+  forexAccounts: [],
   savings: [],
 };
 
@@ -224,8 +232,26 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
       out.push({
         id: "in-" + i.id,
         label: i.name,
-        sub: i.symbol ? i.symbol + " · Đầu tư" : "Đầu tư",
-        href: "/investments",
+        sub: i.symbol ? i.symbol + " · Portfolio" : "Portfolio",
+        href: buildInvestmentsHref({ investmentId: i.id }),
+        kind: "investment",
+      }),
+    );
+
+  data.forexAccounts
+    .filter(
+      (account) =>
+        account.name.toLowerCase().includes(q) ||
+        account.broker.toLowerCase().includes(q) ||
+        (account.accountNumber ?? "").toLowerCase().includes(q),
+    )
+    .slice(0, 1)
+    .forEach((account) =>
+      out.push({
+        id: "fx-" + account.id,
+        label: account.name,
+        sub: `${account.broker} · Forex`,
+        href: buildInvestmentsHref({ forexAccountId: account.id }),
         kind: "investment",
       }),
     );
@@ -504,6 +530,7 @@ export default function Header({
         budgets,
         debts,
         investments,
+        forexAccounts,
         savings,
       ] = await Promise.all([
         getTransactions(),
@@ -513,6 +540,7 @@ export default function Header({
         getBudgets(),
         getDebts(),
         getInvestments(),
+        getForexAccounts(),
         getSavings(),
       ]);
       const data: AppData = {
@@ -523,6 +551,7 @@ export default function Header({
         budgets,
         debts,
         investments,
+        forexAccounts,
         savings,
       };
       setAppData(data);
@@ -609,15 +638,15 @@ export default function Header({
     };
   }, []);
 
-  // Only the tables that can actually change notification output are
-  // registered — wallets/investments/forex data feed the global search
-  // index only and never a notification rule (see
-  // financeNotifications.ts's own dependency audit), so a wallet rename or
-  // investment edit correctly does not trigger a Header reload. Reuses the
-  // existing app-level RealtimeProvider channel — no new Supabase
-  // subscription is created here.
+  // Notification dependencies and search-only investment dependencies both
+  // reuse the app-level RealtimeProvider channel. Investment/Forex edits must
+  // refresh the global search index even though they do not create alerts.
   useRealtimeTable(
     ["transactions", "budgets", "categories", "goals", "debts", "savings"],
+    requestHeaderRefresh,
+  );
+  useRealtimeTable(
+    ["investments", "forex_accounts"],
     requestHeaderRefresh,
   );
 
@@ -645,7 +674,7 @@ export default function Header({
 
   // Load all data once on mount — feeds the global search index and the
   // notification bell only, neither of which is above-the-fold critical
-  // content. Deferred to an idle moment so these 8 parallel full-table
+  // content. Deferred to an idle moment so these 9 parallel full-table
   // reads don't compete with the current route's own critical data fetch
   // (e.g. Dashboard's Promise.all) for network/CPU right at startup.
   useEffect(() => {

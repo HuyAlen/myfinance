@@ -35,36 +35,40 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain("Giờ giao dịch không hợp lệ.");
   });
 
-  it("bounds all three initial read domains with a timeout", () => {
-    expect(source).toContain("const FOREX_LOAD_TIMEOUT_MS = 10_000;");
-    expect(source).toContain('withForexLoadTimeout("Danh sách ví", getWallets())');
-    expect(source).toContain('withForexLoadTimeout(\n      "Tài khoản Forex"');
-    expect(source).toContain('withForexLoadTimeout(\n      "Lịch sử nạp/rút Forex"');
+  it("bounds Portfolio, wallets, Forex accounts and Forex cash-ledger reads with a timeout", () => {
+    expect(source).toContain("const INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS = 10_000;");
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Danh mục Portfolio",\n      getInvestments(),');
+    expect(source).toContain('withInvestmentDomainLoadTimeout("Danh sách ví", getWallets())');
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Tài khoản Forex"');
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Lịch sử nạp/rút Forex"');
   });
 
-  it("starts wallet, account and cash-ledger reads before awaiting the combined result", () => {
+  it("starts Portfolio, wallet, account and cash-ledger reads before awaiting the combined result", () => {
+    const investmentIndex = source.indexOf("const investmentsRequest =");
     const walletIndex = source.indexOf("const walletsRequest =");
     const accountIndex = source.indexOf("const accountsRequest =");
     const transactionIndex = source.indexOf("const transactionsRequest =");
     const awaitIndex = source.indexOf("await Promise.all([", transactionIndex);
-    expect(walletIndex).toBeGreaterThan(-1);
+    expect(investmentIndex).toBeGreaterThan(-1);
+    expect(walletIndex).toBeGreaterThan(investmentIndex);
     expect(accountIndex).toBeGreaterThan(walletIndex);
     expect(transactionIndex).toBeGreaterThan(accountIndex);
     expect(awaitIndex).toBeGreaterThan(transactionIndex);
   });
 
   it("retries the initial load once after a bounded failure", () => {
-    expect(source).toContain("const FOREX_INITIAL_RETRY_DELAY_MS = 750;");
+    expect(source).toContain("const INVESTMENT_DOMAIN_INITIAL_RETRY_DELAY_MS = 750;");
     expect(source).toContain("void reload(2);");
-    expect(source).toContain("await sleep(FOREX_INITIAL_RETRY_DELAY_MS);");
+    expect(source).toContain("await sleep(INVESTMENT_DOMAIN_INITIAL_RETRY_DELAY_MS);");
   });
 
   it("keeps last-known-good finance arrays when a refresh fails", () => {
     const reloadStart = source.indexOf("const reload = useCallback(");
     const reloadEnd = source.indexOf("useEffect(() => {", reloadStart);
     const reloadRegion = source.slice(reloadStart, reloadEnd);
-    expect(reloadRegion).toContain("applyForexPageData(data)");
+    expect(reloadRegion).toContain("applyInvestmentPageData(data)");
     expect(reloadRegion).toContain("setLoadError(");
+    expect(reloadRegion).not.toContain("setInvestments([])");
     expect(reloadRegion).not.toContain("setAccounts([])");
     expect(reloadRegion).not.toContain("setTransactions([])");
     expect(reloadRegion).not.toContain("setWallets([])");
@@ -100,10 +104,16 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(region).not.toContain('"delete_forex_cash_transaction"');
   });
 
-  it("excludes archived accounts from current portfolio exposure while retaining inactive accounts", () => {
+  it("excludes archived accounts from current Forex performance metrics while retaining inactive accounts", () => {
     expect(source).toContain('const currentPortfolioAccounts = accountMetrics.filter(');
     expect(source).toContain('account.status !== "archived"');
     expect(source).toContain("const totalDeposited = currentPortfolioAccounts.reduce(");
     expect(source).toContain("const knownEquityAccounts = currentPortfolioAccounts.filter(");
+  });
+
+  it("subscribes Portfolio and Forex tables under the same owner page", () => {
+    expect(source).toContain('table: "investments"');
+    expect(source).toContain('table: "forex_accounts"');
+    expect(source).toContain('table: "forex_cash_transactions"');
   });
 });

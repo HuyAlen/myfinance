@@ -4,6 +4,7 @@ import {
   buildDebtsHref,
   buildGoalsHref,
   buildSavingsHref,
+  buildInvestmentsHref,
   buildTransactionsHref,
   buildWalletsHref,
   hasTransactionsContext,
@@ -240,6 +241,15 @@ describe("Entity-focus href builders", () => {
     expect(buildSavingsHref({ savingId: "s1" })).toBe("/savings?savingId=s1");
   });
 
+  it("builds Investment and Forex focus URLs under the same owner page", () => {
+    expect(buildInvestmentsHref({ investmentId: "i1" })).toBe(
+      "/investments?investmentId=i1",
+    );
+    expect(buildInvestmentsHref({ forexAccountId: "fx1" })).toBe(
+      "/investments?forexAccountId=fx1",
+    );
+  });
+
   it("builds a Goal focus URL", () => {
     expect(buildGoalsHref({ goalId: "g1" })).toBe("/goals?goalId=g1");
   });
@@ -252,6 +262,7 @@ describe("Entity-focus href builders", () => {
     expect(buildBudgetsHref()).toBe("/budgets");
     expect(buildWalletsHref()).toBe("/wallets");
     expect(buildSavingsHref()).toBe("/savings");
+    expect(buildInvestmentsHref()).toBe("/investments");
     expect(buildGoalsHref()).toBe("/goals");
     expect(buildDebtsHref()).toBe("/debts");
   });

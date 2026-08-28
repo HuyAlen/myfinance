@@ -179,6 +179,15 @@ export function buildSavingsHref(context: { savingId?: string } = {}) {
   return buildHref("/savings", { savingId: context.savingId });
 }
 
+export function buildInvestmentsHref(
+  context: { investmentId?: string; forexAccountId?: string } = {},
+) {
+  return buildHref("/investments", {
+    investmentId: context.investmentId,
+    forexAccountId: context.forexAccountId,
+  });
+}
+
 export function buildGoalsHref(context: { goalId?: string } = {}) {
   return buildHref("/goals", { goalId: context.goalId });
 }
