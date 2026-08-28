@@ -517,16 +517,26 @@ export default function Header({
 
   // Derived
   const pageMeta = PAGE_META[pathname] ?? { title: "MyFinance", desc: "" };
-  const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
   const displayEmail = user?.email ?? "";
-  const displayName = displayEmail
+  const metadataName =
+    typeof user?.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name.trim()
+      : typeof user?.user_metadata?.name === "string"
+        ? user.user_metadata.name.trim()
+        : "";
+  const fallbackName = displayEmail
     ? displayEmail.split("@")[0].replace(/[._-]+/g, " ")
-    : "Tài khoản";
-  const compactName = displayName
-    .split(" ")
+    : "";
+  const fallbackCompactName = fallbackName
+    .split(/\s+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+  const compactName = metadataName || fallbackCompactName || "Tài khoản";
+  const avatarLetter =
+    compactName.charAt(0).toUpperCase() ||
+    displayEmail.charAt(0).toUpperCase() ||
+    "U";
   const unreadCount = notifList.filter((n) => !n.read).length;
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;

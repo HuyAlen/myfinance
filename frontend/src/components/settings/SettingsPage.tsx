@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import { supabase } from "@/src/lib/supabase";
 import HouseholdSettingsCard from "@/src/components/settings/HouseholdSettingsCard";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
@@ -269,7 +270,17 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
 
   const connected = status === "SUBSCRIBED";
-  const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
+  const authProfileName =
+    typeof user?.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name.trim()
+      : typeof user?.user_metadata?.name === "string"
+        ? user.user_metadata.name.trim()
+        : "";
+  const effectiveProfileName = profileName.trim() || authProfileName;
+  const avatarLetter =
+    effectiveProfileName.charAt(0).toUpperCase() ||
+    user?.email?.[0]?.toUpperCase() ||
+    "U";
   const displayEmail = user?.email ?? "";
   const aiConnectionReady =
     aiProvider === "local" || aiHasStoredApiKey || Boolean(aiApiKey.trim());
@@ -419,7 +430,7 @@ export default function SettingsPage() {
       if (!raw) return;
       const saved = JSON.parse(raw) as Partial<LocalSettingsSnapshot>;
       if (saved.version !== SETTINGS_LOCAL_VERSION) return;
-      if (typeof saved.profileName === "string") setProfileName(saved.profileName);
+      if (!authProfileName && typeof saved.profileName === "string") setProfileName(saved.profileName);
       if (typeof saved.profilePhone === "string") setProfilePhone(saved.profilePhone);
       if (typeof saved.timezone === "string") setTimezone(saved.timezone);
       if (typeof saved.lang === "string") setLang(saved.lang);
@@ -449,8 +460,12 @@ export default function SettingsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [localSettingsKey, user?.id]);
+  }, [authProfileName, localSettingsKey, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id || !authProfileName) return;
+    setProfileName(authProfileName);
+  }, [authProfileName, user?.id]);
   const applyAISettings = useCallback((settings: PublicAIFinanceSettings) => {
     setAiProvider(settings.provider);
     setAiModel(settings.model);
@@ -729,7 +744,7 @@ export default function SettingsPage() {
   }
 
   // ── Save prefs feedback ────────────────────────────────────────────────────
-  function handleSavePrefs() {
+  async function handleSavePrefs() {
     const numericRules = [
       ["Mục tiêu tiết kiệm", savingsGoal, 0, 100],
       ["Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100],
@@ -743,19 +758,44 @@ export default function SettingsPage() {
         return;
       }
     }
+
+    const trimmedProfileName = profileName.trim();
+    if (trimmedProfileName.length > 80) {
+      toast({ variant: "error", message: "Họ và tên không được vượt quá 80 ký tự." });
+      return;
+    }
+
     try {
-      window.localStorage.setItem(
-        localSettingsKey,
-        JSON.stringify(buildLocalSettingsSnapshot()),
-      );
+      if (user?.id && user.id !== "local-ui-user") {
+        const { error: profileError } = await supabase.auth.updateUser({
+          data: {
+            full_name: trimmedProfileName,
+            name: trimmedProfileName,
+          },
+        });
+        if (profileError) throw profileError;
+      }
+
+      const localSnapshot = {
+        ...buildLocalSettingsSnapshot(),
+        profileName: trimmedProfileName,
+      };
+      window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
+      setProfileName(trimmedProfileName);
       setSaveSuccess(true);
       window.setTimeout(() => setSaveSuccess(false), 2200);
-      toast({ variant: "success", message: "Đã lưu tùy chỉnh trên trình duyệt này." });
-    } catch {
-      toast({ variant: "error", message: "Không thể lưu tùy chỉnh trên trình duyệt này." });
+      toast({ variant: "success", message: "Đã lưu hồ sơ và tùy chỉnh." });
+    } catch (error) {
+      console.error("[SettingsPage] profile/preferences save failed:", error);
+      toast({
+        variant: "error",
+        message:
+          error instanceof Error
+            ? `Không thể lưu hồ sơ: ${error.message}`
+            : "Không thể lưu hồ sơ. Vui lòng thử lại.",
+      });
     }
   }
-
   function getAISettingsPayload() {
     return {
       provider:
@@ -1156,7 +1196,7 @@ export default function SettingsPage() {
                   {saveSuccess ? "Đã lưu!" : "Lưu thay đổi"}
                 </button>
                 <p className="text-xs text-slate-400">
-                  Lưu riêng cho tài khoản này trên trình duyệt
+                  Họ tên được đồng bộ với tài khoản; các tùy chỉnh khác lưu trên trình duyệt
                 </p>
               </div>
             </div>
