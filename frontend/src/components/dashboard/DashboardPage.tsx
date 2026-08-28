@@ -1590,42 +1590,52 @@ export default function DashboardPage() {
     }
   }, [invalidatePeriodReadinessForNewContext]);
 
-  // Guards against overlapping Dashboard reloads: if a caller asks for a
-  // refresh while one is already running (e.g. a realtime event arriving
-  // mid-fetch), it marks `pending` instead of starting a second concurrent
-  // Promise.all group, then runs exactly one trailing reload once the
-  // in-flight one finishes — so the final state always reflects the latest
-  // writes without ever running two overlapping query sets.
-  const isReloadingRef = useRef(false);
+  // Guards against overlapping Dashboard reloads. Realtime writes that land
+  // during an active cycle still request exactly one trailing reload, but an
+  // overlapping initial caller (React StrictMode replays mount effects in
+  // development) must await the SAME in-flight result instead of treating
+  // "still loading" as "failed" and showing a false recovery retry.
+  const inFlightReloadPromiseRef = useRef<Promise<boolean> | null>(null);
   const hasPendingReloadRef = useRef(false);
   // PERF-4: which trigger caused the currently-pending trailing reload, if
-  // any — purely for observability labeling; the do-while overlap guard
-  // itself is unchanged from PERF-2.
+  // any — purely for observability labeling. Initial callers deliberately do
+  // not enqueue a trailing cycle when they join the active mount load.
   const pendingReloadTriggerRef = useRef<DashboardOperationTrigger>("realtime");
   const runReload = useCallback(
-    async (trigger: DashboardOperationTrigger): Promise<boolean> => {
-      if (isReloadingRef.current) {
-        hasPendingReloadRef.current = true;
-        pendingReloadTriggerRef.current = trigger;
-        return hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
+    (trigger: DashboardOperationTrigger): Promise<boolean> => {
+      const inFlight = inFlightReloadPromiseRef.current;
+      if (inFlight) {
+        if (trigger !== "initial") {
+          hasPendingReloadRef.current = true;
+          pendingReloadTriggerRef.current = trigger;
+        }
+        return inFlight;
       }
-      isReloadingRef.current = true;
-      let ready = hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
-      try {
-        let currentTrigger = trigger;
-        do {
-          hasPendingReloadRef.current = false;
-          ready = await reloadData(currentTrigger);
-          currentTrigger = pendingReloadTriggerRef.current;
-        } while (hasPendingReloadRef.current);
-        return ready;
-      } finally {
-        isReloadingRef.current = false;
-      }
+
+      const reloadPromise = (async () => {
+        let ready = hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
+        try {
+          let currentTrigger = trigger;
+          do {
+            hasPendingReloadRef.current = false;
+            ready = await reloadData(currentTrigger);
+            currentTrigger = pendingReloadTriggerRef.current;
+          } while (hasPendingReloadRef.current);
+          return ready;
+        } finally {
+          // No newer reload can take this slot before the current Promise settles:
+          // every overlapping caller observes the non-null ref and joins it. Clearing
+          // unconditionally avoids a self-reference that TypeScript flags as used
+          // before assignment while preserving the same single-flight semantics.
+          inFlightReloadPromiseRef.current = null;
+        }
+      })();
+
+      inFlightReloadPromiseRef.current = reloadPromise;
+      return reloadPromise;
     },
     [reloadData],
   );
-
   // Realtime-only entry point: coalesces bursts of postgres_changes events
   // that land within a short window (one multi-table write can fire several
   // independent table events — see REALTIME_REFRESH_DEBOUNCE_MS above) into
