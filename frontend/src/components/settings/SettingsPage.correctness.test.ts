@@ -104,21 +104,20 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
     expect(testRegion).toContain("Hãy lưu cấu hình trước khi kiểm tra kết nối");
   });
 
-  it("guards destructive reset and clear against duplicate execution", () => {
+  it("serializes reset, clear and backup restore behind one recovery mutation guard", () => {
     const reset = regionBetween("async function handleResetDemo()", "async function handleClearAll()");
     const clear = regionBetween("async function handleClearAll()", "async function handleExportJson()");
-    for (const region of [reset, clear]) {
-      expect(region).toContain("if (destructiveInFlightRef.current) return");
-      expect(region).toContain("destructiveInFlightRef.current = true");
-      expect(region).toContain("destructiveInFlightRef.current = false");
-    }
-  });
-
-  it("guards backup restore against duplicate confirmation execution", () => {
     const restore = regionBetween("function requestBackupRestore(", "function handleImportJson(");
-    expect(restore).toContain("if (restoreInFlightRef.current) return");
-    expect(restore).toContain("restoreInFlightRef.current = true");
-    expect(restore).toContain("restoreInFlightRef.current = false");
+
+    expect(source).toContain("const recoveryInFlightRef = useRef(false)");
+    expect(source).not.toContain("destructiveInFlightRef");
+    expect(source).not.toContain("restoreInFlightRef");
+
+    for (const region of [reset, clear, restore]) {
+      expect(region).toContain("if (recoveryInFlightRef.current)");
+      expect(region).toContain("recoveryInFlightRef.current = true");
+      expect(region).toContain("recoveryInFlightRef.current = false");
+    }
   });
 
   it("does not describe cloud deletion as device-only deletion", () => {

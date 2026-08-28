@@ -18,6 +18,36 @@ const {
   resetFinanceDemoData,
 } = await import("./financeStorage");
 
+function makeRestoreReceipt(backup: { data: Record<string, unknown[]> }) {
+  const counts = Object.fromEntries(
+    FINANCE_BACKUP_DOMAINS.map((domain: string) => [
+      domain,
+      backup.data[domain].length,
+    ]),
+  ) as Record<string, number>;
+
+  if (
+    counts.net_worth_snapshots === 0 &&
+    [
+      "wallets",
+      "savings",
+      "investments",
+      "debts",
+      "forex_accounts",
+      "forex_cash_transactions",
+    ].some((domain) => counts[domain] > 0)
+  ) {
+    counts.net_worth_snapshots = 1;
+  }
+
+  return {
+    restored: true,
+    verified: true,
+    source_version: 3,
+    counts,
+  };
+}
+
 beforeEach(() => {
   mockGetSession.mockReset();
   mockRpc.mockReset();
@@ -26,7 +56,12 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue({
     data: { session: { user: { id: "user-1" } } },
   });
-  mockRpc.mockResolvedValue({ data: { restored: true }, error: null });
+  mockRpc.mockImplementation(async (name: string, args?: { p_backup?: { data: Record<string, unknown[]> } }) => {
+    if (name === "restore_finance_backup" && args?.p_backup) {
+      return { data: makeRestoreReceipt(args.p_backup), error: null };
+    }
+    return { data: null, error: null };
+  });
 });
 
 describe("NETWORTH-HISTORY-1 clear/reset integrity", () => {

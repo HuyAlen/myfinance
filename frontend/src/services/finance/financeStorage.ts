@@ -219,6 +219,82 @@ export function validateFinanceBackup(
   };
 }
 
+type FinanceRestoreCounts = Record<FinanceBackupDomain, number>;
+
+const NET_WORTH_SOURCE_DOMAINS = [
+  "wallets",
+  "savings",
+  "investments",
+  "debts",
+  "forex_accounts",
+  "forex_cash_transactions",
+] as const satisfies readonly FinanceBackupDomain[];
+
+function financeBackupCounts(backup: FinanceBackupV3): FinanceRestoreCounts {
+  return Object.fromEntries(
+    FINANCE_BACKUP_DOMAINS.map((domain) => [domain, backup.data[domain].length]),
+  ) as FinanceRestoreCounts;
+}
+
+function expectedVerifiedRestoreCounts(
+  backup: FinanceBackupV3,
+): FinanceRestoreCounts {
+  const counts = financeBackupCounts(backup);
+  if (
+    counts.net_worth_snapshots === 0 &&
+    NET_WORTH_SOURCE_DOMAINS.some((domain) => counts[domain] > 0)
+  ) {
+    counts.net_worth_snapshots = 1;
+  }
+  return counts;
+}
+
+function validateFinanceRestoreReceipt(
+  input: unknown,
+  backup: FinanceBackupV3,
+): string | null {
+  const invalidReceipt =
+    "Máy chủ không xác nhận khôi phục đầy đủ. Hãy tải lại trang và kiểm tra dữ liệu trước khi thao tác tiếp.";
+
+  if (!isRecord(input) || input.restored !== true || !isRecord(input.counts)) {
+    return invalidReceipt;
+  }
+
+  if (
+    input.source_version !== undefined &&
+    input.source_version !== FINANCE_BACKUP_VERSION
+  ) {
+    return invalidReceipt;
+  }
+
+  if (input.verified !== undefined && input.verified !== true) {
+    return invalidReceipt;
+  }
+
+  // SETTINGS-RECOVERY-INTEGRITY-1 keeps rollout backward compatible. The
+  // existing V3 RPC reports source payload counts. The hardened RPC sets
+  // verified=true and reports post-write counts, including the one truthful
+  // Net Worth baseline created when a non-empty snapshot has no history.
+  const expected =
+    input.verified === true
+      ? expectedVerifiedRestoreCounts(backup)
+      : financeBackupCounts(backup);
+
+  for (const domain of FINANCE_BACKUP_DOMAINS) {
+    const count = input.counts[domain];
+    if (
+      typeof count !== "number" ||
+      !Number.isSafeInteger(count) ||
+      count < 0 ||
+      count !== expected[domain]
+    ) {
+      return invalidReceipt;
+    }
+  }
+
+  return null;
+}
+
 function mapFinanceBackupError(error: { code?: string; message: string }) {
   switch (error.code) {
     case "MFB01":
@@ -229,6 +305,8 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
       return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (V2 vẫn có thể được nâng cấp khi restore).`;
     case "MFB04":
       return "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.";
+    case "MFB05":
+      return "Máy chủ không thể xác minh trạng thái sau khôi phục nên toàn bộ thay đổi đã được rollback.";
     default:
       return error.message;
   }
@@ -278,13 +356,22 @@ export async function restoreFinanceBackup(
   // V2 is normalized client-side to a V3 envelope with an empty snapshot
   // collection. The server then restores state and captures exactly one
   // current-month baseline rather than fabricating historical months.
-  const { error } = await supabase.rpc("restore_finance_backup", {
+  const { data, error } = await supabase.rpc("restore_finance_backup", {
     p_backup: validation.backup,
   });
 
   if (error) {
     console.error("[financeStorage] restoreFinanceBackup:", error.message);
     return { error: mapFinanceBackupError(error) };
+  }
+
+  const receiptError = validateFinanceRestoreReceipt(data, validation.backup);
+  if (receiptError) {
+    console.error(
+      "[financeStorage] restoreFinanceBackup returned an invalid receipt:",
+      data,
+    );
+    return { error: receiptError };
   }
 
   return { error: null };

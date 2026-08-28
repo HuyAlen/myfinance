@@ -75,8 +75,7 @@ describe("SettingsPage iPhone navigation and control ergonomics (SETTINGS-MOBILE
   it("preserves SETTINGS-CORRECTNESS-1 safety and readiness contracts", () => {
     expect(source).toContain("SETTINGS_STATS_TIMEOUT_MS = 10_000");
     expect(source).toContain("SETTINGS_INITIAL_RETRY_MS = 750");
-    expect(source).toContain("destructiveInFlightRef");
-    expect(source).toContain("restoreInFlightRef");
+    expect(source).toContain("recoveryInFlightRef");
     expect(source).toContain("window.localStorage.setItem");
     expect(source).toContain("testAIFinanceConnection(accessToken)");
   });

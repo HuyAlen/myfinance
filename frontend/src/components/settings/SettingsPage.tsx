@@ -186,8 +186,7 @@ export default function SettingsPage() {
   const statsLoadedRef = useRef(false);
   const statsReloadingRef = useRef(false);
   const statsPendingReloadRef = useRef(false);
-  const destructiveInFlightRef = useRef(false);
-  const restoreInFlightRef = useRef(false);
+  const recoveryInFlightRef = useRef(false);
 
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
@@ -548,8 +547,14 @@ export default function SettingsPage() {
       confirmText: "Reset",
       variant: "warning",
       onConfirm: async () => {
-        if (destructiveInFlightRef.current) return;
-        destructiveInFlightRef.current = true;
+        if (recoveryInFlightRef.current) {
+          toast({
+            variant: "warning",
+            message: "Một thao tác khôi phục dữ liệu khác đang chạy. Vui lòng hoàn tất thao tác hiện tại trước.",
+          });
+          return;
+        }
+        recoveryInFlightRef.current = true;
         try {
         const { error } = await resetFinanceDemoData();
         if (error) {
@@ -565,7 +570,7 @@ export default function SettingsPage() {
           message: "Đã reset dữ liệu demo thành công.",
         });
         } finally {
-          destructiveInFlightRef.current = false;
+          recoveryInFlightRef.current = false;
         }
       },
     });
@@ -579,8 +584,14 @@ export default function SettingsPage() {
       confirmText: "Xóa tất cả",
       variant: "danger",
       onConfirm: async () => {
-        if (destructiveInFlightRef.current) return;
-        destructiveInFlightRef.current = true;
+        if (recoveryInFlightRef.current) {
+          toast({
+            variant: "warning",
+            message: "Một thao tác khôi phục dữ liệu khác đang chạy. Vui lòng hoàn tất thao tác hiện tại trước.",
+          });
+          return;
+        }
+        recoveryInFlightRef.current = true;
         try {
         const { error } = await clearAllUserData();
         if (error) {
@@ -590,7 +601,7 @@ export default function SettingsPage() {
         await runStatsReload();
         toast({ variant: "success", message: "Đã xóa toàn bộ dữ liệu." });
         } finally {
-          destructiveInFlightRef.current = false;
+          recoveryInFlightRef.current = false;
         }
       },
     });
@@ -632,13 +643,20 @@ export default function SettingsPage() {
       description:
         `File ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
         "(Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, " +
-        "Tiết kiệm, Forex và lịch sử Net Worth). Nếu bất kỳ bước nào thất bại, " +
-        "dữ liệu hiện tại sẽ được giữ nguyên.",
+        "Tiết kiệm, Forex và lịch sử Net Worth). Restore chạy trong một " +
+        "transaction server-authoritative; lỗi trước khi commit sẽ rollback " +
+        "toàn bộ, không để trạng thái half-restored.",
       confirmText: "Khôi phục",
       variant: "warning",
       onConfirm: async () => {
-        if (restoreInFlightRef.current) return;
-        restoreInFlightRef.current = true;
+        if (recoveryInFlightRef.current) {
+          toast({
+            variant: "warning",
+            message: "Một thao tác khôi phục dữ liệu khác đang chạy. Vui lòng hoàn tất thao tác hiện tại trước.",
+          });
+          return;
+        }
+        recoveryInFlightRef.current = true;
         try {
         const { error: restoreError } = await restoreFinanceBackup(backup);
         if (restoreError) {
@@ -655,7 +673,7 @@ export default function SettingsPage() {
           message: "Đã khôi phục backup thành công.",
         });
         } finally {
-          restoreInFlightRef.current = false;
+          recoveryInFlightRef.current = false;
         }
       },
     });

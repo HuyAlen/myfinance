@@ -33,6 +33,8 @@ describe("SettingsPage FINANCE-DATA-2 backup flow", () => {
     expect(region).toContain("setPendingAction({");
     expect(region).toContain("onConfirm: async () => {");
     expect(region).toContain("restoreFinanceBackup(backup)");
-    expect(region).toContain("Nếu bất kỳ bước nào thất bại");
+    expect(region).toContain("transaction server-authoritative");
+    expect(region).toContain("rollback");
+    expect(region).toContain("half-restored");
   });
 });

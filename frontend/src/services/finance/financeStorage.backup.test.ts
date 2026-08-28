@@ -40,6 +40,19 @@ function makeV2Backup() {
   };
 }
 
+function makeRestoreReceipt(backup: { data: Record<string, unknown[]> }) {
+  return {
+    restored: true,
+    source_version: 3,
+    counts: Object.fromEntries(
+      FINANCE_BACKUP_DOMAINS.map((domain: string) => [
+        domain,
+        backup.data[domain].length,
+      ]),
+    ),
+  };
+}
+
 beforeEach(() => {
   mockRpc.mockReset();
 });
@@ -121,7 +134,12 @@ describe("NETWORTH-HISTORY-1 backup RPC boundary", () => {
 
   it("restores V2 through one atomic RPC after safe V3 normalization", async () => {
     const backup = makeV2Backup();
-    mockRpc.mockResolvedValue({ data: { restored: true }, error: null });
+    const normalized = validateFinanceBackup(backup);
+    if (!normalized.ok) throw new Error(normalized.error);
+    mockRpc.mockResolvedValue({
+      data: makeRestoreReceipt(normalized.backup),
+      error: null,
+    });
 
     await expect(restoreFinanceBackup(backup)).resolves.toEqual({ error: null });
     expect(mockRpc).toHaveBeenCalledTimes(1);
