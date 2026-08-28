@@ -14,6 +14,7 @@ import { computeFinancialForecast } from "./forecastEngine";
 import { computeRiskScore } from "./riskAnalytics";
 import { computeHealthScoreV2 } from "./healthScore";
 import { predictGoalAchievement } from "./goalAnalytics";
+import { runAdvisor } from "./aiAdvisorEngine";
 
 /**
  * INTEGRATION-1.4 regression coverage: FIRE / Forecast / Risk / Health must
@@ -229,5 +230,57 @@ describe("Goal Analytics effective progress adoption", () => {
     // -> 50% progress, not the naive 20% from goal.currentAmount alone.
     expect(prediction.progressPercent).toBe(50);
     expect(prediction.currentAmount).toBe(50_000);
+  });
+});
+
+describe("AI advisor full balance-sheet adoption", () => {
+  it("uses the same Savings + Forex snapshot for overview, FIRE, Forecast, Health and Risk", () => {
+    const forexAccounts = [
+      {
+        id: "fx-1",
+        name: "FX",
+        broker: "Broker",
+        currency: "USD",
+        status: "active" as const,
+        currentEquity: FOREX_ASSET_VALUE,
+      },
+    ];
+
+    const advisor = runAdvisor({
+      wallets: WALLETS,
+      categories: CATEGORIES,
+      transactions: TRANSACTIONS,
+      debts: DEBTS,
+      goals: [],
+      investments: INVESTMENTS,
+      budgets: [],
+      savings: SAVINGS,
+      forexAccounts,
+      forexCashTransactions: [],
+    });
+
+    const expected = calculateNetWorth({
+      wallets: WALLETS,
+      savings: SAVINGS,
+      investments: INVESTMENTS,
+      debts: DEBTS,
+      forexAssetValue: FOREX_ASSET_VALUE,
+    });
+
+    expect(advisor.totalAssets).toBe(expected.totalAssets);
+    expect(advisor.totalDebt).toBe(expected.totalDebt);
+    expect(advisor.fire.netWorth).toBe(expected.netWorth);
+    expect(advisor.financialForecast.currentNetWorth).toBe(expected.netWorth);
+
+    const expectedDebtRatio = Math.round(
+      (expected.totalDebt / expected.totalAssets) * 100,
+    );
+    expect(advisor.riskScore.dimensions[0].factors[0]).toContain(
+      `${expectedDebtRatio}%`,
+    );
+    expect(
+      advisor.healthV2.factors.find((factor) => factor.label === "Tỷ lệ nợ")
+        ?.note,
+    ).toContain(`${expectedDebtRatio}%`);
   });
 });

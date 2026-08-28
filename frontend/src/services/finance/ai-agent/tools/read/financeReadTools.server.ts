@@ -4,6 +4,8 @@ import type {
   Category,
   CategoryPlanningGroup,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   SavingAccount,
@@ -11,9 +13,10 @@ import type {
   Wallet,
 } from "@/src/types/finance";
 import {
+  calculateBalanceSheetSnapshot,
   calculateBudgetSpendingCollection,
   calculateGoalFundingSnapshot,
-  calculateNetWorth,
+  getDebtRatio,
   getDebtScore,
   getEmergencyMonths,
   getSavingRate,
@@ -113,6 +116,27 @@ type SavingRow = {
   interest_rate?: number | null;
   maturity_date?: string | null;
   notes?: string | null;
+};
+
+type ForexAccountRow = {
+  id: string;
+  name: string;
+  broker: string;
+  currency: string;
+  status: ForexAccount["status"];
+  current_equity?: number | null;
+};
+
+type ForexCashTransactionRow = {
+  id: string;
+  forex_account_id: string;
+  wallet_id?: string | null;
+  type: ForexCashTransaction["type"];
+  amount: number;
+  currency: string;
+  fee?: number | null;
+  transaction_date: string;
+  transaction_time: string;
 };
 
 type DebtRow = {
@@ -272,6 +296,33 @@ export function toDomainSaving(row: SavingRow): SavingAccount {
     interestRate: row.interest_rate ?? undefined,
     maturityDate: row.maturity_date ?? undefined,
     notes: row.notes ?? undefined,
+  };
+}
+
+export function toDomainForexAccount(row: ForexAccountRow): ForexAccount {
+  return {
+    id: row.id,
+    name: row.name,
+    broker: row.broker,
+    currency: row.currency,
+    status: row.status,
+    currentEquity: row.current_equity,
+  };
+}
+
+export function toDomainForexCashTransaction(
+  row: ForexCashTransactionRow,
+): ForexCashTransaction {
+  return {
+    id: row.id,
+    forexAccountId: row.forex_account_id,
+    walletId: row.wallet_id ?? "",
+    type: row.type,
+    amount: Number(row.amount || 0),
+    currency: "VND",
+    fee: Number(row.fee || 0),
+    transactionDate: row.transaction_date,
+    transactionTime: row.transaction_time,
   };
 }
 
@@ -524,7 +575,9 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
     returns: [
       "walletAssets",
       "liquidAssets",
+      "savingsAssets",
       "investmentAssets",
+      "forexAssets",
       "totalAssets",
       "totalDebt",
       "netWorth",
@@ -562,33 +615,44 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
   validate: parseEmptyArgs,
   async execute(context) {
     try {
-      const [wallets, transactions, debts, investments, categoryRows] =
-        await Promise.all([
-          getRows<WalletRow>(context, "wallets"),
-          getRows<TransactionRow>(context, "transactions"),
-          getRows<DebtRow>(context, "debts"),
-          getRows<InvestmentRow>(context, "investments"),
-          getRows<CategoryRow>(context, "categories"),
-        ]);
+      const [
+        wallets,
+        transactions,
+        debts,
+        investments,
+        categoryRows,
+        savings,
+        forexAccounts,
+        forexCashTransactions,
+      ] = await Promise.all([
+        getRows<WalletRow>(context, "wallets"),
+        getRows<TransactionRow>(context, "transactions"),
+        getRows<DebtRow>(context, "debts"),
+        getRows<InvestmentRow>(context, "investments"),
+        getRows<CategoryRow>(context, "categories"),
+        getRows<SavingRow>(context, "savings"),
+        getRows<ForexAccountRow>(context, "forex_accounts"),
+        getRows<ForexCashTransactionRow>(context, "forex_cash_transactions"),
+      ]);
 
-      // Canonical net worth — see financeCalculations.ts. Savings and Forex
-      // are not part of this tool's row set yet, so they default to 0
-      // rather than being reconstructed here.
-      const netWorthBreakdown = calculateNetWorth({
+      const balanceSheet = calculateBalanceSheetSnapshot({
         wallets: wallets.map(toDomainWallet),
+        savings: savings.map(toDomainSaving),
         investments: investments.map(toDomainInvestment),
         debts: debts.map(toDomainDebt),
+        forexAccounts: forexAccounts.map(toDomainForexAccount),
+        forexCashTransactions: forexCashTransactions.map(
+          toDomainForexCashTransaction,
+        ),
       });
-      const walletAssets = netWorthBreakdown.cashAndWallets;
-      const investmentAssets = netWorthBreakdown.investments;
-      const totalDebt = netWorthBreakdown.totalDebt;
-      const totalAssets = netWorthBreakdown.totalAssets;
-      const netWorth = netWorthBreakdown.netWorth;
-      // Canonical spendable Wallet balance (cash + bank + ewallet) — NOT the
-      // same as `walletAssets` above, which also includes the legacy
-      // "investment" WalletType. Use this for any "how much liquidity/
-      // emergency-fund coverage" question, never `walletAssets`.
-      const liquidAssets = getSpendableWalletBalance(wallets.map(toDomainWallet));
+      const walletAssets = balanceSheet.cashAndWallets;
+      const savingsAssets = balanceSheet.savings;
+      const investmentAssets = balanceSheet.investments;
+      const forexAssets = balanceSheet.forex;
+      const totalDebt = balanceSheet.totalDebt;
+      const totalAssets = balanceSheet.totalAssets;
+      const netWorth = balanceSheet.netWorth;
+      const liquidAssets = balanceSheet.liquidAssets;
 
       const month = currentMonth();
       const categories = categoryRows.map(toDomainCategory);
@@ -607,7 +671,9 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
           month,
           walletAssets,
           liquidAssets,
+          savingsAssets,
           investmentAssets,
+          forexAssets,
           totalAssets,
           totalDebt,
           netWorth,
@@ -620,6 +686,8 @@ export const getFinancialSummaryTool: AIFinanceToolRegistration<
             transactions: transactions.length,
             debts: debts.length,
             investments: investments.length,
+            savings: savings.length,
+            forexAccounts: forexAccounts.length,
           },
         },
       };
@@ -1305,8 +1373,7 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
     // getFinancialHealthScore, which also weighs goal progress).
     const savingScore = getSavingScore(data.savingRate);
     const debtScore = getDebtScore(data.totalDebt, data.totalAssets);
-    const debtRatio =
-      data.totalAssets > 0 ? data.totalDebt / data.totalAssets : 0;
+    const debtRatioPercent = getDebtRatio(data.totalDebt, data.totalAssets);
 
     const monthlyExpense = Math.max(0, data.expense);
     // `liquidAssets` (cash + bank + ewallet), NOT `walletAssets` — a legacy
@@ -1340,7 +1407,7 @@ export const getFinancialHealthTool: AIFinanceToolRegistration<
                 : "High risk",
         indicators: {
           savingRate: data.savingRate,
-          debtRatioPercent: Math.round(debtRatio * 1000) / 10,
+          debtRatioPercent,
           emergencyMonths: Math.round(emergencyMonths * 10) / 10,
           cashFlow: data.cashFlow,
         },

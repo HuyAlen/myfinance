@@ -5,6 +5,8 @@ import type {
   Category,
   CategoryPlanningGroup,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   SavingAccount,
@@ -12,9 +14,9 @@ import type {
   Wallet,
 } from "@/src/types/finance";
 import {
+  calculateBalanceSheetSnapshot,
   calculateBudgetSpendingCollection,
   calculateGoalFundingSnapshot,
-  calculateNetWorth,
   getSavingRate,
   getTotalExpense,
   getTotalIncome,
@@ -130,6 +132,49 @@ export function toDomainSaving(
   };
 }
 
+export function toDomainForexAccount(
+  row: Pick<
+    Database["public"]["Tables"]["forex_accounts"]["Row"],
+    "id" | "name" | "broker" | "currency" | "status" | "current_equity"
+  >,
+): ForexAccount {
+  return {
+    id: row.id,
+    name: row.name,
+    broker: row.broker,
+    currency: row.currency,
+    status: row.status,
+    currentEquity: row.current_equity,
+  };
+}
+
+export function toDomainForexCashTransaction(
+  row: Pick<
+    Database["public"]["Tables"]["forex_cash_transactions"]["Row"],
+    | "id"
+    | "forex_account_id"
+    | "wallet_id"
+    | "type"
+    | "amount"
+    | "currency"
+    | "fee"
+    | "transaction_date"
+    | "transaction_time"
+  >,
+): ForexCashTransaction {
+  return {
+    id: row.id,
+    forexAccountId: row.forex_account_id,
+    walletId: row.wallet_id ?? "",
+    type: row.type,
+    amount: Number(row.amount || 0),
+    currency: "VND",
+    fee: Number(row.fee || 0),
+    transactionDate: row.transaction_date,
+    transactionTime: row.transaction_time,
+  };
+}
+
 export function toDomainGoal(
   row: Pick<
     Database["public"]["Tables"]["goals"]["Row"],
@@ -157,11 +202,16 @@ type FinanceContext = {
     goals: number;
     budgets: number;
     investments: number;
+    savings: number;
+    forexAccounts: number;
   };
   totals: {
     walletBalance: number;
-    totalDebt: number;
+    savingsBalance: number;
     investmentValue: number;
+    forexAssetValue: number;
+    totalAssets: number;
+    totalDebt: number;
     netWorth: number;
     currentMonthIncome: number;
     currentMonthExpense: number;
@@ -205,6 +255,8 @@ export async function buildServerFinanceContext(
     budgetsResult,
     investmentsResult,
     savingsResult,
+    forexAccountsResult,
+    forexCashTransactionsResult,
   ] = await Promise.all([
     client.from("wallets").select("*").eq("user_id", userId),
     client.from("categories").select("*").eq("user_id", userId),
@@ -218,6 +270,8 @@ export async function buildServerFinanceContext(
     client.from("budgets").select("*").eq("user_id", userId),
     client.from("investments").select("*").eq("user_id", userId),
     client.from("savings").select("*").eq("user_id", userId),
+    client.from("forex_accounts").select("*").eq("user_id", userId),
+    client.from("forex_cash_transactions").select("*").eq("user_id", userId),
   ]);
 
   const firstError = [
@@ -229,6 +283,8 @@ export async function buildServerFinanceContext(
     budgetsResult.error,
     investmentsResult.error,
     savingsResult.error,
+    forexAccountsResult.error,
+    forexCashTransactionsResult.error,
   ].find(Boolean);
 
   if (firstError) {
@@ -243,6 +299,8 @@ export async function buildServerFinanceContext(
   const budgets = budgetsResult.data ?? [];
   const investments = investmentsResult.data ?? [];
   const savings = savingsResult.data ?? [];
+  const forexAccounts = forexAccountsResult.data ?? [];
+  const forexCashTransactions = forexCashTransactionsResult.data ?? [];
 
   const categoryById = new Map(categories.map((item) => [item.id, item.name]));
   const domainCategories = categories.map(toDomainCategory);
@@ -252,6 +310,10 @@ export async function buildServerFinanceContext(
   const domainMonthTransactions = monthTransactions.map(toDomainTransaction);
   const domainTransactions = transactions.map(toDomainTransaction);
   const domainSavings = savings.map(toDomainSaving);
+  const domainForexAccounts = forexAccounts.map(toDomainForexAccount);
+  const domainForexCashTransactions = forexCashTransactions.map(
+    toDomainForexCashTransaction,
+  );
 
   // Canonical income/expense — see financeCalculations.ts. `getTotalExpense`
   // excludes saving/investment-planning-group transactions (real expense
@@ -295,17 +357,17 @@ export async function buildServerFinanceContext(
     .sort((a, b) => b.usagePercent - a.usagePercent)
     .slice(0, 10);
 
-  // Canonical net worth — see financeCalculations.ts. Savings and Forex are
-  // not part of this AI context snapshot yet, so they default to 0 rather
-  // than being reconstructed here.
-  const netWorthBreakdown = calculateNetWorth({
+  const balanceSheet = calculateBalanceSheetSnapshot({
     wallets: wallets.map(toDomainWallet),
+    savings: domainSavings,
     investments: investments.map(toDomainInvestment),
     debts: debts.map(toDomainDebt),
+    forexAccounts: domainForexAccounts,
+    forexCashTransactions: domainForexCashTransactions,
   });
-  const walletBalance = netWorthBreakdown.cashAndWallets;
-  const totalDebt = netWorthBreakdown.totalDebt;
-  const investmentValue = netWorthBreakdown.investments;
+  const walletBalance = balanceSheet.cashAndWallets;
+  const totalDebt = balanceSheet.totalDebt;
+  const investmentValue = balanceSheet.investments;
   const cashFlow = income - expense;
 
   return {
@@ -318,12 +380,17 @@ export async function buildServerFinanceContext(
       goals: goals.length,
       budgets: budgets.length,
       investments: investments.length,
+      savings: savings.length,
+      forexAccounts: forexAccounts.length,
     },
     totals: {
       walletBalance,
-      totalDebt,
+      savingsBalance: balanceSheet.savings,
       investmentValue,
-      netWorth: netWorthBreakdown.netWorth,
+      forexAssetValue: balanceSheet.forex,
+      totalAssets: balanceSheet.totalAssets,
+      totalDebt,
+      netWorth: balanceSheet.netWorth,
       currentMonthIncome: income,
       currentMonthExpense: expense,
       currentMonthCashFlow: cashFlow,

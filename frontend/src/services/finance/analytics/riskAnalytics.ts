@@ -27,9 +27,8 @@ import type {
 
 import {
   calculateGoalFundingSnapshot,
-  calculateNetWorth,
+  calculateBalanceSheetSnapshot,
   getDebtRatio,
-  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -143,18 +142,17 @@ export function computeRiskScore(
   // Delegates to the canonical net worth calculation — debt risk and
   // investment-concentration risk must use the same assets/debt totals as
   // Dashboard/Reports' current net worth, not a locally reconstructed one.
-  const netWorthBreakdown = calculateNetWorth({
+  const balanceSheet = calculateBalanceSheetSnapshot({
     wallets,
     investments,
     debts,
     savings,
     forexAssetValue,
   });
-  const totalAssets = netWorthBreakdown.totalAssets;
-  const totalDebt = netWorthBreakdown.totalDebt;
-  const totalInvestmentValue = netWorthBreakdown.investments;
-  // Canonical spendable Wallet balance (cash + bank + ewallet).
-  const liquidCash = getSpendableWalletBalance(wallets);
+  const totalAssets = balanceSheet.totalAssets;
+  const totalDebt = balanceSheet.totalDebt;
+  const totalInvestmentValue = balanceSheet.investments;
+  const liquidCash = balanceSheet.liquidAssets;
 
   // ══════════════════════════════════════════════════════════════════════════
   // DIMENSION 1 — Debt Risk
@@ -257,7 +255,7 @@ export function computeRiskScore(
   // ══════════════════════════════════════════════════════════════════════════
   // DIMENSION 4 — Investment Risk
   // ══════════════════════════════════════════════════════════════════════════
-  const netWorth = netWorthBreakdown.netWorth;
+  const netWorth = balanceSheet.netWorth;
   // Concentration: what % of net worth is in investments
   const investmentConcentration =
     netWorth > 0 ? clamp((totalInvestmentValue / netWorth) * 100) : 0;

@@ -11,6 +11,10 @@ describe("DebtsPage financial semantics and recoverable readiness (DEBTS-CORRECT
     expect(source).toContain("DEBTS_INITIAL_RETRY_MS = 750");
     expect(source).toContain("withDebtsLoadTimeout(getDebts()");
     expect(source).toContain("withDebtsLoadTimeout(getWallets()");
+    expect(source).toContain("withDebtsLoadTimeout(getSavings()");
+    expect(source).toContain("withDebtsLoadTimeout(getInvestments()");
+    expect(source).toContain("withDebtsLoadTimeout(getForexAccounts()");
+    expect(source).toContain("getForexCashTransactions()");
     expect(source).toContain("getTransactionsInRange(startDate, endDate)");
     expect(source).toContain("const ok = await runReload()");
     expect(source).toContain("DEBTS_INITIAL_RETRY_MS");
@@ -50,7 +54,18 @@ describe("DebtsPage financial semantics and recoverable readiness (DEBTS-CORRECT
   });
 
   it("subscribes every dataset that affects debt analytics", () => {
-    expect(normalized).toContain('useRealtimeTable( ["debts", "wallets", "transactions"], async () => { await runReload(); }, )');
+    for (const table of [
+      "debts",
+      "wallets",
+      "savings",
+      "investments",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "transactions",
+    ]) {
+      expect(source).toContain(`"${table}"`);
+    }
+    expect(normalized).toContain("useRealtimeTable(");
   });
 
   it("gates first-viewport KPI values until a successful snapshot exists", () => {
@@ -88,6 +103,13 @@ describe("DebtsPage financial semantics and recoverable readiness (DEBTS-CORRECT
     expect(region).toContain("return rateB - rateA");
     expect(region).not.toContain("remainingAmount / a.totalAmount");
     expect(source).toContain("Ưu tiên lãi suất cao nhất");
+  });
+
+  it("uses the canonical debt/assets ratio against the full balance-sheet asset total", () => {
+    expect(source).toContain("calculateBalanceSheetSnapshot({");
+    expect(source).toContain("setTotalAssets(balanceSheet.totalAssets)");
+    expect(source).toContain("getDebtRatio(summary.remainingAmount, totalAssets)");
+    expect(source).not.toContain("Math.round((summary.remainingAmount / totalAssets) * 100)");
   });
 
   it("uses debt-service-to-income semantics from minimum payments", () => {

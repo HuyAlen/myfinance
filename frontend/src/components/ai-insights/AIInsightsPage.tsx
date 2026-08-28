@@ -24,6 +24,8 @@ import type {
   Budget,
   Category,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   SavingAccount,
@@ -38,6 +40,8 @@ import {
   getGoalFundingTransactions,
   getGoals,
   getInvestments,
+  getForexAccounts,
+  getForexCashTransactions,
   getSavings,
   getTransactionsInRange,
   getWallets,
@@ -108,7 +112,7 @@ const INSIGHT_ICON_MAP: Record<InsightIconType, React.ReactNode> = {
 
 export default function AIInsightsPage() {
   // FINANCE-DATA-1B: every insight/score/section below is derived from
-  // the nine arrays loaded here, all starting at [] — indistinguishable
+  // the eleven arrays loaded here, all starting at [] — indistinguishable
   // from "genuinely no data" if the very first load actually FAILED.
   // Rather than gate every individual section, the whole body renders
   // only after the first load has succeeded once; see the early return
@@ -129,6 +133,10 @@ export default function AIInsightsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [savings, setSavings] = useState<SavingAccount[]>([]);
+  const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
+  const [forexCashTransactions, setForexCashTransactions] = useState<
+    ForexCashTransaction[]
+  >([]);
 
   const hasLoadedInsightsDataRef = useRef(false);
   const isReloadingRef = useRef(false);
@@ -147,6 +155,8 @@ export default function AIInsightsPage() {
         nextInvestments,
         nextBudgets,
         nextSavings,
+        nextForexAccounts,
+        nextForexCashTransactions,
       ] = await Promise.all([
         withInsightsLoadTimeout(getWallets(), "wallets"),
         withInsightsLoadTimeout(getCategories(), "categories"),
@@ -163,9 +173,14 @@ export default function AIInsightsPage() {
         withInsightsLoadTimeout(getInvestments(), "investments"),
         withInsightsLoadTimeout(getBudgets(), "budgets"),
         withInsightsLoadTimeout(getSavings(), "savings"),
+        withInsightsLoadTimeout(getForexAccounts(), "forex-accounts"),
+        withInsightsLoadTimeout(
+          getForexCashTransactions(),
+          "forex-cash-transactions",
+        ),
       ]);
 
-      // Commit the nine-read snapshot only after every required dependency succeeds.
+      // Commit the eleven-read snapshot only after every required dependency succeeds.
       setWallets(nextWallets);
       setCategories(nextCategories);
       setTransactions(nextTransactions);
@@ -175,6 +190,8 @@ export default function AIInsightsPage() {
       setInvestments(nextInvestments);
       setBudgets(nextBudgets);
       setSavings(nextSavings);
+      setForexAccounts(nextForexAccounts);
+      setForexCashTransactions(nextForexCashTransactions);
       setInsightsLoadError(null);
       setIsInsightsDataReady(true);
       hasLoadedInsightsDataRef.current = true;
@@ -256,6 +273,8 @@ export default function AIInsightsPage() {
       "investments",
       "budgets",
       "savings",
+      "forex_accounts",
+      "forex_cash_transactions",
     ],
     async () => {
       await runReload();
@@ -276,6 +295,8 @@ export default function AIInsightsPage() {
         investments,
         budgets,
         savings,
+        forexAccounts,
+        forexCashTransactions,
       }),
     [
       wallets,
@@ -287,6 +308,8 @@ export default function AIInsightsPage() {
       investments,
       budgets,
       savings,
+      forexAccounts,
+      forexCashTransactions,
     ],
   );
 

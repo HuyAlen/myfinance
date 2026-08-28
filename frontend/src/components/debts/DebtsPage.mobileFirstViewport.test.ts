@@ -86,7 +86,18 @@ describe("DebtsPage iPhone hierarchy and payoff ergonomics (DEBTS-MOBILE-POLISH-
     expect(source).toContain("DEBTS_LOAD_TIMEOUT_MS = 10_000");
     expect(source).toContain("DEBTS_INITIAL_RETRY_MS = 750");
     expect(source).toContain('window.addEventListener("online", handleOnline)');
-    expect(normalized).toContain('["debts", "wallets", "transactions"], async () => { await runReload(); }');
+    for (const table of [
+      "debts",
+      "wallets",
+      "savings",
+      "investments",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "transactions",
+    ]) {
+      expect(source).toContain(`"${table}"`);
+    }
+    expect(normalized).toContain("useRealtimeTable(");
   });
 
   it("preserves mutation safety and interest-rate Avalanche semantics", () => {

@@ -1,5 +1,17 @@
-import type { Goal, SavingAccount, Transaction } from "@/src/types/finance";
-import { calculateGoalFundingSnapshot } from "@/src/services/finance/financeCalculations";
+import type {
+  Debt,
+  ForexAccount,
+  ForexCashTransaction,
+  Goal,
+  Investment,
+  SavingAccount,
+  Transaction,
+  Wallet,
+} from "@/src/types/finance";
+import {
+  calculateBalanceSheetSnapshot,
+  calculateGoalFundingSnapshot,
+} from "@/src/services/finance/financeCalculations";
 import type { AIFinanceToolContext } from "../tools/aiToolTypes";
 import { detectAIFinanceContextIntent } from "./aiContextIntent.server";
 import { resolveAIFinanceCapabilities } from "./aiCapabilityResolver.server";
@@ -134,6 +146,68 @@ function summarizeWallets(rows: Record<string, unknown>[]) {
       balance: item.balance,
     })),
   };
+}
+
+function summarizeBalanceSheet(input: {
+  wallets: Record<string, unknown>[];
+  savings: Record<string, unknown>[];
+  investments: Record<string, unknown>[];
+  debts: Record<string, unknown>[];
+  forexAccounts: Record<string, unknown>[];
+  forexCashTransactions: Record<string, unknown>[];
+}) {
+  const wallets: Wallet[] = input.wallets.map((item) => ({
+    id: stringOf(item.id),
+    name: stringOf(item.name),
+    type: stringOf(item.type) as Wallet["type"],
+    balance: numberOf(item.balance),
+  }));
+  const savings: SavingAccount[] = input.savings.map(toGoalFundingSaving);
+  const investments: Investment[] = input.investments.map((item) => ({
+    id: stringOf(item.id),
+    name: stringOf(item.name),
+    type: stringOf(item.type) as Investment["type"],
+    investedAmount: numberOf(item.investedAmount ?? item.invested_amount),
+    currentValue: numberOf(item.currentValue ?? item.current_value),
+  }));
+  const debts: Debt[] = input.debts.map((item) => ({
+    id: stringOf(item.id),
+    name: stringOf(item.name),
+    totalAmount: numberOf(item.totalAmount ?? item.total_amount),
+    remainingAmount: numberOf(item.remainingAmount ?? item.remaining_amount),
+  }));
+  const forexAccounts: ForexAccount[] = input.forexAccounts.map((item) => ({
+    id: stringOf(item.id),
+    name: stringOf(item.name),
+    broker: stringOf(item.broker),
+    currency: stringOf(item.currency),
+    status: (stringOf(item.status) || "active") as ForexAccount["status"],
+    currentEquity:
+      item.current_equity === null || item.current_equity === undefined
+        ? undefined
+        : numberOf(item.current_equity),
+  }));
+  const forexCashTransactions: ForexCashTransaction[] =
+    input.forexCashTransactions.map((item) => ({
+      id: stringOf(item.id),
+      forexAccountId: stringOf(item.forex_account_id),
+      walletId: stringOf(item.wallet_id),
+      type: stringOf(item.type) as ForexCashTransaction["type"],
+      amount: numberOf(item.amount),
+      currency: "VND",
+      fee: numberOf(item.fee),
+      transactionDate: stringOf(item.transaction_date),
+      transactionTime: stringOf(item.transaction_time),
+    }));
+
+  return calculateBalanceSheetSnapshot({
+    wallets,
+    savings,
+    investments,
+    debts,
+    forexAccounts,
+    forexCashTransactions,
+  });
 }
 
 function summarizeBudgets(rows: Record<string, unknown>[]) {
@@ -385,11 +459,27 @@ export async function buildAIFinanceRelevantContext(input: {
 
   const investmentPromise =
     intent.domains.includes("investments") ||
-    intent.domains.includes("overview")
+    intent.domains.includes("overview") ||
+    intent.domains.includes("health")
       ? queryRows({
           context: input.context,
           table: "investments",
         })
+      : Promise.resolve([]);
+
+  const balanceSheetSavingsPromise =
+    intent.domains.includes("overview") || intent.domains.includes("health")
+      ? queryRows({ context: input.context, table: "savings" })
+      : Promise.resolve([]);
+
+  const balanceSheetForexAccountsPromise =
+    intent.domains.includes("overview") || intent.domains.includes("health")
+      ? queryRows({ context: input.context, table: "forex_accounts" })
+      : Promise.resolve([]);
+
+  const balanceSheetForexTransactionsPromise =
+    intent.domains.includes("overview") || intent.domains.includes("health")
+      ? queryRows({ context: input.context, table: "forex_cash_transactions" })
       : Promise.resolve([]);
 
   const [
@@ -402,6 +492,9 @@ export async function buildAIFinanceRelevantContext(input: {
     goalFundingTransactions,
     debts,
     investments,
+    balanceSheetSavings,
+    balanceSheetForexAccounts,
+    balanceSheetForexTransactions,
   ] = await Promise.all([
     categoryPromise,
     transactionPromise,
@@ -412,6 +505,9 @@ export async function buildAIFinanceRelevantContext(input: {
     goalFundingTransactionsPromise,
     debtPromise,
     investmentPromise,
+    balanceSheetSavingsPromise,
+    balanceSheetForexAccountsPromise,
+    balanceSheetForexTransactionsPromise,
   ]);
 
   if (categories.length > 0) {
@@ -454,6 +550,19 @@ export async function buildAIFinanceRelevantContext(input: {
   if (investments.length > 0) {
     snapshot.investments = summarizeInvestments(investments);
     loadedDomains.add("investments");
+  }
+
+  if (
+    intent.domains.includes("overview") || intent.domains.includes("health")
+  ) {
+    snapshot.balanceSheet = summarizeBalanceSheet({
+      wallets,
+      savings: balanceSheetSavings,
+      investments,
+      debts,
+      forexAccounts: balanceSheetForexAccounts,
+      forexCashTransactions: balanceSheetForexTransactions,
+    });
   }
 
   if (

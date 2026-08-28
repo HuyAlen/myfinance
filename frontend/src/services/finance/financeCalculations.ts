@@ -681,6 +681,55 @@ export function calculateNetWorth(input: {
   };
 }
 
+export interface BalanceSheetSnapshot extends NetWorthBreakdown {
+  /** Immediately-spendable wallet cash/bank/e-wallet balance. */
+  liquidAssets: number;
+  /** Outstanding debt as a percentage of all current assets. */
+  debtRatio: number;
+}
+
+/**
+ * Canonical FULL current balance-sheet snapshot.
+ *
+ * This is the boundary consumers should use when they have the actual domain
+ * rows for Wallets + Savings + Investments + Forex + Debts. It resolves Forex
+ * current asset value once (currentEquity with net-capital fallback) and then
+ * delegates the assets-minus-liabilities equation to `calculateNetWorth`.
+ *
+ * `forexAssetValue` is an escape hatch for pure analytics callers that already
+ * received a precomputed canonical Forex asset value. Product/UI callers should
+ * normally pass `forexAccounts` + `forexCashTransactions` instead.
+ */
+export function calculateBalanceSheetSnapshot(input: {
+  wallets: Wallet[];
+  savings?: SavingAccount[];
+  investments?: Investment[];
+  debts?: Debt[];
+  forexAccounts?: Array<Pick<ForexAccount, "id" | "currentEquity">>;
+  forexCashTransactions?: ForexCashTransaction[];
+  forexAssetValue?: number;
+}): BalanceSheetSnapshot {
+  const forexAssetValue =
+    input.forexAssetValue ??
+    getForexAssetValue(
+      input.forexAccounts ?? [],
+      input.forexCashTransactions ?? [],
+    );
+  const breakdown = calculateNetWorth({
+    wallets: input.wallets,
+    savings: input.savings ?? [],
+    investments: input.investments ?? [],
+    debts: input.debts ?? [],
+    forexAssetValue,
+  });
+
+  return {
+    ...breakdown,
+    liquidAssets: getSpendableWalletBalance(input.wallets),
+    debtRatio: getDebtRatio(breakdown.totalDebt, breakdown.totalAssets),
+  };
+}
+
 export function getNetWorth(
   wallets: Wallet[],
   debts: Debt[],
@@ -1357,7 +1406,7 @@ export function calculateDashboardSummary(input: {
    * assets-minus-liabilities equation to `calculateNetWorth` so this summary
    * can never silently diverge from the canonical net worth calculation.
    */
-  const netWorthBreakdown = calculateNetWorth({
+  const netWorthBreakdown = calculateBalanceSheetSnapshot({
     wallets: input.wallets,
     savings: input.savings,
     investments: input.investments,
@@ -1365,7 +1414,7 @@ export function calculateDashboardSummary(input: {
     forexAssetValue: input.forexAssetValue,
   });
   const walletAssets = netWorthBreakdown.cashAndWallets;
-  const liquidBalance = getSpendableWalletBalance(input.wallets);
+  const liquidBalance = netWorthBreakdown.liquidAssets;
   const savingAssets = netWorthBreakdown.savings;
   const investmentAssets = netWorthBreakdown.investments;
   const investedAmount = input.investments.reduce(
@@ -1423,7 +1472,7 @@ export function calculateDashboardSummary(input: {
     saving: netCashFlow,
     futureAllocation,
     savingRate,
-    debtRatio: getDebtRatio(totalDebt, totalAssets),
+    debtRatio: netWorthBreakdown.debtRatio,
     goalScore,
     emergencyMonths,
     financialHealthScore: getFinancialHealthScore({

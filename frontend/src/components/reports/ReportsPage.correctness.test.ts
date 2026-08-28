@@ -57,6 +57,15 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(source).not.toContain("getInvestmentCapitalTotal");
   });
 
+  it("shares one canonical full balance-sheet snapshot across report KPIs and analytics", () => {
+    expect(source).toContain("calculateBalanceSheetSnapshot({");
+    expect(source).toContain("const balanceSheet = useMemo(");
+    expect(source).toContain("forexAccounts,");
+    expect(source).toContain("forexCashTransactions,");
+    expect(source).toContain("const debtRatio = balanceSheet.debtRatio;");
+    expect(source).toContain("balanceSheet.forex");
+  });
+
   it("labels cash-flow deltas as cash flow rather than savings", () => {
     const comparisonStart = source.indexOf("const comparisons = useMemo(() => {");
     const comparisonEnd = source.indexOf("// ── Analytics engine", comparisonStart);
@@ -109,7 +118,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     const start = source.indexOf("const assetAllocationData = useMemo(() => {");
     const end = source.indexOf("const goalMeta = useMemo(", start);
     const block = source.slice(start, end);
-    expect(block).toContain('{ name: "Forex", value: forexAssets');
+    expect(block).toContain('{ name: "Forex", value: balanceSheet.forex');
     expect(block).not.toContain('{ name: "Nợ"');
     expect(source).toContain("const assetAllocationTotal = useMemo(");
     expect(source).toContain("item.value / assetAllocationTotal");

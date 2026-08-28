@@ -65,15 +65,12 @@ import {
   initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
+  calculateBalanceSheetSnapshot,
   calculateFinanceFlowSnapshot,
   calculateGoalFundingSnapshot,
-  calculateNetWorth,
   filterByDateRange,
   formatVND,
-  getDebtRatio,
-  getForexAssetValue,
   getGoalScore,
-  getTotalAssets,
   getRealExpenseTransactions,
   getTotalExpense,
   getTotalIncome,
@@ -621,6 +618,20 @@ export default function ReportsPage() {
     [dateRange.endDate, dateRange.startDate, transactions],
   );
 
+  // ── Canonical current balance sheet ───────────────────────────────────────
+  const balanceSheet = useMemo(
+    () =>
+      calculateBalanceSheetSnapshot({
+        wallets,
+        savings,
+        investments,
+        debts,
+        forexAccounts,
+        forexCashTransactions,
+      }),
+    [wallets, savings, investments, debts, forexAccounts, forexCashTransactions],
+  );
+
   // ── Core summary ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
     const flow = calculateFinanceFlowSnapshot({
@@ -643,19 +654,12 @@ export default function ReportsPage() {
         ? Math.round((cashFlowAfterExpense / income) * 1000) / 10
         : 0;
     const allocationRate = flow.futureAllocationRate;
-    const netWorthBreakdown = calculateNetWorth({
-      wallets,
-      savings,
-      investments,
-      debts,
-      forexAssetValue: getForexAssetValue(forexAccounts, forexCashTransactions),
-    });
-    const investmentAssets = netWorthBreakdown.investments;
-    const savingAssets = netWorthBreakdown.savings;
-    const totalAssets = netWorthBreakdown.totalAssets;
-    const totalDebt = netWorthBreakdown.totalDebt;
-    const netWorth = netWorthBreakdown.netWorth;
-    const debtRatio = getDebtRatio(totalDebt, totalAssets);
+    const investmentAssets = balanceSheet.investments;
+    const savingAssets = balanceSheet.savings;
+    const totalAssets = balanceSheet.totalAssets;
+    const totalDebt = balanceSheet.totalDebt;
+    const netWorth = balanceSheet.netWorth;
+    const debtRatio = balanceSheet.debtRatio;
     const goalScore = getGoalScore(goals, transactions, savings);
 
     return {
@@ -688,6 +692,7 @@ export default function ReportsPage() {
     transactions,
     savings,
     savingMovements,
+    balanceSheet,
     dateRange,
     periodMode,
     year,
@@ -934,8 +939,9 @@ export default function ReportsPage() {
         budgets,
         categories,
         3,
-        [],
+        forexCashTransactions,
         savings,
+        forexAccounts,
       ),
     [
       wallets,
@@ -946,6 +952,8 @@ export default function ReportsPage() {
       budgets,
       categories,
       savings,
+      forexAccounts,
+      forexCashTransactions,
     ],
   );
   const riskData = useMemo(
@@ -959,12 +967,23 @@ export default function ReportsPage() {
         3,
         categories,
         savings,
+        balanceSheet.forex,
       ),
-    [wallets, debts, goals, transactions, investments, categories, savings],
+    [wallets, debts, goals, transactions, investments, categories, savings, balanceSheet.forex],
   );
   const forecast = useMemo(
-    () => computeFinancialForecast(wallets, debts, investments, transactions),
-    [wallets, debts, investments, transactions],
+    () =>
+      computeFinancialForecast(
+        wallets,
+        debts,
+        investments,
+        transactions,
+        6,
+        categories,
+        savings,
+        balanceSheet.forex,
+      ),
+    [wallets, debts, investments, transactions, categories, savings, balanceSheet.forex],
   );
   const smartBudget = useMemo(
     () => computeSmartBudget(transactions, categories, budgets),
@@ -1017,25 +1036,14 @@ export default function ReportsPage() {
   }, [periodMonthly]);
 
   const assetAllocationData = useMemo(() => {
-    const walletAssets = getTotalAssets(wallets);
-    const forexAssets = getForexAssetValue(
-      forexAccounts,
-      forexCashTransactions,
-    );
     const rows = [
-      { name: "Thanh khoản", value: walletAssets, color: "#2563eb" },
-      { name: "Tiết kiệm", value: summary.savingAssets, color: "#06b6d4" },
-      { name: "Đầu tư", value: summary.investmentAssets, color: "#8b5cf6" },
-      { name: "Forex", value: forexAssets, color: "#14b8a6" },
+      { name: "Thanh khoản", value: balanceSheet.cashAndWallets, color: "#2563eb" },
+      { name: "Tiết kiệm", value: balanceSheet.savings, color: "#06b6d4" },
+      { name: "Đầu tư", value: balanceSheet.investments, color: "#8b5cf6" },
+      { name: "Forex", value: balanceSheet.forex, color: "#14b8a6" },
     ];
     return rows.filter((item) => item.value > 0);
-  }, [
-    wallets,
-    forexAccounts,
-    forexCashTransactions,
-    summary.savingAssets,
-    summary.investmentAssets,
-  ]);
+  }, [balanceSheet]);
 
   const assetAllocationTotal = useMemo(
     () => assetAllocationData.reduce((sum, item) => sum + item.value, 0),

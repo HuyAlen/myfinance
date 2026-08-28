@@ -15,6 +15,8 @@ import type {
   Budget,
   Category,
   Debt,
+  ForexAccount,
+  ForexCashTransaction,
   Goal,
   Investment,
   SavingAccount,
@@ -23,7 +25,7 @@ import type {
 } from "@/src/types/finance";
 
 import {
-  calculateNetWorth,
+  calculateBalanceSheetSnapshot,
   formatVND,
   getDebtRatio,
   getGoalScore,
@@ -119,6 +121,8 @@ export type AdvisorInput = {
   investments: Investment[];
   budgets: Budget[];
   savings?: SavingAccount[];
+  forexAccounts?: ForexAccount[];
+  forexCashTransactions?: ForexCashTransaction[];
 };
 
 // ─── Private Helpers ──────────────────────────────────────────────────────────
@@ -133,20 +137,20 @@ function computeMetrics(input: AdvisorInput): AdvisorMetrics {
     categories,
     goals,
     savings = [],
+    forexAccounts = [],
+    forexCashTransactions = [],
   } = input;
 
-  // Delegates to the canonical net worth calculation so the debt ratio below
-  // is scoped to the same assets total as Dashboard/Reports for the domains
-  // loaded by AI Insights. Savings are part of this snapshot; Forex remains a
-  // separate follow-up because this ticket only canonicalizes Goal funding.
-  const netWorthBreakdown = calculateNetWorth({
+  const balanceSheet = calculateBalanceSheetSnapshot({
     wallets,
     savings,
     investments,
     debts,
+    forexAccounts,
+    forexCashTransactions,
   });
-  const totalAssets = netWorthBreakdown.totalAssets;
-  const totalDebt = netWorthBreakdown.totalDebt;
+  const totalAssets = balanceSheet.totalAssets;
+  const totalDebt = balanceSheet.totalDebt;
   const income = getTotalIncome(transactions);
   const expense = getTotalExpense(transactions, categories);
   const saving = income - expense;
@@ -361,8 +365,18 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     investments,
     budgets,
     savings = [],
+    forexAccounts = [],
+    forexCashTransactions = [],
   } = input;
 
+  const balanceSheet = calculateBalanceSheetSnapshot({
+    wallets,
+    savings,
+    investments,
+    debts,
+    forexAccounts,
+    forexCashTransactions,
+  });
   const metrics = computeMetrics(input);
   const emergency = computeEmergencyFund(wallets, transactions, 6, 6, categories);
   const fire = computeFireAnalysis(
@@ -374,6 +388,8 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     undefined,
     undefined,
     categories,
+    savings,
+    balanceSheet.forex,
   );
   const smartBudget = computeSmartBudget(transactions, categories, budgets);
   const financialForecast = computeFinancialForecast(
@@ -383,6 +399,8 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     transactions,
     6,
     categories,
+    savings,
+    balanceSheet.forex,
   );
 
   return {
@@ -404,9 +422,9 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
       budgets,
       categories,
       3,
-      [],
+      forexCashTransactions,
       savings,
-      [],
+      forexAccounts,
       goalFundingTransactions,
     ),
     riskScore: computeRiskScore(
@@ -418,7 +436,7 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
       3,
       categories,
       savings,
-      0,
+      balanceSheet.forex,
       goalFundingTransactions,
     ),
     emergencyFund: emergency,

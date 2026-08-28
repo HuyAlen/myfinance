@@ -21,11 +21,9 @@ import type {
 import {
   calculateBudgetSpending,
   calculateGoalFundingSnapshot,
-  calculateNetWorth,
+  calculateBalanceSheetSnapshot,
   getDebtRatio,
   getEmergencyMonths,
-  getForexAssetValue,
-  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -100,19 +98,18 @@ export function computeHealthScoreV2(
   // canonical Forex current-asset-value handling — currentEquity with a
   // net-capital fallback, never net-capital + P&L) instead of reconstructing
   // assets locally.
-  const forexAssetValue = getForexAssetValue(forexAccounts, forexCashTransactions);
-  const netWorthBreakdown = calculateNetWorth({
+  const balanceSheet = calculateBalanceSheetSnapshot({
     wallets,
     investments,
     debts,
     savings,
-    forexAssetValue,
+    forexAccounts,
+    forexCashTransactions,
   });
-  const totalDebt = netWorthBreakdown.totalDebt;
-  const investmentValue = netWorthBreakdown.investments;
-  const totalAssets = netWorthBreakdown.totalAssets;
-  // Canonical spendable Wallet balance (cash + bank + ewallet).
-  const liquidCash = getSpendableWalletBalance(wallets);
+  const totalDebt = balanceSheet.totalDebt;
+  const investmentValue = balanceSheet.investments;
+  const totalAssets = balanceSheet.totalAssets;
+  const liquidCash = balanceSheet.liquidAssets;
 
   const factors: HealthScoreFactor[] = [];
 

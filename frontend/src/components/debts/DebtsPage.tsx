@@ -28,14 +28,19 @@ import {
   addDebt,
   deleteDebt,
   getDebts,
+  getForexAccounts,
+  getForexCashTransactions,
+  getInvestments,
+  getSavings,
   getWallets,
   getTransactionsInRange,
   updateDebt,
 } from "@/src/services/finance/financeStorage";
 
 import {
+  calculateBalanceSheetSnapshot,
   formatVND,
-  getTotalAssets,
+  getDebtRatio,
   getTotalDebt,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -188,16 +193,31 @@ export default function DebtsPage() {
   const reloadData = useCallback(async (): Promise<boolean> => {
     const { startDate, endDate } = getRolling12MonthRange();
     try {
-      const [d, w, t] = await Promise.all([
+      const [d, w, s, i, fa, ft, t] = await Promise.all([
         withDebtsLoadTimeout(getDebts(), "debts"),
         withDebtsLoadTimeout(getWallets(), "wallets"),
+        withDebtsLoadTimeout(getSavings(), "savings"),
+        withDebtsLoadTimeout(getInvestments(), "investments"),
+        withDebtsLoadTimeout(getForexAccounts(), "forex-accounts"),
+        withDebtsLoadTimeout(
+          getForexCashTransactions(),
+          "forex-cash-transactions",
+        ),
         withDebtsLoadTimeout(
           getTransactionsInRange(startDate, endDate),
           "transactions",
         ),
       ]);
+      const balanceSheet = calculateBalanceSheetSnapshot({
+        wallets: w,
+        savings: s,
+        investments: i,
+        debts: d,
+        forexAccounts: fa,
+        forexCashTransactions: ft,
+      });
       setDebts(d);
-      setTotalAssets(getTotalAssets(w));
+      setTotalAssets(balanceSheet.totalAssets);
       setAnnualIncome(getTotalIncome(t));
       setDebtsLoadError(null);
       setIsDebtsDataReady(true);
@@ -273,7 +293,15 @@ export default function DebtsPage() {
   }, [runReload]);
 
   useRealtimeTable(
-    ["debts", "wallets", "transactions"],
+    [
+      "debts",
+      "wallets",
+      "savings",
+      "investments",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "transactions",
+    ],
     async () => {
       await runReload();
     },
@@ -324,10 +352,7 @@ export default function DebtsPage() {
   );
 
   // ── Debt burden + repayment semantics ─────────────────────────────────────
-  const debtToAsset =
-    totalAssets > 0
-      ? Math.round((summary.remainingAmount / totalAssets) * 100)
-      : 0;
+  const debtToAsset = getDebtRatio(summary.remainingAmount, totalAssets);
   const monthlyDebtService = debts.reduce(
     (sum, debt) => sum + Math.max(0, Number(debt.minimumPayment ?? 0)),
     0,

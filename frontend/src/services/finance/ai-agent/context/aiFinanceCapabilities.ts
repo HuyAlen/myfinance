@@ -56,7 +56,16 @@ export const AI_FINANCE_CAPABILITY_DEFINITIONS: Record<
     capability: "financial_overview",
     domains: ["overview", "wallets", "debts", "investments", "cashflow"],
     preferredTools: ["get_financial_summary"],
-    requiredData: ["assets", "debts", "income", "expenses", "cashFlow"],
+    requiredData: [
+      "wallets.balance",
+      "savings.balance",
+      "investments.currentValue",
+      "forex.currentEquity",
+      "debts.remainingAmount",
+      "income",
+      "expenses",
+      "cashFlow",
+    ],
     operations: ["aggregate"],
   },
   wallet_list: {
@@ -197,7 +206,11 @@ export const AI_FINANCE_CAPABILITY_DEFINITIONS: Record<
     capability: "investment_summary",
     domains: ["investments"],
     preferredTools: ["get_financial_summary"],
-    requiredData: ["investment.currentValue", "investment.costBasis"],
+    requiredData: [
+      "investment.currentValue",
+      "investment.costBasis",
+      "forex.currentEquity",
+    ],
     operations: ["aggregate", "rank"],
   },
   period_comparison: {
@@ -211,7 +224,14 @@ export const AI_FINANCE_CAPABILITY_DEFINITIONS: Record<
     capability: "financial_health",
     domains: ["health", "overview", "wallets", "debts", "cashflow"],
     preferredTools: ["get_financial_health"],
-    requiredData: ["savingRate", "debtRatio", "emergencyMonths", "cashFlow"],
+    requiredData: [
+      "savingRate",
+      "totalAssets",
+      "totalDebt",
+      "debtRatio",
+      "emergencyMonths",
+      "cashFlow",
+    ],
     operations: ["detect_threshold_risk"],
   },
   financial_forecast: {

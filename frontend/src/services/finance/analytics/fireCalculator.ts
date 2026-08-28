@@ -24,7 +24,7 @@ import type {
 } from "@/src/types/finance";
 
 import {
-  calculateNetWorth,
+  calculateBalanceSheetSnapshot,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -217,7 +217,7 @@ export function computeFireAnalysis(
 ): FireAnalysis {
   // ── Derive net worth — delegates to the canonical calculation so FIRE can
   // never silently diverge from Dashboard/Reports' current net worth. ───────
-  const netWorth = calculateNetWorth({
+  const netWorth = calculateBalanceSheetSnapshot({
     wallets,
     investments,
     debts,
