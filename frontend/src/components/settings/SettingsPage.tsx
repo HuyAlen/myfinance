@@ -57,7 +57,7 @@ const SECTIONS = [
   { id: "profile", label: "Hồ sơ", icon: User },
   { id: "preferences", label: "Tùy chỉnh", icon: Sliders },
   { id: "financial", label: "Tài chính", icon: Wallet },
-  { id: "ai", label: "AI Advisor", icon: Bot },
+  { id: "ai", label: "Trợ lý AI", icon: Bot },
   { id: "notifications", label: "Thông báo", icon: Bell },
   { id: "data", label: "Dữ liệu", icon: Database },
   { id: "security", label: "Bảo mật", icon: Shield },
@@ -355,36 +355,34 @@ export default function SettingsPage() {
 
     const timer = window.setTimeout(() => {
       try {
-        const raw = window.localStorage.getItem(localSettingsKey);
-        if (!raw) return;
-
-        const saved = JSON.parse(raw) as Partial<LocalSettingsSnapshot>;
-        if (saved.version !== SETTINGS_LOCAL_VERSION) return;
-
-        if (typeof saved.profileName === "string") setProfileName(saved.profileName);
-        if (typeof saved.profilePhone === "string") setProfilePhone(saved.profilePhone);
-        if (typeof saved.timezone === "string") setTimezone(saved.timezone);
-        if (typeof saved.lang === "string") setLang(saved.lang);
-        if (typeof saved.currency === "string") setCurrency(saved.currency);
-        if (typeof saved.dateFormat === "string") setDateFormat(saved.dateFormat);
-        if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
-        if (typeof saved.theme === "string") setTheme(saved.theme);
-        if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
-        if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
-        if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
-        if (typeof saved.debtAlert === "string") setDebtAlert(saved.debtAlert);
-        if (typeof saved.emergencyFund === "string") setEmergencyFund(saved.emergencyFund);
-        if (typeof saved.aiInsights === "boolean") setAiInsights(saved.aiInsights);
-        if (typeof saved.aiForecast === "boolean") setAiForecast(saved.aiForecast);
-        if (typeof saved.aiRisk === "boolean") setAiRisk(saved.aiRisk);
-        if (typeof saved.aiGoalCoach === "boolean") setAiGoalCoach(saved.aiGoalCoach);
-        if (typeof saved.aiInvestCoach === "boolean") setAiInvestCoach(saved.aiInvestCoach);
-        if (typeof saved.notifBudget === "boolean") setNotifBudget(saved.notifBudget);
-        if (typeof saved.notifGoal === "boolean") setNotifGoal(saved.notifGoal);
-        if (typeof saved.notifDebt === "boolean") setNotifDebt(saved.notifDebt);
-        if (typeof saved.notifInvest === "boolean") setNotifInvest(saved.notifInvest);
-        if (typeof saved.notifWeekly === "boolean") setNotifWeekly(saved.notifWeekly);
-        if (typeof saved.notifMonthly === "boolean") setNotifMonthly(saved.notifMonthly);
+      const raw = window.localStorage.getItem(localSettingsKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Partial<LocalSettingsSnapshot>;
+      if (saved.version !== SETTINGS_LOCAL_VERSION) return;
+      if (typeof saved.profileName === "string") setProfileName(saved.profileName);
+      if (typeof saved.profilePhone === "string") setProfilePhone(saved.profilePhone);
+      if (typeof saved.timezone === "string") setTimezone(saved.timezone);
+      if (typeof saved.lang === "string") setLang(saved.lang);
+      if (typeof saved.currency === "string") setCurrency(saved.currency);
+      if (typeof saved.dateFormat === "string") setDateFormat(saved.dateFormat);
+      if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
+      if (typeof saved.theme === "string") setTheme(saved.theme);
+      if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
+      if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
+      if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
+      if (typeof saved.debtAlert === "string") setDebtAlert(saved.debtAlert);
+      if (typeof saved.emergencyFund === "string") setEmergencyFund(saved.emergencyFund);
+      if (typeof saved.aiInsights === "boolean") setAiInsights(saved.aiInsights);
+      if (typeof saved.aiForecast === "boolean") setAiForecast(saved.aiForecast);
+      if (typeof saved.aiRisk === "boolean") setAiRisk(saved.aiRisk);
+      if (typeof saved.aiGoalCoach === "boolean") setAiGoalCoach(saved.aiGoalCoach);
+      if (typeof saved.aiInvestCoach === "boolean") setAiInvestCoach(saved.aiInvestCoach);
+      if (typeof saved.notifBudget === "boolean") setNotifBudget(saved.notifBudget);
+      if (typeof saved.notifGoal === "boolean") setNotifGoal(saved.notifGoal);
+      if (typeof saved.notifDebt === "boolean") setNotifDebt(saved.notifDebt);
+      if (typeof saved.notifInvest === "boolean") setNotifInvest(saved.notifInvest);
+      if (typeof saved.notifWeekly === "boolean") setNotifWeekly(saved.notifWeekly);
+      if (typeof saved.notifMonthly === "boolean") setNotifMonthly(saved.notifMonthly);
       } catch (error) {
         console.warn("[SettingsPage] local preferences could not be restored:", error);
       }
@@ -888,40 +886,36 @@ export default function SettingsPage() {
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* ══ Executive Account Summary ════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-6 pt-6 sm:px-8">
+      <section className="overflow-hidden rounded-3xl border border-blue-100 shadow-sm sm:rounded-4xl">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-4 pt-4 sm:px-8 sm:pb-6 sm:pt-6">
           <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
-            Account Center
+            Cài đặt
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-5">
+          <div className="mt-3 flex items-center gap-3 sm:mt-4 sm:gap-5">
             {/* Avatar */}
-            <div className="flex size-16 shrink-0 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-lg shadow-blue-200/60">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-lg font-black text-white shadow-md shadow-blue-200/50 sm:size-16 sm:rounded-3xl sm:text-2xl">
               {avatarLetter}
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+              <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-3xl">
                 Cài đặt tài khoản
               </h1>
-              <p className="mt-0.5 truncate text-sm text-slate-500">
+              <p className="mt-0.5 break-all text-xs text-slate-500 sm:text-sm">
                 {displayEmail}
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-1.5 flex flex-wrap gap-2 sm:mt-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-[11px] font-bold text-emerald-700">
                   <span className="size-1.5 rounded-full bg-emerald-500" />
                   Tài khoản cá nhân
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-[11px] font-bold text-blue-700">
-                  <Sparkles size={10} />
-                  Premium
                 </span>
               </div>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="-mx-1 mt-4 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-5 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
             {[
               { label: "Ví tiền", value: stats.wallets },
               { label: "Danh mục", value: stats.categories },
@@ -931,7 +925,7 @@ export default function SettingsPage() {
             ].map((s) => (
               <div
                 key={s.label}
-                className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+                className="flex min-w-[7.5rem] shrink-0 snap-start items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3 py-2 shadow-sm sm:min-w-0 sm:px-4"
               >
                 <span className="text-lg font-black text-blue-700">
                   {isLoadingStats ? "…" : statsLoadError ? "–" : s.value}
@@ -951,6 +945,37 @@ export default function SettingsPage() {
           <button type="button" onClick={() => void runStatsReload()} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800">Thử lại</button>
         </div>
       )}
+
+      {/* Mobile section navigation */}
+      <nav aria-label="Điều hướng cài đặt" className="sticky top-2 z-20 -mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:hidden">
+        <div className="flex w-max gap-2 rounded-2xl border border-blue-100 bg-white/95 p-1.5 shadow-sm backdrop-blur">
+          {SECTIONS.map((s) => {
+            const Icon = s.icon;
+            const active = activeSection === s.id;
+            const isDanger = s.id === "danger";
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => scrollTo(s.id)}
+                className={
+                  "flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition-colors " +
+                  (active
+                    ? isDanger
+                      ? "bg-rose-50 text-rose-600"
+                      : "bg-blue-600 text-white"
+                    : isDanger
+                      ? "text-rose-500"
+                      : "text-slate-600")
+                }
+              >
+                <Icon size={13} />
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* ══ Two-column layout: left nav + content ════════════════════════════ */}
       <div className="flex gap-6 xl:gap-8">
@@ -987,17 +1012,17 @@ export default function SettingsPage() {
         </aside>
 
         {/* Main content */}
-        <div className="min-w-0 flex-1 space-y-8">
+        <div className="min-w-0 flex-1 space-y-5 sm:space-y-8">
           {/* ────────────────────────────────────────────────────────────────
               §1 · HỒ SƠ CÁ NHÂN
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-profile">
+          <div id="settings-profile" className="scroll-mt-20">
             <SectionHeader
               icon={<User size={16} />}
               title="Hồ sơ cá nhân"
               desc="Thông tin tài khoản của bạn"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <SettingInput label="Email" value={displayEmail} readOnly />
                 <SettingInput
@@ -1038,7 +1063,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSavePrefs}
                   className={
-                    "flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all " +
+                    "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
                     (saveSuccess
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
@@ -1057,13 +1082,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §2 · TÙY CHỈNH ỨNG DỤNG
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-preferences">
+          <div id="settings-preferences" className="scroll-mt-20">
             <SectionHeader
               icon={<Sliders size={16} />}
               title="Tùy chỉnh ứng dụng"
               desc="Ngôn ngữ, giao diện và mặc định"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="space-y-5">
                 {/* Language */}
                 <div className="flex items-center justify-between gap-4">
@@ -1082,7 +1107,7 @@ export default function SettingsPage() {
                         key={opt.val}
                         onClick={() => setLang(opt.val)}
                         className={
-                          "rounded-2xl border px-4 py-2 text-xs font-bold transition-all " +
+                          "min-h-11 rounded-2xl border px-4 py-2 text-sm font-bold transition-all " +
                           (lang === opt.val
                             ? "border-blue-300 bg-blue-600 text-white shadow-sm"
                             : "border-slate-200 bg-white text-slate-500 hover:bg-blue-50")
@@ -1109,7 +1134,7 @@ export default function SettingsPage() {
                   <select
                     value={dateFormat}
                     onChange={(e) => setDateFormat(e.target.value)}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold outline-none focus:border-blue-400"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     <option value="dd/mm/yyyy">DD/MM/YYYY</option>
                     <option value="mm/dd/yyyy">MM/DD/YYYY</option>
@@ -1132,7 +1157,7 @@ export default function SettingsPage() {
                   <select
                     value={defaultPage}
                     onChange={(e) => setDefaultPage(e.target.value)}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold outline-none focus:border-blue-400"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     <option value="/">Tổng quan</option>
                     <option value="/transactions">Giao dịch</option>
@@ -1163,7 +1188,7 @@ export default function SettingsPage() {
                         key={opt.val}
                         onClick={() => setTheme(opt.val)}
                         className={
-                          "rounded-2xl border px-4 py-2 text-xs font-bold transition-all " +
+                          "min-h-11 rounded-2xl border px-4 py-2 text-sm font-bold transition-all " +
                           (theme === opt.val
                             ? "border-blue-300 bg-blue-600 text-white shadow-sm"
                             : "border-slate-200 bg-white text-slate-500 hover:bg-blue-50")
@@ -1181,13 +1206,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §3 · THIẾT LẬP TÀI CHÍNH
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-financial">
+          <div id="settings-financial" className="scroll-mt-20">
             <SectionHeader
               icon={<Wallet size={16} />}
               title="Thiết lập tài chính"
               desc="Tham số kế hoạch tài chính cá nhân"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <SettingSelect
                   label="Tháng tài chính bắt đầu"
@@ -1213,7 +1238,7 @@ export default function SettingsPage() {
                       max="100"
                       value={savingsGoal}
                       onChange={(e) => setSavingsGoal(e.target.value)}
-                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black outline-none focus:border-blue-400"
+                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
                   </div>
@@ -1232,7 +1257,7 @@ export default function SettingsPage() {
                       max="100"
                       value={budgetAlert}
                       onChange={(e) => setBudgetAlert(e.target.value)}
-                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black outline-none focus:border-blue-400"
+                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
                   </div>
@@ -1251,7 +1276,7 @@ export default function SettingsPage() {
                       max="200"
                       value={debtAlert}
                       onChange={(e) => setDebtAlert(e.target.value)}
-                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black outline-none focus:border-blue-400"
+                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
                   </div>
@@ -1270,7 +1295,7 @@ export default function SettingsPage() {
                       max="24"
                       value={emergencyFund}
                       onChange={(e) => setEmergencyFund(e.target.value)}
-                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-black outline-none focus:border-blue-400"
+                      className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">
                       tháng
@@ -1282,7 +1307,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleSavePrefs}
                   className={
-                    "flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all " +
+                    "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
                     (saveSuccess
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
@@ -1298,10 +1323,10 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §4 · AI ADVISOR
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-ai">
+          <div id="settings-ai" className="scroll-mt-20">
             <SectionHeader
               icon={<Sparkles size={16} />}
-              title="AI Advisor"
+              title="Trợ lý AI"
               desc="AI-6.1 Provider Management, model và quy tắc an toàn"
             />
 
@@ -1312,8 +1337,8 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="mt-4 overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
-              <div className="border-b border-blue-50 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6">
+            <div className="mt-3 overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm sm:mt-4 sm:rounded-4xl">
+              <div className="border-b border-blue-50 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-4 sm:p-6">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="max-w-2xl">
                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-sm shadow-blue-200">
@@ -1699,10 +1724,10 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="mb-4">
                 <h3 className="text-sm font-black text-slate-900">
-                  AI Advisor Features
+                  Tính năng trợ lý AI
                 </h3>
                 <p className="mt-1 text-xs font-medium text-slate-400">
                   Bật/tắt các module phân tích dùng chung cho AI Agent.
@@ -1757,13 +1782,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §5 · THÔNG BÁO
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-notifications">
+          <div id="settings-notifications" className="scroll-mt-20">
             <SectionHeader
               icon={<Bell size={16} />}
               title="Thông báo"
               desc="Quản lý cảnh báo và thông báo hệ thống"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="space-y-1">
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -1821,7 +1846,7 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §6 · DỮ LIỆU
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-data">
+          <div id="settings-data" className="scroll-mt-20">
             <SectionHeader
               icon={<Database size={16} />}
               title="Dữ liệu"
@@ -1829,7 +1854,7 @@ export default function SettingsPage() {
             />
             <div className="mt-4 space-y-4">
               {/* Storage info */}
-              <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                     <Database size={16} />
@@ -1871,7 +1896,7 @@ export default function SettingsPage() {
               {/* Actions grid */}
               <div className="grid gap-4 md:grid-cols-3">
                 {/* Export */}
-                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
                   <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 to-cyan-500 text-white shadow-sm">
                     <Download size={16} />
                   </div>
@@ -1891,7 +1916,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Import */}
-                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
                   <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-400 text-white shadow-sm">
                     <Upload size={16} />
                   </div>
@@ -1914,7 +1939,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Reset demo */}
-                <div className="rounded-4xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
                   <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm">
                     <RefreshCcw size={16} />
                   </div>
@@ -1939,13 +1964,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §7 · BẢO MẬT
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-security">
+          <div id="settings-security" className="scroll-mt-20">
             <SectionHeader
               icon={<Shield size={16} />}
               title="Bảo mật"
-              desc="Quản lý bảo mật tài khoản"
+              desc="Trạng thái bảo mật hiện có"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   {
@@ -1966,15 +1991,15 @@ export default function SettingsPage() {
                   {
                     icon: <Monitor size={15} />,
                     label: "Phiên đăng nhập",
-                    desc: "Quản lý các thiết bị đang đăng nhập",
-                    status: "1 thiết bị",
+                    desc: "Quản lý phiên chưa khả dụng",
+                    status: "Chưa hỗ trợ",
                     statusCls: "bg-blue-50 text-blue-700 border-blue-200",
                   },
                   {
                     icon: <ChevronRight size={15} />,
                     label: "Lịch sử đăng nhập",
-                    desc: "Xem lại các lần đăng nhập gần đây",
-                    status: "Xem chi tiết",
+                    desc: "Lịch sử đăng nhập chưa khả dụng",
+                    status: "Chưa hỗ trợ",
                     statusCls: "bg-slate-100 text-slate-600 border-slate-200",
                   },
                 ].map((item) => (
@@ -2010,13 +2035,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §8 · ĐỒNG BỘ HÓA
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-sync">
+          <div id="settings-sync" className="scroll-mt-20">
             <SectionHeader
               icon={<RefreshCcw size={16} />}
               title="Đồng bộ hóa"
               desc="Trạng thái kết nối và đồng bộ dữ liệu"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="flex flex-wrap items-center gap-4">
                 <div
                   className={
@@ -2101,13 +2126,13 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §9 · HỆ THỐNG
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-system">
+          <div id="settings-system" className="scroll-mt-20">
             <SectionHeader
               icon={<Monitor size={16} />}
               title="Trạng thái hệ thống"
               desc="Thông tin phiên bản và dịch vụ"
             />
-            <div className="mt-4 rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
@@ -2179,14 +2204,14 @@ export default function SettingsPage() {
           {/* ────────────────────────────────────────────────────────────────
               §10 · DANGER ZONE
               ──────────────────────────────────────────────────────────────── */}
-          <div id="settings-danger">
+          <div id="settings-danger" className="scroll-mt-20">
             <SectionHeader
               icon={<AlertTriangle size={16} />}
               title="Vùng nguy hiểm"
               desc="Các thao tác không thể hoàn tác"
               danger
             />
-            <div className="mt-4 rounded-4xl border border-rose-200 bg-rose-50/50 p-6 shadow-sm">
+            <div className="mt-3 rounded-3xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="space-y-4">
                 {/* Reset demo */}
                 <div className="flex flex-col justify-between gap-4 rounded-2xl border border-rose-100 bg-white p-5 sm:flex-row sm:items-center">
@@ -2258,10 +2283,10 @@ function SectionHeader({
   danger?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-1">
+    <div className="flex items-center gap-2.5 px-1 sm:gap-3">
       <div
         className={
-          "flex size-8 shrink-0 items-center justify-center rounded-2xl " +
+          "flex size-8 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl " +
           (danger ? "bg-rose-100 text-rose-500" : "bg-blue-100 text-blue-600")
         }
       >
@@ -2270,7 +2295,7 @@ function SectionHeader({
       <div>
         <h2
           className={
-            "text-base font-black " +
+            "text-sm font-black sm:text-base " +
             (danger ? "text-rose-700" : "text-slate-900")
           }
         >
@@ -2298,7 +2323,7 @@ function ToggleRow({
   onChange: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl p-4 transition hover:bg-slate-50">
+    <div className="flex items-center justify-between gap-3 rounded-2xl px-2 py-3 transition hover:bg-slate-50 sm:gap-4 sm:p-4">
       <div className="flex items-center gap-3">
         <div
           className={
@@ -2316,17 +2341,22 @@ function ToggleRow({
       <button
         type="button"
         onClick={onChange}
-        className={
-          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none " +
-          (checked ? "bg-blue-600" : "bg-slate-200")
-        }
+        aria-pressed={checked}
+        className="flex size-11 shrink-0 items-center justify-center rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
       >
         <span
           className={
-            "inline-block size-4 rounded-full bg-white shadow-sm transition-transform duration-200 " +
-            (checked ? "translate-x-6" : "translate-x-1")
+            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 " +
+            (checked ? "bg-blue-600" : "bg-slate-200")
           }
-        />
+        >
+          <span
+            className={
+              "inline-block size-4 rounded-full bg-white shadow-sm transition-transform duration-200 " +
+              (checked ? "translate-x-6" : "translate-x-1")
+            }
+          />
+        </span>
       </button>
     </div>
   );
@@ -2357,7 +2387,7 @@ function SettingInput({
         readOnly={readOnly}
         onChange={(e) => onChange?.(e.target.value)}
         className={
-          "w-full rounded-2xl border px-4 py-3 text-sm outline-none " +
+          "w-full rounded-2xl border px-4 py-3 text-base outline-none sm:text-sm " +
           (readOnly
             ? "border-slate-100 bg-slate-50 text-slate-400"
             : "border-slate-200 bg-slate-50 focus:border-blue-400 focus:bg-white")
@@ -2389,7 +2419,7 @@ function SettingSelect({
       <select
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:bg-white"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none sm:text-sm focus:border-blue-400 focus:bg-white"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
