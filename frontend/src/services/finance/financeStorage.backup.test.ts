@@ -44,6 +44,21 @@ beforeEach(() => {
   mockRpc.mockReset();
 });
 
+describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup domain coverage", () => {
+  it("keeps Budgets, Investments, Savings and Forex collections in the canonical backup contract", () => {
+    expect(FINANCE_BACKUP_DOMAINS).toEqual(
+      expect.arrayContaining([
+        "budgets",
+        "investments",
+        "savings",
+        "saving_transactions",
+        "forex_accounts",
+        "forex_cash_transactions",
+      ]),
+    );
+  });
+});
+
 describe("NETWORTH-HISTORY-1 backup validation", () => {
   it("accepts a complete V3 envelope including Net Worth snapshots", () => {
     const result = validateFinanceBackup(makeV3Backup());

@@ -33,9 +33,14 @@ import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 import {
   clearAllUserData,
   exportFinanceBackup,
+  FINANCE_BACKUP_VERSION,
+  getBudgets,
   getCategories,
   getDebts,
+  getForexAccounts,
   getGoals,
+  getInvestments,
+  getSavings,
   getTransactions,
   getWallets,
   resetFinanceDemoData,
@@ -78,6 +83,33 @@ const AI_MODEL_OPTIONS = [
 const SETTINGS_STATS_TIMEOUT_MS = 10_000;
 const SETTINGS_INITIAL_RETRY_MS = 750;
 const SETTINGS_LOCAL_VERSION = 1;
+
+type SettingsStats = {
+  wallets: number;
+  categories: number;
+  transactions: number;
+  debts: number;
+  goals: number;
+  budgets: number;
+  investments: number;
+  savings: number;
+  forex: number;
+};
+
+const SETTINGS_STAT_ITEMS = [
+  { key: "wallets", label: "Ví tiền" },
+  { key: "categories", label: "Danh mục" },
+  { key: "transactions", label: "Giao dịch" },
+  { key: "debts", label: "Khoản nợ" },
+  { key: "goals", label: "Mục tiêu" },
+  { key: "budgets", label: "Ngân sách" },
+  { key: "investments", label: "Đầu tư" },
+  { key: "savings", label: "Tiết kiệm" },
+  { key: "forex", label: "Forex" },
+] as const satisfies ReadonlyArray<{
+  key: keyof SettingsStats;
+  label: string;
+}>;
 
 type LocalSettingsSnapshot = {
   version: number;
@@ -130,13 +162,21 @@ export default function SettingsPage() {
   const { user, session } = useAuth();
   const { status, lastSync } = useRealtime();
 
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<SettingsStats>({
     wallets: 0,
     categories: 0,
     transactions: 0,
     debts: 0,
     goals: 0,
+    budgets: 0,
+    investments: 0,
+    savings: 0,
+    forex: 0,
   });
+  const statItems = SETTINGS_STAT_ITEMS.map((item) => ({
+    ...item,
+    value: stats[item.key],
+  }));
   // FINANCE-DATA-1B: stat pills render these counts unconditionally, so an
   // initial reloadStats() failure must not show "0" as if it were a real
   // count. isLoadingStats stays true until the first attempt (success or
@@ -258,12 +298,26 @@ export default function SettingsPage() {
   // succeeded.
   const reloadStats = useCallback(async (): Promise<boolean> => {
     try {
-      const [wallets, categories, transactions, debts, goals] = await Promise.all([
+      const [
+        wallets,
+        categories,
+        transactions,
+        debts,
+        goals,
+        budgets,
+        investments,
+        savings,
+        forexAccounts,
+      ] = await Promise.all([
         withSettingsTimeout(getWallets(), "wallets"),
         withSettingsTimeout(getCategories(), "categories"),
         withSettingsTimeout(getTransactions(), "transactions"),
         withSettingsTimeout(getDebts(), "debts"),
         withSettingsTimeout(getGoals(), "goals"),
+        withSettingsTimeout(getBudgets(), "budgets"),
+        withSettingsTimeout(getInvestments(), "investments"),
+        withSettingsTimeout(getSavings(), "savings"),
+        withSettingsTimeout(getForexAccounts(), "forex accounts"),
       ]);
 
       setStats({
@@ -272,6 +326,10 @@ export default function SettingsPage() {
         transactions: transactions.length,
         debts: debts.length,
         goals: goals.length,
+        budgets: budgets.length,
+        investments: investments.length,
+        savings: savings.length,
+        forex: forexAccounts.length,
       });
       statsLoadedRef.current = true;
       setStatsLoadError(null);
@@ -486,7 +544,7 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Reset dữ liệu demo?",
       description:
-        "Toàn bộ dữ liệu hiện tại, bao gồm Tiết kiệm và Forex, sẽ bị xóa và thay bằng dữ liệu demo.",
+        "Toàn bộ dữ liệu hiện tại (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm và Forex) sẽ bị xóa và thay bằng trạng thái demo mặc định.",
       confirmText: "Reset",
       variant: "warning",
       onConfirm: async () => {
@@ -517,7 +575,7 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Xóa toàn bộ dữ liệu?",
       description:
-        "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính, bao gồm Tiết kiệm và Forex, sẽ bị xóa vĩnh viễn.",
+        "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex và lịch sử Net Worth) sẽ bị xóa vĩnh viễn.",
       confirmText: "Xóa tất cả",
       variant: "danger",
       onConfirm: async () => {
@@ -551,7 +609,7 @@ export default function SettingsPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download =
-        "myfinance-backup-v3-" +
+        `myfinance-backup-v${FINANCE_BACKUP_VERSION}-` +
         new Date().toISOString().slice(0, 10) +
         ".json";
       link.click();
@@ -574,8 +632,8 @@ export default function SettingsPage() {
       description:
         `File ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
         "(Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, " +
-        "Tiết kiệm và Forex). Nếu bất kỳ bước nào thất bại, dữ liệu hiện tại " +
-        "sẽ được giữ nguyên.",
+        "Tiết kiệm, Forex và lịch sử Net Worth). Nếu bất kỳ bước nào thất bại, " +
+        "dữ liệu hiện tại sẽ được giữ nguyên.",
       confirmText: "Khôi phục",
       variant: "warning",
       onConfirm: async () => {
@@ -957,13 +1015,7 @@ export default function SettingsPage() {
 
           {/* Stats */}
           <div className="-mx-1 mt-4 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-5 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
-            {[
-              { label: "Ví tiền", value: stats.wallets },
-              { label: "Danh mục", value: stats.categories },
-              { label: "Giao dịch", value: stats.transactions },
-              { label: "Khoản nợ", value: stats.debts },
-              { label: "Mục tiêu", value: stats.goals },
-            ].map((s) => (
+            {statItems.map((s) => (
               <div
                 key={s.label}
                 className="flex min-w-[7.5rem] shrink-0 snap-start items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3 py-2 shadow-sm sm:min-w-0 sm:px-4"
@@ -1883,13 +1935,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {[
-                    { label: "Ví tiền", value: stats.wallets },
-                    { label: "Danh mục", value: stats.categories },
-                    { label: "Giao dịch", value: stats.transactions },
-                    { label: "Khoản nợ", value: stats.debts },
-                    { label: "Mục tiêu", value: stats.goals },
-                  ].map((s) => (
+                  {statItems.map((s) => (
                     <div
                       key={s.label}
                       className="rounded-2xl bg-slate-50 px-3 py-2.5 text-center"
@@ -1914,7 +1960,7 @@ export default function SettingsPage() {
                     Export JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Tải snapshot đầy đủ Ví, Tiết kiệm, Forex và các dữ liệu tài chính về file JSON backup V2.
+                    Tải snapshot MyFinance V{FINANCE_BACKUP_VERSION} đầy đủ cho Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex và lịch sử Net Worth.
                   </p>
                   <button
                     onClick={handleExportJson}
@@ -1934,7 +1980,7 @@ export default function SettingsPage() {
                     Import JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Khôi phục atomically từ backup MyFinance V2. Backup cũ thiếu Savings/Forex sẽ bị từ chối an toàn.
+                    Khôi phục atomically từ backup MyFinance V{FINANCE_BACKUP_VERSION}. Backup V2 hợp lệ vẫn được hỗ trợ; backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn.
                   </p>
                   <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-[.98]">
                     <Upload size={13} />
@@ -1957,7 +2003,7 @@ export default function SettingsPage() {
                     Reset demo
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Đưa dữ liệu ví, giao dịch, danh mục về mặc định demo.
+                    Đưa toàn bộ domain tài chính về trạng thái demo mặc định, gồm Ngân sách, Đầu tư, Tiết kiệm và Forex.
                   </p>
                   <button
                     onClick={handleResetDemo}
@@ -2233,8 +2279,8 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Đưa ví, giao dịch, danh mục, ngân sách, mục tiêu về dữ
-                      liệu mẫu mặc định.
+                      Đưa toàn bộ domain tài chính về trạng thái demo mặc định,
+                      gồm Ngân sách, Đầu tư, Tiết kiệm và Forex.
                     </p>
                   </div>
                   <button
