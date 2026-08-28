@@ -127,12 +127,15 @@ WITH required(function_name) AS (
     ('create_finance_transaction'),
     ('update_finance_transaction'),
     ('delete_finance_transaction'),
+    ('assert_finance_transaction_effects'),
+    ('delete_category_atomic'),
     ('create_saving_account'),
     ('create_saving_movement'),
     ('delete_saving_account'),
     ('create_forex_cash_transaction'),
     ('update_forex_cash_transaction'),
     ('delete_forex_cash_transaction'),
+    ('delete_forex_account_atomic'),
     ('export_finance_backup'),
     ('restore_finance_backup')
 )
@@ -189,8 +192,10 @@ target_functions AS (
   WHERE n.nspname = 'public'
     AND p.proname IN (
       'create_finance_transaction','update_finance_transaction','delete_finance_transaction',
+      'assert_finance_transaction_effects','delete_category_atomic',
       'create_saving_account','create_saving_movement','delete_saving_account',
       'create_forex_cash_transaction','update_forex_cash_transaction','delete_forex_cash_transaction',
+      'delete_forex_account_atomic',
       'export_finance_backup','restore_finance_backup'
     )
 ),

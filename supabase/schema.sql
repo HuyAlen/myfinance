@@ -1158,6 +1158,80 @@ GRANT EXECUTE ON FUNCTION public.delete_forex_cash_transaction TO authenticated;
 -- ============================================================================
 -- FINANCE-ENGINE-2 canonical RPC definitions
 -- ============================================================================
+
+-- DATA-INTEGRITY-2: server-authoritative validation for client-supplied
+-- wallet effects. The RPC signatures stay backward-compatible, but the DB
+-- refuses any effect vector that does not match transaction semantics.
+CREATE OR REPLACE FUNCTION public.assert_finance_transaction_effects(
+  p_type text,
+  p_amount numeric,
+  p_wallet_id text,
+  p_transfer_to_wallet_id text,
+  p_transfer_reference_type text,
+  p_source_type text,
+  p_destination_type text,
+  p_effect_wallet_id_1 text,
+  p_effect_delta_1 numeric,
+  p_effect_wallet_id_2 text,
+  p_effect_delta_2 numeric
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_expected_wallet_1 text;
+  v_expected_delta_1 numeric;
+  v_expected_wallet_2 text;
+  v_expected_delta_2 numeric;
+BEGIN
+  IF p_amount IS NULL OR p_amount <= 0 OR p_wallet_id IS NULL THEN
+    RAISE EXCEPTION 'Invalid transaction effect input' USING ERRCODE = 'MFE04';
+  END IF;
+
+  IF p_type = 'income' THEN
+    v_expected_wallet_1 := p_wallet_id;
+    v_expected_delta_1 := p_amount;
+  ELSIF p_type = 'expense' THEN
+    v_expected_wallet_1 := p_wallet_id;
+    v_expected_delta_1 := -p_amount;
+  ELSIF p_type = 'transfer' AND lower(coalesce(p_transfer_reference_type, '')) = 'saving' THEN
+    v_expected_wallet_1 := p_wallet_id;
+    IF lower(coalesce(p_source_type, '')) = 'wallet'
+       AND lower(coalesce(p_destination_type, '')) = 'saving' THEN
+      v_expected_delta_1 := -p_amount;
+    ELSIF lower(coalesce(p_source_type, '')) = 'saving'
+       AND lower(coalesce(p_destination_type, '')) = 'wallet' THEN
+      v_expected_delta_1 := p_amount;
+    ELSE
+      RAISE EXCEPTION 'Invalid saving transfer direction' USING ERRCODE = 'MFE04';
+    END IF;
+  ELSIF p_type = 'transfer' THEN
+    IF p_transfer_to_wallet_id IS NULL OR p_transfer_to_wallet_id = p_wallet_id THEN
+      RAISE EXCEPTION 'Invalid wallet transfer destination' USING ERRCODE = 'MFE04';
+    END IF;
+    v_expected_wallet_1 := p_wallet_id;
+    v_expected_delta_1 := -p_amount;
+    v_expected_wallet_2 := p_transfer_to_wallet_id;
+    v_expected_delta_2 := p_amount;
+  ELSE
+    RAISE EXCEPTION 'Invalid transaction type' USING ERRCODE = 'MFE04';
+  END IF;
+
+  IF p_effect_wallet_id_1 IS DISTINCT FROM v_expected_wallet_1
+     OR p_effect_delta_1 IS DISTINCT FROM v_expected_delta_1
+     OR p_effect_wallet_id_2 IS DISTINCT FROM v_expected_wallet_2
+     OR p_effect_delta_2 IS DISTINCT FROM v_expected_delta_2 THEN
+    RAISE EXCEPTION 'Client wallet effects do not match transaction semantics'
+      USING ERRCODE = 'MFE04';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_finance_transaction_effects FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.assert_finance_transaction_effects TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.create_finance_transaction(
   p_id text,
   p_type text,
@@ -1208,6 +1282,21 @@ BEGIN
 
   IF p_effect_wallet_id_1 IS NULL THEN
     RAISE EXCEPTION 'At least one affected wallet is required' USING ERRCODE = 'MFE04';
+  END IF;
+
+  -- DATA-INTEGRITY-2: never trust a caller-provided balance delta.
+  PERFORM public.assert_finance_transaction_effects(
+    p_type, p_amount, p_wallet_id, p_transfer_to_wallet_id,
+    p_transfer_reference_type, p_source_type, p_destination_type,
+    p_effect_wallet_id_1, p_effect_delta_1,
+    p_effect_wallet_id_2, p_effect_delta_2
+  );
+
+  IF p_type IN ('income', 'expense') AND NOT EXISTS (
+    SELECT 1 FROM categories
+    WHERE id = p_category_id AND user_id = v_user_id AND type::text = p_type
+  ) THEN
+    RAISE EXCEPTION 'Category not found or type mismatch' USING ERRCODE = 'MFE04';
   END IF;
 
   v_wallet_ids := ARRAY[p_effect_wallet_id_1];
@@ -1381,6 +1470,27 @@ BEGIN
       USING ERRCODE = 'MFE07';
   END IF;
 
+  PERFORM public.assert_finance_transaction_effects(
+    v_existing.type::text, v_existing.amount, v_existing."walletId",
+    v_existing."transferToWalletId", v_existing.transfer_reference_type,
+    v_existing.source_type, v_existing.destination_type,
+    p_old_effect_wallet_id_1, p_old_effect_delta_1,
+    p_old_effect_wallet_id_2, p_old_effect_delta_2
+  );
+  PERFORM public.assert_finance_transaction_effects(
+    p_type, p_amount, p_wallet_id, p_transfer_to_wallet_id,
+    p_transfer_reference_type, p_source_type, p_destination_type,
+    p_new_effect_wallet_id_1, p_new_effect_delta_1,
+    p_new_effect_wallet_id_2, p_new_effect_delta_2
+  );
+
+  IF p_type IN ('income', 'expense') AND NOT EXISTS (
+    SELECT 1 FROM categories
+    WHERE id = p_category_id AND user_id = v_user_id AND type::text = p_type
+  ) THEN
+    RAISE EXCEPTION 'Category not found or type mismatch' USING ERRCODE = 'MFE04';
+  END IF;
+
   IF p_old_effect_wallet_id_1 IS NOT NULL THEN
     v_wallet_ids := array_append(v_wallet_ids, p_old_effect_wallet_id_1);
   END IF;
@@ -1548,6 +1658,14 @@ BEGIN
       USING ERRCODE = 'MFE07';
   END IF;
 
+  PERFORM public.assert_finance_transaction_effects(
+    v_existing.type::text, v_existing.amount, v_existing."walletId",
+    v_existing."transferToWalletId", v_existing.transfer_reference_type,
+    v_existing.source_type, v_existing.destination_type,
+    p_effect_wallet_id_1, p_effect_delta_1,
+    p_effect_wallet_id_2, p_effect_delta_2
+  );
+
   IF p_effect_wallet_id_1 IS NOT NULL THEN
     v_wallet_ids := ARRAY[p_effect_wallet_id_1];
     IF p_effect_wallet_id_2 IS NOT NULL THEN
@@ -1603,6 +1721,47 @@ $$;
 REVOKE ALL ON FUNCTION public.delete_finance_transaction FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_finance_transaction TO authenticated;
 
+
+
+-- DATA-INTEGRITY-2: category delete is server-authoritative. Transactions do
+-- not carry a physical FK to categories because transfer rows use an empty
+-- category id, so the dependency check must live in the same locked DB
+-- transaction as the delete.
+CREATE OR REPLACE FUNCTION public.delete_category_atomic(p_category_id text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFC01';
+  END IF;
+
+  PERFORM 1 FROM categories
+    WHERE id = p_category_id AND user_id = v_user_id
+    FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Category not found' USING ERRCODE = 'MFC03';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM transactions
+    WHERE user_id = v_user_id AND "categoryId" = p_category_id
+  ) OR EXISTS (
+    SELECT 1 FROM budgets
+    WHERE user_id = v_user_id AND "categoryId" = p_category_id
+  ) THEN
+    RAISE EXCEPTION 'Category is still referenced' USING ERRCODE = 'MFC02';
+  END IF;
+
+  DELETE FROM categories WHERE id = p_category_id AND user_id = v_user_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.delete_category_atomic(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.delete_category_atomic(text) TO authenticated;
 
 -- ============================================================================
 -- WALLETS-INTEGRITY-2 - Atomic Wallet Delete & Reference Guard
@@ -2012,6 +2171,76 @@ $$;
 
 REVOKE ALL ON FUNCTION public.delete_saving_account FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_saving_account TO authenticated;
+
+-- INVESTMENTS-CORRECTNESS-1
+-- Atomic deletion of a Forex account and its linked cash ledger.
+--
+-- Why this exists:
+-- The old client deleted linked forex_cash_transactions one-by-one and only
+-- then deleted forex_accounts. If one middle RPC failed, earlier deletions had
+-- already committed and wallet balances/history were left partially reversed.
+--
+-- This wrapper keeps the existing, authoritative
+-- delete_forex_cash_transaction() semantics for each cash movement, but invokes
+-- every deletion inside ONE outer PostgreSQL function call. PostgreSQL treats
+-- the RPC as one transaction: any error rolls back every nested ledger delete,
+-- wallet reversal, and the final account delete together.
+
+create or replace function public.delete_forex_account_atomic(
+  p_account_id uuid
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_transaction record;
+begin
+  -- Lock and authorize the account first. RLS remains an independent backstop,
+  -- while the explicit user predicate prevents cross-user deletion even if
+  -- policies drift later.
+  perform 1
+  from public.forex_accounts
+  where id = p_account_id
+    and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception using
+      errcode = 'MFX01',
+      message = 'Không tìm thấy tài khoản Forex.';
+  end if;
+
+  -- Lock the exact linked ledger set before mutating it. Each nested function
+  -- reverses its own wallet effect using the same production logic already used
+  -- by single-transaction deletion. A failure here aborts the OUTER RPC too.
+  for v_transaction in
+    select id
+    from public.forex_cash_transactions
+    where forex_account_id = p_account_id
+      and user_id = auth.uid()
+    order by created_at, id
+    for update
+  loop
+    perform public.delete_forex_cash_transaction(p_id => v_transaction.id);
+  end loop;
+
+  delete from public.forex_accounts
+  where id = p_account_id
+    and user_id = auth.uid();
+
+  if not found then
+    raise exception using
+      errcode = 'MFX01',
+      message = 'Không tìm thấy tài khoản Forex.';
+  end if;
+end;
+$$;
+
+revoke all on function public.delete_forex_account_atomic(uuid) from public;
+grant execute on function public.delete_forex_account_atomic(uuid) to authenticated;
+
 
 -- ============================================================================
 -- NETWORTH-HISTORY-1 canonical monthly Net Worth history + backup V3

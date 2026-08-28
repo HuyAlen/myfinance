@@ -178,6 +178,33 @@ export async function updatePendingAction(input: {
   return data as PendingActionRecord;
 }
 
+export async function updatePendingActionIfStatus(input: {
+  context: AIFinanceToolContext;
+  actionId: string;
+  expectedStatus: PendingActionStatus;
+  values: Record<string, unknown>;
+}) {
+  const client = clientOf(input.context);
+
+  const { data, error } = await client
+    .from("ai_pending_actions")
+    .update({
+      ...input.values,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.actionId)
+    .eq("user_id", input.context.userId)
+    .eq("status", input.expectedStatus)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`ai_pending_actions: ${error.message}`);
+  }
+
+  return (data ?? null) as PendingActionRecord | null;
+}
+
 export async function findLatestActivePendingAction(input: {
   context: AIFinanceToolContext;
   conversationId: string;

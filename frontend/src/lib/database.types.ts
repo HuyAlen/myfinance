@@ -712,6 +712,7 @@ export type Database = {
         Returns: undefined;
       };
       delete_wallet_atomic: { Args: { p_wallet_id: string }; Returns: undefined };
+      delete_category_atomic: { Args: { p_category_id: string }; Returns: undefined };
       create_saving_account: {
         Args: { p_saving_id: string; p_name: string; p_type: string; p_balance: number; p_wallet_id: string; p_saving_transaction_id: string; p_transaction_date: string; p_interest_rate?: number | null; p_maturity_date?: string | null; p_notes?: string | null };
         Returns: { saving: SavingRow; wallet: WalletRow; saving_transaction: SavingTransactionRow }[];
@@ -730,6 +731,7 @@ export type Database = {
         Returns: ForexCashTransactionRow;
       };
       delete_forex_cash_transaction: { Args: { p_id: string }; Returns: undefined };
+      delete_forex_account_atomic: { Args: { p_account_id: string }; Returns: undefined };
       capture_current_net_worth_snapshot: { Args: { p_user_id: string }; Returns: undefined };
       export_finance_backup: { Args: Record<PropertyKey, never>; Returns: Json };
       restore_finance_backup: { Args: { p_backup: Json }; Returns: Json };

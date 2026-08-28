@@ -5,6 +5,7 @@ import { recordAIActionAudit } from "./aiActionAuditRepository.server";
 import {
   getPendingAction,
   updatePendingAction,
+  updatePendingActionIfStatus,
   type PendingActionRecord,
 } from "./aiPendingActionRepository.server";
 
@@ -213,9 +214,14 @@ export async function confirmAndExecutePendingAction(input: {
     throw new Error(`PENDING_ACTION_${expired.status.toUpperCase()}`);
   }
 
-  const executing = await updatePendingAction({
+  // DATA-INTEGRITY-2: claim the pending row with compare-and-set semantics.
+  // Two simultaneous confirmations can both READ "pending", but only one is
+  // allowed to transition pending -> executing; the loser never executes the
+  // write tool (critical for create_goal, which has no natural uniqueness).
+  const executing = await updatePendingActionIfStatus({
     context: input.context,
     actionId: input.actionId,
+    expectedStatus: "pending",
     values: {
       status: "executing",
       confirmed_at: new Date().toISOString(),
@@ -223,6 +229,19 @@ export async function confirmAndExecutePendingAction(input: {
       error_message: null,
     },
   });
+
+  if (!executing) {
+    const current = await getPendingAction(input);
+    if (current && hasExecutionEvidence(current)) {
+      return (
+        (await reconcilePreviouslyExecutedAction({
+          context: input.context,
+          action: current,
+        })) ?? current
+      );
+    }
+    throw new Error("PENDING_ACTION_IN_PROGRESS");
+  }
 
   let result: unknown;
 
@@ -315,13 +334,20 @@ export async function cancelPendingAction(input: {
     throw new Error(`PENDING_ACTION_${action.status.toUpperCase()}`);
   }
 
-  const cancelled = await updatePendingAction({
+  const cancelled = await updatePendingActionIfStatus({
     context: input.context,
     actionId: input.actionId,
+    expectedStatus: "pending",
     values: {
       status: "cancelled",
     },
   });
+
+  if (!cancelled) {
+    const current = await getPendingAction(input);
+    if (current?.status === "cancelled") return current;
+    throw new Error("PENDING_ACTION_IN_PROGRESS");
+  }
 
   await recordAuditBestEffort({
     context: input.context,

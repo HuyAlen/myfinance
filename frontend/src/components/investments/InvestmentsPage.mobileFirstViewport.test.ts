@@ -110,7 +110,7 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
   });
 
   it("preserves correctness-1 recovery and atomic-delete contracts", () => {
-    expect(source).toContain("delete_forex_account_atomic");
+    expect(source).toContain("deleteForexAccount");
     expect(source).toContain("withInvestmentDomainLoadTimeout");
     expect(source).toContain("INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS");
     expect(source).toContain('window.addEventListener("online"');

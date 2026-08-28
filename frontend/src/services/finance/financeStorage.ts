@@ -714,6 +714,7 @@ function toForexAccountRow(
     status: account.status,
     opened_at: account.openedAt ?? null,
     notes: account.notes ?? null,
+    current_equity: account.currentEquity ?? null,
   };
 }
 
@@ -2254,9 +2255,13 @@ function mapCategoryIntegrityError(error: {
   code?: string;
   message: string;
 }) {
-  if (error.code === "23503") {
-    return "Không thể xóa danh mục vì vẫn còn ngân sách liên kết. Hãy xóa hoặc chuyển ngân sách sang danh mục khác trước.";
+  if (error.code === "MFC02" || error.code === "23503") {
+    return "Không thể xóa danh mục vì vẫn còn giao dịch hoặc ngân sách liên kết. Hãy xóa hoặc chuyển các liên kết trước.";
   }
+  if (error.code === "MFC03") {
+    return "Không tìm thấy danh mục cần xóa.";
+  }
+  if (error.code === "MFC01") return ERR_NO_AUTH;
   return error.message;
 }
 
@@ -2323,11 +2328,14 @@ export async function deleteCategory(
 ): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
-    .from("categories")
-    .delete()
-    .eq("id", categoryId)
-    .eq("user_id", userId);
+
+  // DATA-INTEGRITY-2: transaction/budget dependency checks and deletion are
+  // one server-side lock/check/delete boundary. The Categories UI still does
+  // a preflight for fast feedback, but correctness never depends on that
+  // inherently-racy client snapshot.
+  const { error } = await supabase.rpc("delete_category_atomic", {
+    p_category_id: categoryId,
+  });
   if (error) {
     console.error("[financeStorage] deleteCategory:", error.message);
     return { error: mapCategoryIntegrityError(error) };
@@ -2591,11 +2599,12 @@ export async function deleteForexAccount(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const { error } = await supabase
-    .from("forex_accounts")
-    .delete()
-    .eq("id", accountId)
-    .eq("user_id", userId);
+  // DATA-INTEGRITY-2: deleting an account must reverse every linked cash
+  // movement and delete the account in one PostgreSQL transaction. Never
+  // expose a direct-table fallback here.
+  const { error } = await supabase.rpc("delete_forex_account_atomic", {
+    p_account_id: accountId,
+  });
 
   if (error) {
     console.error("[financeStorage] deleteForexAccount:", error.message);

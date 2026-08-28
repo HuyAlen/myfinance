@@ -97,8 +97,7 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     const start = source.indexOf("function requestDeleteAccount");
     const end = source.indexOf("function requestDeleteTransaction", start);
     const region = source.slice(start, end);
-    expect(region).toContain('supabase.rpc("delete_forex_account_atomic"');
-    expect(region).toContain("p_account_id: account.id");
+    expect(region).toContain("await deleteForexAccount(account.id)");
     expect(region).not.toContain("for (const transactionId");
     expect(region).not.toContain('.from("forex_accounts")');
     expect(region).not.toContain('"delete_forex_cash_transaction"');

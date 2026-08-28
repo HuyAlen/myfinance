@@ -33,10 +33,13 @@ import { supabase } from "@/src/lib/supabase";
 import { getForexAssetValue } from "@/src/services/finance/financeCalculations";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
+  addForexAccount,
   addInvestment,
+  deleteForexAccount,
   deleteInvestment,
   getInvestments,
   getWallets,
+  updateForexAccount,
   updateInvestment,
 } from "@/src/services/finance/financeStorage";
 import type {
@@ -893,33 +896,29 @@ export default function InvestmentsPage() {
     setSaveError(null);
 
     try {
-      const payload = {
+      const account = {
         id: accountForm.id || crypto.randomUUID(),
         name: accountForm.name.trim(),
         broker: accountForm.broker.trim(),
-        account_number: accountForm.accountNumber.trim() || null,
+        accountNumber: accountForm.accountNumber.trim() || undefined,
         currency: "VND",
         status: accountForm.status,
-        opened_at: accountForm.openedAt || null,
-        notes: accountForm.notes.trim() || null,
-        current_equity:
+        openedAt: accountForm.openedAt || undefined,
+        notes: accountForm.notes.trim() || undefined,
+        currentEquity:
           accountForm.currentEquity.trim() === ""
             ? null
             : Number(accountForm.currentEquity),
-        updated_at: new Date().toISOString(),
       };
 
+      // DATA-INTEGRITY-2: account ownership/user_id mapping lives in the
+      // storage boundary. Direct table inserts here previously omitted the
+      // required user_id and bypassed the canonical write path.
       const result = accountForm.id
-        ? await supabase
-            .from("forex_accounts")
-            .update(payload)
-            .eq("id", accountForm.id)
-        : await supabase.from("forex_accounts").insert({
-            ...payload,
-            created_at: new Date().toISOString(),
-          });
+        ? await updateForexAccount(account)
+        : await addForexAccount(account);
 
-      if (result.error) throw result.error;
+      if (result.error) throw new Error(result.error);
 
       await reload();
       setAccountModalOpen(false);
@@ -1014,15 +1013,12 @@ export default function InvestmentsPage() {
       description: `Tài khoản ${account.name} và lịch sử liên quan sẽ được xóa trong một giao dịch an toàn; số dư ví được hoàn tác tương ứng.`,
       variant: "danger",
       onConfirm: async () => {
-        // Correctness boundary: deleting the account, reversing every linked
-        // cash movement, and deleting those ledger rows must commit or roll
-        // back together. Never loop client-side through transactions here.
-        const result = await supabase.rpc("delete_forex_account_atomic", {
-          p_account_id: account.id,
-        });
+        // Correctness boundary is centralized in financeStorage: the storage
+        // method is fail-closed and routes exclusively through the atomic RPC.
+        const result = await deleteForexAccount(account.id);
 
         if (result.error) {
-          toast({ variant: "error", message: result.error.message });
+          toast({ variant: "error", message: result.error });
           return;
         }
 
