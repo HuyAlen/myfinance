@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
+import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import {
   Area,
   AreaChart,
@@ -106,6 +107,12 @@ const INV_TYPE_LABEL: Record<string, string> = {
   gold: "Vàng",
   other: "Khác",
 };
+
+// A single finance mutation can emit several postgres_changes events (for
+// example saving/forex movement + balance updates). Reports reloads a broad
+// cross-domain snapshot, so fold those bursts into one refresh instead of
+// racing multiple full Promise.all cycles against each other.
+const REPORTS_REALTIME_REFRESH_DEBOUNCE_MS = 120;
 
 type SavingRow = {
   id: string;
@@ -522,14 +529,13 @@ export default function ReportsPage() {
   );
   const [reportTab, setReportTab] = useState<ReportTab>("overview");
 
-  useEffect(() => {
-    // FINANCE-DATA-1: these readers now reject on a genuine query failure
-    // instead of silently resolving to [] — caught here so a failure never
-    // becomes an unhandled rejection. Leaves the report page at its default
-    // (empty) state rather than crashing; a page refresh retries.
+  const load = useCallback(
     async function load() {
+      // FINANCE-DATA-1: these readers now reject on a genuine query failure
+      // instead of silently resolving to [] — caught here so a failure never
+      // becomes an unhandled rejection. Leaves the report page at its default
+      // (empty) state rather than crashing; a page refresh retries.
       try {
-        await initFinanceDemoData();
         const [
           w,
           inv,
@@ -604,8 +610,75 @@ export default function ReportsPage() {
       } finally {
         setIsLoadingReports(false);
       }
+    },
+    [],
+  );
+
+  const isReportsReloadingRef = useRef(false);
+  const hasPendingReportsReloadRef = useRef(false);
+  const runReportsReload = useCallback(async () => {
+    if (isReportsReloadingRef.current) {
+      hasPendingReportsReloadRef.current = true;
+      return;
     }
-    load();
+    isReportsReloadingRef.current = true;
+    try {
+      do {
+        hasPendingReportsReloadRef.current = false;
+        await load();
+      } while (hasPendingReportsReloadRef.current);
+    } finally {
+      isReportsReloadingRef.current = false;
+    }
+  }, [load]);
+
+  useEffect(() => {
+    // Demo seeding is an initial-load concern only. Running the seed RPC from
+    // a realtime callback can itself emit table changes and feed back into the
+    // subscription that requested the refresh.
+    void (async () => {
+      await initFinanceDemoData();
+      await runReportsReload();
+    })();
+  }, [runReportsReload]);
+
+  const reportsRealtimeTimerRef = useRef<number | null>(null);
+  const requestReportsRealtimeRefresh = useCallback(() => {
+    if (reportsRealtimeTimerRef.current) {
+      window.clearTimeout(reportsRealtimeTimerRef.current);
+    }
+    reportsRealtimeTimerRef.current = window.setTimeout(() => {
+      reportsRealtimeTimerRef.current = null;
+      void runReportsReload();
+    }, REPORTS_REALTIME_REFRESH_DEBOUNCE_MS);
+  }, [runReportsReload]);
+
+  // REALTIME-NAV-INTEGRITY-1: every table consumed by the report snapshot is
+  // part of its realtime dependency contract. This keeps Net Worth, flow,
+  // goals, budgets and analytics in one coherent refresh boundary.
+  useRealtimeTable(
+    [
+      "wallets",
+      "investments",
+      "categories",
+      "transactions",
+      "debts",
+      "goals",
+      "budgets",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "savings",
+      "saving_transactions",
+    ],
+    requestReportsRealtimeRefresh,
+  );
+
+  useEffect(() => {
+    return () => {
+      if (reportsRealtimeTimerRef.current) {
+        window.clearTimeout(reportsRealtimeTimerRef.current);
+      }
+    };
   }, []);
 
   // ── Filtered transactions (preserved) ────────────────────────────────────

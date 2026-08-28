@@ -23,7 +23,9 @@ describe("Header unified investment-domain search", () => {
   });
 
   it("refreshes the search index when either investment owner changes", () => {
-    expect(source).toContain('["investments", "forex_accounts"]');
+    expect(source).toContain(
+      '["wallets", "investments", "forex_accounts"]',
+    );
     expect(source).toContain("requestHeaderRefresh");
   });
 });

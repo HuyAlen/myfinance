@@ -168,7 +168,7 @@ describe("no Header-owned Supabase realtime channel — reuses the existing Real
     expect(source).toContain("useRealtimeTable(");
   });
 
-  it("keeps notification realtime dependencies separate from search-only investment dependencies", () => {
+  it("keeps notification realtime dependencies separate from search-only entity dependencies", () => {
     const notificationStart = source.indexOf("useRealtimeTable(");
     expect(notificationStart).toBeGreaterThan(-1);
     const notificationEnd = source.indexOf(");", notificationStart);
@@ -198,6 +198,7 @@ describe("no Header-owned Supabase realtime channel — reuses the existing Real
     expect(searchStart).toBeGreaterThan(notificationEnd);
     const searchEnd = source.indexOf(");", searchStart);
     const searchCall = source.slice(searchStart, searchEnd);
+    expect(searchCall).toContain('"wallets"');
     expect(searchCall).toContain('"investments"');
     expect(searchCall).toContain('"forex_accounts"');
     expect(searchCall).not.toContain('"forex_cash_transactions"');

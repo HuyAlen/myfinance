@@ -9,6 +9,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { useSearchParams } from "next/navigation";
+import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -464,6 +467,8 @@ const getProgressLabel = (saving: SavingWithWallet) => {
 export default function SavingsPage({
   savings = EMPTY_SAVINGS,
 }: SavingsPageProps) {
+  const searchParams = useSearchParams();
+  const focusSavingId = parseFocusId(searchParams, "savingId");
   const [localSavings, setLocalSavings] = useState<SavingWithWallet[]>(savings);
   const [wallets, setWallets] = useState<WalletType[]>([]);
   // FINANCE-DATA-1B: selectedWalletBalance below falls back to 0 when the
@@ -499,6 +504,11 @@ export default function SavingsPage({
   const [transactionError, setTransactionError] = useState("");
   const [isHydrating, setIsHydrating] = useState(false);
   const [isPersisting, setIsPersisting] = useState(false);
+  const [highlightedSavingId, setHighlightedSavingId] = useState<string | null>(
+    null,
+  );
+  const focusedSavingIdRef = useRef<string | null>(null);
+  const savingsPageMountedRef = useRef(true);
 
   const metrics = useMemo(() => {
     const totalSavings = localSavings.reduce(
@@ -561,6 +571,39 @@ export default function SavingsPage({
       return matchesSearch && matchesFilter;
     });
   }, [activeFilter, localSavings, searchTerm]);
+
+  // REALTIME-NAV-INTEGRITY-1: savingId is an entity-focus instruction, not a
+  // persistent list filter. If a search/filter currently hides the requested
+  // saving, restore the neutral list first, then scroll/highlight the card.
+  // Unknown/deleted ids are ignored without disturbing the user's filters.
+  useEffect(() => {
+    if (!focusSavingId || focusedSavingIdRef.current === focusSavingId) return;
+    if (!localSavings.some((saving) => saving.id === focusSavingId)) return;
+
+    if (searchTerm || activeFilter !== "all") {
+      setSearchTerm("");
+      setActiveFilter("all");
+      return;
+    }
+
+    const el = document.getElementById(`saving-card-${focusSavingId}`);
+    if (!el) return;
+
+    focusedSavingIdRef.current = focusSavingId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightTimer = window.setTimeout(
+      () => setHighlightedSavingId(focusSavingId),
+      0,
+    );
+    const clearTimer = window.setTimeout(
+      () => setHighlightedSavingId(null),
+      2500,
+    );
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [activeFilter, focusSavingId, localSavings, searchTerm]);
 
   useEffect(() => {
     walletsRef.current = wallets;
@@ -773,6 +816,13 @@ export default function SavingsPage({
     setToast(nextToast);
   }, []);
 
+  useEffect(() => {
+    savingsPageMountedRef.current = true;
+    return () => {
+      savingsPageMountedRef.current = false;
+    };
+  }, []);
+
   const persistWalletBalance = useCallback(async (wallet: WalletType) => {
     const localResult = await updateWallet(wallet);
 
@@ -794,13 +844,11 @@ export default function SavingsPage({
     return { error: null };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
+  const loadWalletsForSavingsEngine = useCallback(
     async function loadWalletsForSavingsEngine() {
       try {
         const walletRows = await getWallets();
-        if (!isMounted) return;
+        if (!savingsPageMountedRef.current) return;
 
         setWallets(walletRows);
         setWalletsLoadError(null);
@@ -825,7 +873,7 @@ export default function SavingsPage({
           };
         });
       } catch (error) {
-        if (!isMounted) return;
+        if (!savingsPageMountedRef.current) return;
 
         setWalletsLoadError(
           "Không thể tải số dư ví. Vui lòng tải lại trang.",
@@ -838,21 +886,17 @@ export default function SavingsPage({
               : "Không thể tải ví để đồng bộ tiết kiệm.",
         });
       }
-    }
-
-    void loadWalletsForSavingsEngine();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [showToast]);
+    },
+    [showToast],
+  );
 
   useEffect(() => {
-    if (!supabase) return;
+    void loadWalletsForSavingsEngine();
+  }, [loadWalletsForSavingsEngine]);
 
-    let isMounted = true;
-
-    const fetchSavingsData = async () => {
+  const loadSavingsSnapshot = useCallback(
+    async function loadSavingsSnapshot() {
+      if (!supabase) return;
       setIsHydrating(true);
 
       const [
@@ -874,7 +918,7 @@ export default function SavingsPage({
           .order("created_at", { ascending: false }),
       ]);
 
-      if (!isMounted) return;
+      if (!savingsPageMountedRef.current) return;
 
       if (savingsError || transactionsError) {
         showToast({
@@ -898,14 +942,40 @@ export default function SavingsPage({
       setLocalSavings(nextSavings);
       setTransactionsBySavingId(groupTransactionsBySavingId(nextTransactions));
       setIsHydrating(false);
-    };
+    },
+    [showToast],
+  );
 
-    void fetchSavingsData();
+  useEffect(() => {
+    void loadSavingsSnapshot();
+  }, [loadSavingsSnapshot]);
 
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const requestRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimerRef.current) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+    realtimeRefreshTimerRef.current = window.setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      void Promise.all([
+        loadWalletsForSavingsEngine(),
+        loadSavingsSnapshot(),
+      ]);
+    }, 100);
+  }, [loadSavingsSnapshot, loadWalletsForSavingsEngine]);
+
+  useRealtimeTable(
+    ["savings", "saving_transactions", "wallets"],
+    requestRealtimeRefresh,
+  );
+
+  useEffect(() => {
     return () => {
-      isMounted = false;
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+      }
     };
-  }, [showToast]);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -1956,7 +2026,12 @@ export default function SavingsPage({
               return (
                 <article
                   key={item.id}
-                  className="group rounded-2xl border border-[#DCE6EF] bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50 sm:rounded-3xl sm:p-5"
+                  id={`saving-card-${item.id}`}
+                  className={`group rounded-2xl border bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-50 sm:rounded-3xl sm:p-5 ${
+                    highlightedSavingId === item.id
+                      ? "border-blue-300 ring-2 ring-blue-200 ring-offset-2"
+                      : "border-[#DCE6EF]"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">

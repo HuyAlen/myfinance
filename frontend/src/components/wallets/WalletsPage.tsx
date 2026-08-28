@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
-import { buildTransactionsHref } from "@/src/lib/navigation/financeNavigation";
+import {
+  buildTransactionsHref,
+  parseFocusId,
+} from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -237,6 +241,8 @@ const REALTIME_REFRESH_DEBOUNCE_MS = 100;
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function WalletsPage() {
+  const searchParams = useSearchParams();
+  const focusWalletId = parseFocusId(searchParams, "walletId");
   const [wallets, setWallets] = useState<WalletType[]>([]);
   // FINANCE-DATA-1B: `wallets` starts at [] the same as a genuine
   // zero-wallet account, so the empty-state CTA below must not trust
@@ -281,6 +287,10 @@ export default function WalletsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingWallet, setIsSavingWallet] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [highlightedWalletId, setHighlightedWalletId] = useState<string | null>(
+    null,
+  );
+  const focusedWalletIdRef = useRef<string | null>(null);
   const { toast } = useToast();
 
   // Stable identity: unlike Transactions/Dashboard, Wallets analytics always
@@ -426,6 +436,33 @@ export default function WalletsPage() {
     () => wallets.filter(isSpendableWallet),
     [wallets],
   );
+
+  // REALTIME-NAV-INTEGRITY-1: entity-focus links are navigation context, not
+  // filters. Once the authoritative wallet snapshot contains the requested
+  // row, reveal that exact card and briefly highlight it. Unknown/deleted ids
+  // are ignored and leave the normal page untouched.
+  useEffect(() => {
+    if (!focusWalletId || focusedWalletIdRef.current === focusWalletId) return;
+    if (!spendableWallets.some((wallet) => wallet.id === focusWalletId)) return;
+
+    const el = document.getElementById(`wallet-card-${focusWalletId}`);
+    if (!el) return;
+
+    focusedWalletIdRef.current = focusWalletId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const highlightTimer = window.setTimeout(
+      () => setHighlightedWalletId(focusWalletId),
+      0,
+    );
+    const clearTimer = window.setTimeout(
+      () => setHighlightedWalletId(null),
+      2500,
+    );
+    return () => {
+      window.clearTimeout(highlightTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusWalletId, spendableWallets]);
 
   const totalAssets = useMemo(
     () => getTotalAssets(spendableWallets),
@@ -1062,7 +1099,12 @@ export default function WalletsPage() {
             return (
               <div
                 key={wallet.id}
-                className="group relative rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md sm:rounded-4xl sm:p-5"
+                id={`wallet-card-${wallet.id}`}
+                className={`group relative rounded-3xl border bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md sm:rounded-4xl sm:p-5 ${
+                  highlightedWalletId === wallet.id
+                    ? "border-blue-300 ring-2 ring-blue-200 ring-offset-2"
+                    : "border-slate-200"
+                }`}
               >
                 {/* Header */}
                 <div className="min-w-0 pr-12 sm:pr-20">

@@ -306,7 +306,11 @@ export default function BudgetsPage() {
     return () => window.clearTimeout(timer);
   }, [reloadData]);
 
-  useRealtimeTable(["budgets", "transactions"], reloadData);
+  // REALTIME-NAV-INTEGRITY-1: category planning-group/type changes affect
+  // which budgets are considered real-expense budgets and how their cards are
+  // labelled. Keep every read dependency in the realtime contract, not only
+  // the two tables that hold budget/transaction rows themselves.
+  useRealtimeTable(["budgets", "transactions", "categories"], reloadData);
 
   // ── PRESERVED: expense categories ─────────────────────────────────────────
   const expenseCategories = useMemo(

@@ -29,6 +29,7 @@ import ConfirmDialog, {
 } from "@/src/components/ui/ConfirmDialog";
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
+import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { supabase } from "@/src/lib/supabase";
 import { getForexAssetValue } from "@/src/services/finance/financeCalculations";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
@@ -584,36 +585,17 @@ export default function InvestmentsPage() {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    const channel = supabase
-      .channel("investments-domain-page")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "investments" },
-        () => void reload(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "forex_accounts" },
-        () => void reload(),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "forex_cash_transactions",
-        },
-        () => void reload(),
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+  // REALTIME-NAV-INTEGRITY-1: reuse the app-level, user-scoped realtime
+  // channel instead of owning a second unfiltered Supabase subscription.
+  // Wallets are a direct dependency too: Forex deposit/withdraw previews and
+  // selectors must refresh when a wallet changes elsewhere in the app.
+  const requestInvestmentRealtimeRefresh = useCallback(() => {
+    void reload();
   }, [reload]);
+  useRealtimeTable(
+    ["investments", "forex_accounts", "forex_cash_transactions", "wallets"],
+    requestInvestmentRealtimeRefresh,
+  );
 
   const focusQuery = searchParams.toString();
   const focusParams = useMemo(

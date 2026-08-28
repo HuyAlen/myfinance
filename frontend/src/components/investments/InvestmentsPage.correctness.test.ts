@@ -111,9 +111,11 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain("const knownEquityAccounts = currentPortfolioAccounts.filter(");
   });
 
-  it("subscribes Portfolio and Forex tables under the same owner page", () => {
-    expect(source).toContain('table: "investments"');
-    expect(source).toContain('table: "forex_accounts"');
-    expect(source).toContain('table: "forex_cash_transactions"');
+  it("subscribes Portfolio, Forex and wallet dependencies through the shared owner channel", () => {
+    expect(source).toContain("useRealtimeTable(");
+    expect(source).toContain(
+      '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
+    );
+    expect(source).not.toContain('supabase.channel("investments-domain-page")');
   });
 });

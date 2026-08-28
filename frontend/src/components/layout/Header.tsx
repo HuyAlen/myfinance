@@ -19,6 +19,7 @@ import {
   Settings,
   Sparkles,
   Target,
+  PiggyBank,
   User,
   Wallet,
   X,
@@ -44,7 +45,13 @@ import {
   type NotificationFirstSeenMap,
 } from "@/src/lib/notifications/notificationOrdering";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
-import { buildInvestmentsHref } from "@/src/lib/navigation/financeNavigation";
+import {
+  buildDebtsHref,
+  buildGoalsHref,
+  buildInvestmentsHref,
+  buildSavingsHref,
+  buildWalletsHref,
+} from "@/src/lib/navigation/financeNavigation";
 
 import {
   getBudgets,
@@ -114,7 +121,14 @@ type SearchResult = {
   label: string;
   sub: string;
   href: string;
-  kind: "transaction" | "wallet" | "category" | "goal" | "debt" | "investment";
+  kind:
+    | "transaction"
+    | "wallet"
+    | "saving"
+    | "category"
+    | "goal"
+    | "debt"
+    | "investment";
 };
 
 type NotificationItem = {
@@ -177,8 +191,21 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
         id: "wa-" + w.id,
         label: w.name,
         sub: "Ví tiền",
-        href: "/wallets",
+        href: buildWalletsHref({ walletId: w.id }),
         kind: "wallet",
+      }),
+    );
+
+  data.savings
+    .filter((saving) => saving.name.toLowerCase().includes(q))
+    .slice(0, 1)
+    .forEach((saving) =>
+      out.push({
+        id: "sa-" + saving.id,
+        label: saving.name,
+        sub: "Khoản tiết kiệm",
+        href: buildSavingsHref({ savingId: saving.id }),
+        kind: "saving",
       }),
     );
 
@@ -203,7 +230,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
         id: "go-" + g.id,
         label: g.name,
         sub: "Mục tiêu tài chính",
-        href: "/goals",
+        href: buildGoalsHref({ goalId: g.id }),
         kind: "goal",
       }),
     );
@@ -216,7 +243,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
         id: "de-" + d.id,
         label: d.name,
         sub: "Khoản nợ",
-        href: "/debts",
+        href: buildDebtsHref({ debtId: d.id }),
         kind: "debt",
       }),
     );
@@ -290,6 +317,8 @@ function KindIcon({ kind }: { kind: SearchResult["kind"] }) {
       return <ReceiptText size={14} className={cls} />;
     case "wallet":
       return <Wallet size={14} className={cls} />;
+    case "saving":
+      return <PiggyBank size={14} className={cls} />;
     case "category":
       return <Folder size={14} className={cls} />;
     case "goal":
@@ -306,6 +335,7 @@ function KindIcon({ kind }: { kind: SearchResult["kind"] }) {
 const KIND_LABELS: Record<SearchResult["kind"], string> = {
   transaction: "Giao dịch",
   wallet: "Ví tiền",
+  saving: "Tiết kiệm",
   category: "Danh mục",
   goal: "Mục tiêu",
   debt: "Nợ",
@@ -638,15 +668,15 @@ export default function Header({
     };
   }, []);
 
-  // Notification dependencies and search-only investment dependencies both
-  // reuse the app-level RealtimeProvider channel. Investment/Forex edits must
-  // refresh the global search index even though they do not create alerts.
+  // Notification dependencies and search-only entity dependencies both reuse
+  // the app-level RealtimeProvider channel. Wallet/Investment/Forex edits must
+  // refresh the global search index even when they do not create alerts.
   useRealtimeTable(
     ["transactions", "budgets", "categories", "goals", "debts", "savings"],
     requestHeaderRefresh,
   );
   useRealtimeTable(
-    ["investments", "forex_accounts"],
+    ["wallets", "investments", "forex_accounts"],
     requestHeaderRefresh,
   );
 
