@@ -21,7 +21,6 @@ import {
   getEmergencyMonths,
   getSavingRate,
   getSavingScore,
-  getSpendableWalletBalance,
   getTotalExpense,
   getTotalIncome,
   isRealExpenseTransaction,

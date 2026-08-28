@@ -415,8 +415,18 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   const filterRef = useRef(filter);
-  pathnameRef.current = pathname;
-  filterRef.current = filter;
+
+  // Keep mutable mirrors synchronized after commit. React 19 lint forbids
+  // reading/writing refs during render; these refs intentionally exist only
+  // so URL callbacks can observe the latest route/filter without making route
+  // transitions dependencies of the state-to-URL effect.
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    filterRef.current = filter;
+  }, [filter]);
 
   // Mark this document's DateFilterProvider lifecycle as bootstrapped and
   // persist the resolved filter, but only the FIRST time this happens for

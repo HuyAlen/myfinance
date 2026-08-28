@@ -78,7 +78,9 @@ describe("CATEGORY-INTEGRITY-1 budget/category integrity contract", () => {
     );
     expect(page).toContain("const budgetCountByCategory = useMemo(() => {");
     expect(page).toContain("const budgetCount = budgetCountByCategory.get(category.id) ?? 0;");
-    expect(page).toContain("isActive: usage.count > 0 || budgetCount > 0");
+    expect(page.replace(/\s+/g, " ")).toContain(
+      "isActive: category.isRecurring === true || usage.count > 0 || budgetCount > 0",
+    );
     expect(page).toContain("if (budgetCount > 0) {");
     expect(page).toContain("ngân sách liên kết");
   });

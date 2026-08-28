@@ -171,10 +171,6 @@ function getSavingPrincipal(row: SavingRow | ReportSaving): number {
   );
 }
 
-function getSavingBalance(row: ReportSaving): number {
-  return toNumber(row.balance);
-}
-
 function mapSavingRow(row: SavingRow): ReportSaving {
   const principal = getSavingPrincipal(row);
   return {
@@ -756,23 +752,13 @@ export default function ReportsPage() {
   }, [
     filtered,
     categories,
-    wallets,
-    investments,
-    debts,
-    forexAccounts,
+    savingMovements,
     forexCashTransactions,
+    dateRange,
+    balanceSheet,
     goals,
     transactions,
     savings,
-    savingMovements,
-    balanceSheet,
-    dateRange,
-    periodMode,
-    year,
-    month,
-    quarter,
-    customStart,
-    customEnd,
   ]);
 
   const incomeExpenseGap = summary.income - summary.expense;

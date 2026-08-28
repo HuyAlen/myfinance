@@ -35,7 +35,7 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
   });
 
   it("fetches history as a first-class concurrent full-load query", () => {
-    const historyStart = source.indexOf("const netWorthHistoryPromise = measureDashboardQuery(");
+    const historyStart = source.indexOf("const netWorthHistoryPromise = bounded(");
     const historyGroup = source.indexOf("const netWorthHistoryGroupPromise = (async () => {");
     expect(historyStart).toBeGreaterThanOrEqual(0);
     expect(historyGroup).toBeGreaterThan(historyStart);
@@ -46,8 +46,8 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
 
   it("year switching starts transactions and history before awaiting either", () => {
     const body = reloadPeriodBody();
-    const transactionStart = body.indexOf("const transactionsRequest = measureDashboardQuery(");
-    const historyStart = body.indexOf("const historyRequest = measureDashboardQuery(");
+    const transactionStart = body.indexOf("const transactionsRequest = withDashboardTimeout(");
+    const historyStart = body.indexOf("const historyRequest = withDashboardTimeout(");
     const awaitBoth = body.indexOf("await Promise.allSettled([");
 
     expect(transactionStart).toBeGreaterThanOrEqual(0);

@@ -90,8 +90,11 @@ describe("SavingsPage compact mobile financial hierarchy", () => {
 
   it("reduces account-card chrome while preserving direct money actions", () => {
     expect(accounts).toContain(
-      "group rounded-2xl border border-[#DCE6EF] bg-white p-4",
+      "group rounded-2xl border bg-white p-4",
     );
+    expect(accounts).toContain('id={`saving-card-${item.id}`}');
+    expect(accounts).toContain("highlightedSavingId === item.id");
+    expect(accounts).toContain('"border-[#DCE6EF]"');
     expect(accounts).toContain("mt-3 grid grid-cols-3 gap-2 sm:mt-4");
     expect(accounts).toContain("min-h-9");
     expect(accounts).toContain('openMoneyMovementModal(item, "deposit")');

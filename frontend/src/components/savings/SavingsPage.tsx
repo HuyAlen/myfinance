@@ -582,9 +582,14 @@ export default function SavingsPage({
     if (!localSavings.some((saving) => saving.id === focusSavingId)) return;
 
     if (searchTerm || activeFilter !== "all") {
-      setSearchTerm("");
-      setActiveFilter("all");
-      return;
+      // Reset list controls on the next task so this effect only coordinates
+      // with the DOM/external navigation boundary, never synchronously cascades
+      // React state while an effect is committing.
+      const resetTimer = window.setTimeout(() => {
+        setSearchTerm("");
+        setActiveFilter("all");
+      }, 0);
+      return () => window.clearTimeout(resetTimer);
     }
 
     const el = document.getElementById(`saving-card-${focusSavingId}`);
@@ -892,7 +897,10 @@ export default function SavingsPage({
   );
 
   useEffect(() => {
-    void loadWalletsForSavingsEngine();
+    const initialWalletLoadTimer = window.setTimeout(() => {
+      void loadWalletsForSavingsEngine();
+    }, 0);
+    return () => window.clearTimeout(initialWalletLoadTimer);
   }, [loadWalletsForSavingsEngine]);
 
   const loadSavingsSnapshot = useCallback(
@@ -948,7 +956,10 @@ export default function SavingsPage({
   );
 
   useEffect(() => {
-    void loadSavingsSnapshot();
+    const initialSavingsLoadTimer = window.setTimeout(() => {
+      void loadSavingsSnapshot();
+    }, 0);
+    return () => window.clearTimeout(initialSavingsLoadTimer);
   }, [loadSavingsSnapshot]);
 
   const realtimeRefreshTimerRef = useRef<number | null>(null);

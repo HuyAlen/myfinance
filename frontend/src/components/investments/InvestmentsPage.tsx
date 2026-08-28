@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   Activity,
-  ArrowDownLeft,
   ArrowUpRight,
   BriefcaseBusiness,
   Edit3,
@@ -736,7 +735,7 @@ export default function InvestmentsPage() {
       roi,
       hasEquity: knownEquityAccounts.length > 0,
     };
-  }, [accounts, accountMetrics]);
+  }, [accounts, accountMetrics, transactions]);
 
   function openCreatePortfolioInvestment() {
     setPortfolioForm(createEmptyPortfolioForm());

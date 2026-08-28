@@ -486,20 +486,6 @@ export default function Header({
   const [customStart, setCustomStart] = useState(dateRange.startDate);
   const [customEnd, setCustomEnd] = useState(dateRange.endDate);
 
-  // Keep the Header draft aligned with the canonical custom range when the
-  // picker opens. Reports can change the same global period, so this draft
-  // must never retain an older private copy.
-  useEffect(() => {
-    if (!monthOpen || filterMode !== "custom") return;
-    setCustomStart(activeCustomStart);
-    setCustomEnd(activeCustomEnd);
-  }, [
-    activeCustomEnd,
-    activeCustomStart,
-    filterMode,
-    monthOpen,
-  ]);
-
   // App data (loaded once for search + notifications) — reloadHeaderData
   // below is the single canonical fetch+build+commit path shared by the
   // initial idle-deferred load and NOTIF-FRESHNESS-1's realtime-triggered
@@ -833,6 +819,10 @@ export default function Header({
     }
 
     if (filterMode === "custom") {
+      // Refresh the local draft at the user interaction boundary instead of
+      // synchronously mirroring provider state from an effect.
+      setCustomStart(activeCustomStart);
+      setCustomEnd(activeCustomEnd);
       setMonthOpen(true);
       return;
     }
@@ -1082,6 +1072,10 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => {
+                  if (!monthOpen && filterMode === "custom") {
+                    setCustomStart(activeCustomStart);
+                    setCustomEnd(activeCustomEnd);
+                  }
                   setMonthOpen((v) => !v);
                   setDropdownOpen(false);
                   setNotifOpen(false);
