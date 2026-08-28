@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+
 import {
   Activity,
   AlertTriangle,
@@ -34,7 +36,7 @@ import {
   getDebts,
   getGoals,
   getInvestments,
-  getTransactions,
+  getTransactionsInRange,
   getWallets,
 } from "@/src/services/finance/financeStorage";
 
@@ -50,6 +52,44 @@ import {
 type Insight = InsightData & { icon: React.ReactNode };
 
 // Map engine icon-type tokens → React nodes (kept in UI layer intentionally).
+const INSIGHTS_LOAD_TIMEOUT_MS = 10_000;
+const INSIGHTS_INITIAL_RETRY_MS = 750;
+const INSIGHTS_TRANSACTION_WINDOW_MONTHS = 24;
+
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getAnalyticsTransactionRange(now = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth() - (INSIGHTS_TRANSACTION_WINDOW_MONTHS - 1), 1);
+  return {
+    startDate: toLocalDateKey(start),
+    endDate: toLocalDateKey(now),
+  };
+}
+
+function withInsightsLoadTimeout<T>(request: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`[AIInsightsPage] ${label} timed out`));
+    }, INSIGHTS_LOAD_TIMEOUT_MS);
+
+    Promise.resolve(request).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const INSIGHT_ICON_MAP: Record<InsightIconType, React.ReactNode> = {
   "trending-up": <TrendingUp size={20} />,
   "trending-down": <TrendingDown size={20} />,
@@ -74,6 +114,7 @@ export default function AIInsightsPage() {
   const [insightsLoadError, setInsightsLoadError] = useState<string | null>(
     null,
   );
+  const [isInsightsDataReady, setIsInsightsDataReady] = useState(false);
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,48 +123,127 @@ export default function AIInsightsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
 
-  useEffect(() => {
-    // FINANCE-DATA-1: these readers now reject on a genuine query failure
-    // instead of silently resolving to [] — caught here so a failure never
-    // becomes an unhandled rejection.
-    async function load() {
-      try {
-        const [
-          wallets,
-          categories,
-          transactions,
-          debts,
-          goals,
-          investments,
-          budgets,
-        ] = await Promise.all([
-          getWallets(),
-          getCategories(),
-          getTransactions(),
-          getDebts(),
-          getGoals(),
-          getInvestments(),
-          getBudgets(),
-        ]);
-        setWallets(wallets);
-        setCategories(categories);
-        setTransactions(transactions);
-        setDebts(debts);
-        setGoals(goals);
-        setInvestments(investments);
-        setBudgets(budgets);
-        setInsightsLoadError(null);
-      } catch (error) {
-        console.error("[AIInsightsPage] load failed:", error);
-        setInsightsLoadError(
-          "Không thể tải dữ liệu phân tích. Vui lòng tải lại trang.",
-        );
-      } finally {
-        setIsLoadingInsights(false);
-      }
+  const hasLoadedInsightsDataRef = useRef(false);
+  const isReloadingRef = useRef(false);
+  const hasPendingReloadRef = useRef(false);
+
+  const reloadData = useCallback(async (): Promise<boolean> => {
+    const { startDate, endDate } = getAnalyticsTransactionRange();
+    try {
+      const [
+        nextWallets,
+        nextCategories,
+        nextTransactions,
+        nextDebts,
+        nextGoals,
+        nextInvestments,
+        nextBudgets,
+      ] = await Promise.all([
+        withInsightsLoadTimeout(getWallets(), "wallets"),
+        withInsightsLoadTimeout(getCategories(), "categories"),
+        withInsightsLoadTimeout(
+          getTransactionsInRange(startDate, endDate),
+          "transactions",
+        ),
+        withInsightsLoadTimeout(getDebts(), "debts"),
+        withInsightsLoadTimeout(getGoals(), "goals"),
+        withInsightsLoadTimeout(getInvestments(), "investments"),
+        withInsightsLoadTimeout(getBudgets(), "budgets"),
+      ]);
+
+      // Commit the seven-source snapshot only after every required read succeeds.
+      setWallets(nextWallets);
+      setCategories(nextCategories);
+      setTransactions(nextTransactions);
+      setDebts(nextDebts);
+      setGoals(nextGoals);
+      setInvestments(nextInvestments);
+      setBudgets(nextBudgets);
+      setInsightsLoadError(null);
+      setIsInsightsDataReady(true);
+      hasLoadedInsightsDataRef.current = true;
+      return true;
+    } catch (error) {
+      console.error("[AIInsightsPage] reloadData failed:", error);
+      setInsightsLoadError(
+        "Không thể đồng bộ dữ liệu phân tích. Vui lòng thử lại.",
+      );
+      // Never clear a successful snapshot on a later refresh failure.
+      if (hasLoadedInsightsDataRef.current) setIsInsightsDataReady(true);
+      return false;
+    } finally {
+      setIsLoadingInsights(false);
     }
-    load();
   }, []);
+
+  const runReload = useCallback(async (): Promise<boolean> => {
+    if (isReloadingRef.current) {
+      hasPendingReloadRef.current = true;
+      return false;
+    }
+
+    isReloadingRef.current = true;
+    let lastResult = false;
+    try {
+      do {
+        hasPendingReloadRef.current = false;
+        lastResult = await reloadData();
+      } while (hasPendingReloadRef.current);
+      return lastResult;
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, [reloadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const ok = await runReload();
+        if (!ok && !cancelled) {
+          retryTimer = window.setTimeout(() => {
+            void runReload();
+          }, INSIGHTS_INITIAL_RETRY_MS);
+        }
+      })();
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [runReload]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void runReload();
+    };
+    const handleOnline = () => void runReload();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [runReload]);
+
+  useRealtimeTable(
+    [
+      "wallets",
+      "categories",
+      "transactions",
+      "debts",
+      "goals",
+      "investments",
+      "budgets",
+    ],
+    async () => {
+      await runReload();
+    },
+  );
 
   // ─── Single engine call — all analytics run here, no logic in the UI ────────
 
@@ -156,6 +276,18 @@ export default function AIInsightsPage() {
     goalPredictions,
   } = advisor;
 
+  const transactionCoverage = useMemo(() => {
+    const months = new Set(
+      transactions
+        .map((transaction) => transaction.date?.slice(0, 7))
+        .filter((month): month is string => Boolean(month)),
+    );
+    return {
+      monthCount: months.size,
+      hasForecastHistory: months.size >= 6,
+    };
+  }, [transactions]);
+
   // Map engine InsightData (no React nodes) → UI Insight (with icon)
   const insights: Insight[] = advisor.insights.map((d) => ({
     ...d,
@@ -166,7 +298,7 @@ export default function AIInsightsPage() {
   // has succeeded at least once. A later refresh failure keeps this same
   // gate from re-triggering (isLoadingInsights never resets after the
   // first attempt), so a last-known-good analysis stays visible.
-  if (isLoadingInsights) {
+  if (isLoadingInsights && !isInsightsDataReady) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center">
         <Brain className="mb-4 h-10 w-10 text-slate-400" />
@@ -176,7 +308,7 @@ export default function AIInsightsPage() {
       </div>
     );
   }
-  if (insightsLoadError) {
+  if (insightsLoadError && !isInsightsDataReady) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center">
         <Brain className="mb-4 h-10 w-10 text-rose-400" />
@@ -184,17 +316,38 @@ export default function AIInsightsPage() {
           Không thể tải dữ liệu phân tích
         </h3>
         <p className="mt-1 text-sm text-rose-400">{insightsLoadError}</p>
+        <button
+          type="button"
+          onClick={() => void runReload()}
+          className="mt-5 min-h-11 rounded-2xl bg-rose-600 px-5 text-sm font-bold text-white"
+        >
+          Thử lại
+        </button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {insightsLoadError && isInsightsDataReady && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">
+            Đang hiển thị dữ liệu gần nhất đã tải thành công.
+          </p>
+          <button
+            type="button"
+            onClick={() => void runReload()}
+            className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
       <section className="rounded-4xl border border-slate-200 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6 shadow-sm">
         <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <div>
             <p className="text-sm font-bold text-blue-600">
-              AI Cố vấn tài chính
+              Phân tích tài chính thông minh
             </p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
               Phân tích tài chính cá nhân
@@ -205,7 +358,7 @@ export default function AIInsightsPage() {
           </div>
 
           <div className="rounded-3xl bg-white/80 px-5 py-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">Điểm sức khỏe V2</p>
+            <p className="text-xs font-bold text-slate-500">Điểm sức khỏe tài chính</p>
             <p className="mt-1 text-4xl font-black text-blue-600">
               {healthV2.total}/100
             </p>
@@ -247,7 +400,7 @@ export default function AIInsightsPage() {
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                Nhận xét thông minh
+                Nhận xét từ dữ liệu
               </h2>
               <p className="text-sm text-slate-500">
                 Các điểm đáng chú ý từ dữ liệu tài chính của bạn.
@@ -319,10 +472,10 @@ export default function AIInsightsPage() {
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                Điểm sức khỏe V2
+                Điểm sức khỏe tài chính
               </h2>
               <p className="text-sm text-slate-500">
-                Phân tích 10 yếu tố từ dữ liệu thực tế.
+                Tổng hợp 10 yếu tố từ dữ liệu hiện có.
               </p>
             </div>
           </div>
@@ -353,7 +506,7 @@ export default function AIInsightsPage() {
                 {healthV2.label}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Dựa trên 10 yếu tố tài chính
+                Tổng hợp từ 10 yếu tố tài chính
               </p>
             </div>
           </div>
@@ -676,10 +829,18 @@ export default function AIInsightsPage() {
               Dự báo tháng tới
             </h2>
             <p className="text-sm text-slate-500">
-              Hồi quy tuyến tính từ dữ liệu 6 tháng gần nhất.
+              {transactionCoverage.hasForecastHistory
+                ? "Mô hình xu hướng sử dụng tối đa 6 tháng dữ liệu gần nhất."
+                : `Mới có ${transactionCoverage.monthCount}/6 tháng dữ liệu; dự báo chỉ mang tính tham khảo.`}
             </p>
           </div>
         </div>
+
+        {!transactionCoverage.hasForecastHistory && (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Chưa đủ 6 tháng dữ liệu giao dịch để xem dự báo như một xu hướng ổn định.
+          </div>
+        )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <ForecastCard
