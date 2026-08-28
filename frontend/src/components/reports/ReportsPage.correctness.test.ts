@@ -12,15 +12,16 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
   const source = readFileSync(path.resolve(__dirname, "ReportsPage.tsx"), "utf8");
   const normalized = source.replace(/\s+/g, " ");
 
-  it("initializes report controls from the current calendar period instead of stale hard-coded values", () => {
-    expect(source).toContain("function getCurrentReportPeriodDefaults(now = new Date())");
-    expect(source).toContain("useState(() => getCurrentReportPeriodDefaults())");
-    expect(source).toContain("useState(initialPeriod.year)");
-    expect(source).toContain("useState(initialPeriod.month)");
-    expect(source).toContain("useState(initialPeriod.quarter)");
-    expect(source).not.toContain('const [year, setYear] = useState("2026")');
-    expect(source).not.toContain('const [month, setMonth] = useState("06")');
-    expect(source).not.toContain('const [quarter, setQuarter] = useState("2")');
+  it("consumes the canonical global DateFilterProvider instead of owning a second report-period state", () => {
+    expect(source).toContain('import { useDateFilter } from "@/src/components/layout/DateFilterProvider";');
+    expect(source).toContain("filterMode: periodMode");
+    expect(source).toContain("filterLabel: canonicalPeriodLabel");
+    expect(source).toContain("dateRange");
+    expect(source).not.toContain("useState<PeriodMode>");
+    expect(source).not.toContain("getCurrentReportPeriodDefaults");
+    expect(source).not.toContain('const [year, setYear] = useState');
+    expect(source).not.toContain('const [month, setMonth] = useState');
+    expect(source).not.toContain('const [quarter, setQuarter] = useState');
   });
 
   it("validates custom ranges in filtering and keeps the date controls ordered", () => {
@@ -28,8 +29,8 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(normalized).toContain('case "custom": if (!isValidCustomRange(customStart, customEnd)) return [];');
     expect(source).toContain("max={customEnd || undefined}");
     expect(source).toContain("min={customStart || undefined}");
-    expect(source).toContain("setCustomEnd(nextStart)");
-    expect(source).toContain("setCustomStart(nextEnd)");
+    expect(source).toContain("setCustomRange(nextStart, nextStart > customEnd ? nextStart : customEnd)");
+    expect(source).toContain("setCustomRange(nextEnd < customStart ? nextEnd : customStart, nextEnd)");
   });
 
   it("separates period cash-flow margin from future-allocation rate", () => {

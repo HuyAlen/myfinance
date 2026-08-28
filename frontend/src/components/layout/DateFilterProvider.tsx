@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { isValidISODate } from "@/src/lib/date/calendarDate";
 
 const STORAGE_KEY = "myfinance_date_filter_v2";
 const LEGACY_MONTH_KEY = "myfinance_selected_month";
@@ -55,6 +57,8 @@ type DateFilterContextValue = {
   selectedYear: number;
   selectedMonthNumber: number;
   selectedQuarter: string;
+  customStart: string;
+  customEnd: string;
   setSelectedMonth: (month: string) => void;
   setSelectedQuarter: (quarter: string) => void;
   setSelectedYearFilter: (year: number) => void;
@@ -90,7 +94,16 @@ function isValidQuarterKey(value: string | null): value is string {
 }
 
 function isValidDate(value: string | null): value is string {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+  return Boolean(value && isValidISODate(value));
+}
+
+function isValidDateFilterMode(value: unknown): value is DateFilterMode {
+  return (
+    value === "month" ||
+    value === "quarter" ||
+    value === "year" ||
+    value === "custom"
+  );
 }
 
 function parseMonthKey(monthKey: string) {
@@ -243,7 +256,7 @@ function normalizeFilter(raw: Partial<StoredDateFilter>): StoredDateFilter {
     : getMonthRange(selectedMonth).endDate;
 
   return {
-    mode: raw.mode ?? "month",
+    mode: isValidDateFilterMode(raw.mode) ? raw.mode : "month",
     selectedMonth,
     selectedQuarter,
     selectedYear: Number.isFinite(raw.selectedYear)
@@ -263,6 +276,12 @@ function getFilterFromUrl(): Partial<StoredDateFilter> | null {
   const yearRaw = params.get("year");
   const customStart = params.get("from");
   const customEnd = params.get("to");
+  const legacyRange = params.get("range");
+  const legacyRangeMatch = legacyRange?.match(
+    /^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/,
+  );
+  const resolvedCustomStart = customStart ?? legacyRangeMatch?.[1] ?? null;
+  const resolvedCustomEnd = customEnd ?? legacyRangeMatch?.[2] ?? null;
 
   if (isValidMonthKey(month)) {
     const parsed = parseMonthKey(month);
@@ -295,9 +314,15 @@ function getFilterFromUrl(): Partial<StoredDateFilter> | null {
     };
   }
 
-  if (isValidDate(customStart) && isValidDate(customEnd)) {
-    const safeStart = customStart <= customEnd ? customStart : customEnd;
-    const safeEnd = customStart <= customEnd ? customEnd : customStart;
+  if (isValidDate(resolvedCustomStart) && isValidDate(resolvedCustomEnd)) {
+    const safeStart =
+      resolvedCustomStart <= resolvedCustomEnd
+        ? resolvedCustomStart
+        : resolvedCustomEnd;
+    const safeEnd =
+      resolvedCustomStart <= resolvedCustomEnd
+        ? resolvedCustomEnd
+        : resolvedCustomStart;
     const parsed = parseMonthKey(safeStart.slice(0, 7));
 
     return {
@@ -316,21 +341,18 @@ function getFilterFromUrl(): Partial<StoredDateFilter> | null {
 function getInitialFilter(): StoredDateFilter {
   if (typeof window === "undefined") return getDefaultStoredFilter();
 
-  // First DateFilterProvider mount since the document loaded (fresh tab or
-  // hard reload): always start from the current month, ignoring any stale
-  // ?month= query param or a previously persisted selection. This is a
-  // pure read of the module flag — it must NOT mutate it here, because
-  // React (Strict Mode) can invoke this initializer more than once per
-  // render pass; the flag is only ever flipped from the mount effect
-  // below, after the state produced by this call has already committed.
-  if (!hasBootstrappedDateFilter) {
-    return getDefaultStoredFilter();
-  }
-
+  // A valid deep-link is authoritative on BOTH the first document load and
+  // SPA remounts. Without a period query, the first real document load still
+  // starts at the current month (avoids resurrecting a stale persisted period);
+  // later remounts may restore the persisted in-app selection.
   try {
     const urlFilter = getFilterFromUrl();
     if (urlFilter) {
       return normalizeFilter(urlFilter);
+    }
+
+    if (!hasBootstrappedDateFilter) {
+      return getDefaultStoredFilter();
     }
 
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -391,7 +413,10 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState(getInitialFilter);
   const router = useRouter();
   const pathname = usePathname();
-  const didSyncUrlRef = useRef(false);
+  const pathnameRef = useRef(pathname);
+  const filterRef = useRef(filter);
+  pathnameRef.current = pathname;
+  filterRef.current = filter;
 
   // Mark this document's DateFilterProvider lifecycle as bootstrapped and
   // persist the resolved filter, but only the FIRST time this happens for
@@ -408,22 +433,93 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
     persistFilter(filter);
   }, [filter]);
 
-  // Sync the resolved filter (possibly just reset to the current month)
-  // back into the URL exactly once per mount, without touching unrelated
-  // query params or creating a new history entry. This never calls
-  // setFilter, so it only synchronizes the URL (an external system) and
-  // cannot loop or fight with user-driven month changes.
+  const replaceCanonicalPeriodInUrl = useCallback(
+    (nextFilter: StoredDateFilter) => {
+      if (typeof window === "undefined") return;
+
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentPathname = pathnameRef.current;
+      if (
+        currentPathname === "/transactions" &&
+        (currentParams.has("dateFrom") || currentParams.has("dateTo"))
+      ) {
+        return;
+      }
+
+      const nextParams = new URLSearchParams(window.location.search);
+      ["month", "quarter", "year", "from", "to", "range"].forEach((key) =>
+        nextParams.delete(key),
+      );
+
+      if (nextFilter.mode === "quarter") {
+        nextParams.set("quarter", nextFilter.selectedQuarter);
+      } else if (nextFilter.mode === "year") {
+        nextParams.set("year", String(nextFilter.selectedYear));
+      } else if (nextFilter.mode === "custom") {
+        nextParams.set("from", nextFilter.customStart);
+        nextParams.set("to", nextFilter.customEnd);
+      } else {
+        nextParams.set("month", nextFilter.selectedMonth);
+      }
+
+      if (currentParams.toString() === nextParams.toString()) return;
+
+      const query = nextParams.toString();
+      router.replace(query ? `${currentPathname}?${query}` : currentPathname);
+    },
+    [router],
+  );
+
+  // Route changes are special: normal sidebar navigation has no period query,
+  // so carry the current global period into the new URL. A route that already
+  // carries a valid period deep-link becomes authoritative instead. Explicit
+  // Transactions dateFrom/dateTo drill-downs are contextual and must remain
+  // independent — do not inject a global month that would override them.
   useEffect(() => {
-    if (didSyncUrlRef.current) return;
-    didSyncUrlRef.current = true;
-    if (typeof window === "undefined" || filter.mode !== "month") return;
+    if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("month") === filter.selectedMonth) return;
+    if (
+      pathname === "/transactions" &&
+      (params.has("dateFrom") || params.has("dateTo"))
+    ) {
+      return;
+    }
 
-    params.set("month", filter.selectedMonth);
-    router.replace(`${pathname}?${params.toString()}`);
-  }, [filter, pathname, router]);
+    const urlFilter = getFilterFromUrl();
+    if (urlFilter) {
+      const normalized = normalizeFilter(urlFilter);
+      const currentFilter = filterRef.current;
+      const currentRange = getFilterRange(currentFilter);
+      const nextRange = getFilterRange(normalized);
+      const isSame =
+        currentFilter.mode === normalized.mode &&
+        currentRange.startDate === nextRange.startDate &&
+        currentRange.endDate === nextRange.endDate;
+
+      if (!isSame) {
+        setFilter(normalized);
+        persistFilter(normalized);
+      }
+      return;
+    }
+
+    replaceCanonicalPeriodInUrl(filterRef.current);
+    // Route adoption is intentionally keyed to pathname, while the callback
+    // itself is stable unless the Next router instance changes.
+  }, [pathname, replaceCanonicalPeriodInUrl]);
+
+  // Canonical durable URL contract. DateFilterProvider is the ONLY writer of
+  // global-period query params after an in-app filter change: preserve
+  // unrelated params, delete every stale period key from prior modes, then
+  // write exactly the active mode. Keeping pathname out of this dependency
+  // list prevents a contextual Transactions month drill-down from being
+  // overwritten merely because navigation changed routes.
+  useEffect(() => {
+    replaceCanonicalPeriodInUrl(filter);
+    // `replaceCanonicalPeriodInUrl` reads the latest pathname via a ref so
+    // route transitions themselves do not trigger this state-to-URL effect.
+  }, [filter, replaceCanonicalPeriodInUrl]);
 
   const updateFilter = (next: StoredDateFilter) => {
     setFilter(next);
@@ -497,6 +593,8 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
       selectedYear: filter.selectedYear,
       selectedMonthNumber: parsed.selectedMonthNumber,
       selectedQuarter: filter.selectedQuarter,
+      customStart: filter.customStart,
+      customEnd: filter.customEnd,
       setSelectedMonth,
       setSelectedQuarter,
       setSelectedYearFilter,
@@ -533,6 +631,8 @@ export function useDateFilter() {
     selectedYear: fallback.selectedYear,
     selectedMonthNumber: parsed.selectedMonthNumber,
     selectedQuarter: fallback.selectedQuarter,
+    customStart: fallback.customStart,
+    customEnd: fallback.customEnd,
     setSelectedMonth: () => {},
     setSelectedQuarter: () => {},
     setSelectedYearFilter: () => {},

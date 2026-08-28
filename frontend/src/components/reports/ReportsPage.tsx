@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import {
   Area,
   AreaChart,
@@ -307,40 +308,6 @@ function filterByPeriod(
   }
 }
 
-function periodLabel(
-  mode: PeriodMode,
-  year: string,
-  month: string,
-  quarter: string,
-  customStart: string,
-  customEnd: string,
-): string {
-  switch (mode) {
-    case "month":
-      return "T" + Number(month) + "/" + year;
-    case "quarter":
-      return "Q" + quarter + "/" + year;
-    case "year":
-      return "Năm " + year;
-    case "custom":
-      return customStart + " → " + customEnd;
-  }
-}
-
-function getCurrentReportPeriodDefaults(now = new Date()) {
-  const year = String(now.getFullYear());
-  const monthNumber = now.getMonth() + 1;
-  const month = String(monthNumber).padStart(2, "0");
-  const quarter = String(Math.floor((monthNumber - 1) / 3) + 1);
-  return {
-    year,
-    month,
-    quarter,
-    customStart: year + "-01-01",
-    customEnd: year + "-12-31",
-  };
-}
-
 function isValidCustomRange(customStart: string, customEnd: string) {
   return Boolean(customStart && customEnd && customStart <= customEnd);
 }
@@ -618,15 +585,57 @@ export default function ReportsPage() {
     ForexCashTransaction[]
   >([]);
 
-  // REPORTS-CORRECTNESS-1: period controls start from the user's current
-  // calendar period instead of stale hard-coded 2026/Q2 defaults.
-  const [initialPeriod] = useState(() => getCurrentReportPeriodDefaults());
-  const [periodMode, setPeriodMode] = useState<PeriodMode>("year");
-  const [year, setYear] = useState(initialPeriod.year);
-  const [month, setMonth] = useState(initialPeriod.month);
-  const [quarter, setQuarter] = useState(initialPeriod.quarter);
-  const [customStart, setCustomStart] = useState(initialPeriod.customStart);
-  const [customEnd, setCustomEnd] = useState(initialPeriod.customEnd);
+  // MYFINANCE-CROSSPAGE-1: Reports no longer owns a second period engine.
+  // Its controls are another UI surface for the same DateFilterProvider state
+  // used by Header, Dashboard, Transactions and Budgets.
+  const {
+    filterMode: periodMode,
+    setFilterMode: setPeriodMode,
+    selectedMonth,
+    selectedQuarter,
+    selectedYear,
+    customStart,
+    customEnd,
+    setSelectedMonth,
+    setSelectedQuarter,
+    setSelectedYearFilter,
+    setCustomRange,
+    filterLabel: canonicalPeriodLabel,
+    dateRange,
+  } = useDateFilter();
+  const year = String(selectedYear);
+  const month = selectedMonth.slice(5, 7);
+  const quarter = selectedQuarter.split("-Q")[1] ?? "1";
+
+  function setYear(nextYear: string) {
+    if (periodMode === "month") {
+      setSelectedMonth(`${nextYear}-${month}`);
+      return;
+    }
+    if (periodMode === "quarter") {
+      setSelectedQuarter(`${nextYear}-Q${quarter}`);
+      return;
+    }
+    setSelectedYearFilter(Number(nextYear));
+  }
+
+  function setMonth(nextMonth: string) {
+    setSelectedMonth(`${year}-${nextMonth}`);
+  }
+
+  function setQuarter(nextQuarter: string) {
+    setSelectedQuarter(`${year}-Q${nextQuarter}`);
+  }
+
+  function setCustomStart(nextStart: string) {
+    if (!nextStart) return;
+    setCustomRange(nextStart, nextStart > customEnd ? nextStart : customEnd);
+  }
+
+  function setCustomEnd(nextEnd: string) {
+    if (!nextEnd) return;
+    setCustomRange(nextEnd < customStart ? nextEnd : customStart, nextEnd);
+  }
 
   // UI state
   const [stmtTab, setStmtTab] = useState<"income" | "cashflow" | "networth">(
@@ -699,16 +708,11 @@ export default function ReportsPage() {
   // ── Filtered transactions (preserved) ────────────────────────────────────
   const filtered = useMemo(
     () =>
-      filterByPeriod(
-        transactions,
-        periodMode,
-        year,
-        month,
-        quarter,
-        customStart,
-        customEnd,
-      ),
-    [transactions, periodMode, year, month, quarter, customStart, customEnd],
+      transactions.filter((transaction) => {
+        const day = transaction.date.slice(0, 10);
+        return day >= dateRange.startDate && day <= dateRange.endDate;
+      }),
+    [dateRange.endDate, dateRange.startDate, transactions],
   );
 
   // ── Core summary ──────────────────────────────────────────────────────────
@@ -1195,14 +1199,7 @@ export default function ReportsPage() {
     0,
   );
 
-  const label = periodLabel(
-    periodMode,
-    year,
-    month,
-    quarter,
-    customStart,
-    customEnd,
-  );
+  const label = canonicalPeriodLabel;
   const isReportPeriodValid =
     periodMode !== "custom" || isValidCustomRange(customStart, customEnd);
   const reportFileToken = getReportFileToken(
@@ -1258,7 +1255,7 @@ export default function ReportsPage() {
     window.print();
   }
 
-  const currentYearNumber = Number(initialPeriod.year);
+  const currentYearNumber = new Date().getFullYear();
   const dataYears = transactions
     .map((transaction) => transaction.date.slice(0, 4))
     .filter((candidate) => /^\d{4}$/.test(candidate));
@@ -1555,17 +1552,19 @@ export default function ReportsPage() {
             </div>
 
             <div className="mt-3 grid gap-2">
-              <select
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-700 outline-none"
-              >
-                {YEARS.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              {periodMode !== "custom" && (
+                <select
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-bold text-slate-700 outline-none"
+                >
+                  {YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              )}
               {periodMode === "month" && (
                 <select
                   value={month}
@@ -1599,13 +1598,7 @@ export default function ReportsPage() {
                     value={customStart}
                     max={customEnd || undefined}
                     aria-invalid={!isReportPeriodValid}
-                    onChange={(e) => {
-                      const nextStart = e.target.value;
-                      setCustomStart(nextStart);
-                      if (customEnd && nextStart > customEnd) {
-                        setCustomEnd(nextStart);
-                      }
-                    }}
+                    onChange={(e) => setCustomStart(e.target.value)}
                     className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-700 outline-none"
                   />
                   <input
@@ -1613,13 +1606,7 @@ export default function ReportsPage() {
                     value={customEnd}
                     min={customStart || undefined}
                     aria-invalid={!isReportPeriodValid}
-                    onChange={(e) => {
-                      const nextEnd = e.target.value;
-                      setCustomEnd(nextEnd);
-                      if (customStart && nextEnd < customStart) {
-                        setCustomStart(nextEnd);
-                      }
-                    }}
+                    onChange={(e) => setCustomEnd(e.target.value)}
                     className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-700 outline-none"
                   />
                 </div>
@@ -1651,17 +1638,19 @@ export default function ReportsPage() {
             </button>
           ))}
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <select
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
-            >
-              {YEARS.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+            {periodMode !== "custom" && (
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 outline-none"
+              >
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            )}
             {periodMode === "month" && (
               <select
                 value={month}
@@ -1695,13 +1684,7 @@ export default function ReportsPage() {
                   value={customStart}
                   max={customEnd || undefined}
                   aria-invalid={!isReportPeriodValid}
-                  onChange={(e) => {
-                    const nextStart = e.target.value;
-                    setCustomStart(nextStart);
-                    if (customEnd && nextStart > customEnd) {
-                      setCustomEnd(nextStart);
-                    }
-                  }}
+                  onChange={(e) => setCustomStart(e.target.value)}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none"
                 />
                 <span className="text-xs text-slate-400">→</span>
@@ -1710,13 +1693,7 @@ export default function ReportsPage() {
                   value={customEnd}
                   min={customStart || undefined}
                   aria-invalid={!isReportPeriodValid}
-                  onChange={(e) => {
-                    const nextEnd = e.target.value;
-                    setCustomEnd(nextEnd);
-                    if (customStart && nextEnd < customStart) {
-                      setCustomStart(nextEnd);
-                    }
-                  }}
+                  onChange={(e) => setCustomEnd(e.target.value)}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none"
                 />
               </>

@@ -407,6 +407,8 @@ export default function Header({
     selectedMonth,
     selectedQuarter,
     selectedYear,
+    customStart: activeCustomStart,
+    customEnd: activeCustomEnd,
     setSelectedMonth,
     setSelectedQuarter,
     setSelectedYearFilter,
@@ -422,6 +424,20 @@ export default function Header({
   const [searchQuery, setSearchQuery] = useState("");
   const [customStart, setCustomStart] = useState(dateRange.startDate);
   const [customEnd, setCustomEnd] = useState(dateRange.endDate);
+
+  // Keep the Header draft aligned with the canonical custom range when the
+  // picker opens. Reports can change the same global period, so this draft
+  // must never retain an older private copy.
+  useEffect(() => {
+    if (!monthOpen || filterMode !== "custom") return;
+    setCustomStart(activeCustomStart);
+    setCustomEnd(activeCustomEnd);
+  }, [
+    activeCustomEnd,
+    activeCustomStart,
+    filterMode,
+    monthOpen,
+  ]);
 
   // App data (loaded once for search + notifications) — reloadHeaderData
   // below is the single canonical fetch+build+commit path shared by the
@@ -646,28 +662,19 @@ export default function Header({
     router.replace("/login");
   }
 
-  function updateUrlFilter(key: string, value: string) {
-    const params = new URLSearchParams(window.location.search);
-    params.set(key, value);
-    router.replace(`${pathname}?${params.toString()}`);
-  }
-
   function handleSelectMonth(month: string) {
     setSelectedMonth(month);
     setMonthOpen(false);
-    updateUrlFilter("month", month);
   }
 
   function handleSelectQuarter(quarter: string) {
     setSelectedQuarter(quarter);
     setMonthOpen(false);
-    updateUrlFilter("quarter", quarter);
   }
 
   function handleSelectYear(year: string) {
     setSelectedYearFilter(Number(year));
     setMonthOpen(false);
-    updateUrlFilter("year", year);
   }
 
   function formatCompactMonth(monthKey: string) {
@@ -718,14 +725,12 @@ export default function Header({
     const nextYear = selectedYear + offset;
     const nextMonth = `${nextYear}-${String(selectedMonthNumber).padStart(2, "0")}`;
     setSelectedMonth(nextMonth);
-    updateUrlFilter("month", nextMonth);
   }
 
   function shiftQuarterYear(offset: number) {
     const nextYear = selectedYear + offset;
     const nextQuarter = `${nextYear}-Q${selectedQuarterNumber}`;
     setSelectedQuarter(nextQuarter);
-    updateUrlFilter("quarter", nextQuarter);
   }
 
   function shiftMonth(offset: number) {
@@ -733,7 +738,6 @@ export default function Header({
     const date = new Date(year, month - 1 + offset, 1);
     const nextMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     setSelectedMonth(nextMonth);
-    updateUrlFilter("month", nextMonth);
   }
 
   function shiftQuarter(offset: number) {
@@ -743,13 +747,11 @@ export default function Header({
     const quarter = (absolute % 4) + 1;
     const nextQuarter = `${year}-Q${quarter}`;
     setSelectedQuarter(nextQuarter);
-    updateUrlFilter("quarter", nextQuarter);
   }
 
   function shiftYear(offset: number) {
     const nextYear = selectedYear + offset;
     setSelectedYearFilter(nextYear);
-    updateUrlFilter("year", String(nextYear));
   }
 
   function handleTimelineStep(offset: number) {
@@ -772,30 +774,19 @@ export default function Header({
   }
 
   function handleApplyCurrentMode() {
-    setMonthOpen(false);
-
-    if (filterMode === "quarter") {
-      updateUrlFilter("quarter", selectedQuarter);
-      return;
-    }
-
-    if (filterMode === "year") {
-      updateUrlFilter("year", String(selectedYear));
-      return;
-    }
-
     if (filterMode === "custom") {
       handleApplyCustomRange();
       return;
     }
 
-    updateUrlFilter("month", selectedMonth);
+    // Month/quarter/year selections already update the canonical provider;
+    // DateFilterProvider owns URL serialization for every consumer.
+    setMonthOpen(false);
   }
 
   function handleApplyCustomRange() {
     setCustomRange(customStart, customEnd);
     setMonthOpen(false);
-    updateUrlFilter("range", `${customStart}_${customEnd}`);
   }
 
   // NOTIF-UI-1: Escape closes the notification dropdown, matching the

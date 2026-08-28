@@ -262,7 +262,12 @@ export default function BudgetsPage() {
     null,
   );
   const { toast } = useToast();
-  const { selectedMonth: activeMonth } = useDateFilter();
+  const {
+    selectedMonth: activeMonth,
+    filterMode,
+    filterLabel,
+    dateRange,
+  } = useDateFilter();
 
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
@@ -335,11 +340,27 @@ export default function BudgetsPage() {
     [getCategoryGroup],
   );
 
+  // MYFINANCE-CROSSPAGE-1: Budget analytics consume the same exact global
+  // dateRange as Dashboard/Transactions/Reports. Budget rows remain monthly
+  // planning artifacts, but their spending is intersected with the selected
+  // period (important for custom ranges that cut through a month).
+  const periodTransactions = useMemo(
+    () =>
+      transactions.filter((transaction) => {
+        const day = transaction.date.slice(0, 10);
+        return day >= dateRange.startDate && day <= dateRange.endDate;
+      }),
+    [dateRange.endDate, dateRange.startDate, transactions],
+  );
+
   // ── Canonical: delegates to calculateBudgetSpending ───────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
   function getSpent(budget: Budget) {
-    return calculateBudgetSpending({ budget, transactions, categories })
-      .spent;
+    return calculateBudgetSpending({
+      budget,
+      transactions: periodTransactions,
+      categories,
+    }).spent;
   }
 
   // ── NEW: Smart Budget analytics ───────────────────────────────────────────
@@ -364,12 +385,15 @@ export default function BudgetsPage() {
     [isRealExpenseGroup, smartBudget.overspendingTrend],
   );
 
-  const filteredBudgets = useMemo(
-    () => budgets.filter((b) => b.month === activeMonth),
-    [budgets, activeMonth],
-  );
+  const filteredBudgets = useMemo(() => {
+    const startMonth = dateRange.startDate.slice(0, 7);
+    const endMonth = dateRange.endDate.slice(0, 7);
+    return budgets.filter(
+      (budget) => budget.month >= startMonth && budget.month <= endMonth,
+    );
+  }, [budgets, dateRange.endDate, dateRange.startDate]);
 
-  // ── NEW: Filtered summary for active month KPIs ───────────────────────────
+  // ── Selected-period budget summary ─────────────────────────────────────────
   const filteredSummary = useMemo(() => {
     const realExpenseBudgets = filteredBudgets.filter((budget) =>
       isRealExpenseGroup(budget.categoryId),
@@ -390,26 +414,30 @@ export default function BudgetsPage() {
     };
   }, [filteredBudgets, getSpent, isRealExpenseGroup]);
 
-  const budgetForecast = useMemo(
-    () =>
-      getBudgetForecast(
+  const budgetForecast = useMemo(() => {
+    if (filterMode === "month") {
+      return getBudgetForecast(
         filteredSummary.totalLimit,
         filteredSummary.totalSpent,
         activeMonth,
-      ),
-    [activeMonth, filteredSummary],
-  );
+      );
+    }
 
-  const monthlyIncome = useMemo(
+    // A multi-month/global custom period is already an aggregate; do not
+    // extrapolate that aggregate as though all spending happened in the
+    // anchor month. Health uses the actual selected-period utilization.
+    return {
+      projectedPercent: filteredSummary.percent,
+      confidenceWeight: 1,
+    };
+  }, [activeMonth, filterMode, filteredSummary]);
+
+  const periodIncome = useMemo(
     () =>
-      transactions
-        .filter(
-          (transaction) =>
-            transaction.type === "income" &&
-            transaction.date.startsWith(activeMonth),
-        )
+      periodTransactions
+        .filter((transaction) => transaction.type === "income")
         .reduce((sum, transaction) => sum + transaction.amount, 0),
-    [activeMonth, transactions],
+    [periodTransactions],
   );
 
   const financialPlanning = useMemo(() => {
@@ -527,24 +555,22 @@ export default function BudgetsPage() {
       return null;
     };
 
-    const actualPlanningSpent = transactions
-      .filter((transaction) => transaction.date.startsWith(activeMonth))
-      .reduce(
-        (summary, transaction) => {
-          const group = classifyPlanningTransaction(transaction);
-          if (group === "fixed") summary.fixed += transaction.amount;
-          if (group === "variable") summary.variable += transaction.amount;
-          if (group === "saving") summary.saving += transaction.amount;
-          if (group === "investment") summary.investment += transaction.amount;
-          return summary;
-        },
-        {
-          fixed: 0,
-          variable: 0,
-          saving: 0,
-          investment: 0,
-        },
-      );
+    const actualPlanningSpent = periodTransactions.reduce(
+      (summary, transaction) => {
+        const group = classifyPlanningTransaction(transaction);
+        if (group === "fixed") summary.fixed += transaction.amount;
+        if (group === "variable") summary.variable += transaction.amount;
+        if (group === "saving") summary.saving += transaction.amount;
+        if (group === "investment") summary.investment += transaction.amount;
+        return summary;
+      },
+      {
+        fixed: 0,
+        variable: 0,
+        saving: 0,
+        investment: 0,
+      },
+    );
 
     const fixedSpent = actualPlanningSpent.fixed;
     const variableSpent = actualPlanningSpent.variable;
@@ -559,8 +585,8 @@ export default function BudgetsPage() {
     const futureAllocationSpent = savingSpent + investmentSpent;
     const realExpenseProjected = fixedProjected + variableProjected;
     const effectiveIncome =
-      monthlyIncome > 0
-        ? monthlyIncome
+      periodIncome > 0
+        ? periodIncome
         : Math.max(
             filteredSummary.totalLimit,
             realExpenseSpent + futureAllocationSpent,
@@ -614,13 +640,12 @@ export default function BudgetsPage() {
       effectiveIncome,
     };
   }, [
-    activeMonth,
     categoryById,
     filteredBudgets,
     filteredSummary.totalLimit,
     getSpent,
-    monthlyIncome,
-    transactions,
+    periodIncome,
+    periodTransactions,
   ]);
 
   const budgetHealthScore = useMemo(() => {
@@ -685,18 +710,29 @@ export default function BudgetsPage() {
   );
 
   const canClonePreviousBudget =
-    filteredBudgets.length === 0 && previousMonthBudgets.length > 0;
+    filterMode === "month" &&
+    filteredBudgets.length === 0 &&
+    previousMonthBudgets.length > 0;
 
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
-  const pieData = useMemo(
-    () =>
-      filteredBudgets.map((b, i) => ({
-        name: categories.find((c) => c.id === b.categoryId)?.name ?? "Khác",
-        value: b.limitAmount,
-        color: PIE_COLORS[i % PIE_COLORS.length],
-      })),
-    [filteredBudgets, categories],
-  );
+  const pieData = useMemo(() => {
+    const limitByCategory = new Map<string, number>();
+    filteredBudgets.forEach((budget) => {
+      limitByCategory.set(
+        budget.categoryId,
+        (limitByCategory.get(budget.categoryId) ?? 0) + budget.limitAmount,
+      );
+    });
+
+    return Array.from(limitByCategory.entries()).map(
+      ([categoryId, value], index) => ({
+        name: categories.find((category) => category.id === categoryId)?.name ??
+          "Khác",
+        value,
+        color: PIE_COLORS[index % PIE_COLORS.length],
+      }),
+    );
+  }, [filteredBudgets, categories]);
 
   // ── NEW: Health score ─────────────────────────────────────────────────────
   const healthGrade =
@@ -945,7 +981,7 @@ export default function BudgetsPage() {
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
-              sub={filteredBudgets.length + " danh mục · tháng " + activeMonth}
+              sub={filteredBudgets.length + " ngân sách · " + filterLabel}
               tone="blue"
               icon={<Target size={16} />}
             />
@@ -1120,7 +1156,7 @@ export default function BudgetsPage() {
                 Phân bổ ngân sách
               </h2>
               <p className="text-xs text-slate-500">
-                Tháng {activeMonth} · cơ cấu hạn mức theo danh mục
+                {filterLabel} · cơ cấu hạn mức theo danh mục
               </p>
             </div>
           </div>
@@ -1192,7 +1228,7 @@ export default function BudgetsPage() {
             </div>
           ) : (
             <p className="py-6 text-center text-sm text-slate-400">
-              Chưa có dữ liệu phân bổ cho tháng này.
+              Chưa có dữ liệu phân bổ cho kỳ đã chọn.
             </p>
           )}
         </section>
@@ -1206,7 +1242,7 @@ export default function BudgetsPage() {
         <div className="mb-3 flex items-center gap-2 px-1 sm:mb-4">
           <div className="size-1.5 rounded-full bg-blue-600" />
           <p className="text-sm font-black text-slate-700">
-            {filteredBudgets.length} ngân sách · tháng {activeMonth}
+            {filteredBudgets.length} ngân sách · {filterLabel}
           </p>
         </div>
 
@@ -1263,6 +1299,11 @@ export default function BudgetsPage() {
                         >
                           {label}
                         </span>
+                        {filterMode !== "month" && (
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                            {budget.month}
+                          </span>
+                        )}
                         {trend === "increasing" && (
                           <TrendingUp size={11} className="text-rose-500" />
                         )}
@@ -1436,14 +1477,14 @@ export default function BudgetsPage() {
                 </div>
                 <h3 className="mt-4 text-base font-black text-slate-700">
                   {budgets.length > 0
-                    ? "Không có ngân sách tháng " + activeMonth
+                    ? "Không có ngân sách trong " + filterLabel
                     : "Chưa có ngân sách nào"}
                 </h3>
                 <p className="mt-2 text-sm text-slate-400">
                   {budgets.length > 0
                     ? canClonePreviousBudget
                       ? `Sao chép nhanh ngân sách tháng ${previousMonth}, hoặc tạo ngân sách mới.`
-                      : "Chọn tháng khác hoặc tạo ngân sách mới."
+                      : "Chọn kỳ khác hoặc tạo ngân sách mới."
                     : "Bắt đầu bằng cách tạo ngân sách đầu tiên."}
                 </p>
                 <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-3 sm:w-auto sm:flex-row sm:items-center">
