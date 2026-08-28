@@ -11,9 +11,13 @@ describe("SettingsPage iPhone navigation and control ergonomics (SETTINGS-MOBILE
     expect(source).toContain('className="min-w-0 flex-1 space-y-5 sm:space-y-8"');
   });
 
-  it("uses a mobile horizontal settings navigator while preserving desktop navigation", () => {
+  it("pins the mobile settings navigator to the viewport while preserving desktop navigation", () => {
     expect(source).toContain('aria-label="Điều hướng cài đặt"');
-    expect(source).toContain("xl:hidden");
+    expect(source).toContain('className="fixed inset-x-0 top-[8.5625rem] z-20');
+    expect(source).toContain("md:top-[4.5rem]");
+    expect(source).toContain("lg:left-72");
+    expect(source).toContain('className="h-[3.75rem] xl:hidden"');
+    expect(source).not.toContain('className="sticky top-2 z-20 -mx-1');
     expect(source).toContain('className="hidden w-44 shrink-0 xl:block"');
   });
 
@@ -21,7 +25,7 @@ describe("SettingsPage iPhone navigation and control ergonomics (SETTINGS-MOBILE
     expect(source).toContain('"flex min-h-11 shrink-0 items-center');
   });
 
-  it("offsets sections for the sticky mobile navigator", () => {
+  it("offsets sections for the fixed mobile navigator", () => {
     for (const id of ["profile", "preferences", "financial", "ai", "notifications", "data", "security", "sync", "system", "danger"]) {
       expect(source).toContain(`id="settings-${id}" className="scroll-mt-20"`);
     }

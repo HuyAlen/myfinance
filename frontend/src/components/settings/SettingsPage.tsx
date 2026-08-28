@@ -887,6 +887,47 @@ export default function SettingsPage() {
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Mobile section navigation — fixed below the global mobile header.
+          AppShell keeps Header outside the scrolling <main>, so pinning this
+          rail to the viewport makes it independent from SettingsPage scroll. */}
+      <div className="fixed inset-x-0 top-[8.5625rem] z-20 bg-slate-50/95 px-3 py-2 backdrop-blur-md sm:px-6 md:top-[4.5rem] lg:left-72 lg:px-8 xl:hidden">
+        <nav
+          aria-label="Điều hướng cài đặt"
+          className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex w-max min-w-full gap-2 rounded-2xl border border-blue-100 bg-white/95 p-1.5 shadow-sm backdrop-blur">
+            {SECTIONS.map((s) => {
+              const Icon = s.icon;
+              const active = activeSection === s.id;
+              const isDanger = s.id === "danger";
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => scrollTo(s.id)}
+                  className={
+                    "flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition-colors " +
+                    (active
+                      ? isDanger
+                        ? "bg-rose-50 text-rose-600"
+                        : "bg-blue-600 text-white"
+                      : isDanger
+                        ? "text-rose-500"
+                        : "text-slate-600")
+                  }
+                >
+                  <Icon size={13} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+
+      {/* Reserve mobile flow space for the fixed navigation rail so the
+          account summary starts below it instead of being covered. */}
+      <div aria-hidden="true" className="h-[3.75rem] xl:hidden" />
       {/* ══ Executive Account Summary ════════════════════════════════════════ */}
       <section className="overflow-hidden rounded-3xl border border-blue-100 shadow-sm sm:rounded-4xl">
         <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-4 pt-4 sm:px-8 sm:pb-6 sm:pt-6">
@@ -945,37 +986,6 @@ export default function SettingsPage() {
           <button type="button" onClick={() => void runStatsReload()} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800">Thử lại</button>
         </div>
       )}
-
-      {/* Mobile section navigation */}
-      <nav aria-label="Điều hướng cài đặt" className="sticky top-2 z-20 -mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:hidden">
-        <div className="flex w-max gap-2 rounded-2xl border border-blue-100 bg-white/95 p-1.5 shadow-sm backdrop-blur">
-          {SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const active = activeSection === s.id;
-            const isDanger = s.id === "danger";
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => scrollTo(s.id)}
-                className={
-                  "flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold transition-colors " +
-                  (active
-                    ? isDanger
-                      ? "bg-rose-50 text-rose-600"
-                      : "bg-blue-600 text-white"
-                    : isDanger
-                      ? "text-rose-500"
-                      : "text-slate-600")
-                }
-              >
-                <Icon size={13} />
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
 
       {/* ══ Two-column layout: left nav + content ════════════════════════════ */}
       <div className="flex gap-6 xl:gap-8">
