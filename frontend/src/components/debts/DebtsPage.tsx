@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
@@ -29,7 +29,7 @@ import {
   deleteDebt,
   getDebts,
   getWallets,
-  getTransactions,
+  getTransactionsInRange,
   updateDebt,
 } from "@/src/services/finance/financeStorage";
 
@@ -109,6 +109,42 @@ const TIER_STYLE: Record<
   },
 };
 
+
+const DEBTS_LOAD_TIMEOUT_MS = 10_000;
+const DEBTS_INITIAL_RETRY_MS = 750;
+
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getRolling12MonthRange(now = new Date()) {
+  const start = new Date(now);
+  start.setFullYear(start.getFullYear() - 1);
+  return { startDate: toLocalDateKey(start), endDate: toLocalDateKey(now) };
+}
+
+function withDebtsLoadTimeout<T>(request: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`[DebtsPage] ${label} timed out`));
+    }, DEBTS_LOAD_TIMEOUT_MS);
+
+    Promise.resolve(request).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const PIE_COLORS = [
   "#f43f5e",
   "#f97316",
@@ -130,64 +166,128 @@ export default function DebtsPage() {
   // would otherwise look identical to a genuinely debt-free account.
   const [isLoadingDebts, setIsLoadingDebts] = useState(true);
   const [debtsLoadError, setDebtsLoadError] = useState<string | null>(null);
+  const [isDebtsDataReady, setIsDebtsDataReady] = useState(false);
   const [totalAssets, setTotalAssets] = useState(0);
   const [annualIncome, setAnnualIncome] = useState(0);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
   const { toast } = useToast();
 
-  // ── PRESERVED: reloadData ─────────────────────────────────────────────────
-  // FINANCE-DATA-1: getDebts/getWallets/getTransactions now reject on a
-  // genuine query failure instead of silently resolving to [] — caught
-  // here so every caller (mount, realtime, post-submit/post-delete
-  // refresh) never sees an unhandled rejection. State setters only run
-  // after a successful resolve, so a caught failure leaves the
-  // previously-loaded debts/totals on screen.
-  async function reloadData() {
+  const hasLoadedDebtsDataRef = useRef(false);
+  const isReloadingRef = useRef(false);
+  const hasPendingReloadRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
+  const editingDebtRef = useRef<Debt | null>(null);
+
+  const reloadData = useCallback(async (): Promise<boolean> => {
+    const { startDate, endDate } = getRolling12MonthRange();
     try {
       const [d, w, t] = await Promise.all([
-        getDebts(),
-        getWallets(),
-        getTransactions(),
+        withDebtsLoadTimeout(getDebts(), "debts"),
+        withDebtsLoadTimeout(getWallets(), "wallets"),
+        withDebtsLoadTimeout(
+          getTransactionsInRange(startDate, endDate),
+          "transactions",
+        ),
       ]);
       setDebts(d);
       setTotalAssets(getTotalAssets(w));
-      // Last-12-months income for debt-to-income
-      const now = new Date();
-      const cutoff = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-        .toISOString()
-        .slice(0, 10);
-      const recent = t.filter((tx) => tx.date >= cutoff);
-      setAnnualIncome(getTotalIncome(recent));
+      setAnnualIncome(getTotalIncome(t));
       setDebtsLoadError(null);
+      setIsDebtsDataReady(true);
+      hasLoadedDebtsDataRef.current = true;
+      return true;
     } catch (error) {
       console.error("[DebtsPage] reloadData failed:", error);
-      setDebtsLoadError("Không thể tải dữ liệu khoản nợ. Vui lòng tải lại trang.");
+      setDebtsLoadError(
+        "Không thể đồng bộ dữ liệu khoản nợ. Vui lòng thử lại.",
+      );
+      if (hasLoadedDebtsDataRef.current) {
+        setIsDebtsDataReady(true);
+      }
+      return false;
     } finally {
       setIsLoadingDebts(false);
     }
-  }
+  }, []);
+
+  const runReload = useCallback(async () => {
+    if (isReloadingRef.current) {
+      hasPendingReloadRef.current = true;
+      return false;
+    }
+
+    isReloadingRef.current = true;
+    let lastResult = false;
+    try {
+      do {
+        hasPendingReloadRef.current = false;
+        lastResult = await reloadData();
+      } while (hasPendingReloadRef.current);
+      return lastResult;
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, [reloadData]);
 
   useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | null = null;
+
     const timer = window.setTimeout(() => {
-      reloadData();
+      void (async () => {
+        const ok = await runReload();
+        if (!ok && !cancelled) {
+          retryTimer = window.setTimeout(() => {
+            void runReload();
+          }, DEBTS_INITIAL_RETRY_MS);
+        }
+      })();
     }, 0);
 
-    return () => window.clearTimeout(timer);
-  }, []);
-  useRealtimeTable(["debts"], reloadData);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [runReload]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void runReload();
+    };
+    const handleOnline = () => void runReload();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [runReload]);
+
+  useRealtimeTable(
+  ["debts", "wallets", "transactions"],
+  async () => {
+    await runReload();
+  },
+);
 
   // ── PRESERVED: summary ────────────────────────────────────────────────────
   const summary = useMemo(() => {
     const totalAmount = debts.reduce((s, d) => s + d.totalAmount, 0);
     const remainingAmount = getTotalDebt(debts);
-    const paidAmount = totalAmount - remainingAmount;
+    const paidAmount = Math.max(0, Math.min(totalAmount, totalAmount - remainingAmount));
     const paidPercent =
-      totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
+      totalAmount > 0
+        ? Math.max(0, Math.min(100, Math.round((paidAmount / totalAmount) * 100)))
+        : 0;
     return { totalAmount, remainingAmount, paidAmount, paidPercent };
   }, [debts]);
 
@@ -195,9 +295,11 @@ export default function DebtsPage() {
   const debtMeta = useMemo(
     () =>
       debts.map((d, i) => {
-        const paidAmt = d.totalAmount - d.remainingAmount;
+        const paidAmt = Math.max(0, Math.min(d.totalAmount, d.totalAmount - d.remainingAmount));
         const paidPct =
-          d.totalAmount > 0 ? Math.round((paidAmt / d.totalAmount) * 100) : 0;
+          d.totalAmount > 0
+            ? Math.max(0, Math.min(100, Math.round((paidAmt / d.totalAmount) * 100)))
+            : 0;
         const tier = getDebtTier(paidPct, d.remainingAmount);
         return {
           ...d,
@@ -221,24 +323,28 @@ export default function DebtsPage() {
     [debtMeta],
   );
 
-  // ── NEW: debt ratios ──────────────────────────────────────────────────────
+  // ── Debt burden + repayment semantics ─────────────────────────────────────
   const debtToAsset =
     totalAssets > 0
       ? Math.round((summary.remainingAmount / totalAssets) * 100)
       : 0;
-  const debtToIncome =
-    annualIncome > 0
-      ? Math.round((summary.remainingAmount / annualIncome) * 100)
-      : 0;
+  const monthlyDebtService = debts.reduce(
+    (sum, debt) => sum + Math.max(0, Number(debt.minimumPayment ?? 0)),
+    0,
+  );
+  const debtServiceToIncome =
+    annualIncome > 0 && monthlyDebtService > 0
+      ? Math.round(((monthlyDebtService * 12) / annualIncome) * 100)
+      : null;
 
-  // ── NEW: health score ─────────────────────────────────────────────────────
-  const healthScore = summary.paidPercent; // 0→100: % paid off overall
-  const healthGrade =
-    healthScore >= 70
-      ? { gradient: "from-emerald-500 to-green-500", label: "Xuất sắc" }
-      : healthScore >= 40
-        ? { gradient: "from-amber-400 to-orange-500", label: "Trung bình" }
-        : { gradient: "from-rose-500 to-red-500", label: "Áp lực cao" };
+  // This is repayment progress, not a broad "health" score.
+  const repaymentProgress = summary.paidPercent;
+  const repaymentGrade =
+    repaymentProgress >= 70
+      ? { gradient: "from-emerald-500 to-green-500", label: "Tiến độ cao" }
+      : repaymentProgress >= 40
+        ? { gradient: "from-amber-400 to-orange-500", label: "Tiến độ trung bình" }
+        : { gradient: "from-rose-500 to-red-500", label: "Mới bắt đầu" };
 
   // ── NEW: pie data ─────────────────────────────────────────────────────────
   const pieData = useMemo(
@@ -341,7 +447,7 @@ export default function DebtsPage() {
     return insights.slice(0, 6);
   }, [debtMeta, summary, debtToAsset]);
 
-  // ── NEW: Payoff planner (Snowball = smallest remaining first; Avalanche = highest remaining ratio first) ──
+  // ── Payoff planner: Snowball = smallest balance; Avalanche = highest interest first ──
   const snowballOrder = useMemo(
     () =>
       [...debtMeta]
@@ -354,33 +460,42 @@ export default function DebtsPage() {
       [...debtMeta]
         .filter((d) => d.tier !== "paid")
         .sort((a, b) => {
-          const ratioA =
-            a.totalAmount > 0 ? a.remainingAmount / a.totalAmount : 0;
-          const ratioB =
-            b.totalAmount > 0 ? b.remainingAmount / b.totalAmount : 0;
-          return ratioB - ratioA;
+          const rateA = Number.isFinite(Number(a.interestRate))
+            ? Number(a.interestRate)
+            : -1;
+          const rateB = Number.isFinite(Number(b.interestRate))
+            ? Number(b.interestRate)
+            : -1;
+          if (rateA !== rateB) return rateB - rateA;
+          return b.remainingAmount - a.remainingAmount;
         }),
     [debtMeta],
   );
 
   // ── PRESERVED: CRUD ───────────────────────────────────────────────────────
   function openCreateForm() {
+    editingDebtRef.current = null;
     setForm(emptyForm);
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
   function openEditForm(debt: Debt) {
+    editingDebtRef.current = debt;
     setForm({
       id: debt.id,
       name: debt.name,
       totalAmount: String(debt.totalAmount),
       remainingAmount: String(debt.remainingAmount),
     });
+    setSaveError(null);
     setIsFormOpen(true);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (saveInFlightRef.current) return;
+
     const totalAmount = Number(form.totalAmount);
     const remainingAmount = Number(form.remainingAmount);
     if (!form.name.trim()) {
@@ -399,21 +514,33 @@ export default function DebtsPage() {
       setSaveError("Số tiền còn lại không được lớn hơn tổng số tiền vay");
       return;
     }
+
+    const existingDebt = form.id ? editingDebtRef.current : null;
     const debt: Debt = {
+      ...(existingDebt ?? {}),
       id: form.id ?? crypto.randomUUID(),
       name: form.name.trim(),
       totalAmount,
       remainingAmount,
-    };
+    } as Debt;
+
+    saveInFlightRef.current = true;
+    setIsSaving(true);
     setSaveError(null);
-    const { error } = form.id ? await updateDebt(debt) : await addDebt(debt);
-    if (error) {
-      setSaveError(error);
-      return;
+    try {
+      const { error } = form.id ? await updateDebt(debt) : await addDebt(debt);
+      if (error) {
+        setSaveError(error);
+        return;
+      }
+      await runReload();
+      setIsFormOpen(false);
+      setForm(emptyForm);
+      editingDebtRef.current = null;
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaving(false);
     }
-    await reloadData();
-    setIsFormOpen(false);
-    setForm(emptyForm);
   }
 
   function handleDelete(id: string) {
@@ -423,13 +550,19 @@ export default function DebtsPage() {
         "Hành động này không thể hoàn tác. Khoản nợ sẽ bị xóa khỏi tài khoản của bạn.",
       variant: "danger",
       onConfirm: async () => {
-        const { error } = await deleteDebt(id);
-        if (error) {
-          toast({ variant: "error", message: "Lỗi xóa khoản nợ: " + error });
-          return;
+        if (deleteInFlightRef.current) return;
+        deleteInFlightRef.current = true;
+        try {
+          const { error } = await deleteDebt(id);
+          if (error) {
+            toast({ variant: "error", message: "Lỗi xóa khoản nợ: " + error });
+            return;
+          }
+          toast({ variant: "success", message: "Đã xóa khoản nợ thành công." });
+          await runReload();
+        } finally {
+          deleteInFlightRef.current = false;
         }
-        toast({ variant: "success", message: "Đã xóa khoản nợ thành công." });
-        await reloadData();
       },
     });
   }
@@ -514,6 +647,7 @@ export default function DebtsPage() {
               gradient="from-rose-400 to-rose-500"
               iconBg="bg-white/20"
               icon={<ArrowDownRight size={16} />}
+              isLoading={!isDebtsDataReady}
             />
             <KpiCard
               label="Đã hoàn trả"
@@ -522,6 +656,7 @@ export default function DebtsPage() {
               gradient="from-emerald-500 to-emerald-600"
               iconBg="bg-emerald-400/30"
               icon={<CheckCircle2 size={16} />}
+              isLoading={!isDebtsDataReady}
             />
             <KpiCard
               label="Số khoản nợ"
@@ -535,6 +670,7 @@ export default function DebtsPage() {
               gradient="from-blue-500 to-blue-600"
               iconBg="bg-blue-400/30"
               icon={<Landmark size={16} />}
+              isLoading={!isDebtsDataReady}
             />
             <KpiCard
               label="Tỷ lệ Nợ/Tài sản"
@@ -555,39 +691,57 @@ export default function DebtsPage() {
               }
               iconBg="bg-white/20"
               icon={<Shield size={16} />}
+              isLoading={!isDebtsDataReady}
             />
-            {/* Debt Health Score */}
+            {/* Tiến độ trả nợ Score */}
             <div
               className={
                 "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
-                healthGrade.gradient
+                repaymentGrade.gradient
               }
             >
               <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-                Debt Health
+                Tiến độ trả nợ
               </p>
-              <p className="mt-1 text-3xl font-black text-white">
-                {healthScore}
-                <span className="text-lg opacity-70">%</span>
-              </p>
+              {isDebtsDataReady ? (
+                <p className="mt-1 text-3xl font-black text-white">
+                  {repaymentProgress}
+                  <span className="text-lg opacity-70">%</span>
+                </p>
+              ) : (
+                <div className="mt-2 h-8 w-20 animate-pulse rounded-lg bg-white/25" />
+              )}
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
                 <div
                   className="h-1.5 rounded-full bg-white"
-                  style={{ width: Math.min(healthScore, 100) + "%" }}
+                  style={{ width: Math.min(repaymentProgress, 100) + "%" }}
                 />
               </div>
               <p className="mt-1.5 text-[10px] text-white/80">
-                {healthGrade.label}
+                {repaymentGrade.label}
               </p>
             </div>
           </div>
         </div>
       </section>
 
+      {debtsLoadError && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">{debtsLoadError}</p>
+          <button
+            type="button"
+            onClick={() => void runReload()}
+            className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 · Debt Overview + Analytics
           ══════════════════════════════════════════════════════════════════ */}
-      {debts.length > 0 && (
+      {isDebtsDataReady && debts.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
           {/* LEFT: Master progress + tier breakdown */}
           <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -713,19 +867,19 @@ export default function DebtsPage() {
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-3 text-center">
                   <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    Nợ / Thu nhập
+                    Trả nợ / Thu nhập
                   </p>
                   <p
                     className={
                       "mt-1 text-lg font-black " +
-                      (debtToIncome < 100
+                      (debtServiceToIncome === null || debtServiceToIncome < 20
                         ? "text-emerald-600"
-                        : debtToIncome < 200
+                        : debtServiceToIncome < 35
                           ? "text-amber-500"
                           : "text-rose-500")
                     }
                   >
-                    {debtToIncome}%
+                    {debtServiceToIncome === null ? "—" : `${debtServiceToIncome}%`}
                   </p>
                 </div>
               </div>
@@ -832,13 +986,13 @@ export default function DebtsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 3 · AI Debt Coach
+          SECTION 3 · Debt guidance
           ══════════════════════════════════════════════════════════════════ */}
-      {coachInsights.length > 0 && (
+      {isDebtsDataReady && coachInsights.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-2 px-1">
             <Bot size={14} className="text-blue-600" />
-            <p className="text-sm font-black text-slate-700">AI Debt Coach</p>
+            <p className="text-sm font-black text-slate-700">Gợi ý trả nợ</p>
             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
               {coachInsights.length}
             </span>
@@ -904,7 +1058,7 @@ export default function DebtsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 4 · Payoff Planner
           ══════════════════════════════════════════════════════════════════ */}
-      {snowballOrder.length > 1 && (
+      {isDebtsDataReady && snowballOrder.length > 1 && (
         <section className="grid gap-5 xl:grid-cols-2">
           {/* Snowball */}
           <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -966,16 +1120,15 @@ export default function DebtsPage() {
                   Phương pháp Avalanche
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Trả khoản tỷ lệ còn lại cao nhất — tối ưu tài chính
+                  Ưu tiên lãi suất cao nhất · khoản thiếu lãi suất xếp sau
                 </p>
               </div>
             </div>
             <div className="space-y-3">
               {avalancheOrder.map((d, i) => {
-                const ratio =
-                  d.totalAmount > 0
-                    ? Math.round((d.remainingAmount / d.totalAmount) * 100)
-                    : 0;
+                const interestRate = Number.isFinite(Number(d.interestRate))
+                  ? Number(d.interestRate)
+                  : null;
                 return (
                   <div
                     key={d.id}
@@ -996,7 +1149,9 @@ export default function DebtsPage() {
                         {d.name}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {ratio}% còn lại ({formatVND(d.remainingAmount)})
+                        {interestRate === null
+                          ? `Chưa nhập lãi suất · ${formatVND(d.remainingAmount)} còn lại`
+                          : `Lãi suất ${interestRate}% · ${formatVND(d.remainingAmount)} còn lại`}
                       </p>
                     </div>
                     {i === 0 && (
@@ -1214,7 +1369,7 @@ export default function DebtsPage() {
           )}
 
           {/* Empty state */}
-          {debts.length === 0 && !isLoadingDebts && !debtsLoadError && (
+          {debts.length === 0 && isDebtsDataReady && !debtsLoadError && (
             <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-emerald-100">
                 <TrendingUp size={24} className="text-emerald-500" />
@@ -1301,9 +1456,14 @@ export default function DebtsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
+                  disabled={isSaving}
+                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {form.id ? "Lưu thay đổi" : "Thêm khoản nợ"}
+                  {isSaving
+                    ? "Đang lưu..."
+                    : form.id
+                      ? "Lưu thay đổi"
+                      : "Thêm khoản nợ"}
                 </button>
               </div>
             </form>
@@ -1328,6 +1488,7 @@ function KpiCard({
   gradient,
   iconBg,
   icon,
+  isLoading = false,
 }: {
   label: string;
   value: string;
@@ -1335,6 +1496,7 @@ function KpiCard({
   gradient: string;
   iconBg: string;
   icon: React.ReactNode;
+  isLoading?: boolean;
 }) {
   return (
     <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
@@ -1351,8 +1513,17 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+      {isLoading ? (
+        <>
+          <div className="mt-2 h-6 w-28 animate-pulse rounded-lg bg-white/25" />
+          <div className="mt-1.5 h-3 w-20 animate-pulse rounded bg-white/20" />
+        </>
+      ) : (
+        <>
+          <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
+          <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+        </>
+      )}
     </div>
   );
 }
