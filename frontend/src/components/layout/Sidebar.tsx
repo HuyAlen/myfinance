@@ -12,6 +12,7 @@ import {
   BriefcaseBusiness,
   ChartPie,
   Folder,
+  History,
   Home,
   Landmark,
   PiggyBank,
@@ -48,6 +49,7 @@ const NAV_GROUPS = [
   {
     label: "Hệ thống",
     items: [
+      { label: "Hoạt động", icon: History, href: "/activity" },
       { label: "Cài Đặt", icon: Settings, href: "/settings" },
       { label: "Hướng Dẫn", icon: BookOpen, href: "/help" },
     ],

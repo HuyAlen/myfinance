@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
+  ChevronRight,
+  History,
   Loader2,
   Mail,
   ShieldCheck,
@@ -162,7 +165,21 @@ export default function HouseholdSettingsCard() {
                 Shared Finance
               </div>
             </div>
-
+            <Link
+              href="/activity"
+              className="group flex min-h-16 items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/45 p-3.5 transition hover:border-blue-200 hover:bg-blue-50"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+                <History size={17} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-black text-slate-800">Lịch sử hoạt động</span>
+                <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                  Xem ai đã thay đổi dữ liệu, thời điểm và giá trị trước / sau.
+                </span>
+              </span>
+              <ChevronRight size={16} className="shrink-0 text-blue-400 transition group-hover:translate-x-0.5" />
+            </Link>
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div>

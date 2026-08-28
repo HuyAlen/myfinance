@@ -109,6 +109,10 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
   "/categories": { title: "Danh Mục", desc: "Phân loại thu chi" },
   "/ai-insights": { title: "AI Advisor", desc: "Tư vấn tài chính thông minh" },
   "/settings": { title: "Cài Đặt", desc: "Tuỳ chỉnh ứng dụng" },
+  "/activity": {
+    title: "Hoạt động",
+    desc: "Lịch sử thay đổi tài chính & người thực hiện",
+  },
   "/help": {
     title: "Hướng Dẫn",
     desc: "Onboarding, tính năng & câu hỏi thường gặp",

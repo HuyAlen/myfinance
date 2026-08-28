@@ -30,6 +30,7 @@ function isActivePath(pathname: string, href: string) {
       "/ai-insights",
       "/settings",
       "/help",
+      "/activity",
     ].some((path) => pathname.startsWith(path));
   }
 
