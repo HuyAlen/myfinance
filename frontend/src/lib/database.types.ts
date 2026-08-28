@@ -100,6 +100,43 @@ type HouseholdInviteInsert = {
   updated_at?: string;
 };
 type HouseholdInviteUpdate = Partial<HouseholdInviteInsert>;
+// BEGIN AUDIT-TRAIL-1 DATABASE TYPES
+type FinanceAuditLogRow = {
+  id: string;
+  household_id: string;
+  finance_owner_user_id: string;
+  actor_user_id: string;
+  actor_email: string | null;
+  actor_role: HouseholdRole;
+  entity_type: string;
+  entity_id: string | null;
+  action: string;
+  before_data: Json | null;
+  after_data: Json | null;
+  metadata: Json;
+  request_id: string | null;
+  transaction_id: number;
+  created_at: string;
+};
+type FinanceAuditLogInsert = {
+  id?: string;
+  household_id: string;
+  finance_owner_user_id: string;
+  actor_user_id: string;
+  actor_email?: string | null;
+  actor_role: HouseholdRole;
+  entity_type: string;
+  entity_id?: string | null;
+  action: string;
+  before_data?: Json | null;
+  after_data?: Json | null;
+  metadata?: Json;
+  request_id?: string | null;
+  transaction_id?: number;
+  created_at?: string;
+};
+type FinanceAuditLogUpdate = Partial<FinanceAuditLogInsert>;
+// END AUDIT-TRAIL-1 DATABASE TYPES
 type WalletRow = {
   id: string;
   user_id: string;
@@ -658,6 +695,9 @@ export type Database = {
       households: { Row: HouseholdRow; Insert: HouseholdInsert; Update: HouseholdUpdate; Relationships: [] };
       household_members: { Row: HouseholdMemberRow; Insert: HouseholdMemberInsert; Update: HouseholdMemberUpdate; Relationships: [] };
       household_invites: { Row: HouseholdInviteRow; Insert: HouseholdInviteInsert; Update: HouseholdInviteUpdate; Relationships: [] };
+// BEGIN AUDIT-TRAIL-1 TABLE SURFACE
+      finance_audit_log: { Row: FinanceAuditLogRow; Insert: FinanceAuditLogInsert; Update: FinanceAuditLogUpdate; Relationships: [] };
+// END AUDIT-TRAIL-1 TABLE SURFACE
       wallets: { Row: WalletRow; Insert: WalletInsert; Update: WalletUpdate; Relationships: [] };
       categories: {
         Row: CategoryRow;

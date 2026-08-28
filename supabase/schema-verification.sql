@@ -361,3 +361,95 @@ FROM pg_policies
 WHERE schemaname = 'public'
   AND tablename IN ('wallets','transactions','savings','forex_accounts','net_worth_snapshots','households','household_members')
 ORDER BY tablename, policyname;
+
+-- BEGIN AUDIT-TRAIL-1 VERIFICATION
+-- AUDIT-TRAIL-1 Canonical Append-only Finance Audit Log
+-- Read-only checks. Expected booleans are documented by column names.
+SELECT
+  to_regclass('public.finance_audit_log') IS NOT NULL AS has_finance_audit_log,
+  has_table_privilege('authenticated', 'public.finance_audit_log', 'SELECT') AS authenticated_can_select,
+  has_table_privilege('authenticated', 'public.finance_audit_log', 'INSERT') AS authenticated_can_insert,
+  has_table_privilege('authenticated', 'public.finance_audit_log', 'UPDATE') AS authenticated_can_update,
+  has_table_privilege('authenticated', 'public.finance_audit_log', 'DELETE') AS authenticated_can_delete,
+  has_table_privilege('anon', 'public.finance_audit_log', 'SELECT') AS anon_can_select,
+  has_table_privilege('anon', 'public.finance_audit_log', 'INSERT') AS anon_can_insert,
+  has_table_privilege('service_role', 'public.finance_audit_log', 'SELECT') AS service_role_can_select,
+  has_table_privilege('service_role', 'public.finance_audit_log', 'INSERT') AS service_role_can_insert,
+  has_table_privilege('service_role', 'public.finance_audit_log', 'UPDATE') AS service_role_can_update,
+  has_table_privilege('service_role', 'public.finance_audit_log', 'DELETE') AS service_role_can_delete,
+  has_table_privilege('service_role', 'public.finance_audit_log', 'TRUNCATE') AS service_role_can_truncate;
+
+SELECT
+  c.relrowsecurity AS rls_enabled,
+  EXISTS (
+    SELECT 1
+    FROM pg_policies p
+    WHERE p.schemaname = 'public'
+      AND p.tablename = 'finance_audit_log'
+      AND p.policyname = 'finance_audit_log_household_select'
+      AND p.cmd = 'SELECT'
+      AND p.roles @> ARRAY['authenticated']::name[]
+      AND p.qual ILIKE '%current_household_id%'
+  ) AS has_household_select_policy,
+  NOT EXISTS (
+    SELECT 1
+    FROM pg_policies p
+    WHERE p.schemaname = 'public'
+      AND p.tablename = 'finance_audit_log'
+      AND p.cmd IN ('INSERT','UPDATE','DELETE','ALL')
+  ) AS has_no_client_write_policy
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relname = 'finance_audit_log';
+
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM pg_trigger t
+    WHERE t.tgrelid = 'public.finance_audit_log'::regclass
+      AND t.tgname = 'trg_finance_audit_log_stamp_insert'
+      AND NOT t.tgisinternal
+  ) AS has_server_stamp_trigger,
+  EXISTS (
+    SELECT 1
+    FROM pg_trigger t
+    WHERE t.tgrelid = 'public.finance_audit_log'::regclass
+      AND t.tgname = 'trg_finance_audit_log_append_only_guard'
+      AND NOT t.tgisinternal
+  ) AS has_append_only_guard,
+  strpos(
+    pg_get_functiondef('public.stamp_finance_audit_log_insert()'::regprocedure),
+    'auth.uid()'
+  ) > 0 AS stamp_uses_authenticated_actor,
+  strpos(
+    pg_get_functiondef('public.reject_finance_audit_log_mutation()'::regprocedure),
+    'MFA03'
+  ) > 0 AS append_only_guard_raises_mfa03,
+  strpos(
+    pg_get_functiondef('public.capture_finance_audit_row()'::regprocedure),
+    'INSERT INTO public.finance_audit_log'
+  ) > 0 AS capture_inserts_audit_event;
+
+SELECT
+  NOT has_function_privilege(
+    'authenticated',
+    'public.capture_finance_audit_row()',
+    'EXECUTE'
+  ) AS capture_function_is_private,
+  NOT has_function_privilege(
+    'authenticated',
+    'public.stamp_finance_audit_log_insert()',
+    'EXECUTE'
+  ) AS stamp_function_is_private,
+  NOT has_function_privilege(
+    'anon',
+    'public.capture_finance_audit_row()',
+    'EXECUTE'
+  ) AS anon_cannot_execute_capture,
+  NOT has_function_privilege(
+    'anon',
+    'public.stamp_finance_audit_log_insert()',
+    'EXECUTE'
+  ) AS anon_cannot_execute_stamp;
+-- END AUDIT-TRAIL-1 VERIFICATION
