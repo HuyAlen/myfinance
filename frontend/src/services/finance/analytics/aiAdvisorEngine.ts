@@ -17,6 +17,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
@@ -111,22 +112,39 @@ export type AdvisorInput = {
   wallets: Wallet[];
   categories: Category[];
   transactions: Transaction[];
+  /** Whole-history minimal ledger used only for cumulative Goal funding. */
+  goalFundingTransactions?: Transaction[];
   debts: Debt[];
   goals: Goal[];
   investments: Investment[];
   budgets: Budget[];
+  savings?: SavingAccount[];
 };
 
 // ─── Private Helpers ──────────────────────────────────────────────────────────
 
 function computeMetrics(input: AdvisorInput): AdvisorMetrics {
-  const { wallets, debts, investments, transactions, categories, goals } =
-    input;
+  const {
+    wallets,
+    debts,
+    investments,
+    transactions,
+    goalFundingTransactions = transactions,
+    categories,
+    goals,
+    savings = [],
+  } = input;
 
   // Delegates to the canonical net worth calculation so the debt ratio below
-  // is scoped to the same assets total as Dashboard/Reports (wallets +
-  // investments here — savings/Forex are not yet fetched for AI Insights).
-  const netWorthBreakdown = calculateNetWorth({ wallets, investments, debts });
+  // is scoped to the same assets total as Dashboard/Reports for the domains
+  // loaded by AI Insights. Savings are part of this snapshot; Forex remains a
+  // separate follow-up because this ticket only canonicalizes Goal funding.
+  const netWorthBreakdown = calculateNetWorth({
+    wallets,
+    savings,
+    investments,
+    debts,
+  });
   const totalAssets = netWorthBreakdown.totalAssets;
   const totalDebt = netWorthBreakdown.totalDebt;
   const income = getTotalIncome(transactions);
@@ -134,7 +152,7 @@ function computeMetrics(input: AdvisorInput): AdvisorMetrics {
   const saving = income - expense;
   const savingRate = getSavingRate(income, expense);
   const debtRatio = getDebtRatio(totalDebt, totalAssets);
-  const goalScore = getGoalScore(goals);
+  const goalScore = getGoalScore(goals, goalFundingTransactions, savings);
   const spendingByCategory = getSpendingByCategory(transactions, categories);
   const topSpending = spendingByCategory[0];
 
@@ -337,10 +355,12 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     wallets,
     categories,
     transactions,
+    goalFundingTransactions = transactions,
     debts,
     goals,
     investments,
     budgets,
+    savings = [],
   } = input;
 
   const metrics = computeMetrics(input);
@@ -383,6 +403,11 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
       transactions,
       budgets,
       categories,
+      3,
+      [],
+      savings,
+      [],
+      goalFundingTransactions,
     ),
     riskScore: computeRiskScore(
       wallets,
@@ -392,6 +417,9 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
       investments,
       3,
       categories,
+      savings,
+      0,
+      goalFundingTransactions,
     ),
     emergencyFund: emergency,
     fire,
@@ -399,6 +427,13 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     financialForecast,
     anomalies: detectSpendingAnomalies(transactions, categories),
     forecast: computeMonthlyForecast(transactions),
-    goalPredictions: predictGoalAchievement(goals, transactions, 3, categories),
+    goalPredictions: predictGoalAchievement(
+      goals,
+      transactions,
+      3,
+      categories,
+      savings,
+      goalFundingTransactions,
+    ),
   };
 }

@@ -20,6 +20,7 @@ import type {
 
 import {
   calculateBudgetSpending,
+  calculateGoalFundingSnapshot,
   calculateNetWorth,
   getDebtRatio,
   getEmergencyMonths,
@@ -82,6 +83,7 @@ export function computeHealthScoreV2(
   forexCashTransactions: ForexCashTransaction[] = [],
   savings: SavingAccount[] = [],
   forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">> = [],
+  goalFundingTransactions: Transaction[] = transactions,
 ): HealthScoreV2 {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
@@ -190,8 +192,13 @@ export function computeHealthScoreV2(
       ? 50
       : Math.round(
           goals.reduce(
-            (s, g) =>
-              s + Math.min((g.currentAmount / g.targetAmount) * 100, 100),
+            (sum, goal) =>
+              sum +
+              calculateGoalFundingSnapshot({
+                goal,
+                transactions: goalFundingTransactions,
+                savings,
+              }).progressPercent,
             0,
           ) / goals.length,
         );

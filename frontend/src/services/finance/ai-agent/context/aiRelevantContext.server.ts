@@ -1,3 +1,5 @@
+import type { Goal, SavingAccount, Transaction } from "@/src/types/finance";
+import { calculateGoalFundingSnapshot } from "@/src/services/finance/financeCalculations";
 import type { AIFinanceToolContext } from "../tools/aiToolTypes";
 import { detectAIFinanceContextIntent } from "./aiContextIntent.server";
 import { resolveAIFinanceCapabilities } from "./aiCapabilityResolver.server";
@@ -143,19 +145,67 @@ function summarizeBudgets(rows: Record<string, unknown>[]) {
   }));
 }
 
-function summarizeGoals(rows: Record<string, unknown>[]) {
+function toGoalFundingTransaction(row: Record<string, unknown>): Transaction {
+  return {
+    id: stringOf(row.id),
+    type: stringOf(row.type) as Transaction["type"],
+    amount: numberOf(row.amount),
+    categoryId: stringOf(row.categoryId ?? row.category_id),
+    walletId: stringOf(row.walletId ?? row.wallet_id),
+    note: stringOf(row.note),
+    date: stringOf(row.date),
+  };
+}
+
+function toGoalFundingSaving(row: Record<string, unknown>): SavingAccount {
+  const interestRate = row.interestRate ?? row.interest_rate;
+
+  return {
+    id: stringOf(row.id),
+    name: stringOf(row.name),
+    type: stringOf(row.type) as SavingAccount["type"],
+    balance: numberOf(row.balance),
+    interestRate:
+      interestRate === null || interestRate === undefined
+        ? undefined
+        : numberOf(interestRate),
+    maturityDate: stringOf(row.maturityDate ?? row.maturity_date) || undefined,
+    notes: stringOf(row.notes) || undefined,
+  };
+}
+
+function toGoalFundingGoal(row: Record<string, unknown>): Goal {
+  const rawLinks = row.savingCategoryIds ?? row.saving_category_ids;
+  return {
+    id: stringOf(row.id),
+    name: stringOf(row.name),
+    targetAmount: numberOf(row.targetAmount ?? row.target_amount),
+    currentAmount: numberOf(row.currentAmount ?? row.current_amount),
+    savingCategoryIds: Array.isArray(rawLinks)
+      ? rawLinks.filter((value): value is string => typeof value === "string")
+      : [],
+  };
+}
+
+function summarizeGoals(
+  rows: Record<string, unknown>[],
+  fundingTransactions: Record<string, unknown>[],
+  fundingSavings: Record<string, unknown>[],
+) {
+  const transactions = fundingTransactions.map(toGoalFundingTransaction);
+  const savings = fundingSavings.map(toGoalFundingSaving);
+
   return rows.map((item) => {
-    const targetAmount = numberOf(item.targetAmount ?? item.target_amount);
-    const currentAmount = numberOf(item.currentAmount ?? item.current_amount);
+    const goal = toGoalFundingGoal(item);
+    const funding = calculateGoalFundingSnapshot({ goal, transactions, savings });
 
     return {
-      id: item.id,
-      name: item.name,
-      targetAmount,
-      currentAmount,
-      remaining: Math.max(0, targetAmount - currentAmount),
-      progressPercent:
-        targetAmount > 0 ? Math.round((currentAmount / targetAmount) * 100) : 0,
+      id: goal.id,
+      name: goal.name,
+      targetAmount: goal.targetAmount,
+      currentAmount: funding.effectiveCurrentAmount,
+      remaining: funding.remainingAmount,
+      progressPercent: funding.progressPercent,
     };
   });
 }
@@ -303,6 +353,26 @@ export async function buildAIFinanceRelevantContext(input: {
       })
     : Promise.resolve([]);
 
+  // Goal progress depends on the same canonical funding inputs as the product
+  // UI. These are dependency reads, not extra context domains: Saving links
+  // provide the current balance and legacy category links need transaction
+  // history to preserve old Goal rows during migration.
+  const goalFundingSavingsPromise = intent.domains.includes("goals")
+    ? queryRows({
+        context: input.context,
+        table: "savings",
+      })
+    : Promise.resolve([]);
+
+  const goalFundingTransactionsPromise = intent.domains.includes("goals")
+    ? queryRows({
+        context: input.context,
+        table: "transactions",
+        configure: (query) => query.order("date", { ascending: false }),
+        limit: MAX_ROWS_PER_DOMAIN,
+      })
+    : Promise.resolve([]);
+
   const debtPromise =
     intent.domains.includes("debts") ||
     intent.domains.includes("overview") ||
@@ -328,6 +398,8 @@ export async function buildAIFinanceRelevantContext(input: {
     wallets,
     budgets,
     goals,
+    goalFundingSavings,
+    goalFundingTransactions,
     debts,
     investments,
   ] = await Promise.all([
@@ -336,6 +408,8 @@ export async function buildAIFinanceRelevantContext(input: {
     walletPromise,
     budgetPromise,
     goalPromise,
+    goalFundingSavingsPromise,
+    goalFundingTransactionsPromise,
     debtPromise,
     investmentPromise,
   ]);
@@ -364,7 +438,11 @@ export async function buildAIFinanceRelevantContext(input: {
   }
 
   if (goals.length > 0 || intent.domains.includes("goals")) {
-    snapshot.goals = summarizeGoals(goals);
+    snapshot.goals = summarizeGoals(
+      goals,
+      goalFundingTransactions,
+      goalFundingSavings,
+    );
     loadedDomains.add("goals");
   }
 

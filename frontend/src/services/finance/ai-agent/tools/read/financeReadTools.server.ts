@@ -4,12 +4,15 @@ import type {
   Category,
   CategoryPlanningGroup,
   Debt,
+  Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 import {
   calculateBudgetSpendingCollection,
+  calculateGoalFundingSnapshot,
   calculateNetWorth,
   getDebtScore,
   getEmergencyMonths,
@@ -99,6 +102,17 @@ type GoalRow = {
   name: string;
   targetAmount: number;
   currentAmount: number;
+  saving_category_ids?: string[] | null;
+};
+
+type SavingRow = {
+  id: string;
+  name: string;
+  type: SavingAccount["type"];
+  balance: number;
+  interest_rate?: number | null;
+  maturity_date?: string | null;
+  notes?: string | null;
 };
 
 type DebtRow = {
@@ -236,6 +250,28 @@ export function toDomainBudget(row: BudgetRow): Budget {
     categoryId: row.categoryId,
     month: row.month,
     limitAmount: Number(row.limitAmount || 0),
+  };
+}
+
+export function toDomainGoal(row: GoalRow): Goal {
+  return {
+    id: row.id,
+    name: row.name,
+    targetAmount: Number(row.targetAmount || 0),
+    currentAmount: Number(row.currentAmount || 0),
+    savingCategoryIds: row.saving_category_ids ?? [],
+  };
+}
+
+export function toDomainSaving(row: SavingRow): SavingAccount {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    balance: Number(row.balance || 0),
+    interestRate: row.interest_rate ?? undefined,
+    maturityDate: row.maturity_date ?? undefined,
+    notes: row.notes ?? undefined,
   };
 }
 
@@ -834,32 +870,33 @@ export const getGoalsTool: AIFinanceToolRegistration<Record<string, never>> = {
   validate: parseEmptyArgs,
   async execute(context) {
     try {
-      const goals = await getRows<GoalRow>(context, "goals");
+      const [goals, savings, transactions] = await Promise.all([
+        getRows<GoalRow>(context, "goals"),
+        getRows<SavingRow>(context, "savings"),
+        getRows<TransactionRow>(context, "transactions"),
+      ]);
+      const domainSavings = savings.map(toDomainSaving);
+      const domainTransactions = transactions.map(toDomainTransaction);
 
       return {
         ok: true,
         data: goals
-          .map((goal) => ({
-            id: goal.id,
-            name: goal.name,
-            targetAmount: Number(goal.targetAmount || 0),
-            currentAmount: Number(goal.currentAmount || 0),
-            remaining: Math.max(
-              0,
-              Number(goal.targetAmount || 0) - Number(goal.currentAmount || 0),
-            ),
-            progressPercent:
-              Number(goal.targetAmount || 0) > 0
-                ? Math.min(
-                    100,
-                    Math.round(
-                      (Number(goal.currentAmount || 0) /
-                        Number(goal.targetAmount || 0)) *
-                        100,
-                    ),
-                  )
-                : 0,
-          }))
+          .map((goal) => {
+            const domainGoal = toDomainGoal(goal);
+            const funding = calculateGoalFundingSnapshot({
+              goal: domainGoal,
+              transactions: domainTransactions,
+              savings: domainSavings,
+            });
+            return {
+              id: domainGoal.id,
+              name: domainGoal.name,
+              targetAmount: domainGoal.targetAmount,
+              currentAmount: funding.effectiveCurrentAmount,
+              remaining: funding.remainingAmount,
+              progressPercent: funding.progressPercent,
+            };
+          })
           .sort((a, b) => a.progressPercent - b.progressPercent),
       };
     } catch (error) {

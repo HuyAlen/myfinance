@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
-import { supabase } from "@/src/lib/supabase";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
@@ -23,15 +22,16 @@ import type { Goal, SavingAccount, Transaction } from "@/src/types/finance";
 import {
   addGoal,
   deleteGoal,
+  getGoalFundingTransactions,
   getGoals,
-  getTransactions,
+  getSavings,
   updateGoal,
 } from "@/src/services/finance/financeStorage";
 
 import {
+  calculateGoalFundingSnapshot,
   formatVND,
-  getGoalEffectiveCurrentAmount,
-  getGoalLinkedSavingAmount,
+  resolveGoalFundingLinks,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
@@ -46,6 +46,8 @@ type FormState = {
   name: string;
   targetAmount: string;
   currentAmount: string;
+  linkedSavingIds: string[];
+  /** Hidden legacy category links retained until the row is migrated on save. */
   savingCategoryIds: string[];
 };
 
@@ -53,6 +55,7 @@ const emptyForm: FormState = {
   name: "",
   targetAmount: "",
   currentAmount: "",
+  linkedSavingIds: [],
   savingCategoryIds: [],
 };
 
@@ -103,73 +106,6 @@ const TIER_STYLE: Record<
     iconGrad: "from-amber-400 to-orange-500",
     label: "Mới bắt đầu",
   },
-};
-
-type SavingRow = {
-  id: string;
-  name: string;
-  type: SavingAccount["type"];
-  balance: number | string | null;
-  interest_rate: number | string | null;
-  maturity_date: string | null;
-  notes: string | null;
-};
-
-const mapSavingRowToSavingAccount = (row: SavingRow): SavingAccount => ({
-  id: row.id,
-  name: row.name,
-  type: row.type,
-  balance: Number(row.balance ?? 0),
-  interestRate:
-    row.interest_rate === null || row.interest_rate === undefined
-      ? undefined
-      : Number(row.interest_rate),
-  maturityDate: row.maturity_date ?? undefined,
-  notes: row.notes ?? undefined,
-});
-
-const normalizeGoalText = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .trim();
-
-const getSupabaseSavingAmountForGoal = (
-  goal: Goal,
-  savings: SavingAccount[],
-) => {
-  const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
-  const selectedSavingsAmount = savings.reduce((sum, saving) => {
-    if (!linkedSavingIds.has(saving.id)) return sum;
-    return sum + saving.balance;
-  }, 0);
-
-  if (selectedSavingsAmount > 0) {
-    return selectedSavingsAmount;
-  }
-
-  const goalName = normalizeGoalText(goal.name);
-
-  return savings.reduce((sum, saving) => {
-    const savingName = normalizeGoalText(saving.name);
-    const isEmergencyGoal =
-      goalName.includes("khan cap") ||
-      goalName.includes("emergency") ||
-      goalName.includes("du phong");
-    const isEmergencySaving = saving.type === "emergency_fund";
-    const isNameMatched =
-      goalName.length > 0 &&
-      savingName.length > 0 &&
-      (goalName.includes(savingName) || savingName.includes(goalName));
-
-    if ((isEmergencyGoal && isEmergencySaving) || isNameMatched) {
-      return sum + saving.balance;
-    }
-
-    return sum;
-  }, 0);
 };
 
 // GOALS-MOBILE-POLISH-2: keep financial card text single-line on iPhone
@@ -224,31 +160,15 @@ export default function GoalsPage() {
   // screen.
   async function reloadData() {
     try {
-      const [nextGoals, nextTransactions, savingRows] = await Promise.all([
+      const [nextGoals, nextTransactions, nextSavings] = await Promise.all([
         getGoals(),
-        getTransactions(),
-        supabase
-          .from("savings")
-          .select("id,name,type,balance,interest_rate,maturity_date,notes")
-          .order("created_at", { ascending: false }),
+        getGoalFundingTransactions(),
+        getSavings(),
       ]);
-
-      // FINANCE-DATA-1C: this raw "savings" read is a mandatory dependency
-      // of this load cycle too — selectedSavingsAmount/selectedTotal treat
-      // `savings` as validated data, so a failed read here must not be
-      // treated as a successful load (which previously left `savings` at
-      // its stale/initial [] while clearing goalsLoadError to null).
-      if (savingRows.error) {
-        throw savingRows.error;
-      }
 
       setGoals(nextGoals);
       setTransactions(nextTransactions);
-      setSavings(
-        ((savingRows.data ?? []) as SavingRow[]).map(
-          mapSavingRowToSavingAccount,
-        ),
-      );
+      setSavings(nextSavings);
       setGoalsLoadError(null);
     } catch (error) {
       console.error("[GoalsPage] reloadData failed:", error);
@@ -265,31 +185,26 @@ export default function GoalsPage() {
 
     return () => window.clearTimeout(timer);
   }, []);
-  useRealtimeTable(["goals", "transactions"], reloadData);
+  useRealtimeTable(["goals", "transactions", "savings"], reloadData);
 
   // ── NEW: per-goal analytics ───────────────────────────────────────────────
   const goalMeta = useMemo(
     () =>
       goals.map((g) => {
-        const linkedSavingAmount = getGoalLinkedSavingAmount({
+        const funding = calculateGoalFundingSnapshot({
           goal: g,
           transactions,
+          savings,
         });
-        const supabaseSavingAmount = getSupabaseSavingAmountForGoal(g, savings);
-        const baseEffectiveCurrentAmount = getGoalEffectiveCurrentAmount({
-          goal: g,
-          transactions,
-        });
-        const effectiveCurrentAmount = Math.max(
-          baseEffectiveCurrentAmount,
-          g.currentAmount + supabaseSavingAmount,
-        );
-        const pct =
-          g.targetAmount > 0
-            ? Math.round((effectiveCurrentAmount / g.targetAmount) * 100)
+        const linkedSavingAmount = funding.legacyCategoryAmount;
+        const supabaseSavingAmount =
+          funding.source === "linked-saving" || funding.source === "heuristic-saving"
+            ? funding.autoFundedAmount
             : 0;
+        const effectiveCurrentAmount = funding.effectiveCurrentAmount;
+        const pct = funding.progressPercent;
         const tier = getTier(pct);
-        const remaining = Math.max(g.targetAmount - effectiveCurrentAmount, 0);
+        const remaining = funding.remainingAmount;
         const suggestedMonthly =
           remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
         const monthsLeft =
@@ -392,12 +307,14 @@ export default function GoalsPage() {
   }, [focusGoalId, goalMeta]);
 
   function openEditForm(goal: Goal) {
+    const links = resolveGoalFundingLinks({ goal, savings });
     setForm({
       id: goal.id,
       name: goal.name,
       targetAmount: String(goal.targetAmount),
       currentAmount: String(goal.currentAmount),
-      savingCategoryIds: goal.savingCategoryIds ?? [],
+      linkedSavingIds: links.linkedSavingIds,
+      savingCategoryIds: links.legacyCategoryIds,
     });
     setIsFormOpen(true);
   }
@@ -423,6 +340,7 @@ export default function GoalsPage() {
       name: form.name.trim(),
       targetAmount,
       currentAmount,
+      linkedSavingIds: form.linkedSavingIds,
       savingCategoryIds: form.savingCategoryIds,
     };
     setSaveError(null);
@@ -959,11 +877,11 @@ export default function GoalsPage() {
 
                 <SavingAccountSelector
                   savings={savings}
-                  value={form.savingCategoryIds}
+                  value={form.linkedSavingIds}
                   onChange={(next) =>
                     setForm((previous) => ({
                       ...previous,
-                      savingCategoryIds: next,
+                      linkedSavingIds: next,
                     }))
                   }
                 />

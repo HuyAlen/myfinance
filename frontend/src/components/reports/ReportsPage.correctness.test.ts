@@ -74,15 +74,12 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(source).toContain("[...periodMonthly].sort((a, b) => b.income - a.income)");
   });
 
-  it("keeps explicitly linked goal savings authoritative even when their balance is zero", () => {
-    const start = source.indexOf("function getSupabaseSavingAmountForReportGoal(");
-    const end = source.indexOf("function isDateInPeriod(", start);
-    const block = source.slice(start, end);
-    const explicitIdx = block.indexOf("if (linkedSavingIds.size > 0) {");
-    const heuristicIdx = block.indexOf("const goalName = normalizeReportText(goal.name)");
-    expect(explicitIdx).toBeGreaterThan(-1);
-    expect(heuristicIdx).toBeGreaterThan(explicitIdx);
-    expect(block).not.toContain("selectedSavingsAmount > 0");
+  it("delegates goal funding to the canonical cross-page snapshot instead of reimplementing Savings matching", () => {
+    expect(source).toContain("calculateGoalFundingSnapshot({");
+    expect(source).toContain("const effectiveCurrentAmount = funding.effectiveCurrentAmount;");
+    expect(source).toContain("const pct = funding.progressPercent;");
+    expect(source).not.toContain("getSupabaseSavingAmountForReportGoal");
+    expect(source).not.toContain("normalizeReportText");
   });
 
   it("treats asset allocation as assets only and keeps debt outside the pie denominator", () => {

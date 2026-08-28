@@ -8,7 +8,7 @@ describe("AIInsightsPage recoverable analytics readiness and trustworthy semanti
 
   it("bounds every critical source read with a 10-second timeout", () => {
     expect(source).toContain("const INSIGHTS_LOAD_TIMEOUT_MS = 10_000");
-    for (const label of ["wallets", "categories", "transactions", "debts", "goals", "investments", "budgets"]) {
+    for (const label of ["wallets", "categories", "transactions", "goal-funding-transactions", "debts", "goals", "investments", "budgets", "savings"]) {
       expect(source).toContain(`\"${label}\"`);
     }
     expect(source).toContain("withInsightsLoadTimeout(");
@@ -31,28 +31,29 @@ describe("AIInsightsPage recoverable analytics readiness and trustworthy semanti
     expect(source).toContain('document.visibilityState === "visible"');
   });
 
-  it("subscribes all seven datasets that can change advisor output", () => {
-    for (const table of ["wallets", "categories", "transactions", "debts", "goals", "investments", "budgets"]) {
+  it("subscribes all eight datasets that can change advisor output", () => {
+    for (const table of ["wallets", "categories", "transactions", "debts", "goals", "investments", "budgets", "savings"]) {
       expect(source).toContain(`\"${table}\"`);
     }
     expect(source).toContain("useRealtimeTable(");
     expect(source).toContain("await runReload();");
   });
 
-  it("uses a bounded local-calendar transaction window instead of whole-history reads", () => {
+  it("keeps general analytics on a bounded local-calendar window while Goal funding uses a dedicated cumulative minimal ledger", () => {
     expect(source).toContain("getTransactionsInRange");
+    expect(source).toContain("getGoalFundingTransactions");
     expect(source).not.toContain("getTransactions,");
     expect(source).toContain("INSIGHTS_TRANSACTION_WINDOW_MONTHS = 24");
     expect(source).toContain("toLocalDateKey");
     expect(source).not.toContain("toISOString().slice(0, 10)");
   });
 
-  it("commits the seven-source snapshot only after Promise.all succeeds", () => {
+  it("commits all nine required reads only after Promise.all succeeds", () => {
     const start = source.indexOf("const reloadData = useCallback");
     const catchIdx = source.indexOf("} catch (error) {", start);
     const success = source.slice(start, catchIdx);
     expect(success).toContain("await Promise.all([");
-    for (const setter of ["setWallets(nextWallets)", "setCategories(nextCategories)", "setTransactions(nextTransactions)", "setDebts(nextDebts)", "setGoals(nextGoals)", "setInvestments(nextInvestments)", "setBudgets(nextBudgets)"]) {
+    for (const setter of ["setWallets(nextWallets)", "setCategories(nextCategories)", "setTransactions(nextTransactions)", "setGoalFundingTransactions(nextGoalFundingTransactions)", "setDebts(nextDebts)", "setGoals(nextGoals)", "setInvestments(nextInvestments)", "setBudgets(nextBudgets)", "setSavings(nextSavings)"]) {
       expect(success).toContain(setter);
     }
   });

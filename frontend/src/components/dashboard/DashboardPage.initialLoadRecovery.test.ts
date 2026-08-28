@@ -35,6 +35,7 @@ describe("DashboardPage recoverable initial load contract (DASHBOARD-DATA-READIN
       '"forex_ledger"',
       '"categories"',
       '"transactions"',
+      '"goal_funding_transactions"',
       '"net_worth_history"',
       '"debts"',
       '"goals"',

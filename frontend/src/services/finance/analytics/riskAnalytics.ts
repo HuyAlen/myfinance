@@ -26,6 +26,7 @@ import type {
 } from "@/src/types/finance";
 
 import {
+  calculateGoalFundingSnapshot,
   calculateNetWorth,
   getDebtRatio,
   getSpendableWalletBalance,
@@ -127,6 +128,7 @@ export function computeRiskScore(
   categories: Category[] = [],
   savings: SavingAccount[] = [],
   forexAssetValue = 0,
+  goalFundingTransactions: Transaction[] = transactions,
 ): RiskScore {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
@@ -393,7 +395,13 @@ export function computeRiskScore(
     goals.length === 0
       ? 50
       : goals.reduce(
-          (s, g) => s + Math.min((g.currentAmount / g.targetAmount) * 100, 100),
+          (sum, goal) =>
+            sum +
+            calculateGoalFundingSnapshot({
+              goal,
+              transactions: goalFundingTransactions,
+              savings,
+            }).progressPercent,
           0,
         ) / goals.length;
   const goalGapFactor: RiskFactor = {

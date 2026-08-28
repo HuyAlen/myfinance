@@ -5,11 +5,10 @@
  * Input: plain data arrays. No side effects. Unit-test-ready.
  */
 
-import type { Category, Goal, Transaction } from "@/src/types/finance";
+import type { Category, Goal, SavingAccount, Transaction } from "@/src/types/finance";
 
 import {
-  getGoalEffectiveCurrentAmount,
-  getGoalEffectiveProgress,
+  calculateGoalFundingSnapshot,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -54,6 +53,8 @@ export function predictGoalAchievement(
   transactions: Transaction[],
   lookbackMonths = 3,
   categories: Category[] = [],
+  savings: SavingAccount[] = [],
+  goalFundingTransactions: Transaction[] = transactions,
 ): GoalPrediction[] {
   const months = lastNMonths(lookbackMonths);
   const byMonth = groupByMonth(transactions);
@@ -64,19 +65,26 @@ export function predictGoalAchievement(
   });
 
   const avgMonthlySaving = mean(monthlySavings);
-  const activeGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
+  const fundingSnapshots = goals.map((goal) => ({
+    goal,
+    funding: calculateGoalFundingSnapshot({
+      goal,
+      transactions: goalFundingTransactions,
+      savings,
+    }),
+  }));
+  const activeGoals = fundingSnapshots.filter(
+    ({ funding }) => funding.progressPercent < 100,
+  );
   const monthlyPerGoal =
     activeGoals.length > 0 && avgMonthlySaving > 0
       ? avgMonthlySaving / activeGoals.length
       : 0;
 
-  return goals.map((goal): GoalPrediction => {
-    // Delegates to the canonical goal-progress helpers so FIRE/Goals/Reports
-    // never diverge on what counts as a goal's "effective" current amount
-    // (base amount + any linked saving-category transactions).
-    const currentAmount = getGoalEffectiveCurrentAmount({ goal, transactions });
-    const remaining = Math.max(0, goal.targetAmount - currentAmount);
-    const progressPercent = getGoalEffectiveProgress({ goal, transactions });
+  return fundingSnapshots.map(({ goal, funding }): GoalPrediction => {
+    const currentAmount = funding.effectiveCurrentAmount;
+    const remaining = funding.remainingAmount;
+    const progressPercent = funding.progressPercent;
 
     if (progressPercent >= 100) {
       return {
@@ -121,7 +129,7 @@ export function predictGoalAchievement(
       goalId: goal.id,
       goalName: goal.name,
       targetAmount: goal.targetAmount,
-      currentAmount: goal.currentAmount,
+      currentAmount,
       remaining,
       progressPercent,
       monthlyContribution: Math.round(monthlyPerGoal),

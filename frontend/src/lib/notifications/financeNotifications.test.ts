@@ -3,7 +3,14 @@ import {
   buildFinanceNotifications,
   getCurrentLocalMonthKey,
 } from "./financeNotifications";
-import type { Budget, Category, Debt, Goal, Transaction } from "@/src/types/finance";
+import type {
+  Budget,
+  Category,
+  Debt,
+  Goal,
+  SavingAccount,
+  Transaction,
+} from "@/src/types/finance";
 
 /**
  * NOTIF-CORRECTNESS-1 — Notification Logic Audit & Hardening.
@@ -466,7 +473,7 @@ describe("period tests", () => {
   });
 });
 
-describe("goal notifications use the canonical effective current amount (linked saving contributions)", () => {
+describe("goal notifications use the canonical Goal funding snapshot", () => {
   const goal: Goal = {
     id: "goal-1",
     name: "Mua xe",
@@ -506,6 +513,54 @@ describe("goal notifications use the canonical effective current amount (linked 
       debts: [],
       currentMonth: "2026-08",
     });
+    expect(result).toHaveLength(0);
+  });
+
+  it("uses an explicitly linked Saving balance for the same near-goal threshold as Goals/Dashboard/Reports", () => {
+    const savingLinkedGoal: Goal = {
+      ...goal,
+      savingCategoryIds: [],
+      linkedSavingIds: ["saving-car"],
+    };
+    const savings: SavingAccount[] = [
+      { id: "saving-car", name: "Mua xe", type: "savings_account", balance: 400_000 },
+    ];
+
+    const result = buildFinanceNotifications({
+      budgets: [],
+      transactions: [],
+      categories: [],
+      goals: [savingLinkedGoal],
+      savings,
+      debts: [],
+      currentMonth: "2026-08",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toContain("Sắp đạt mục tiêu");
+  });
+
+  it("keeps an explicit zero-balance Saving link authoritative instead of falling through to a same-name heuristic Saving", () => {
+    const savingLinkedGoal: Goal = {
+      ...goal,
+      savingCategoryIds: [],
+      linkedSavingIds: ["saving-zero"],
+    };
+    const savings: SavingAccount[] = [
+      { id: "saving-zero", name: "Sổ đã chọn", type: "savings_account", balance: 0 },
+      { id: "saving-other", name: "Mua xe", type: "savings_account", balance: 500_000 },
+    ];
+
+    const result = buildFinanceNotifications({
+      budgets: [],
+      transactions: [],
+      categories: [],
+      goals: [savingLinkedGoal],
+      savings,
+      debts: [],
+      currentMonth: "2026-08",
+    });
+
     expect(result).toHaveLength(0);
   });
 });

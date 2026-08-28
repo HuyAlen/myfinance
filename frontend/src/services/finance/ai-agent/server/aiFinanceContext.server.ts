@@ -5,12 +5,15 @@ import type {
   Category,
   CategoryPlanningGroup,
   Debt,
+  Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
 import {
   calculateBudgetSpendingCollection,
+  calculateGoalFundingSnapshot,
   calculateNetWorth,
   getSavingRate,
   getTotalExpense,
@@ -110,6 +113,40 @@ export function toDomainInvestment(
   };
 }
 
+export function toDomainSaving(
+  row: Pick<
+    Database["public"]["Tables"]["savings"]["Row"],
+    "id" | "name" | "type" | "balance" | "interest_rate" | "maturity_date" | "notes"
+  >,
+): SavingAccount {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    balance: Number(row.balance || 0),
+    interestRate: row.interest_rate ?? undefined,
+    maturityDate: row.maturity_date ?? undefined,
+    notes: row.notes ?? undefined,
+  };
+}
+
+export function toDomainGoal(
+  row: Pick<
+    Database["public"]["Tables"]["goals"]["Row"],
+    "id" | "name" | "targetAmount" | "currentAmount" | "saving_category_ids"
+  >,
+): Goal {
+  return {
+    id: row.id,
+    name: row.name,
+    targetAmount: Number(row.targetAmount || 0),
+    currentAmount: Number(row.currentAmount || 0),
+    // Raw persisted links are deliberately passed through. The canonical
+    // resolver understands both namespaced v2 links and unprefixed legacy IDs.
+    savingCategoryIds: row.saving_category_ids ?? [],
+  };
+}
+
 type FinanceContext = {
   generatedAt: string;
   counts: {
@@ -167,6 +204,7 @@ export async function buildServerFinanceContext(
     goalsResult,
     budgetsResult,
     investmentsResult,
+    savingsResult,
   ] = await Promise.all([
     client.from("wallets").select("*").eq("user_id", userId),
     client.from("categories").select("*").eq("user_id", userId),
@@ -179,6 +217,7 @@ export async function buildServerFinanceContext(
     client.from("goals").select("*").eq("user_id", userId),
     client.from("budgets").select("*").eq("user_id", userId),
     client.from("investments").select("*").eq("user_id", userId),
+    client.from("savings").select("*").eq("user_id", userId),
   ]);
 
   const firstError = [
@@ -189,6 +228,7 @@ export async function buildServerFinanceContext(
     goalsResult.error,
     budgetsResult.error,
     investmentsResult.error,
+    savingsResult.error,
   ].find(Boolean);
 
   if (firstError) {
@@ -202,6 +242,7 @@ export async function buildServerFinanceContext(
   const goals = goalsResult.data ?? [];
   const budgets = budgetsResult.data ?? [];
   const investments = investmentsResult.data ?? [];
+  const savings = savingsResult.data ?? [];
 
   const categoryById = new Map(categories.map((item) => [item.id, item.name]));
   const domainCategories = categories.map(toDomainCategory);
@@ -209,6 +250,8 @@ export async function buildServerFinanceContext(
     String(item.date).startsWith(currentMonth),
   );
   const domainMonthTransactions = monthTransactions.map(toDomainTransaction);
+  const domainTransactions = transactions.map(toDomainTransaction);
+  const domainSavings = savings.map(toDomainSaving);
 
   // Canonical income/expense — see financeCalculations.ts. `getTotalExpense`
   // excludes saving/investment-planning-group transactions (real expense
@@ -288,18 +331,20 @@ export async function buildServerFinanceContext(
     },
     topExpenseCategories,
     budgetStatus,
-    goals: goals.slice(0, 10).map((goal) => ({
-      name: goal.name,
-      targetAmount: goal.targetAmount,
-      currentAmount: goal.currentAmount,
-      progressPercent:
-        goal.targetAmount > 0
-          ? Math.min(
-              100,
-              Math.round((goal.currentAmount / goal.targetAmount) * 100),
-            )
-          : 0,
-    })),
+    goals: goals.slice(0, 10).map((goal) => {
+      const domainGoal = toDomainGoal(goal);
+      const funding = calculateGoalFundingSnapshot({
+        goal: domainGoal,
+        transactions: domainTransactions,
+        savings: domainSavings,
+      });
+      return {
+        name: domainGoal.name,
+        targetAmount: domainGoal.targetAmount,
+        currentAmount: funding.effectiveCurrentAmount,
+        progressPercent: funding.progressPercent,
+      };
+    }),
   };
 }
 

@@ -64,6 +64,7 @@ import {
   getNetWorthSnapshotsInRange,
   getForexAccounts,
   getForexCashTransactions,
+  getGoalFundingTransactions,
   getTransactionsInRange,
   getWallets,
 } from "@/src/services/finance/financeStorage";
@@ -72,12 +73,11 @@ import {
   buildMonthlyCashFlowData,
   calculateDashboardSummary,
   calculateFinancialStructureSummary,
+  calculateGoalFundingSnapshot,
   filterTransactionsByDateRange,
   formatVND,
   getForexAssetValue,
   getForexNetCapital,
-  getGoalEffectiveCurrentAmount,
-  getGoalLinkedSavingAmount,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -173,48 +173,6 @@ type DashboardSupabaseResult<T> = {
 type ForexEquityRow = {
   id: string;
   current_equity: number | string | null;
-};
-
-const normalizeGoalText = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .trim();
-
-const getDashboardGoalSavingAmount = (
-  goal: Goal,
-  savings: DashboardSavingAccount[],
-) => {
-  const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
-  const selectedSavingsAmount = savings.reduce((sum, saving) => {
-    if (!linkedSavingIds.has(saving.id)) return sum;
-    return sum + saving.balance;
-  }, 0);
-
-  if (selectedSavingsAmount > 0) return selectedSavingsAmount;
-
-  const goalName = normalizeGoalText(goal.name);
-
-  return savings.reduce((sum, saving) => {
-    const savingName = normalizeGoalText(saving.name);
-    const isEmergencyGoal =
-      goalName.includes("khan cap") ||
-      goalName.includes("emergency") ||
-      goalName.includes("du phong");
-    const isEmergencySaving = saving.type === "emergency_fund";
-    const isNameMatched =
-      goalName.length > 0 &&
-      savingName.length > 0 &&
-      (goalName.includes(savingName) || savingName.includes(goalName));
-
-    if ((isEmergencyGoal && isEmergencySaving) || isNameMatched) {
-      return sum + saving.balance;
-    }
-
-    return sum;
-  }, 0);
 };
 
 type DashboardGoalMeta = Goal & {
@@ -668,6 +626,9 @@ export default function DashboardPage() {
   >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [goalFundingTransactions, setGoalFundingTransactions] = useState<
+    Transaction[]
+  >([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -680,7 +641,7 @@ export default function DashboardPage() {
   //
   //   cashFlowReady        transactions + categories
   //                        → periodFlowSummary (income/expense), "Dòng tiền ròng"
-  //   goalsReady           goals + transactions + savings
+  //   goalsReady           goals + cumulative goal-funding transactions + savings
   //                        → goalMeta/goalSnapshot, "Mục tiêu"
   //   emergencyFundReady   savings + transactions + categories
   //                        → savingsSnapshot.emergencyFund / summary.monthlyExpense
@@ -1075,6 +1036,12 @@ export default function DashboardPage() {
       },
       ),
     );
+    const goalFundingTransactionsPromise = bounded(
+      "goal_funding_transactions",
+      measureDashboardQuery("goal_funding_transactions", ctx, () =>
+        getGoalFundingTransactions(),
+      ),
+    );
     const netWorthHistoryPromise = bounded(
       "net_worth_history",
       measureDashboardQuery(
@@ -1253,20 +1220,19 @@ export default function DashboardPage() {
       }
     })();
 
-    // GOALS group — goal progress (`goalMeta`/`goalSnapshot`, "Mục tiêu")
-    // needs goals + transactions + savings, never investments/debts/Forex.
+    // GOALS group — Goal progress is cumulative and must not change when the
+    // Dashboard year/period changes. It therefore owns a dedicated minimal
+    // whole-history Goal-funding transaction read plus goals + savings.
     const goalsGroupPromise = (async () => {
       try {
-        const [gls, txn, savingRows] = await Promise.all([
+        const [gls, fundingTxn, savingRows] = await Promise.all([
           goalsPromise,
-          transactionsPromise,
+          goalFundingTransactionsPromise,
           savingsPromise,
         ]);
         if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
         setGoals(gls ?? []);
-        setTransactions(txn ?? []);
-        loadedPeriodYearRef.current = selectedYear;
-        markPeriodReadyOnce();
+        setGoalFundingTransactions(fundingTxn ?? []);
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
         );
@@ -1986,6 +1952,7 @@ export default function DashboardPage() {
         investments: snapshotInvestments,
         debts: snapshotDebts,
         transactions: filteredTransactions,
+        goalFundingTransactions,
         categories,
         goals: snapshotGoals,
         forexAssetValue: forexSnapshot.assetValue,
@@ -1996,6 +1963,7 @@ export default function DashboardPage() {
       snapshotInvestments,
       snapshotDebts,
       filteredTransactions,
+      goalFundingTransactions,
       categories,
       snapshotGoals,
       forexSnapshot.assetValue,
@@ -2005,33 +1973,19 @@ export default function DashboardPage() {
   const goalMeta = useMemo<DashboardGoalMeta[]>(
     () =>
       snapshotGoals.map((goal) => {
-        const linkedSavingAmount = getGoalLinkedSavingAmount({
+        const funding = calculateGoalFundingSnapshot({
           goal,
-          transactions,
-        });
-        const supabaseSavingAmount = getDashboardGoalSavingAmount(
-          goal,
+          transactions: goalFundingTransactions,
           savings,
-        );
-        const baseEffectiveCurrentAmount = getGoalEffectiveCurrentAmount({
-          goal,
-          transactions,
         });
-        const effectiveCurrentAmount = Math.max(
-          baseEffectiveCurrentAmount,
-          goal.currentAmount + supabaseSavingAmount,
-        );
-        const percent =
-          goal.targetAmount > 0
-            ? Math.min(
-                Math.round((effectiveCurrentAmount / goal.targetAmount) * 100),
-                100,
-              )
+        const linkedSavingAmount = funding.legacyCategoryAmount;
+        const supabaseSavingAmount =
+          funding.source === "linked-saving" || funding.source === "heuristic-saving"
+            ? funding.autoFundedAmount
             : 0;
-        const remaining = Math.max(
-          goal.targetAmount - effectiveCurrentAmount,
-          0,
-        );
+        const effectiveCurrentAmount = funding.effectiveCurrentAmount;
+        const percent = funding.progressPercent;
+        const remaining = funding.remainingAmount;
         const suggestedMonthly =
           remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
         const monthsLeft =
@@ -2049,7 +2003,7 @@ export default function DashboardPage() {
           monthsLeft,
         };
       }),
-    [snapshotGoals, transactions, savings],
+    [snapshotGoals, goalFundingTransactions, savings],
   );
 
   const goalSnapshot = useMemo(() => {

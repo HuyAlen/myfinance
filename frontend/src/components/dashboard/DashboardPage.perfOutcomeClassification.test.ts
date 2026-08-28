@@ -58,7 +58,7 @@ describe("DashboardPage measureDashboardQuery outcome-classification wiring", ()
     },
   );
 
-  it.each(["debts", "wallets", "transactions"])(
+  it.each(["debts", "wallets", "transactions", "goal_funding_transactions"])(
     "%s does NOT carry the fulfilled-result classifier (its service function already throws/resolves a plain value, not {data,error})",
     (queryName) => {
       expect(callBlockFor(queryName)).not.toContain(

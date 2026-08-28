@@ -11,6 +11,7 @@ import type {
   Goal,
   Investment,
   NetWorthSnapshot,
+  SavingAccount,
   ForexAccount,
   ForexCashTransaction,
   Transaction,
@@ -355,6 +356,7 @@ function sanitizeDemoFinanceData(
 
   const goals = demoData.goals.map((goal) => ({
     ...goal,
+    linkedSavingIds: goal.linkedSavingIds ?? [],
     savingCategoryIds: (goal.savingCategoryIds ?? []).filter(
       (categoryId) => !isLegacyFutureAllocationCategoryId(categoryId),
     ),
@@ -484,13 +486,56 @@ type GoalDbRow = Goal & {
   user_id?: string;
 };
 
+const GOAL_SAVING_LINK_PREFIX = "saving:";
+const GOAL_CATEGORY_LINK_PREFIX = "category:";
+
+function decodeGoalFundingLinks(row: GoalDbRow) {
+  const rawLinks = row.saving_category_ids ?? row.savingCategoryIds ?? [];
+  const linkedSavingIds = [...(row.linkedSavingIds ?? [])];
+  const savingCategoryIds: string[] = [];
+
+  for (const rawLink of rawLinks) {
+    if (rawLink.startsWith(GOAL_SAVING_LINK_PREFIX)) {
+      linkedSavingIds.push(rawLink.slice(GOAL_SAVING_LINK_PREFIX.length));
+      continue;
+    }
+    if (rawLink.startsWith(GOAL_CATEGORY_LINK_PREFIX)) {
+      savingCategoryIds.push(rawLink.slice(GOAL_CATEGORY_LINK_PREFIX.length));
+      continue;
+    }
+
+    // Pre-GOAL-SAVINGS-SSOT-1 rows are intentionally left unclassified here.
+    // `resolveGoalFundingLinks` owns the migration because only callers that
+    // have the real Savings snapshot can safely distinguish an old Saving ID
+    // from a legacy Category ID.
+    savingCategoryIds.push(rawLink);
+  }
+
+  return {
+    linkedSavingIds: [...new Set(linkedSavingIds.filter(Boolean))],
+    savingCategoryIds: [...new Set(savingCategoryIds.filter(Boolean))],
+  };
+}
+
+function encodeGoalFundingLinks(goal: Goal) {
+  return [
+    ...(goal.savingCategoryIds ?? []).map(
+      (id) => `${GOAL_CATEGORY_LINK_PREFIX}${id}`,
+    ),
+    ...(goal.linkedSavingIds ?? []).map(
+      (id) => `${GOAL_SAVING_LINK_PREFIX}${id}`,
+    ),
+  ];
+}
+
 function fromGoalRow(row: GoalDbRow): Goal {
+  const links = decodeGoalFundingLinks(row);
   return {
     id: row.id,
     name: row.name,
     targetAmount: row.targetAmount,
     currentAmount: row.currentAmount,
-    savingCategoryIds: row.saving_category_ids ?? row.savingCategoryIds ?? [],
+    ...links,
   };
 }
 
@@ -500,7 +545,7 @@ function toGoalRow(goal: Goal): Omit<GoalDbRow, "user_id"> {
     name: goal.name,
     targetAmount: goal.targetAmount,
     currentAmount: goal.currentAmount,
-    saving_category_ids: goal.savingCategoryIds ?? [],
+    saving_category_ids: encodeGoalFundingLinks(goal),
   };
 }
 
@@ -996,6 +1041,64 @@ export async function getTransactionsInRange(
     .map(fromTransactionRow);
 }
 
+/**
+ * Minimal whole-history transaction reader for cumulative Goal funding.
+ *
+ * General analytics pages should keep using bounded date-range reads. Goal
+ * progress is different: legacy category-linked goals are cumulative, so a
+ * selected year/analytics window must never change their effective balance.
+ * Only the fields read by `calculateGoalFundingSnapshot` are selected.
+ */
+export async function getGoalFundingTransactions(): Promise<Transaction[]> {
+  if (LOCAL_UI_MODE) {
+    return getLocalUiDemoData()
+      .transactions.filter(
+        (transaction) =>
+          transaction.type === "expense" || transaction.type === "saving",
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id,type,amount,categoryId,walletId,note,date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false });
+  if (error) {
+    console.error(
+      "[financeStorage] getGoalFundingTransactions:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as Array<{
+    id: string;
+    type: Transaction["type"];
+    amount: number;
+    categoryId: string;
+    walletId: string;
+    note: string | null;
+    date: string;
+  }>)
+    .filter(
+      (row) =>
+        !isLegacyFutureAllocationCategoryId(row.categoryId) &&
+        (row.type === "expense" || row.type === "saving"),
+    )
+    .map((row) => ({
+      id: row.id,
+      type: row.type,
+      amount: Number(row.amount || 0),
+      categoryId: row.categoryId,
+      walletId: row.walletId,
+      note: row.note ?? "",
+      date: row.date,
+    }));
+}
+
 export async function getDebts(): Promise<Debt[]> {
   if (LOCAL_UI_MODE) return getLocalUiDemoData().debts;
 
@@ -1029,11 +1132,49 @@ export async function getGoals(): Promise<Goal[]> {
     const goal = fromGoalRow(row);
     return {
       ...goal,
+      linkedSavingIds: goal.linkedSavingIds ?? [],
       savingCategoryIds: (goal.savingCategoryIds ?? []).filter(
         (categoryId) => !isLegacyFutureAllocationCategoryId(categoryId),
       ),
     };
   });
+}
+
+export async function getSavings(): Promise<SavingAccount[]> {
+  if (LOCAL_UI_MODE) return [];
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("savings")
+    .select("id,name,type,balance,interest_rate,maturity_date,notes")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[financeStorage] getSavings:", error.message);
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as Array<{
+    id: string;
+    name: string;
+    type: SavingAccount["type"];
+    balance: number | string | null;
+    interest_rate: number | string | null;
+    maturity_date: string | null;
+    notes: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    balance: Number(row.balance ?? 0),
+    interestRate:
+      row.interest_rate === null || row.interest_rate === undefined
+        ? undefined
+        : Number(row.interest_rate),
+    maturityDate: row.maturity_date ?? undefined,
+    notes: row.notes ?? undefined,
+  }));
 }
 
 export async function getBudgets(): Promise<Budget[]> {

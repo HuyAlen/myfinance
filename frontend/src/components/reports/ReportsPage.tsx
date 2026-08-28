@@ -65,11 +65,11 @@ import {
   initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
+  calculateGoalFundingSnapshot,
   calculateNetWorth,
   formatVND,
   getDebtRatio,
   getForexAssetValue,
-  getGoalEffectiveCurrentAmount,
   getGoalScore,
   getTotalAssets,
   getTotalExpense,
@@ -191,51 +191,6 @@ function formatMillionTooltip(value: unknown): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return "0 đ";
   return formatVND(Math.round(n * 1_000_000));
-}
-
-function normalizeReportText(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .trim();
-}
-
-function getSupabaseSavingAmountForReportGoal(
-  goal: Goal,
-  savingRows: ReportSaving[],
-) {
-  const linkedSavingIds = new Set(goal.savingCategoryIds ?? []);
-
-  // REPORTS-CORRECTNESS-1: an explicit goal -> saving link is authoritative
-  // even when the linked balance is currently zero. Falling through to name
-  // heuristics in that case can silently attach an unrelated saving account.
-  if (linkedSavingIds.size > 0) {
-    return savingRows.reduce((sum, saving) => {
-      if (!linkedSavingIds.has(saving.id)) return sum;
-      return sum + getSavingBalance(saving);
-    }, 0);
-  }
-
-  const goalName = normalizeReportText(goal.name);
-  return savingRows.reduce((sum, saving) => {
-    const savingName = normalizeReportText(saving.name);
-    const isEmergencyGoal =
-      goalName.includes("khan cap") ||
-      goalName.includes("emergency") ||
-      goalName.includes("du phong");
-    const isEmergencySaving = saving.type === "emergency_fund";
-    const isNameMatched =
-      goalName.length > 0 &&
-      savingName.length > 0 &&
-      (goalName.includes(savingName) || savingName.includes(goalName));
-
-    if ((isEmergencyGoal && isEmergencySaving) || isNameMatched) {
-      return sum + getSavingBalance(saving);
-    }
-    return sum;
-  }, 0);
 }
 
 function isDateInPeriod(
@@ -767,7 +722,7 @@ export default function ReportsPage() {
     const totalDebt = netWorthBreakdown.totalDebt;
     const netWorth = netWorthBreakdown.netWorth;
     const debtRatio = getDebtRatio(totalDebt, totalAssets);
-    const goalScore = getGoalScore(goals, transactions);
+    const goalScore = getGoalScore(goals, transactions, savings);
 
     return {
       income,
@@ -1024,12 +979,34 @@ export default function ReportsPage() {
         transactions,
         budgets,
         categories,
+        3,
+        [],
+        savings,
       ),
-    [wallets, debts, goals, investments, transactions, budgets, categories],
+    [
+      wallets,
+      debts,
+      goals,
+      investments,
+      transactions,
+      budgets,
+      categories,
+      savings,
+    ],
   );
   const riskData = useMemo(
-    () => computeRiskScore(wallets, debts, goals, transactions, investments),
-    [wallets, debts, goals, transactions, investments],
+    () =>
+      computeRiskScore(
+        wallets,
+        debts,
+        goals,
+        transactions,
+        investments,
+        3,
+        categories,
+        savings,
+      ),
+    [wallets, debts, goals, transactions, investments, categories, savings],
   );
   const forecast = useMemo(
     () => computeFinancialForecast(wallets, debts, investments, transactions),
@@ -1114,29 +1091,14 @@ export default function ReportsPage() {
   const goalMeta = useMemo(
     () =>
       goals.map((goal) => {
-        const supabaseSavingAmount = getSupabaseSavingAmountForReportGoal(
-          goal,
-          savings,
-        );
-        const baseCurrent = getGoalEffectiveCurrentAmount({
+        const funding = calculateGoalFundingSnapshot({
           goal,
           transactions,
+          savings,
         });
-        const effectiveCurrentAmount = Math.max(
-          baseCurrent,
-          toNumber(goal.currentAmount) + supabaseSavingAmount,
-        );
-        const remaining = Math.max(
-          goal.targetAmount - effectiveCurrentAmount,
-          0,
-        );
-        const pct =
-          goal.targetAmount > 0
-            ? Math.min(
-                Math.round((effectiveCurrentAmount / goal.targetAmount) * 100),
-                100,
-              )
-            : 0;
+        const effectiveCurrentAmount = funding.effectiveCurrentAmount;
+        const remaining = funding.remainingAmount;
+        const pct = funding.progressPercent;
         const suggestedMonthly =
           remaining > 0 ? Math.ceil(remaining / 12 / 1000) * 1000 : 0;
         const monthsLeft =

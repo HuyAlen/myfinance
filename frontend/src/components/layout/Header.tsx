@@ -51,6 +51,7 @@ import {
   getDebts,
   getGoals,
   getInvestments,
+  getSavings,
   getTransactions,
   getWallets,
 } from "@/src/services/finance/financeStorage";
@@ -61,6 +62,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet as WalletType,
 } from "@/src/types/finance";
@@ -126,6 +128,7 @@ type AppData = {
   budgets: Budget[];
   debts: Debt[];
   investments: Investment[];
+  savings: SavingAccount[];
 };
 
 const EMPTY: AppData = {
@@ -136,6 +139,7 @@ const EMPTY: AppData = {
   budgets: [],
   debts: [],
   investments: [],
+  savings: [],
 };
 
 // ─── Build search results ─────────────────────────────────────────────────────
@@ -233,7 +237,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
 // NOTIF-CORRECTNESS-1: the actual rule engine now lives in
 // buildFinanceNotifications (src/lib/notifications/financeNotifications.ts)
 // — a pure, framework-free module that uses each domain's canonical
-// calculation (calculateBudgetSpendingCollection, getGoalEffectiveCurrentAmount,
+// calculation (calculateBudgetSpendingCollection, calculateGoalFundingSnapshot,
 // getTotalIncome/getTotalExpense) instead of a second, locally-reimplemented
 // copy that had drifted from them. This wrapper only adds the one field
 // specific to Header's own presentation (`read`, always false here — the
@@ -246,6 +250,7 @@ function buildNotifications(data: AppData): NotificationItem[] {
     transactions: data.transactions,
     categories: data.categories,
     goals: data.goals,
+    savings: data.savings,
     debts: data.debts,
     currentMonth,
   }).map((notification) => ({ ...notification, read: false }));
@@ -499,6 +504,7 @@ export default function Header({
         budgets,
         debts,
         investments,
+        savings,
       ] = await Promise.all([
         getTransactions(),
         getWallets(),
@@ -507,6 +513,7 @@ export default function Header({
         getBudgets(),
         getDebts(),
         getInvestments(),
+        getSavings(),
       ]);
       const data: AppData = {
         transactions,
@@ -516,6 +523,7 @@ export default function Header({
         budgets,
         debts,
         investments,
+        savings,
       };
       setAppData(data);
 
@@ -609,7 +617,7 @@ export default function Header({
   // existing app-level RealtimeProvider channel — no new Supabase
   // subscription is created here.
   useRealtimeTable(
-    ["transactions", "budgets", "categories", "goals", "debts"],
+    ["transactions", "budgets", "categories", "goals", "debts", "savings"],
     requestHeaderRefresh,
   );
 
@@ -637,7 +645,7 @@ export default function Header({
 
   // Load all data once on mount — feeds the global search index and the
   // notification bell only, neither of which is above-the-fold critical
-  // content. Deferred to an idle moment so these 7 parallel full-table
+  // content. Deferred to an idle moment so these 8 parallel full-table
   // reads don't compete with the current route's own critical data fetch
   // (e.g. Dashboard's Promise.all) for network/CPU right at startup.
   useEffect(() => {

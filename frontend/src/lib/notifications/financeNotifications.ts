@@ -25,7 +25,7 @@
  *      `getCurrentLocalMonthKey` below mirrors it.
  *   3. Goal milestones read the raw `goal.currentAmount` field directly,
  *      ignoring linked-saving contributions
- *      (`getGoalLinkedSavingAmount`) that `getGoalEffectiveCurrentAmount`
+ *      (`getGoalLinkedSavingAmount`) that `calculateGoalFundingSnapshot`
  *      already accounts for everywhere else a goal's real progress is
  *      shown (Dashboard). A goal genuinely at 100% via linked savings
  *      could fail to fire "hoàn thành", or fire "sắp đạt" prematurely.
@@ -49,7 +49,7 @@ import {
 } from "@/src/lib/navigation/financeNavigation";
 import {
   calculateBudgetSpendingCollection,
-  getGoalEffectiveCurrentAmount,
+  calculateGoalFundingSnapshot,
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
@@ -58,6 +58,7 @@ import type {
   Category,
   Debt,
   Goal,
+  SavingAccount,
   Transaction,
 } from "@/src/types/finance";
 
@@ -132,14 +133,19 @@ function buildBudgetNotifications(
   return out;
 }
 
-function buildGoalNotifications(goals: Goal[], transactions: Transaction[]) {
+function buildGoalNotifications(
+  goals: Goal[],
+  transactions: Transaction[],
+  savings: SavingAccount[],
+) {
   const out: FinanceNotification[] = [];
   for (const g of goals) {
     if (g.targetAmount <= 0) continue;
-    const effectiveCurrentAmount = getGoalEffectiveCurrentAmount({
+    const effectiveCurrentAmount = calculateGoalFundingSnapshot({
       goal: g,
       transactions,
-    });
+      savings,
+    }).effectiveCurrentAmount;
     const progress = effectiveCurrentAmount / g.targetAmount;
 
     if (effectiveCurrentAmount >= g.targetAmount) {
@@ -219,6 +225,7 @@ export function buildFinanceNotifications(input: {
   transactions: Transaction[];
   categories: Category[];
   goals: Goal[];
+  savings?: SavingAccount[];
   debts: Debt[];
   currentMonth: string;
 }): FinanceNotification[] {
@@ -229,7 +236,11 @@ export function buildFinanceNotifications(input: {
       input.categories,
       input.currentMonth,
     ),
-    ...buildGoalNotifications(input.goals, input.transactions),
+    ...buildGoalNotifications(
+      input.goals,
+      input.transactions,
+      input.savings ?? [],
+    ),
     ...buildDebtNotifications(input.debts),
     ...buildCashFlowNotification(
       input.transactions,

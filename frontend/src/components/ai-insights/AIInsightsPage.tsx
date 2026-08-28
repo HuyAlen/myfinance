@@ -26,6 +26,7 @@ import type {
   Debt,
   Goal,
   Investment,
+  SavingAccount,
   Transaction,
   Wallet as WalletData,
 } from "@/src/types/finance";
@@ -34,8 +35,10 @@ import {
   getBudgets,
   getCategories,
   getDebts,
+  getGoalFundingTransactions,
   getGoals,
   getInvestments,
+  getSavings,
   getTransactionsInRange,
   getWallets,
 } from "@/src/services/finance/financeStorage";
@@ -105,7 +108,7 @@ const INSIGHT_ICON_MAP: Record<InsightIconType, React.ReactNode> = {
 
 export default function AIInsightsPage() {
   // FINANCE-DATA-1B: every insight/score/section below is derived from
-  // the seven arrays loaded here, all starting at [] — indistinguishable
+  // the nine arrays loaded here, all starting at [] — indistinguishable
   // from "genuinely no data" if the very first load actually FAILED.
   // Rather than gate every individual section, the whole body renders
   // only after the first load has succeeded once; see the early return
@@ -118,10 +121,14 @@ export default function AIInsightsPage() {
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [goalFundingTransactions, setGoalFundingTransactions] = useState<
+    Transaction[]
+  >([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [savings, setSavings] = useState<SavingAccount[]>([]);
 
   const hasLoadedInsightsDataRef = useRef(false);
   const isReloadingRef = useRef(false);
@@ -134,10 +141,12 @@ export default function AIInsightsPage() {
         nextWallets,
         nextCategories,
         nextTransactions,
+        nextGoalFundingTransactions,
         nextDebts,
         nextGoals,
         nextInvestments,
         nextBudgets,
+        nextSavings,
       ] = await Promise.all([
         withInsightsLoadTimeout(getWallets(), "wallets"),
         withInsightsLoadTimeout(getCategories(), "categories"),
@@ -145,20 +154,27 @@ export default function AIInsightsPage() {
           getTransactionsInRange(startDate, endDate),
           "transactions",
         ),
+        withInsightsLoadTimeout(
+          getGoalFundingTransactions(),
+          "goal-funding-transactions",
+        ),
         withInsightsLoadTimeout(getDebts(), "debts"),
         withInsightsLoadTimeout(getGoals(), "goals"),
         withInsightsLoadTimeout(getInvestments(), "investments"),
         withInsightsLoadTimeout(getBudgets(), "budgets"),
+        withInsightsLoadTimeout(getSavings(), "savings"),
       ]);
 
-      // Commit the seven-source snapshot only after every required read succeeds.
+      // Commit the nine-read snapshot only after every required dependency succeeds.
       setWallets(nextWallets);
       setCategories(nextCategories);
       setTransactions(nextTransactions);
+      setGoalFundingTransactions(nextGoalFundingTransactions);
       setDebts(nextDebts);
       setGoals(nextGoals);
       setInvestments(nextInvestments);
       setBudgets(nextBudgets);
+      setSavings(nextSavings);
       setInsightsLoadError(null);
       setIsInsightsDataReady(true);
       hasLoadedInsightsDataRef.current = true;
@@ -239,6 +255,7 @@ export default function AIInsightsPage() {
       "goals",
       "investments",
       "budgets",
+      "savings",
     ],
     async () => {
       await runReload();
@@ -253,12 +270,24 @@ export default function AIInsightsPage() {
         wallets,
         categories,
         transactions,
+        goalFundingTransactions,
         debts,
         goals,
         investments,
         budgets,
+        savings,
       }),
-    [wallets, categories, transactions, debts, goals, investments, budgets],
+    [
+      wallets,
+      categories,
+      transactions,
+      goalFundingTransactions,
+      debts,
+      goals,
+      investments,
+      budgets,
+      savings,
+    ],
   );
 
   // Aliases that keep the JSX references unchanged

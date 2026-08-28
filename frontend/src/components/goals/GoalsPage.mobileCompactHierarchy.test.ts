@@ -106,17 +106,16 @@ describe("GoalsPage compacts the mobile financial hierarchy", () => {
     expect(source).toContain("getMobileSingleLineNameSize(");
   });
 
-  it("does not change authoritative goal balance, savings-linking, CRUD, or failure-state semantics", () => {
-    expect(source).toContain("getGoalEffectiveCurrentAmount({");
-    expect(source).toContain("getGoalLinkedSavingAmount({");
-    expect(source).toContain("getSupabaseSavingAmountForGoal(g, savings)");
-    expect(source).toMatch(
-      /Math\.max\(\s*baseEffectiveCurrentAmount,\s*g\.currentAmount \+ supabaseSavingAmount,\s*\)/,
-    );
+  it("does not change authoritative goal balance, canonical Savings linking, CRUD, or failure-state semantics", () => {
+    expect(source).toContain("calculateGoalFundingSnapshot({");
+    expect(source).toContain("resolveGoalFundingLinks({ goal, savings })");
+    expect(source).toContain("linkedSavingIds: form.linkedSavingIds");
+    expect(source).toContain("savingCategoryIds: form.savingCategoryIds");
+    expect(source).toContain("value={form.linkedSavingIds}");
+    expect(source).toContain("getSavings(),");
+    expect(source).toContain("getGoalFundingTransactions(),");
     expect(source).toContain("const { error } = form.id ? await updateGoal(goal) : await addGoal(goal);");
     expect(source).toContain("await deleteGoal(id)");
-    expect(source).toContain("if (savingRows.error) {");
-    expect(source).toContain("throw savingRows.error;");
     expect(source).toContain(
       "goals.length === 0 && !isLoadingGoals && goalsLoadError",
     );

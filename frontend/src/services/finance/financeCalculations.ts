@@ -269,6 +269,88 @@ export function isFixedExpenseCategory(
   return getCategoryPlanningGroup(category) === "fixed";
 }
 
+export type GoalFundingSource =
+  | "manual"
+  | "linked-saving"
+  | "legacy-category"
+  | "heuristic-saving";
+
+export type GoalFundingLinks = {
+  /** Explicit Saving-account links, including legacy unprefixed IDs that match a Saving row. */
+  linkedSavingIds: string[];
+  /** Legacy category links retained only for backward-compatible goal funding. */
+  legacyCategoryIds: string[];
+};
+
+export type GoalFundingSnapshot = GoalFundingLinks & {
+  manualAmount: number;
+  linkedSavingAmount: number;
+  legacyCategoryAmount: number;
+  heuristicSavingAmount: number;
+  autoFundedAmount: number;
+  effectiveCurrentAmount: number;
+  remainingAmount: number;
+  progressPercent: number;
+  source: GoalFundingSource;
+};
+
+function normalizeGoalFundingText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
+
+function uniqueIds(values: readonly string[]) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+/**
+ * GOAL-SAVINGS-SSOT-1 migration boundary.
+ *
+ * New Goal rows expose `linkedSavingIds` explicitly. Older rows used the
+ * single `saving_category_ids` array for both category IDs and Saving-account
+ * IDs. Any unprefixed legacy ID that matches a real Saving row is therefore
+ * migrated in-memory to `linkedSavingIds`; the rest stay legacy category IDs.
+ */
+export function resolveGoalFundingLinks(input: {
+  goal: Pick<Goal, "linkedSavingIds" | "savingCategoryIds">;
+  savings: Array<Pick<SavingAccount, "id">>;
+}): GoalFundingLinks {
+  const savingIds = new Set(input.savings.map((saving) => saving.id));
+  const linkedSavingIds: string[] = [];
+  const legacyCategoryIds: string[] = [];
+
+  for (const rawId of input.goal.linkedSavingIds ?? []) {
+    const id = rawId.startsWith("saving:") ? rawId.slice("saving:".length) : rawId;
+    if (id) linkedSavingIds.push(id);
+  }
+
+  for (const rawId of input.goal.savingCategoryIds ?? []) {
+    if (rawId.startsWith("saving:")) {
+      linkedSavingIds.push(rawId.slice("saving:".length));
+      continue;
+    }
+    if (rawId.startsWith("category:")) {
+      legacyCategoryIds.push(rawId.slice("category:".length));
+      continue;
+    }
+
+    // Unprefixed rows predate GOAL-SAVINGS-SSOT-1 and are ambiguous. A live
+    // Saving-row match is enough to migrate them safely; unknown/deleted IDs
+    // stay legacy category links so no historical funding rule is discarded.
+    if (savingIds.has(rawId)) linkedSavingIds.push(rawId);
+    else legacyCategoryIds.push(rawId);
+  }
+
+  return {
+    linkedSavingIds: uniqueIds(linkedSavingIds),
+    legacyCategoryIds: uniqueIds(legacyCategoryIds),
+  };
+}
+
 export function getGoalLinkedSavingAmount(input: {
   goal: Pick<Goal, "savingCategoryIds">;
   transactions: Transaction[];
@@ -289,10 +371,122 @@ export function getGoalLinkedSavingAmount(input: {
   }, 0);
 }
 
+function getGoalHeuristicSavingAmount(
+  goal: Pick<Goal, "name">,
+  savings: SavingAccount[],
+) {
+  const goalName = normalizeGoalFundingText(goal.name);
+  if (!goalName) return 0;
+
+  return savings.reduce((sum, saving) => {
+    const savingName = normalizeGoalFundingText(saving.name);
+    const isEmergencyGoal =
+      goalName.includes("khan cap") ||
+      goalName.includes("emergency") ||
+      goalName.includes("du phong");
+    const isEmergencySaving = saving.type === "emergency_fund";
+    const isNameMatched =
+      savingName.length > 0 &&
+      (goalName.includes(savingName) || savingName.includes(goalName));
+
+    return (isEmergencyGoal && isEmergencySaving) || isNameMatched
+      ? sum + saving.balance
+      : sum;
+  }, 0);
+}
+
+/**
+ * Canonical Goal funding snapshot used by Goals, Dashboard, Reports, Header
+ * notifications and AI. Funding-source precedence is deliberate:
+ *
+ *   explicit Saving links > legacy category links > name heuristic > manual.
+ *
+ * An explicit Saving link is authoritative even when its balance is zero, so
+ * we never silently fall through and attach an unrelated similarly-named
+ * Saving account. Legacy category links are also authoritative over the old
+ * heuristic to keep historical goal rules deterministic.
+ */
+export function calculateGoalFundingSnapshot(input: {
+  goal: Goal;
+  transactions: Transaction[];
+  savings: SavingAccount[];
+}): GoalFundingSnapshot {
+  const links = resolveGoalFundingLinks({
+    goal: input.goal,
+    savings: input.savings,
+  });
+  const linkedSavingIds = new Set(links.linkedSavingIds);
+  const linkedSavingAmount = input.savings.reduce(
+    (sum, saving) =>
+      linkedSavingIds.has(saving.id) ? sum + saving.balance : sum,
+    0,
+  );
+  const legacyCategoryAmount = getGoalLinkedSavingAmount({
+    goal: { savingCategoryIds: links.legacyCategoryIds },
+    transactions: input.transactions,
+  });
+  const heuristicSavingAmount =
+    links.linkedSavingIds.length === 0 && links.legacyCategoryIds.length === 0
+      ? getGoalHeuristicSavingAmount(input.goal, input.savings)
+      : 0;
+
+  let source: GoalFundingSource = "manual";
+  let autoFundedAmount = 0;
+  if (links.linkedSavingIds.length > 0) {
+    source = "linked-saving";
+    autoFundedAmount = linkedSavingAmount;
+  } else if (links.legacyCategoryIds.length > 0) {
+    source = "legacy-category";
+    autoFundedAmount = legacyCategoryAmount;
+  } else if (heuristicSavingAmount > 0) {
+    source = "heuristic-saving";
+    autoFundedAmount = heuristicSavingAmount;
+  }
+
+  const manualAmount = Number(input.goal.currentAmount || 0);
+  const effectiveCurrentAmount = manualAmount + autoFundedAmount;
+  const remainingAmount = Math.max(
+    Number(input.goal.targetAmount || 0) - effectiveCurrentAmount,
+    0,
+  );
+  const progressPercent =
+    input.goal.targetAmount > 0
+      ? Math.min(
+          100,
+          Math.round((effectiveCurrentAmount / input.goal.targetAmount) * 100),
+        )
+      : 0;
+
+  return {
+    ...links,
+    manualAmount,
+    linkedSavingAmount,
+    legacyCategoryAmount,
+    heuristicSavingAmount,
+    autoFundedAmount,
+    effectiveCurrentAmount,
+    remainingAmount,
+    progressPercent,
+    source,
+  };
+}
+
 export function getGoalEffectiveCurrentAmount(input: {
   goal: Goal;
   transactions: Transaction[];
+  savings?: SavingAccount[];
 }) {
+  if (input.savings) {
+    return calculateGoalFundingSnapshot({
+      goal: input.goal,
+      transactions: input.transactions,
+      savings: input.savings,
+    }).effectiveCurrentAmount;
+  }
+
+  // Backward-compatible category-only path for older pure callers that do
+  // not yet own Saving-account data. Cross-page product surfaces must pass
+  // `savings` and consume calculateGoalFundingSnapshot directly.
   return (
     input.goal.currentAmount +
     getGoalLinkedSavingAmount({
@@ -305,11 +499,15 @@ export function getGoalEffectiveCurrentAmount(input: {
 export function getGoalEffectiveProgress(input: {
   goal: Goal;
   transactions: Transaction[];
+  savings?: SavingAccount[];
 }) {
   if (input.goal.targetAmount <= 0) return 0;
 
   const effectiveCurrentAmount = getGoalEffectiveCurrentAmount(input);
-  return Math.round((effectiveCurrentAmount / input.goal.targetAmount) * 100);
+  return Math.min(
+    100,
+    Math.round((effectiveCurrentAmount / input.goal.targetAmount) * 100),
+  );
 }
 
 export function getTotalAssets(wallets: Wallet[]) {
@@ -822,15 +1020,19 @@ export function getDebtRatio(totalDebt: number, totalAssets: number) {
   return Math.round((totalDebt / totalAssets) * 1000) / 10;
 }
 
-export function getGoalScore(goals: Goal[], transactions: Transaction[] = []) {
+export function getGoalScore(
+  goals: Goal[],
+  transactions: Transaction[] = [],
+  savings: SavingAccount[] = [],
+) {
   if (goals.length === 0) return 0;
 
   const progressScore = goals.reduce((sum, goal) => {
     if (goal.targetAmount <= 0) return sum;
 
     const currentAmount =
-      transactions.length > 0
-        ? getGoalEffectiveCurrentAmount({ goal, transactions })
+      savings.length > 0 || transactions.length > 0
+        ? getGoalEffectiveCurrentAmount({ goal, transactions, savings })
         : goal.currentAmount;
 
     return sum + Math.min((currentAmount / goal.targetAmount) * 100, 100);
@@ -958,6 +1160,8 @@ export function calculateDashboardSummary(input: {
   investments: Investment[];
   debts: Debt[];
   transactions: Transaction[];
+  /** Cumulative transactions used only by Goal funding; defaults to transactions. */
+  goalFundingTransactions?: Transaction[];
   categories?: Category[];
   goals: Goal[];
   /** Forex current asset value (see `getForexAssetValue`); omit if not tracked. */
@@ -1010,7 +1214,11 @@ export function calculateDashboardSummary(input: {
   const savingRate =
     income > 0 ? Math.round((netCashFlow / income) * 1000) / 10 : 0;
   const emergencyMonths = getEmergencyMonths(liquidBalance, monthlyExpense);
-  const goalScore = getGoalScore(input.goals);
+  const goalScore = getGoalScore(
+    input.goals,
+    input.goalFundingTransactions ?? input.transactions,
+    input.savings ?? [],
+  );
 
   return {
     walletAssets,
@@ -2184,14 +2392,13 @@ export function generateDashboardActions(input: {
 
   const slowGoal = input.goals
     .map((goal) => {
-      const percent =
-        goal.targetAmount > 0
-          ? Math.min(
-              Math.round((goal.currentAmount / goal.targetAmount) * 100),
-              100,
-            )
-          : 0;
-      const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
+      const funding = calculateGoalFundingSnapshot({
+        goal,
+        transactions: input.transactions,
+        savings: input.savings ?? [],
+      });
+      const percent = funding.progressPercent;
+      const remaining = funding.remainingAmount;
       const monthsLeft =
         remaining > 0 && summary.saving > 0
           ? Math.max(0, Math.ceil(remaining / summary.saving))

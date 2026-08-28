@@ -118,8 +118,15 @@ export type Goal = {
   targetAmount: number;
   currentAmount: number;
   /**
-   * Saving categories that automatically contribute to this goal.
-   * Stored in Supabase as `saving_category_ids`.
+   * Canonical links to real Saving accounts. GOAL-SAVINGS-SSOT-1 stores
+   * these in the existing `saving_category_ids` text[] column using the
+   * `saving:<id>` namespace so no schema migration is required.
+   */
+  linkedSavingIds?: string[];
+  /**
+   * Legacy category links that automatically contributed transaction amounts
+   * to this goal. New UI must not write Saving-account IDs here anymore.
+   * Persisted in the same compatibility column as `category:<id>`.
    */
   savingCategoryIds?: string[];
 };

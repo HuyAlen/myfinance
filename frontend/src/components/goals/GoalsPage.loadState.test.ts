@@ -55,45 +55,38 @@ describe("GoalsPage distinguishes load failure from legitimate empty (FINANCE-DA
     expect(source).toContain("goals.length > 0");
   });
 
-  // FINANCE-DATA-1C: reloadData also bundles a raw supabase.from("savings")
-  // read alongside getGoals/getTransactions. The Final Re-Audit found that
-  // its `.error` was checked only to guard the setSavings call — with no
-  // `else`, no logging, and no propagation — while goalsLoadError was
-  // cleared unconditionally right after, so a genuine failure of THIS
-  // specific sub-query was invisible and `savings` silently stayed at its
-  // stale/initial [], which selectedSavingsAmount/selectedTotal then treat
-  // as a validated (false) zero. These tests prove the fix: the raw read
-  // is validated the same way the hardened `financeStorage` readers are —
-  // by throwing — before any state for this load cycle is committed.
-  describe("FINANCE-DATA-1C: raw savings sub-query failure semantics", () => {
+  // GOAL-SAVINGS-SSOT-1: Savings now comes through the hardened financeStorage
+  // reader instead of a raw Supabase sub-query. Promise.all remains the atomic
+  // load boundary: no Goals/Goal-funding-transactions/Savings state is committed
+  // until all three required sources resolve successfully.
+  describe("GOAL-SAVINGS-SSOT-1: canonical savings dependency semantics", () => {
     const start = source.indexOf("async function reloadData() {");
     const end = source.indexOf("useEffect(", start);
     const fnSource = source.slice(start, end);
 
-    it("throws on a failed raw savings read instead of silently guarding the setter", () => {
-      expect(fnSource).toContain("if (savingRows.error) {");
-      const checkIdx = fnSource.indexOf("if (savingRows.error) {");
-      const throwRegion = fnSource.slice(checkIdx, checkIdx + 120);
-      expect(throwRegion).toContain("throw savingRows.error;");
-      // The old silent-guard shape must be gone — no bare "if (!savingRows.error)".
-      expect(fnSource).not.toContain("if (!savingRows.error)");
+    it("loads Savings through financeStorage inside the same Promise.all snapshot", () => {
+      expect(fnSource).toContain("await Promise.all([");
+      expect(fnSource).toContain("getGoals(),");
+      expect(fnSource).toContain("getGoalFundingTransactions(),");
+      expect(fnSource).toContain("getSavings(),");
+      expect(fnSource).not.toContain('.from("savings")');
     });
 
-    it("validates the savings dependency before committing ANY state for this load cycle (atomic load)", () => {
-      const checkIdx = fnSource.indexOf("if (savingRows.error) {");
+    it("commits goals, transactions and savings only after Promise.all resolves", () => {
+      const awaitIdx = fnSource.indexOf("await Promise.all([");
       const setGoalsIdx = fnSource.indexOf("setGoals(nextGoals)");
       const setTransactionsIdx = fnSource.indexOf("setTransactions(nextTransactions)");
-      const setSavingsIdx = fnSource.indexOf("setSavings(");
+      const setSavingsIdx = fnSource.indexOf("setSavings(nextSavings)");
       const clearErrorIdx = fnSource.indexOf("setGoalsLoadError(null)");
 
-      expect(checkIdx).toBeGreaterThan(-1);
-      expect(setGoalsIdx).toBeGreaterThan(checkIdx);
-      expect(setTransactionsIdx).toBeGreaterThan(checkIdx);
-      expect(setSavingsIdx).toBeGreaterThan(checkIdx);
-      expect(clearErrorIdx).toBeGreaterThan(checkIdx);
+      expect(awaitIdx).toBeGreaterThan(-1);
+      expect(setGoalsIdx).toBeGreaterThan(awaitIdx);
+      expect(setTransactionsIdx).toBeGreaterThan(awaitIdx);
+      expect(setSavingsIdx).toBeGreaterThan(awaitIdx);
+      expect(clearErrorIdx).toBeGreaterThan(awaitIdx);
     });
 
-    it("a failed savings read does not reset savings/goals/transactions to []", () => {
+    it("a failed savings read preserves the last-known-good snapshot", () => {
       const catchIdx = fnSource.indexOf("} catch (error) {");
       const catchSource = fnSource.slice(catchIdx);
       expect(catchSource).not.toContain("setSavings([])");
@@ -101,4 +94,5 @@ describe("GoalsPage distinguishes load failure from legitimate empty (FINANCE-DA
       expect(catchSource).not.toContain("setTransactions([])");
     });
   });
+
 });
