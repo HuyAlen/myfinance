@@ -273,11 +273,11 @@ export default function DebtsPage() {
   }, [runReload]);
 
   useRealtimeTable(
-  ["debts", "wallets", "transactions"],
-  async () => {
-    await runReload();
-  },
-);
+    ["debts", "wallets", "transactions"],
+    async () => {
+      await runReload();
+    },
+  );
 
   // ── PRESERVED: summary ────────────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -608,35 +608,36 @@ export default function DebtsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Executive KPI Header
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
-        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-7 pt-6 sm:px-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm sm:rounded-4xl">
+        <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-4 pt-4 sm:px-8 sm:pb-7 sm:pt-6">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
-                Debt Management Center
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
+                Quản lý khoản nợ
               </p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              <h1 className="mt-0.5 text-2xl font-black tracking-tight text-slate-800 sm:mt-1 sm:text-4xl">
                 Nợ & Khoản vay
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                 Theo dõi và lập kế hoạch trả nợ hướng tới tự do tài chính.
               </p>
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95"
+              className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-2xl bg-blue-600 px-3.5 text-sm font-bold text-white shadow-sm shadow-blue-200/60 transition-all hover:bg-blue-700 active:scale-95 sm:px-5"
             >
               <Plus size={17} />
-              Thêm khoản nợ
+              <span className="sm:hidden">Thêm nợ</span>
+              <span className="hidden sm:inline">Thêm khoản nợ</span>
             </button>
           </div>
 
           {/* 5 KPI cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="-mx-4 mt-4 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-6 sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
             <KpiCard
               label="Tổng dư nợ"
               value={formatVND(summary.remainingAmount)}
@@ -696,7 +697,7 @@ export default function DebtsPage() {
             {/* Tiến độ trả nợ Score */}
             <div
               className={
-                "col-span-2 sm:col-span-1 rounded-2xl bg-linear-to-br p-4 shadow-sm " +
+                "min-w-[156px] snap-start rounded-2xl bg-linear-to-br p-3.5 shadow-sm sm:min-w-0 sm:p-4 " +
                 repaymentGrade.gradient
               }
             >
@@ -737,6 +738,212 @@ export default function DebtsPage() {
           </button>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 5 · Premium Debt Cards
+          ══════════════════════════════════════════════════════════════════ */}
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-2 px-1">
+          <div className="size-1.5 rounded-full bg-blue-600" />
+          <p className="text-sm font-black text-slate-700">
+            Khoản nợ · {debts.length}
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {sortedDebts.map((debt) => {
+            const s = TIER_STYLE[debt.tier];
+            const isPaid = debt.tier === "paid";
+            return (
+              <div
+                key={debt.id}
+                id={`debt-card-${debt.id}`}
+                className={
+                  "group rounded-3xl border bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5 " +
+                  s.border +
+                  (highlightedDebtId === debt.id
+                    ? " ring-2 ring-blue-400 ring-offset-2"
+                    : "")
+                }
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={
+                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
+                        s.iconGrad
+                      }
+                    >
+                      <Landmark size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="break-words text-[15px] font-black leading-tight text-slate-800 sm:text-base">
+                        {debt.name}
+                      </h3>
+                      <span
+                        className={
+                          "mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold " +
+                          s.badge
+                        }
+                      >
+                        {s.label}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Hover edit/delete */}
+                  <div className="hidden shrink-0 gap-1.5 lg:flex lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100">
+                    <button
+                      onClick={() => openEditForm(debt)}
+                      className="flex size-11 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      <Edit3 size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(debt.id)}
+                      className="flex size-11 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Compact debt facts */}
+                <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-blue-50/50 p-3">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                      Tổng vay
+                    </p>
+                    <p className="mt-0.5 break-words text-[11px] font-black leading-tight text-slate-600 tabular-nums">
+                      {formatVND(debt.totalAmount)}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-right">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                      Đã trả
+                    </p>
+                    <p className="mt-0.5 break-words text-[11px] font-black leading-tight text-emerald-600 tabular-nums">
+                      {formatVND(debt.paidAmt)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Large remaining amount */}
+                <div className="mt-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    {isPaid ? "Trạng thái" : "Còn phải trả"}
+                  </p>
+                  <p
+                    className={
+                      "mt-1 break-words text-xl font-black leading-tight tabular-nums sm:text-2xl " +
+                      (isPaid ? "text-emerald-600" : "text-rose-600")
+                    }
+                  >
+                    {isPaid ? "Đã tất toán ✓" : formatVND(debt.remainingAmount)}
+                  </p>
+                  {!isPaid && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      Tổng vay: {formatVND(debt.totalAmount)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="mt-4">
+                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Đã trả</span>
+                    <span
+                      className={
+                        "font-black " +
+                        (isPaid ? "text-emerald-600" : "text-slate-700")
+                      }
+                    >
+                      {debt.paidPct}%
+                    </span>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-3 rounded-full transition-all duration-700"
+                      style={{
+                        width: Math.min(debt.paidPct, 100) + "%",
+                        background: s.bar,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Mobile edit row */}
+                <div className="mt-3 flex gap-2 lg:hidden">
+                  <button
+                    onClick={() => openEditForm(debt)}
+                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600"
+                  >
+                    <Edit3 size={12} />
+                    Sửa
+                  </button>
+                  <button
+                    onClick={() => handleDelete(debt.id)}
+                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50/50 px-3 text-xs font-bold text-rose-600"
+                  >
+                    <Trash2 size={12} />
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* FINANCE-DATA-1B: "Không có khoản nợ nào! Bạn đang tự do tài
+              chính" is an active financial conclusion — it must not
+              render while loading, or (much worse) when the initial load
+              actually FAILED, since that would tell the user they're
+              debt-free when we simply don't know. */}
+          {debts.length === 0 && isLoadingDebts && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
+                <TrendingUp size={24} className="text-slate-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Đang tải dữ liệu khoản nợ...
+              </h3>
+            </div>
+          )}
+
+          {debts.length === 0 && !isLoadingDebts && debtsLoadError && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
+                <TrendingUp size={24} className="text-rose-400" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Không thể tải dữ liệu khoản nợ
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">{debtsLoadError}</p>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {debts.length === 0 && isDebtsDataReady && !debtsLoadError && (
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
+              <div className="flex size-16 items-center justify-center rounded-3xl bg-emerald-100">
+                <TrendingUp size={24} className="text-emerald-500" />
+              </div>
+              <h3 className="mt-4 text-base font-black text-slate-700">
+                Không có khoản nợ nào!
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Bạn đang tự do tài chính — hoặc thêm khoản nợ cần theo dõi.
+              </p>
+              <button
+                onClick={openCreateForm}
+                className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
+              >
+                <Plus size={15} />
+                Thêm khoản nợ
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 · Debt Overview + Analytics
@@ -894,7 +1101,7 @@ export default function DebtsPage() {
                 Phân bổ dư nợ
               </h2>
               {pieData.length > 0 ? (
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
                   <div className="h-36 w-36 shrink-0">
                     <PieChart width={144} height={144}>
                       <Pie
@@ -912,7 +1119,7 @@ export default function DebtsPage() {
                       </Pie>
                     </PieChart>
                   </div>
-                  <div className="flex-1 space-y-2">
+                  <div className="w-full flex-1 space-y-2">
                     {pieData.map((d) => (
                       <div
                         key={d.name}
@@ -922,7 +1129,7 @@ export default function DebtsPage() {
                           className="size-2 shrink-0 rounded-full"
                           style={{ background: d.color }}
                         />
-                        <span className="flex-1 truncate font-bold text-slate-600">
+                        <span className="min-w-0 flex-1 break-words font-bold text-slate-600">
                           {d.name}
                         </span>
                         <span className="font-black text-slate-900 text-[10px]">
@@ -1168,238 +1375,13 @@ export default function DebtsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 5 · Premium Debt Cards
-          ══════════════════════════════════════════════════════════════════ */}
-      <section>
-        <div className="mb-4 flex items-center gap-2 px-1">
-          <div className="size-1.5 rounded-full bg-blue-600" />
-          <p className="text-sm font-black text-slate-700">
-            {debts.length} khoản nợ
-          </p>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {sortedDebts.map((debt) => {
-            const s = TIER_STYLE[debt.tier];
-            const isPaid = debt.tier === "paid";
-            return (
-              <div
-                key={debt.id}
-                id={`debt-card-${debt.id}`}
-                className={
-                  "group rounded-4xl border bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg " +
-                  s.border +
-                  (highlightedDebtId === debt.id
-                    ? " ring-2 ring-blue-400 ring-offset-2"
-                    : "")
-                }
-              >
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={
-                        "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-sm " +
-                        s.iconGrad
-                      }
-                    >
-                      <Landmark size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-black text-slate-900">
-                        {debt.name}
-                      </h3>
-                      <span
-                        className={
-                          "mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold " +
-                          s.badge
-                        }
-                      >
-                        {s.label}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Hover edit/delete */}
-                  <div className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      onClick={() => openEditForm(debt)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(debt.id)}
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3-col mini stats */}
-                <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3">
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
-                      Tổng vay
-                    </p>
-                    <p className="mt-0.5 text-xs font-black text-slate-600">
-                      {debt.totalAmount >= 1_000_000
-                        ? Math.round(debt.totalAmount / 1_000_000) + "M"
-                        : Math.round(debt.totalAmount / 1_000) + "K"}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
-                      Đã trả
-                    </p>
-                    <p className="mt-0.5 text-xs font-black text-emerald-600">
-                      {debt.paidAmt >= 1_000_000
-                        ? Math.round(debt.paidAmt / 1_000_000) + "M"
-                        : Math.round(debt.paidAmt / 1_000) + "K"}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase text-slate-400">
-                      Còn lại
-                    </p>
-                    <p
-                      className={
-                        "mt-0.5 text-xs font-black " +
-                        (isPaid ? "text-emerald-600" : "text-rose-600")
-                      }
-                    >
-                      {debt.remainingAmount >= 1_000_000
-                        ? Math.round(debt.remainingAmount / 1_000_000) + "M"
-                        : Math.round(debt.remainingAmount / 1_000) + "K"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Large remaining amount */}
-                <div className="mt-4">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                    {isPaid ? "Trạng thái" : "Còn phải trả"}
-                  </p>
-                  <p
-                    className={
-                      "mt-1 text-2xl font-black " +
-                      (isPaid ? "text-emerald-600" : "text-rose-600")
-                    }
-                  >
-                    {isPaid ? "Đã tất toán ✓" : formatVND(debt.remainingAmount)}
-                  </p>
-                  {!isPaid && (
-                    <p className="mt-0.5 text-xs text-slate-400">
-                      Tổng vay: {formatVND(debt.totalAmount)}
-                    </p>
-                  )}
-                </div>
-
-                {/* Progress bar */}
-                <div className="mt-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Đã trả</span>
-                    <span
-                      className={
-                        "font-black " +
-                        (isPaid ? "text-emerald-600" : "text-slate-700")
-                      }
-                    >
-                      {debt.paidPct}%
-                    </span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-3 rounded-full transition-all duration-700"
-                      style={{
-                        width: Math.min(debt.paidPct, 100) + "%",
-                        background: s.bar,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Mobile edit row */}
-                <div className="mt-4 flex gap-2 lg:hidden">
-                  <button
-                    onClick={() => openEditForm(debt)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500"
-                  >
-                    <Edit3 size={12} />
-                    Sửa
-                  </button>
-                  <button
-                    onClick={() => handleDelete(debt.id)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-rose-100 py-2 text-xs font-bold text-rose-500"
-                  >
-                    <Trash2 size={12} />
-                    Xóa
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* FINANCE-DATA-1B: "Không có khoản nợ nào! Bạn đang tự do tài
-              chính" is an active financial conclusion — it must not
-              render while loading, or (much worse) when the initial load
-              actually FAILED, since that would tell the user they're
-              debt-free when we simply don't know. */}
-          {debts.length === 0 && isLoadingDebts && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-12 text-center md:col-span-2 xl:col-span-3">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-slate-100">
-                <TrendingUp size={24} className="text-slate-400" />
-              </div>
-              <h3 className="mt-4 text-base font-black text-slate-700">
-                Đang tải dữ liệu khoản nợ...
-              </h3>
-            </div>
-          )}
-
-          {debts.length === 0 && !isLoadingDebts && debtsLoadError && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-rose-200 bg-rose-50/40 p-12 text-center md:col-span-2 xl:col-span-3">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-rose-100">
-                <TrendingUp size={24} className="text-rose-400" />
-              </div>
-              <h3 className="mt-4 text-base font-black text-slate-700">
-                Không thể tải dữ liệu khoản nợ
-              </h3>
-              <p className="mt-2 text-sm text-slate-400">{debtsLoadError}</p>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {debts.length === 0 && isDebtsDataReady && !debtsLoadError && (
-            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-12 text-center md:col-span-2 xl:col-span-3">
-              <div className="flex size-16 items-center justify-center rounded-3xl bg-emerald-100">
-                <TrendingUp size={24} className="text-emerald-500" />
-              </div>
-              <h3 className="mt-4 text-base font-black text-slate-700">
-                Không có khoản nợ nào!
-              </h3>
-              <p className="mt-2 text-sm text-slate-400">
-                Bạn đang tự do tài chính — hoặc thêm khoản nợ cần theo dõi.
-              </p>
-              <button
-                onClick={openCreateForm}
-                className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700"
-              >
-                <Plus size={15} />
-                Thêm khoản nợ
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════════════════════════════════
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 px-0 pt-3 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex w-full max-w-xl flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl max-h-[calc(var(--app-height,100dvh)-env(safe-area-inset-top)-0.75rem)] sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))]">
+        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full max-w-xl flex-col overflow-hidden rounded-none bg-white shadow-2xl sm:h-auto sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))] sm:rounded-4xl">
             {/* Modal header */}
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   {form.id ? "Chỉnh sửa khoản nợ" : "Thêm khoản nợ mới"}
@@ -1410,7 +1392,7 @@ export default function DebtsPage() {
               </div>
               <button
                 onClick={() => setIsFormOpen(false)}
-                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
+                className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
               >
                 <X size={16} />
               </button>
@@ -1418,7 +1400,7 @@ export default function DebtsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:pb-6"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-0 sm:px-6 sm:py-5 sm:pb-6"
             >
               <div className="space-y-4">
                 <FormInput
@@ -1446,18 +1428,18 @@ export default function DebtsPage() {
                 message={saveError}
                 onDismiss={() => setSaveError(null)}
               />
-              <div className="mt-6 flex gap-3">
+              <div className="sticky bottom-0 -mx-4 mt-6 flex gap-3 border-t border-slate-100 bg-white/95 px-4 py-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:pb-0">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  className="min-h-11 flex-1 rounded-2xl border border-slate-200 px-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 flex-1 rounded-2xl bg-blue-600 px-3 text-sm font-bold text-white shadow-sm shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSaving
                     ? "Đang lưu..."
@@ -1499,7 +1481,7 @@ function KpiCard({
   isLoading?: boolean;
 }) {
   return (
-    <div className={"rounded-2xl bg-linear-to-br p-4 shadow-sm " + gradient}>
+    <div className={"min-w-[156px] snap-start rounded-2xl bg-linear-to-br p-3.5 shadow-sm sm:min-w-0 sm:p-4 " + gradient}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
           {label}
@@ -1520,8 +1502,8 @@ function KpiCard({
         </>
       ) : (
         <>
-          <p className="mt-2 truncate text-lg font-black text-white">{value}</p>
-          <p className="mt-0.5 truncate text-[10px] text-white/70">{sub}</p>
+          <p className="mt-2 break-words text-base font-black leading-tight text-white tabular-nums sm:text-lg">{value}</p>
+          <p className="mt-0.5 break-words text-[10px] leading-tight text-white/75">{sub}</p>
         </>
       )}
     </div>
@@ -1549,7 +1531,7 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:bg-white"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-blue-400 focus:bg-white sm:text-sm"
       />
     </label>
   );
