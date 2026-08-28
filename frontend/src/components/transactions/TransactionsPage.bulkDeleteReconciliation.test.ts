@@ -44,7 +44,14 @@ describe("handleBulkDelete outcome tracking (TXN-BULKDELETE-1)", () => {
 
   it("both the normal-transaction and Forex-cash branches push onto succeededIds on success and set failureMessage + break (not an early return) on failure", () => {
     const forexBranchStart = fnSource.indexOf("isForexUnifiedTransaction(unifiedTransaction)");
-    const forexBranchEnd = fnSource.indexOf("const transaction = transactions.find(");
+    // CROSS-DOMAIN-INTEGRITY-1 adds a Savings preflight lookup before the
+    // delete loop. Bound this search to the Forex branch so that earlier
+    // transaction lookups do not make the source-inspection test slice the
+    // wrong region.
+    const forexBranchEnd = fnSource.indexOf(
+      "const transaction = transactions.find(",
+      forexBranchStart,
+    );
     expect(forexBranchStart).toBeGreaterThan(-1);
     expect(forexBranchEnd).toBeGreaterThan(forexBranchStart);
     const forexBranch = fnSource.slice(forexBranchStart, forexBranchEnd);

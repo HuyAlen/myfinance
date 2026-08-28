@@ -30,12 +30,18 @@ describe("DATA-INTEGRITY-2 database authority", () => {
     expect(forexDelete).not.toContain(".delete()");
   });
 
-  it("centralizes Forex account create/update ownership mapping in financeStorage", () => {
+  it("centralizes Forex account and cash-ledger mutation ownership in financeStorage", () => {
     expect(storage).toContain("current_equity: account.currentEquity ?? null");
     expect(investments).toContain("await updateForexAccount(account)");
     expect(investments).toContain("await addForexAccount(account)");
+    expect(investments).toContain("await updateForexCashTransaction(transaction)");
+    expect(investments).toContain("await addForexCashTransaction(transaction)");
+    expect(investments).toContain("await deleteForexCashTransaction(transaction.id)");
     expect(investments).not.toContain('.from("forex_accounts").insert(');
     expect(investments).not.toContain('.from("forex_accounts").update(');
+    expect(investments).not.toContain('rpc("create_forex_cash_transaction"');
+    expect(investments).not.toContain('rpc("update_forex_cash_transaction"');
+    expect(investments).not.toContain('rpc("delete_forex_cash_transaction"');
   });
 });
 

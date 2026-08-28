@@ -12,6 +12,7 @@ import {
 import {
   getSavingTransferKind,
   isInternalTransferTransaction,
+  isSavingsManagedTransaction,
   normalizeTransactionNote,
 } from "@/src/lib/transactions/transactionClassification";
 import { resolveTransactionsEffectiveRange } from "@/src/lib/transactions/transactionsPeriod";
@@ -1161,6 +1162,24 @@ export default function TransactionsPage() {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
     const idsToDelete = new Set(selectedIds);
+
+    // CROSS-DOMAIN-INTEGRITY-1: preflight the whole selection BEFORE the
+    // first independently-committed delete. A Savings-owned mirror can only
+    // be reconciled by the Savings Engine; allowing earlier rows to commit
+    // before discovering one would create an avoidable partial batch.
+    const savingsManagedCount = Array.from(idsToDelete).filter((id) => {
+      const transaction = transactions.find((item) => item.id === id);
+      return transaction ? isSavingsManagedTransaction(transaction) : false;
+    }).length;
+    if (savingsManagedCount > 0) {
+      toast({
+        variant: "warning",
+        message:
+          "Không thể xóa hàng loạt vì lựa chọn có bút toán Tiết kiệm do hệ thống quản lý. Hãy bỏ chọn các bút toán này và tạo giao dịch bù tại trang Tiết kiệm nếu cần điều chỉnh.",
+      });
+      return;
+    }
+
     setPendingAction({
       title: `Xóa ${count} giao dịch?`,
       description: `Hành động này không thể hoàn tác. ${count} giao dịch đã chọn sẽ bị xóa vĩnh viễn.`,
@@ -1409,6 +1428,15 @@ export default function TransactionsPage() {
       toast({
         variant: "info",
         message: "Hãy chỉnh sửa giao dịch Forex tại trang Đầu tư.",
+      });
+      return;
+    }
+
+    if (isSavingsManagedTransaction(t)) {
+      toast({
+        variant: "info",
+        message:
+          "Bút toán này thuộc Savings Engine và không thể sửa riêng từ Giao dịch. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
       });
       return;
     }
@@ -1672,6 +1700,18 @@ export default function TransactionsPage() {
   }
 
   function handleDelete(id: string) {
+    const savingsManagedTransaction = transactions.find(
+      (item) => item.id === id && isSavingsManagedTransaction(item),
+    );
+    if (savingsManagedTransaction) {
+      toast({
+        variant: "warning",
+        message:
+          "Không thể xóa riêng bút toán Tiết kiệm từ Giao dịch vì sẽ làm lệch số dư Tiết kiệm. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
+      });
+      return;
+    }
+
     setPendingAction({
       title: "Xóa giao dịch?",
       description:

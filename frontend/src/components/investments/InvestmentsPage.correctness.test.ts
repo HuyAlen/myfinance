@@ -93,6 +93,26 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain("onClick={() => void reload(1)}");
   });
 
+  it("routes Forex reads and cash-ledger mutations through financeStorage", () => {
+    expect(source).toContain("getForexAccounts()");
+    expect(source).toContain("getForexCashTransactions()");
+    expect(source).toContain("await addForexCashTransaction(transaction)");
+    expect(source).toContain("await updateForexCashTransaction(transaction)");
+    expect(source).toContain("await deleteForexCashTransaction(transaction.id)");
+    expect(source).not.toContain('from("forex_accounts")');
+    expect(source).not.toContain('from("forex_cash_transactions")');
+    expect(source).not.toContain('rpc("create_forex_cash_transaction"');
+    expect(source).not.toContain('rpc("update_forex_cash_transaction"');
+    expect(source).not.toContain('rpc("delete_forex_cash_transaction"');
+  });
+
+  it("uses the canonical after-fee Forex capital basis for P/L and headline net capital", () => {
+    expect(source).toContain("const netCashFlow = getForexNetCapital(related);");
+    expect(source).toContain("account.currentEquity - netCashFlow");
+    expect(source).toContain("sum + account.netCashFlow");
+    expect(source).toContain("Tổng nạp trừ tổng rút và phí");
+  });
+
   it("deletes a Forex account through one atomic RPC rather than client-side transaction loops", () => {
     const start = source.indexOf("function requestDeleteAccount");
     const end = source.indexOf("function requestDeleteTransaction", start);

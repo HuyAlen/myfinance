@@ -35,6 +35,7 @@ import type {
 
 import {
   addBudget,
+  clonePreviousMonthBudgets,
   deleteBudget,
   getBudgets,
   getCategories,
@@ -818,47 +819,30 @@ export default function BudgetsPage() {
     setIsCloningPrevious(true);
 
     try {
-      const existingCategoryIds = new Set(
-        budgets
-          .filter((budget) => budget.month === activeMonth)
-          .map((budget) => budget.categoryId),
-      );
+      // CROSS-DOMAIN-INTEGRITY-1: cloning is one server transaction. Never
+      // reintroduce a client loop of independently committed addBudget calls.
+      const result = await clonePreviousMonthBudgets(activeMonth);
 
-      const cloneItems = previousMonthBudgets.filter(
-        (budget) => !existingCategoryIds.has(budget.categoryId),
-      );
-
-      if (cloneItems.length === 0) {
+      if (result.error) {
         toast({
-          variant: "success",
-          message: "Ngân sách tháng này đã có đủ danh mục từ tháng trước.",
+          variant: "error",
+          message: "Lỗi sao chép ngân sách: " + result.error,
         });
         return;
       }
 
-      for (const item of cloneItems) {
-        const clonedBudget = {
-          id: crypto.randomUUID(),
-          categoryId: item.categoryId,
-          month: activeMonth,
-          limitAmount: item.limitAmount,
-          rolloverAmount: 0,
-        } as Budget;
-
-        const { error } = await addBudget(clonedBudget);
-
-        if (error) {
-          toast({
-            variant: "error",
-            message: "Lỗi sao chép ngân sách: " + error,
-          });
-          return;
-        }
+      if (result.cloned === 0) {
+        toast({
+          variant: "success",
+          message: "Ngân sách tháng này đã có đủ danh mục từ tháng trước.",
+        });
+        await reloadData();
+        return;
       }
 
       toast({
         variant: "success",
-        message: `Đã sao chép ${cloneItems.length} ngân sách từ tháng ${previousMonth}.`,
+        message: `Đã sao chép ${result.cloned} ngân sách từ tháng ${previousMonth}.`,
       });
       await reloadData();
     } finally {

@@ -1587,6 +1587,23 @@ function normalizeEngineText(value: string | null | undefined) {
     .replace(/đ/g, "d");
 }
 
+const SAVINGS_MANAGED_TRANSACTION_ERROR =
+  "Giao dịch tiết kiệm là bút toán hệ thống do module Tiết kiệm quản lý. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm thay vì sửa/xóa từ Giao dịch.";
+
+function isSavingsManagedFinanceTransaction(transaction: Transaction) {
+  if (transaction.type !== "transfer") return false;
+
+  const referenceType = normalizeEngineText(getTransferReferenceType(transaction));
+  const sourceType = normalizeEngineText(getSourceType(transaction));
+  const destinationType = normalizeEngineText(getDestinationType(transaction));
+
+  return (
+    referenceType === "saving" ||
+    sourceType === "saving" ||
+    destinationType === "saving"
+  );
+}
+
 function inferTransactionKind(transaction: Transaction): TransactionKind {
   const transferReferenceType = normalizeEngineText(
     getTransferReferenceType(transaction),
@@ -1711,6 +1728,14 @@ export async function addTransaction(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
+  // CROSS-DOMAIN-INTEGRITY-1: Savings Engine mirror rows are not generic
+  // transaction mutations. The Savings RPC owns wallet + savings.balance +
+  // saving_transactions atomically; letting this client path create one would
+  // update only wallets + the main transactions ledger.
+  if (isSavingsManagedFinanceTransaction(transaction)) {
+    return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
+  }
+
   if (
     transaction.type === "transfer" &&
     inferTransactionKind(transaction) === "wallet_transfer"
@@ -1794,6 +1819,15 @@ export async function updateTransaction(
 
   if (!oldTransaction) {
     return { error: "Không tìm thấy giao dịch cần cập nhật." };
+  }
+
+  // A Savings-owned mirror cannot be converted to/from a generic transaction
+  // because update_finance_transaction only reconciles Wallet effects.
+  if (
+    isSavingsManagedFinanceTransaction(oldTransaction) ||
+    isSavingsManagedFinanceTransaction(updatedTransaction)
+  ) {
+    return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
   }
 
   if (
@@ -1888,6 +1922,13 @@ export async function deleteTransaction(
 
   if (!transaction) {
     return { error: "Không tìm thấy giao dịch cần xóa." };
+  }
+
+  // Deleting this mirror through the generic transaction engine would credit/
+  // debit the Wallet but leave savings.balance and saving_transactions intact.
+  // Fail closed at the storage boundary even if a caller bypasses page UX.
+  if (isSavingsManagedFinanceTransaction(transaction)) {
+    return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
   }
 
   const effects = getTransactionEffects(transaction);
@@ -2451,6 +2492,56 @@ export async function addBudget(
     return { error: mapBudgetCategoryIntegrityError(error) };
   }
   return { error: null };
+}
+
+export async function clonePreviousMonthBudgets(
+  targetMonth: string,
+): Promise<{ cloned: number; error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { cloned: 0, error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase.rpc(
+    "clone_previous_month_budgets_atomic",
+    { p_target_month: targetMonth },
+  );
+
+  if (error) {
+    console.error(
+      "[financeStorage] clonePreviousMonthBudgets:",
+      error.message,
+    );
+    if (error.code === "MFBG1") {
+      return { cloned: 0, error: ERR_NO_AUTH };
+    }
+    if (error.code === "MFBG2") {
+      return { cloned: 0, error: "Tháng ngân sách không hợp lệ." };
+    }
+    return {
+      cloned: 0,
+      error: mapBudgetCategoryIntegrityError(error),
+    };
+  }
+
+  if (
+    !isRecord(data) ||
+    data.verified !== true ||
+    typeof data.cloned !== "number" ||
+    !Number.isSafeInteger(data.cloned) ||
+    data.cloned < 0 ||
+    data.target_month !== targetMonth
+  ) {
+    console.error(
+      "[financeStorage] clonePreviousMonthBudgets returned an invalid receipt:",
+      data,
+    );
+    return {
+      cloned: 0,
+      error:
+        "Máy chủ chưa xác nhận kết quả sao chép ngân sách. Vui lòng tải lại trước khi thử lại.",
+    };
+  }
+
+  return { cloned: data.cloned, error: null };
 }
 
 export async function updateBudget(

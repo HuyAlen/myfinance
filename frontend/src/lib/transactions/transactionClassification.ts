@@ -67,6 +67,27 @@ function getTransactionDestinationType(transaction: Transaction) {
 }
 
 /**
+ * Savings Engine rows in the main transactions ledger are mirrors of an
+ * authoritative Savings mutation. Generic transaction edit/delete must never
+ * own them because doing so would only reverse/update Wallet effects while
+ * leaving savings.balance + saving_transactions unchanged. Metadata, not note
+ * text, is the ownership boundary.
+ */
+export function isSavingsManagedTransaction(transaction: Transaction) {
+  if (transaction.type !== "transfer") return false;
+
+  const referenceType = getTransactionTransferReferenceType(transaction);
+  const sourceType = getTransactionSourceType(transaction);
+  const destinationType = getTransactionDestinationType(transaction);
+
+  return (
+    referenceType === "saving" ||
+    sourceType === "saving" ||
+    destinationType === "saving"
+  );
+}
+
+/**
  * Mirrors financeStorage.ts's inferTransactionKind, which returns
  * "income"/"expense" immediately and never reaches its own note-text
  * matching for those types. A plain income/expense transaction must never

@@ -29,85 +29,35 @@ import ConfirmDialog, {
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
-import { supabase } from "@/src/lib/supabase";
-import { getForexAssetValue } from "@/src/services/finance/financeCalculations";
+import {
+  getForexAssetValue,
+  getForexNetCapital,
+} from "@/src/services/finance/financeCalculations";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
   addForexAccount,
+  addForexCashTransaction,
   addInvestment,
   deleteForexAccount,
+  deleteForexCashTransaction,
   deleteInvestment,
+  getForexAccounts,
+  getForexCashTransactions,
   getInvestments,
   getWallets,
   updateForexAccount,
+  updateForexCashTransaction,
   updateInvestment,
 } from "@/src/services/finance/financeStorage";
 import type {
+  ForexAccount,
+  ForexAccountStatus,
+  ForexCashTransaction,
+  ForexCashTransactionType,
   Investment,
   InvestmentType,
   Wallet as FinanceWallet,
 } from "@/src/types/finance";
-
-type ForexAccountStatus = "active" | "inactive" | "archived";
-type ForexCashTransactionType = "deposit" | "withdrawal";
-
-type ForexAccount = {
-  id: string;
-  name: string;
-  broker: string;
-  accountNumber: string | null;
-  currency: string;
-  status: ForexAccountStatus;
-  openedAt: string | null;
-  notes: string | null;
-  currentEquity: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ForexCashTransaction = {
-  id: string;
-  forexAccountId: string;
-  walletId: string;
-  type: ForexCashTransactionType;
-  amount: number;
-  currency: string;
-  fee: number;
-  transactionDate: string;
-  transactionTime: string;
-  notes: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ForexAccountRow = {
-  id: string;
-  name: string;
-  broker: string;
-  account_number: string | null;
-  currency: string | null;
-  status: ForexAccountStatus | null;
-  opened_at: string | null;
-  notes: string | null;
-  current_equity?: number | string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type ForexCashTransactionRow = {
-  id: string;
-  forex_account_id: string;
-  wallet_id: string;
-  type: ForexCashTransactionType;
-  amount: number | string;
-  currency: string | null;
-  fee: number | string | null;
-  transaction_date: string;
-  transaction_time: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 type AccountFormState = {
   id: string;
@@ -261,52 +211,6 @@ function getInvestmentTypeLabel(type: InvestmentType): string {
   return "Khác";
 }
 
-function toNumber(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function nullableNumber(
-  value: number | string | null | undefined,
-): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function mapAccountRow(row: ForexAccountRow): ForexAccount {
-  return {
-    id: row.id,
-    name: row.name,
-    broker: row.broker,
-    accountNumber: row.account_number,
-    currency: row.currency ?? "VND",
-    status: row.status ?? "active",
-    openedAt: row.opened_at,
-    notes: row.notes,
-    currentEquity: nullableNumber(row.current_equity),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapTransactionRow(row: ForexCashTransactionRow): ForexCashTransaction {
-  return {
-    id: row.id,
-    forexAccountId: row.forex_account_id,
-    walletId: row.wallet_id,
-    type: row.type,
-    amount: toNumber(row.amount),
-    currency: row.currency ?? "VND",
-    fee: toNumber(row.fee),
-    transactionDate: row.transaction_date,
-    transactionTime: String(row.transaction_time ?? "00:00").slice(0, 5),
-    notes: row.notes,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 function formatMoney(value: number, currency = "VND"): string {
   try {
     return new Intl.NumberFormat("vi-VN", {
@@ -448,39 +352,29 @@ export default function InvestmentsPage() {
     const walletsRequest = withInvestmentDomainLoadTimeout("Danh sách ví", getWallets());
     const accountsRequest = withInvestmentDomainLoadTimeout(
       "Tài khoản Forex",
-      supabase
-        .from("forex_accounts")
-        .select("*")
-        .order("created_at", { ascending: false }),
+      getForexAccounts(),
     );
     const transactionsRequest = withInvestmentDomainLoadTimeout(
       "Lịch sử nạp/rút Forex",
-      supabase
-        .from("forex_cash_transactions")
-        .select("*")
-        .order("transaction_date", { ascending: false })
-        .order("transaction_time", { ascending: false }),
+      getForexCashTransactions(),
     );
 
-    const [loadedInvestments, loadedWallets, accountResult, transactionResult] =
-      await Promise.all([
-        investmentsRequest,
-        walletsRequest,
-        accountsRequest,
-        transactionsRequest,
-      ]);
-
-    if (accountResult.error) throw accountResult.error;
-    if (transactionResult.error) throw transactionResult.error;
+    const [
+      loadedInvestments,
+      loadedWallets,
+      loadedAccounts,
+      loadedTransactions,
+    ] = await Promise.all([
+      investmentsRequest,
+      walletsRequest,
+      accountsRequest,
+      transactionsRequest,
+    ]);
 
     return {
       investments: loadedInvestments,
-      accounts: ((accountResult.data ?? []) as ForexAccountRow[]).map(
-        mapAccountRow,
-      ),
-      transactions: (
-        (transactionResult.data ?? []) as ForexCashTransactionRow[]
-      ).map(mapTransactionRow),
+      accounts: loadedAccounts,
+      transactions: loadedTransactions,
       wallets: loadedWallets,
       loadError: null,
     };
@@ -653,12 +547,14 @@ export default function InvestmentsPage() {
         .filter((transaction) => transaction.type === "withdrawal")
         .reduce((sum, transaction) => sum + transaction.amount, 0);
       const fees = related.reduce(
-        (sum, transaction) => sum + transaction.fee,
+        (sum, transaction) => sum + (transaction.fee ?? 0),
         0,
       );
-      const netCashFlow = deposits - withdrawals;
+      // CROSS-DOMAIN-INTEGRITY-1: use the same cost-basis rule as canonical
+      // Net Worth/Forex fallback value: deposits - withdrawals - fees.
+      const netCashFlow = getForexNetCapital(related);
       const tradingProfitLoss =
-        account.currentEquity === null
+        account.currentEquity == null
           ? null
           : account.currentEquity - netCashFlow;
       const roi =
@@ -700,7 +596,7 @@ export default function InvestmentsPage() {
       0,
     );
     const knownEquityAccounts = currentPortfolioAccounts.filter(
-      (account) => account.currentEquity !== null,
+      (account) => account.currentEquity != null,
     );
     const totalEquity = knownEquityAccounts.reduce(
       (sum, account) => sum + (account.currentEquity ?? 0),
@@ -731,7 +627,10 @@ export default function InvestmentsPage() {
       totalDeposited,
       totalWithdrawn,
       totalFees,
-      netCashFlow: totalDeposited - totalWithdrawn,
+      netCashFlow: currentPortfolioAccounts.reduce(
+        (sum, account) => sum + account.netCashFlow,
+        0,
+      ),
       totalEquity,
       currentExposure,
       totalProfitLoss,
@@ -848,7 +747,7 @@ export default function InvestmentsPage() {
       openedAt: account.openedAt ?? "",
       notes: account.notes ?? "",
       currentEquity:
-        account.currentEquity === null ? "" : String(account.currentEquity),
+        account.currentEquity == null ? "" : String(account.currentEquity),
     });
     setSaveError(null);
     setAccountModalOpen(true);
@@ -967,24 +866,23 @@ export default function InvestmentsPage() {
     setSaveError(null);
 
     try {
-      const rpcName = transactionForm.id
-        ? "update_forex_cash_transaction"
-        : "create_forex_cash_transaction";
+      const transaction: ForexCashTransaction = {
+        id,
+        forexAccountId: transactionForm.forexAccountId,
+        walletId: transactionForm.walletId,
+        type: transactionForm.type,
+        amount,
+        currency: "VND",
+        fee,
+        transactionDate: transactionForm.transactionDate,
+        transactionTime: transactionForm.transactionTime,
+        notes: transactionForm.notes.trim() || undefined,
+      };
+      const result = transactionForm.id
+        ? await updateForexCashTransaction(transaction)
+        : await addForexCashTransaction(transaction);
 
-      const result = await supabase.rpc(rpcName, {
-        p_id: id,
-        p_forex_account_id: transactionForm.forexAccountId,
-        p_wallet_id: transactionForm.walletId,
-        p_type: transactionForm.type,
-        p_amount: amount,
-        p_currency: "VND",
-        p_fee: fee,
-        p_transaction_date: transactionForm.transactionDate,
-        p_transaction_time: transactionForm.transactionTime,
-        p_notes: transactionForm.notes.trim() || null,
-      });
-
-      if (result.error) throw result.error;
+      if (result.error) throw new Error(result.error);
 
       await reload();
       setTransactionModalOpen(false);
@@ -1035,12 +933,10 @@ export default function InvestmentsPage() {
         "Giao dịch sẽ bị xóa và số dư ví liên kết được hoàn tác theo RPC.",
       variant: "danger",
       onConfirm: async () => {
-        const result = await supabase.rpc("delete_forex_cash_transaction", {
-          p_id: transaction.id,
-        });
+        const result = await deleteForexCashTransaction(transaction.id);
 
         if (result.error) {
-          toast({ variant: "error", message: result.error.message });
+          toast({ variant: "error", message: result.error });
           return;
         }
 
@@ -1171,7 +1067,7 @@ export default function InvestmentsPage() {
           <SummaryCard
             label="Vốn ròng Forex"
             value={formatMoney(summary.netCashFlow)}
-            note="Tổng nạp trừ tổng rút"
+            note="Tổng nạp trừ tổng rút và phí"
             tone={summary.netCashFlow >= 0 ? "amber" : "rose"}
             icon={<ArrowUpRight size={17} />}
           />
@@ -1438,7 +1334,7 @@ export default function InvestmentsPage() {
                 <Metric
                   label="Giá trị tài khoản"
                   value={
-                    account.currentEquity === null
+                    account.currentEquity == null
                       ? "Chưa nhập"
                       : formatMoney(account.currentEquity)
                   }
@@ -1491,7 +1387,7 @@ export default function InvestmentsPage() {
                     onClick={() => openEditAccount(account)}
                     className="min-h-11 rounded-xl border border-[#D9E7F4] bg-[#F3F8FF] px-2 text-xs font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC]"
                   >
-                    {account.currentEquity === null ? "Nhập giá trị" : "Cập nhật"}
+                    {account.currentEquity == null ? "Nhập giá trị" : "Cập nhật"}
                   </button>
                   <button
                     type="button"
@@ -1572,9 +1468,9 @@ export default function InvestmentsPage() {
                         {isDeposit ? "+" : "-"}
                         {formatMoney(transaction.amount)}
                       </p>
-                      {transaction.fee > 0 ? (
+                      {(transaction.fee ?? 0) > 0 ? (
                         <p className="text-xs text-slate-400">
-                          Phí {formatMoney(transaction.fee)}
+                          Phí {formatMoney(transaction.fee ?? 0)}
                         </p>
                       ) : null}
                     </div>

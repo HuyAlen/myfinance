@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getSavingTransferKind,
   isInternalTransferTransaction,
+  isSavingsManagedTransaction,
 } from "@/src/lib/transactions/transactionClassification";
 import type { Transaction } from "@/src/types/finance";
 import {
@@ -180,5 +181,46 @@ describe("F-1 regression: real income/expense with transfer-like wording must no
     expect(totalIncome).toBe(10_000_000);
     expect(totalExpense).toBe(2_000_000);
     expect(netCashFlow).toBe(8_000_000);
+  });
+});
+
+
+describe("CROSS-DOMAIN-INTEGRITY-1: Savings-owned ledger detection", () => {
+  it("recognizes authoritative Savings Engine metadata as managed by Savings", () => {
+    const txn = makeTransaction({
+      type: "transfer",
+      ...{
+        transferReferenceType: "saving",
+        sourceType: "wallet",
+        destinationType: "saving",
+      },
+    } as Partial<Transaction>);
+
+    expect(isSavingsManagedTransaction(txn)).toBe(true);
+  });
+
+  it("does not use note heuristics for ownership, so ordinary transfers remain editable", () => {
+    const txn = makeTransaction({
+      type: "transfer",
+      transferToWalletId: "wallet-2",
+      note: "Nạp vào tiết kiệm cho kế hoạch cá nhân",
+    });
+
+    expect(getSavingTransferKind(txn)).toBe("deposit");
+    expect(isSavingsManagedTransaction(txn)).toBe(false);
+  });
+
+  it("treats either Savings endpoint metadata as managed even if reference type is missing", () => {
+    const withdrawal = makeTransaction({
+      type: "transfer",
+      ...{ sourceType: "saving", destinationType: "wallet" },
+    } as Partial<Transaction>);
+    const deposit = makeTransaction({
+      type: "transfer",
+      ...{ sourceType: "wallet", destinationType: "saving" },
+    } as Partial<Transaction>);
+
+    expect(isSavingsManagedTransaction(withdrawal)).toBe(true);
+    expect(isSavingsManagedTransaction(deposit)).toBe(true);
   });
 });
