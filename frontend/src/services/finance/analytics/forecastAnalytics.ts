@@ -5,7 +5,7 @@
  * Input: plain data arrays. No side effects. Unit-test-ready.
  */
 
-import type { Transaction } from "@/src/types/finance";
+import type { Category, Transaction } from "@/src/types/finance";
 
 import {
   getTotalExpense,
@@ -43,6 +43,7 @@ export type MonthlyForecast = {
 export function computeMonthlyForecast(
   transactions: Transaction[],
   lookbackMonths = 6,
+  categories: Category[] = [],
 ): MonthlyForecast {
   // Reverse so index 0 = oldest (correct x-axis direction for regression)
   const months = lastNMonths(lookbackMonths).reverse();
@@ -50,7 +51,7 @@ export function computeMonthlyForecast(
 
   const incomeValues = months.map((m) => getTotalIncome(byMonth.get(m) ?? []));
   const expenseValues = months.map((m) =>
-    getTotalExpense(byMonth.get(m) ?? []),
+    getTotalExpense(byMonth.get(m) ?? [], categories),
   );
 
   const incomeReg = linearRegression(incomeValues);

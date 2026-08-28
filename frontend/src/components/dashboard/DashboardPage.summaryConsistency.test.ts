@@ -6,6 +6,7 @@ import {
   getTotalExpense,
 } from "@/src/services/finance/financeCalculations";
 import type { Category, Transaction } from "@/src/types/finance";
+import { isInternalTransferTransaction } from "@/src/lib/transactions/transactionClassification";
 
 /**
  * DASH-POLISH-1 — Canonical Summary & Readiness Consistency.
@@ -27,15 +28,21 @@ describe("DashboardPage canonical Financial Structure consistency (DASH-POLISH-1
     );
   });
 
-  it("periodFlowSummary (the canonical KPI source) is built from the shared collection", () => {
-    const start = source.indexOf("const periodFlowSummary = useMemo(");
+  it("period flow KPIs and future allocation are derived from one canonical flow snapshot", () => {
+    const start = source.indexOf("const periodFinanceFlow = useMemo(");
     expect(start).toBeGreaterThan(-1);
-    const end = source.indexOf("}, [nonTransferFilteredTransactions, categories]);", start);
+    const end = source.indexOf("const periodFlowSummary = useMemo(", start);
     expect(end).toBeGreaterThan(start);
     const body = source.slice(start, end);
-    expect(body).toContain("getTotalIncome(nonTransferFilteredTransactions)");
-    expect(body).toContain(
-      "getTotalExpense(nonTransferFilteredTransactions, categories)",
+    expect(body).toContain("calculateFinanceFlowSnapshot({");
+    expect(body).toContain("transactions: nonTransferFilteredTransactions");
+    expect(body).toContain("savingMovements: savingTransactions");
+    expect(body).toContain("forexCashTransactions");
+    expect(body).toContain("dateRange");
+    expect(source).toContain("expense: periodFinanceFlow.realExpense");
+    expect(source).toContain("savingAmount: periodFinanceFlow.savingAllocation");
+    expect(source).toContain(
+      "investmentAmount: periodFinanceFlow.investmentAllocation",
     );
   });
 
@@ -64,42 +71,7 @@ describe("DashboardPage canonical Financial Structure consistency (DASH-POLISH-1
   });
 });
 
-describe("canonical helpers do not themselves apply the Dashboard's transfer-note heuristic (why a shared pre-filter is required)", () => {
-  // Mirrors DashboardPage.tsx's private isInternalTransferTransaction
-  // verbatim (keyword list + type==="transfer" check) — not a new
-  // heuristic. It is private to the page component and this repo's test
-  // convention reads DashboardPage.tsx as source text rather than
-  // importing it as a module (see the describe block above), so this
-  // fixture-construction helper mirrors the real predicate instead.
-  const INTERNAL_TRANSFER_KEYWORDS = [
-    "transfer",
-    "internal",
-    "chuyển tiền",
-    "chuyen tien",
-    "chuyển khoản",
-    "chuyen khoan",
-    "chuyển nội bộ",
-    "chuyen noi bo",
-    "sang vietcombank",
-    "sang tp bank",
-    "sang tpbank",
-  ];
-
-  function isInternalTransferTransaction(transaction: Transaction): boolean {
-    const record = transaction as unknown as Record<string, unknown>;
-    const searchableText = [record.type, record.note]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return (
-      transaction.type === "transfer" ||
-      INTERNAL_TRANSFER_KEYWORDS.some((keyword) =>
-        searchableText.includes(keyword),
-      )
-    );
-  }
-
+describe("Dashboard uses the shared canonical transfer classifier", () => {
   function makeCategory(overrides: Partial<Category>): Category {
     return {
       id: "c1",
@@ -123,85 +95,58 @@ describe("canonical helpers do not themselves apply the Dashboard's transfer-not
     } as Transaction;
   }
 
-  it("a mislabeled transfer (type=expense, note matching the transfer heuristic) is included by getTotalExpense/calculateFinancialStructureSummary when NOT pre-filtered — this is the exact divergence the patch fixes", () => {
-    const income = makeTransaction({
-      id: "income",
-      type: "income",
-      amount: 5_000_000,
-      note: "Lương tháng 8",
-    });
-    const mislabeledTransfer = makeTransaction({
-      id: "transfer",
-      type: "expense",
-      amount: 2_000_000,
-      note: "Chuyển khoản sang Vietcombank",
-    });
-    const realExpense = makeTransaction({
+  it("does not misclassify a real expense as an internal transfer just because its note says chuyển khoản", () => {
+    const expense = makeTransaction({
       id: "expense",
-      type: "expense",
       amount: 1_000_000,
-      note: "Ăn uống",
+      note: "Chuyển khoản học phí con",
     });
     const categories = [makeCategory({})];
-    const rawTransactions = [income, mislabeledTransfer, realExpense];
 
-    // Confirm the fixture actually matches the heuristic (sanity check on
-    // the fixture itself, not the assertion under test).
-    expect(isInternalTransferTransaction(mislabeledTransfer)).toBe(true);
-    expect(isInternalTransferTransaction(realExpense)).toBe(false);
-
-    // BEFORE this patch: Financial Structure received raw transactions
-    // with no pre-filter — the mislabeled transfer inflates its expense.
-    const beforeFixExpense = getTotalExpense(rawTransactions, categories);
-    expect(beforeFixExpense).toBe(3_000_000); // 2,000,000 + 1,000,000 — polluted
-
-    // AFTER this patch: both the canonical KPI pipeline and Financial
-    // Structure receive the SAME pre-filtered collection.
-    const sharedNonTransferTransactions = rawTransactions.filter(
-      (transaction) => !isInternalTransferTransaction(transaction),
-    );
-    const canonicalKpiExpense = getTotalExpense(
-      sharedNonTransferTransactions,
-      categories,
-    );
-    const financialStructureExpense = calculateFinancialStructureSummary({
-      transactions: sharedNonTransferTransactions,
-      categories,
-    }).expense;
-
-    expect(canonicalKpiExpense).toBe(1_000_000); // mislabeled transfer correctly excluded
-    expect(financialStructureExpense).toBe(canonicalKpiExpense); // the two can no longer disagree
+    expect(isInternalTransferTransaction(expense)).toBe(false);
+    expect(getTotalExpense([expense], categories)).toBe(1_000_000);
+    expect(
+      calculateFinancialStructureSummary({
+        transactions: [expense],
+        categories,
+      }).expense,
+    ).toBe(1_000_000);
   });
 
-  it("income agrees between the canonical KPI pipeline and Financial Structure once both share the same pre-filtered input", () => {
+  it("removes true transfer rows without changing canonical income/expense totals", () => {
     const income = makeTransaction({
       id: "income",
       type: "income",
       amount: 5_000_000,
     });
-    const mislabeledTransferIncome = makeTransaction({
-      id: "transfer-income",
-      type: "income",
-      amount: 500_000,
-      note: "Chuyển tiền nội bộ giữa các ví",
+    const expense = makeTransaction({
+      id: "expense",
+      amount: 1_000_000,
+    });
+    const transfer = makeTransaction({
+      id: "transfer",
+      type: "transfer",
+      amount: 2_000_000,
+      note: "Chuyển tiền nội bộ",
     });
     const categories = [makeCategory({})];
-    const rawTransactions = [income, mislabeledTransferIncome];
-
-    const sharedNonTransferTransactions = rawTransactions.filter(
+    const sharedNonTransferTransactions = [income, expense, transfer].filter(
       (transaction) => !isInternalTransferTransaction(transaction),
     );
 
-    const canonicalKpiIncome = sharedNonTransferTransactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const financialStructureIncome = calculateFinancialStructureSummary({
-      transactions: sharedNonTransferTransactions,
-      categories,
-    }).income;
-
-    expect(canonicalKpiIncome).toBe(5_000_000);
-    expect(financialStructureIncome).toBe(canonicalKpiIncome);
+    expect(sharedNonTransferTransactions.map((item) => item.id)).toEqual([
+      "income",
+      "expense",
+    ]);
+    expect(getTotalExpense(sharedNonTransferTransactions, categories)).toBe(
+      1_000_000,
+    );
+    expect(
+      calculateFinancialStructureSummary({
+        transactions: sharedNonTransferTransactions,
+        categories,
+      }).expense,
+    ).toBe(1_000_000);
   });
 });
 

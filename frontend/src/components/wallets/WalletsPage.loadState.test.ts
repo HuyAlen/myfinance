@@ -32,9 +32,10 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     const fnSource = source.slice(start, end);
 
     expect(fnSource).toContain("const walletTask = getWallets()");
-    expect(fnSource).toContain(
-      "const monthlyAnalyticsTask = getTransactionsInRange(startDate, endDate)",
-    );
+    expect(fnSource).toContain("const monthlyAnalyticsTask = Promise.all([");
+    expect(fnSource).toContain("getTransactionsInRange(startDate, endDate)");
+    expect(fnSource).toContain("getCategories()");
+    expect(fnSource).toContain("setCategories(loadedCategories)");
     expect(fnSource).toContain("const linkCountsTask = Promise.all([");
     expect(fnSource).toContain("getTransactionWalletLinks()");
     expect(fnSource).toContain("getForexCashWalletLinks()");

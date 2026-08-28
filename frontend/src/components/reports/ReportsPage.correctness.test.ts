@@ -34,7 +34,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
   });
 
   it("separates period cash-flow margin from future-allocation rate", () => {
-    expect(source).toContain("const cashFlowAfterExpense = income - expense;");
+    expect(source).toContain("const cashFlowAfterExpense = flow.netCashFlow;");
     expect(source).toContain("const cashFlowRate =");
     expect(source).toContain("const allocationRate =");
     expect(source).not.toContain("const savingRate =");
@@ -42,6 +42,19 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(source).toContain('label="Tỷ lệ tích lũy"');
     expect(source).toContain("value={summary.allocationRate + \"%\"}");
     expect(source).toContain("{summary.cashFlowRate}%");
+  });
+
+  it("uses the canonical finance-flow snapshot for real expense and Savings/Forex allocation", () => {
+    expect(source).toContain("calculateFinanceFlowSnapshot({");
+    expect(source).toContain("savingMovements");
+    expect(source).toContain('from("saving_transactions")');
+    expect(source).toContain("forexCashTransactions");
+    expect(source).toContain("const savingAllocation = flow.savingAllocation;");
+    expect(source).toContain(
+      "const investmentAllocation = flow.investmentAllocation;",
+    );
+    expect(source).not.toContain("getSavingCapitalTotal");
+    expect(source).not.toContain("getInvestmentCapitalTotal");
   });
 
   it("labels cash-flow deltas as cash flow rather than savings", () => {
@@ -66,10 +79,20 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(block).not.toContain("const now = new Date()");
   });
 
-  it("computes period monthly averages and strongest month from the selected scope, including exact custom boundaries", () => {
+  it("computes period monthly averages and strongest month from the selected scope using canonical Savings/Forex ledgers", () => {
     expect(source).toContain("const periodMonthKeys = useMemo(");
-    expect(source).toContain("const periodSavings = useMemo(");
-    expect(normalized).toContain("buildMonthlyReportRow( monthKey, filtered, categories, periodSavings,");
+    expect(normalized).toContain(
+      "buildMonthlyReportRow( monthKey, filtered, categories, periodSavingMovements, periodForexCashTransactions,",
+    );
+    expect(source).not.toContain("const periodSavings = useMemo(");
+    expect(source).toContain("const periodSavingMovements = useMemo(");
+    expect(source).toContain("const periodForexCashTransactions = useMemo(");
+    expect(normalized).toContain(
+      "filterByDateRange( savingMovements, dateRange, (movement) => movement.date",
+    );
+    expect(normalized).toContain(
+      "filterByDateRange( forexCashTransactions, dateRange, (transaction) => transaction.transactionDate",
+    );
     expect(source).toContain("const monthsWithData = periodMonthly.filter(");
     expect(source).toContain("[...periodMonthly].sort((a, b) => b.income - a.income)");
   });

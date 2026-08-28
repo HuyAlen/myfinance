@@ -38,6 +38,7 @@ import {
   buildSavingsHref,
   buildTransactionsHref,
 } from "@/src/lib/navigation/financeNavigation";
+import { isInternalTransferTransaction } from "@/src/lib/transactions/transactionClassification";
 
 import {
   ArrowDownRight,
@@ -70,16 +71,16 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
+  buildCategorySpendingData,
   buildMonthlyCashFlowData,
   calculateDashboardSummary,
+  calculateFinanceFlowSnapshot,
   calculateFinancialStructureSummary,
   calculateGoalFundingSnapshot,
   filterTransactionsByDateRange,
   formatVND,
   getForexAssetValue,
   getForexNetCapital,
-  getTotalExpense,
-  getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 
 import type {
@@ -284,46 +285,6 @@ type RecentActivityItem = {
   kind: RecentActivityKind;
 };
 
-const INTERNAL_TRANSFER_KEYWORDS = [
-  "transfer",
-  "internal",
-  "chuyển tiền",
-  "chuyen tien",
-  "chuyển khoản",
-  "chuyen khoan",
-  "chuyển nội bộ",
-  "chuyen noi bo",
-  "sang vietcombank",
-  "sang tp bank",
-  "sang tpbank",
-];
-
-function isInternalTransferTransaction(transaction: Transaction) {
-  const record = transaction as Record<string, unknown>;
-  const searchableText = [
-    record.type,
-    record.kind,
-    record.transactionType,
-    record.transaction_type,
-    record.categoryType,
-    record.category_type,
-    record.categoryName,
-    record.category_name,
-    record.note,
-    record.description,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    transaction.type === "transfer" ||
-    INTERNAL_TRANSFER_KEYWORDS.some((keyword) =>
-      searchableText.includes(keyword),
-    )
-  );
-}
-
 function getRecentDayLabel(dateText: string) {
   const date = new Date(dateText);
   if (!Number.isFinite(date.getTime())) return "Không rõ ngày";
@@ -474,56 +435,6 @@ function toLocalDateKey(value: string | Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function isDateWithinRange(
-  value: string | Date | null | undefined,
-  startDate: string,
-  endDate: string,
-) {
-  if (!value) return false;
-
-  const dateKey = toLocalDateKey(value);
-  if (!dateKey) return false;
-
-  return dateKey >= startDate.slice(0, 10) && dateKey <= endDate.slice(0, 10);
-}
-
-function getNetSavingAllocation(
-  transactions: DashboardSavingTransaction[],
-  startDate: string,
-  endDate: string,
-) {
-  return transactions.reduce((sum, transaction) => {
-    if (!isDateWithinRange(transaction.date, startDate, endDate)) return sum;
-
-    if (transaction.type === "deposit") return sum + transaction.amount;
-    if (transaction.type === "withdraw" || transaction.type === "settlement") {
-      return sum - transaction.amount;
-    }
-
-    return sum;
-  }, 0);
-}
-
-function getNetInvestmentAllocation(
-  transactions: ForexCashTransaction[],
-  startDate: string,
-  endDate: string,
-) {
-  return transactions.reduce((sum, transaction) => {
-    if (!isDateWithinRange(transaction.transactionDate, startDate, endDate)) {
-      return sum;
-    }
-
-    const fee = Math.max(0, transaction.fee ?? 0);
-
-    if (transaction.type === "deposit") {
-      return sum + Math.max(0, transaction.amount + fee);
-    }
-
-    return sum - Math.max(0, transaction.amount - fee);
-  }, 0);
 }
 
 /**
@@ -795,45 +706,44 @@ export default function DashboardPage() {
    * KPIs. Internal transfers are excluded because they only move money between
    * owned accounts.
    */
-  const periodFlowSummary = useMemo(() => {
-    // Canonical income/expense (financeCalculations.ts) — `getTotalExpense`
-    // excludes saving/investment-planning-group categories, matching
-    // Reports/AI.
-    return {
-      income: getTotalIncome(nonTransferFilteredTransactions),
-      expense: getTotalExpense(nonTransferFilteredTransactions, categories),
-    };
-  }, [nonTransferFilteredTransactions, categories]);
-
-  const periodFutureAllocation = useMemo(() => {
-    const savingAmount = Math.max(
-      0,
-      getNetSavingAllocation(
-        savingTransactions,
-        dateRange.startDate,
-        dateRange.endDate,
-      ),
-    );
-    const investmentAmount = Math.max(
-      0,
-      getNetInvestmentAllocation(
+  const periodFinanceFlow = useMemo(
+    () =>
+      calculateFinanceFlowSnapshot({
+        transactions: nonTransferFilteredTransactions,
+        categories,
+        savingMovements: savingTransactions,
         forexCashTransactions,
-        dateRange.startDate,
-        dateRange.endDate,
-      ),
-    );
+        dateRange,
+      }),
+    [
+      categories,
+      dateRange,
+      forexCashTransactions,
+      nonTransferFilteredTransactions,
+      savingTransactions,
+    ],
+  );
 
-    return {
-      savingAmount,
-      investmentAmount,
-      totalAmount: savingAmount + investmentAmount,
-    };
-  }, [
-    dateRange.endDate,
-    dateRange.startDate,
-    forexCashTransactions,
-    savingTransactions,
-  ]);
+  const periodFlowSummary = useMemo(
+    () => ({
+      income: periodFinanceFlow.income,
+      expense: periodFinanceFlow.realExpense,
+    }),
+    [periodFinanceFlow.income, periodFinanceFlow.realExpense],
+  );
+
+  const periodFutureAllocation = useMemo(
+    () => ({
+      savingAmount: periodFinanceFlow.savingAllocation,
+      investmentAmount: periodFinanceFlow.investmentAllocation,
+      totalAmount: periodFinanceFlow.futureAllocation,
+    }),
+    [
+      periodFinanceFlow.futureAllocation,
+      periodFinanceFlow.investmentAllocation,
+      periodFinanceFlow.savingAllocation,
+    ],
+  );
 
   /**
    * Dashboard v5 data model
@@ -2147,16 +2057,17 @@ export default function DashboardPage() {
       const monthStart = `${selectedYear}-${String(month).padStart(2, "0")}-01`;
       const monthEndDate = new Date(selectedYear, month, 0);
       const monthEnd = toLocalDateKey(monthEndDate);
-      const tietKiem = Math.max(
-        0,
-        getNetSavingAllocation(savingTransactions, monthStart, monthEnd),
-      );
-      const dauTu = Math.max(
-        0,
-        getNetInvestmentAllocation(forexCashTransactions, monthStart, monthEnd),
-      );
-      const thu = Number(item.thu ?? 0);
-      const chi = Number(item.chi ?? 0);
+      const monthFlow = calculateFinanceFlowSnapshot({
+        transactions: selectedYearTransactions,
+        categories,
+        savingMovements: savingTransactions,
+        forexCashTransactions,
+        dateRange: { startDate: monthStart, endDate: monthEnd },
+      });
+      const tietKiem = monthFlow.savingAllocation;
+      const dauTu = monthFlow.investmentAllocation;
+      const thu = monthFlow.income;
+      const chi = monthFlow.realExpense;
 
       return {
         ...item,
@@ -2168,7 +2079,14 @@ export default function DashboardPage() {
         hasData: thu > 0 || chi > 0 || tietKiem > 0 || dauTu > 0,
       };
     });
-  }, [cashFlowTrend, forexCashTransactions, savingTransactions, selectedYear]);
+  }, [
+    cashFlowTrend,
+    categories,
+    forexCashTransactions,
+    savingTransactions,
+    selectedYear,
+    selectedYearTransactions,
+  ]);
 
   const netCashFlow = summary.income - summary.expense;
 
@@ -2541,28 +2459,23 @@ export default function DashboardPage() {
   // ── MyFinance v2 daily command center ───────────────────────────────────
   const todaySnapshot = useMemo(() => {
     const todayKey = toLocalDateKey(new Date());
-    const todayTransactions = transactions.filter(
-      (transaction) => toLocalDateKey(transaction.date) === todayKey,
-    );
-    const income = todayTransactions
-      .filter((transaction) => transaction.type === "income")
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-    const expense = todayTransactions
-      .filter(
-        (transaction) =>
-          transaction.type === "expense" &&
-          !isInternalTransferTransaction(transaction),
-      )
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-    const saving = savingTransactions
-      .filter(
-        (transaction) =>
-          transaction.type === "deposit" &&
-          toLocalDateKey(transaction.date) === todayKey,
-      )
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    return { income, expense, saving, net: income - expense };
-  }, [transactions, savingTransactions]);
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: transactions.filter(
+        (transaction) => !isInternalTransferTransaction(transaction),
+      ),
+      categories,
+      savingMovements: savingTransactions,
+      forexCashTransactions,
+      dateRange: { startDate: todayKey, endDate: todayKey },
+    });
+
+    return {
+      income: flow.income,
+      expense: flow.realExpense,
+      saving: flow.savingAllocation,
+      net: flow.netCashFlow,
+    };
+  }, [categories, forexCashTransactions, savingTransactions, transactions]);
 
   const monthlyPulse = useMemo(() => {
     const now = new Date();
@@ -2591,12 +2504,12 @@ export default function DashboardPage() {
         date.getMonth() === monthIndex
       );
     });
-    const income = monthTransactions
-      .filter((transaction) => transaction.type === "income")
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-    const expense = monthTransactions
-      .filter((transaction) => transaction.type === "expense")
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const monthFlow = calculateFinanceFlowSnapshot({
+      transactions: monthTransactions,
+      categories,
+    });
+    const income = monthFlow.income;
+    const expense = monthFlow.realExpense;
     const projectedExpense =
       isCurrentMonth && elapsedDays > 0
         ? Math.round((expense / elapsedDays) * daysInMonth)
@@ -2624,7 +2537,14 @@ export default function DashboardPage() {
       budgetUsage,
       projectedBudgetUsage,
     };
-  }, [budgets, dashboardMonthKey, selectedMonth, selectedYear, transactions]);
+  }, [
+    budgets,
+    categories,
+    dashboardMonthKey,
+    selectedMonth,
+    selectedYear,
+    transactions,
+  ]);
 
   // DASH-POLISH-1: gates only monthlyPulse's transaction/budget-dependent
   // fields (spend, projected spend, budget usage, projected budget usage)
@@ -2722,36 +2642,22 @@ export default function DashboardPage() {
   }, [categories, transactions]);
 
   const topSpendingCategories = useMemo(() => {
-    const totals = new Map<string, number>();
-    transactions.forEach((transaction) => {
-      if (
-        transaction.type !== "expense" ||
-        isInternalTransferTransaction(transaction)
-      )
-        return;
+    const monthTransactions = transactions.filter((transaction) => {
+      if (isInternalTransferTransaction(transaction)) return false;
       const date = new Date(transaction.date);
-      if (
-        Number.isNaN(date.getTime()) ||
-        date.getFullYear() !== selectedYear ||
-        date.getMonth() !== selectedMonth - 1
-      )
-        return;
-      totals.set(
-        transaction.categoryId,
-        (totals.get(transaction.categoryId) ?? 0) +
-          Math.abs(transaction.amount),
+      return (
+        !Number.isNaN(date.getTime()) &&
+        date.getFullYear() === selectedYear &&
+        date.getMonth() === selectedMonth - 1
       );
     });
 
-    return Array.from(totals.entries())
-      .map(([categoryId, amount]) => ({
-        categoryId,
-        name:
-          categories.find((category) => category.id === categoryId)?.name ??
-          "Khác",
-        amount,
+    return buildCategorySpendingData(monthTransactions, categories)
+      .map((item) => ({
+        categoryId: item.id,
+        name: item.name,
+        amount: item.value,
       }))
-      .sort((a, b) => b.amount - a.amount)
       .slice(0, 4);
   }, [transactions, categories, selectedMonth, selectedYear]);
 

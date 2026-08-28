@@ -61,7 +61,8 @@ import {
 } from "@/src/services/finance/financeStorage";
 import {
   formatVND,
-  getTotalExpense,
+  getCategoryPlanningGroup,
+  getRealExpenseTransactions,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 import {
@@ -301,13 +302,6 @@ function compareTransactionNewestFirst(a: Transaction, b: Transaction) {
   if (timeCompare !== 0) return timeCompare;
 
   return String(b.id).localeCompare(String(a.id));
-}
-
-function getCategoryPlanningGroup(category?: Category) {
-  return (
-    category?.planningGroup ??
-    (category?.type === "income" ? "income" : "variable")
-  );
 }
 
 function getTransactionFormMode(
@@ -977,9 +971,17 @@ export default function TransactionsPage() {
     () => getTotalIncome(cashFlowTransactions),
     [cashFlowTransactions],
   );
-  const totalExpense = useMemo(
-    () => getTotalExpense(cashFlowTransactions, categories),
+  const realExpenseTransactions = useMemo(
+    () => getRealExpenseTransactions(cashFlowTransactions, categories),
     [cashFlowTransactions, categories],
+  );
+  const totalExpense = useMemo(
+    () =>
+      realExpenseTransactions.reduce(
+        (sum, transaction) => sum + transaction.amount,
+        0,
+      ),
+    [realExpenseTransactions],
   );
   const totalLiquidity = useMemo(
     () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
@@ -1761,7 +1763,7 @@ export default function TransactionsPage() {
     amountMin,
     amountMax,
   ].filter(Boolean).length;
-  const savingRate =
+  const cashFlowMarginRate =
     totalIncome > 0
       ? Math.round((Math.max(0, netCashFlow) / totalIncome) * 100)
       : 0;
@@ -1902,7 +1904,7 @@ export default function TransactionsPage() {
           <SummaryCard
             label="Chi tiêu"
             value={formatVND(totalExpense)}
-            note={`${cashFlowTransactions.filter((item) => item.type === "expense").length} giao dịch`}
+            note={`${realExpenseTransactions.length} giao dịch`}
             footerLabel="Tỷ lệ chi tiêu / Thu nhập"
             mobileFooterLabel="Tỷ lệ chi / thu"
             footerValue={
@@ -1917,8 +1919,8 @@ export default function TransactionsPage() {
             label="Dòng tiền ròng"
             value={getSignedAmountText(netCashFlow)}
             note={netCashFlow >= 0 ? "Thu lớn hơn chi" : "Chi lớn hơn thu"}
-            footerLabel="Tỷ lệ tiết kiệm"
-            footerValue={`${savingRate}%`}
+            footerLabel="Dư sau chi / Thu nhập"
+            footerValue={`${cashFlowMarginRate}%`}
             tone={netCashFlow >= 0 ? "positive" : "negative"}
           />
 

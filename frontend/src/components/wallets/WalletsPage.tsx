@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import type {
+  Category,
   Transaction,
   Wallet as WalletType,
   WalletType as FinanceWalletType,
@@ -31,6 +32,7 @@ import {
   addTransaction,
   addWallet,
   deleteWallet,
+  getCategories,
   getForexCashWalletLinks,
   getTransactionWalletLinks,
   getTransactionsInRange,
@@ -253,6 +255,7 @@ export default function WalletsPage() {
   const [currentMonthTransactions, setCurrentMonthTransactions] = useState<
     Transaction[]
   >([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingMonthAnalytics, setIsLoadingMonthAnalytics] = useState(true);
   const [monthAnalyticsError, setMonthAnalyticsError] = useState<string | null>(
     null,
@@ -306,9 +309,13 @@ export default function WalletsPage() {
         setIsLoadingWallets(false);
       });
 
-    const monthlyAnalyticsTask = getTransactionsInRange(startDate, endDate)
-      .then((monthTransactions) => {
+    const monthlyAnalyticsTask = Promise.all([
+      getTransactionsInRange(startDate, endDate),
+      getCategories(),
+    ])
+      .then(([monthTransactions, loadedCategories]) => {
         setCurrentMonthTransactions(monthTransactions);
+        setCategories(loadedCategories);
         setMonthAnalyticsError(null);
         setMonthlyAnalyticsReady(true);
       })
@@ -403,7 +410,10 @@ export default function WalletsPage() {
   // Forex/savings writes go through server-side RPCs that also update
   // `wallets.balance` directly, so watching `wallets` already catches them —
   // no separate forex_cash_transactions subscription needed here.
-  useRealtimeTable(["wallets", "transactions"], requestRealtimeRefresh);
+  useRealtimeTable(
+    ["wallets", "transactions", "categories"],
+    requestRealtimeRefresh,
+  );
 
   // ── Existing computations ─────────────────────────────────────────────────
   // Wallets page only manages liquid, transferable accounts (cash/bank/
@@ -467,8 +477,10 @@ export default function WalletsPage() {
     [currentMonthTransactions, currentMonth, spendableWalletIds],
   );
   const currentMonthNet = useMemo(
-    () => getTotalIncome(currentMonthTxns) - getTotalExpense(currentMonthTxns),
-    [currentMonthTxns],
+    () =>
+      getTotalIncome(currentMonthTxns) -
+      getTotalExpense(currentMonthTxns, categories),
+    [categories, currentMonthTxns],
   );
 
   const currentMonthTransfers = useMemo(
@@ -522,13 +534,18 @@ export default function WalletsPage() {
       const wt = txnsByWallet.get(w.id) ?? [];
       map.set(w.id, {
         income: getTotalIncome(wt),
-        expense: getTotalExpense(wt),
+        expense: getTotalExpense(wt, categories),
         transferIn: transferInByWallet.get(w.id) ?? 0,
         transferOut: transferOutByWallet.get(w.id) ?? 0,
       });
     }
     return map;
-  }, [spendableWallets, currentMonthTxns, currentMonthTransfers]);
+  }, [
+    categories,
+    spendableWallets,
+    currentMonthTxns,
+    currentMonthTransfers,
+  ]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   function openCreateForm() {
@@ -900,10 +917,10 @@ export default function WalletsPage() {
             isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
-            label="Tiền ra tháng này"
+            label="Chi tiêu tháng này"
             value={
               walletAnalyticsReady
-                ? formatVND(getTotalExpense(currentMonthTxns))
+                ? formatVND(getTotalExpense(currentMonthTxns, categories))
                 : "—"
             }
             note={

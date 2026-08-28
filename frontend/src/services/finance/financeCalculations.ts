@@ -822,14 +822,24 @@ export function isRealExpenseTransaction(
   return group !== "saving" && group !== "investment";
 }
 
-export function getTotalExpense(
+export function getRealExpenseTransactions(
   transactions: Transaction[],
   categories: Category[] = [],
 ) {
   const categoryById = buildCategoryMap(categories);
-  return transactions
-    .filter((item) => isRealExpenseTransaction(item, categoryById))
-    .reduce((sum, item) => sum + item.amount, 0);
+  return transactions.filter((item) =>
+    isRealExpenseTransaction(item, categoryById),
+  );
+}
+
+export function getTotalExpense(
+  transactions: Transaction[],
+  categories: Category[] = [],
+) {
+  return getRealExpenseTransactions(transactions, categories).reduce(
+    (sum, item) => sum + item.amount,
+    0,
+  );
 }
 
 export function getTotalSavingAllocation(
@@ -860,6 +870,179 @@ export function getTotalFutureAllocation(
   return transactions
     .filter((item) => isFutureAllocationTransaction(item, categoryById))
     .reduce((sum, item) => sum + item.amount, 0);
+}
+
+/**
+ * Minimal normalized Savings-ledger movement consumed by cross-page flow
+ * analytics. The Savings UI/DB may carry more metadata; flow semantics only
+ * need movement type, amount and local calendar date.
+ */
+export type SavingAllocationMovement = {
+  type: string;
+  amount: number;
+  date: string;
+};
+
+export type FinanceFlowSnapshot = {
+  income: number;
+  realExpense: number;
+  realExpenseCount: number;
+  netCashFlow: number;
+  /** Manual/legacy saving allocations recorded in the main transactions ledger. */
+  transactionSavingAllocation: number;
+  /** Signed net movement from saving_transactions (deposit - withdraw - settlement). */
+  savingLedgerNet: number;
+  /** Positive net saving capital allocated in the period. */
+  savingAllocation: number;
+  /** Manual/legacy investment allocations recorded in the main transactions ledger. */
+  transactionInvestmentAllocation: number;
+  /** Signed wallet-cash movement committed to Forex, including transaction fees. */
+  investmentLedgerNet: number;
+  /** Positive net investment capital allocated in the period. */
+  investmentAllocation: number;
+  futureAllocation: number;
+  futureAllocationRate: number;
+};
+
+function scopeFlowTransactions(
+  transactions: Transaction[],
+  dateRange?: DateRangeInput,
+) {
+  return dateRange
+    ? filterTransactionsByDateRange(transactions, dateRange)
+    : transactions;
+}
+
+function scopeSavingMovements(
+  movements: SavingAllocationMovement[],
+  dateRange?: DateRangeInput,
+) {
+  return dateRange
+    ? filterByDateRange(movements, dateRange, (movement) => movement.date)
+    : movements;
+}
+
+function scopeForexCashTransactions(
+  transactions: ForexCashTransaction[],
+  dateRange?: DateRangeInput,
+) {
+  return dateRange
+    ? filterByDateRange(
+        transactions,
+        dateRange,
+        (transaction) => transaction.transactionDate,
+      )
+    : transactions;
+}
+
+/**
+ * Savings allocation is capital intentionally moved from spendable cash into
+ * Savings. Deposits allocate capital; withdrawals and settlement de-allocate
+ * it; interest is investment return and must not be misreported as a fresh
+ * user allocation.
+ */
+export function getNetSavingAllocationFromLedger(
+  movements: SavingAllocationMovement[],
+  dateRange?: DateRangeInput,
+) {
+  return scopeSavingMovements(movements, dateRange).reduce((sum, movement) => {
+    const amount = Math.max(0, Number(movement.amount) || 0);
+    if (movement.type === "deposit") return sum + amount;
+    if (movement.type === "withdraw" || movement.type === "settlement") {
+      return sum - amount;
+    }
+    return sum;
+  }, 0);
+}
+
+/**
+ * Forex allocation follows wallet-cash commitment semantics used by the
+ * Investments engine: a deposit consumes `amount + fee` from cash, while a
+ * withdrawal returns `amount - fee`. This keeps allocation analytics aligned
+ * with the actual cash that left/returned to owned Wallets.
+ */
+export function getNetInvestmentAllocationFromLedger(
+  transactions: ForexCashTransaction[],
+  dateRange?: DateRangeInput,
+) {
+  return scopeForexCashTransactions(transactions, dateRange).reduce(
+    (sum, transaction) => {
+      const amount = Math.max(0, Number(transaction.amount) || 0);
+      const fee = Math.max(0, Number(transaction.fee) || 0);
+
+      if (transaction.type === "deposit") return sum + amount + fee;
+      return sum - Math.max(0, amount - fee);
+    },
+    0,
+  );
+}
+
+/**
+ * FINANCE-FLOW-SSOT-1 cross-page flow contract.
+ *
+ * Main transactions remain authoritative for income/real expense and for
+ * legacy/manual saving/investment category allocations. Savings/Forex engine
+ * movements are additive because their mirrored main-ledger rows are internal
+ * transfers, not saving/investment expenses. Signed withdrawals can reduce
+ * same-period allocations; UI-facing allocation values are clamped at zero so
+ * a de-allocation never masquerades as negative "saving".
+ */
+export function calculateFinanceFlowSnapshot(input: {
+  transactions: Transaction[];
+  categories?: Category[];
+  savingMovements?: SavingAllocationMovement[];
+  forexCashTransactions?: ForexCashTransaction[];
+  dateRange?: DateRangeInput;
+}): FinanceFlowSnapshot {
+  const categories = input.categories ?? [];
+  const transactions = scopeFlowTransactions(
+    input.transactions,
+    input.dateRange,
+  );
+  const income = getTotalIncome(transactions);
+  const realExpenses = getRealExpenseTransactions(transactions, categories);
+  const realExpense = realExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const transactionSavingAllocation = getTotalSavingAllocation(
+    transactions,
+    categories,
+  );
+  const savingLedgerNet = getNetSavingAllocationFromLedger(
+    input.savingMovements ?? [],
+    input.dateRange,
+  );
+  const savingAllocation = Math.max(
+    0,
+    transactionSavingAllocation + savingLedgerNet,
+  );
+  const transactionInvestmentAllocation = getTotalInvestmentAllocation(
+    transactions,
+    categories,
+  );
+  const investmentLedgerNet = getNetInvestmentAllocationFromLedger(
+    input.forexCashTransactions ?? [],
+    input.dateRange,
+  );
+  const investmentAllocation = Math.max(
+    0,
+    transactionInvestmentAllocation + investmentLedgerNet,
+  );
+  const futureAllocation = savingAllocation + investmentAllocation;
+
+  return {
+    income,
+    realExpense,
+    realExpenseCount: realExpenses.length,
+    netCashFlow: income - realExpense,
+    transactionSavingAllocation,
+    savingLedgerNet,
+    savingAllocation,
+    transactionInvestmentAllocation,
+    investmentLedgerNet,
+    investmentAllocation,
+    futureAllocation,
+    futureAllocationRate:
+      income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0,
+  };
 }
 
 export function getDisposableCashFlow(

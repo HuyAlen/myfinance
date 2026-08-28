@@ -52,6 +52,7 @@ describe("ReportsPage withholds the whole report body until first load succeeds 
       "setForexAccounts([",
       "setForexCashTransactions([",
       "setSavings([",
+      "setSavingMovements([",
     ]) {
       expect(catchSource).not.toContain(setter);
     }
@@ -101,7 +102,7 @@ describe("ReportsPage withholds the whole report body until first load succeeds 
       expect(fnSource).not.toContain("if (!savingResult.error)");
     });
 
-    it("validates the savings dependency before committing ANY of the ten arrays for this load cycle (atomic load)", () => {
+    it("validates the savings dependency before committing ANY report array for this load cycle (atomic load)", () => {
       const checkIdx = fnSource.indexOf("if (savingResult.error) {");
       expect(checkIdx).toBeGreaterThan(-1);
       for (const setter of [
@@ -115,10 +116,22 @@ describe("ReportsPage withholds the whole report body until first load succeeds 
         "setForexAccounts(fxAcc)",
         "setForexCashTransactions(fxTxn)",
         "setSavings(",
+        "setSavingMovements(",
         "setReportsLoadError(null)",
       ]) {
         expect(fnSource.indexOf(setter)).toBeGreaterThan(checkIdx);
       }
+    });
+
+    it("also treats saving_transactions as a mandatory flow dependency before committing report state", () => {
+      expect(fnSource).toContain("if (savingMovementResult.error) {");
+      const checkIdx = fnSource.indexOf("if (savingMovementResult.error) {");
+      const throwRegion = fnSource.slice(checkIdx, checkIdx + 150);
+      expect(throwRegion).toContain("throw savingMovementResult.error;");
+      expect(fnSource.indexOf("setWallets(w)")).toBeGreaterThan(checkIdx);
+      expect(fnSource.indexOf("setSavingMovements(")).toBeGreaterThan(
+        checkIdx,
+      );
     });
   });
 });

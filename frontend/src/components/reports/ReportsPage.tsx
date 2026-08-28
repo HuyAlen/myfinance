@@ -65,18 +65,19 @@ import {
   initFinanceDemoData,
 } from "@/src/services/finance/financeStorage";
 import {
+  calculateFinanceFlowSnapshot,
   calculateGoalFundingSnapshot,
   calculateNetWorth,
+  filterByDateRange,
   formatVND,
   getDebtRatio,
   getForexAssetValue,
   getGoalScore,
   getTotalAssets,
+  getRealExpenseTransactions,
   getTotalExpense,
   getTotalIncome,
-  isInvestmentAllocationTransaction,
-  isRealExpenseTransaction as isCanonicalRealExpenseTransaction,
-  isSavingAllocationTransaction,
+  type SavingAllocationMovement,
 } from "@/src/services/finance/financeCalculations";
 import { computeHealthScoreV2 } from "@/src/services/finance/analytics/healthScore";
 import { computeRiskScore } from "@/src/services/finance/analytics/riskAnalytics";
@@ -124,6 +125,23 @@ type SavingRow = {
   notes?: string | null;
   created_at?: string | null;
 };
+
+type SavingTransactionRow = {
+  type: string;
+  amount: number | string | null;
+  transaction_date: string | null;
+  created_at?: string | null;
+};
+
+function mapSavingAllocationMovement(
+  row: SavingTransactionRow,
+): SavingAllocationMovement {
+  return {
+    type: row.type,
+    amount: toNumber(row.amount),
+    date: row.transaction_date ?? row.created_at ?? "",
+  };
+}
 
 type ReportSaving = SavingAccount & {
   principal?: number;
@@ -191,34 +209,6 @@ function formatMillionTooltip(value: unknown): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return "0 đ";
   return formatVND(Math.round(n * 1_000_000));
-}
-
-function isDateInPeriod(
-  dateValue: string | undefined | null,
-  mode: PeriodMode,
-  year: string,
-  month: string,
-  quarter: string,
-  customStart: string,
-  customEnd: string,
-): boolean {
-  if (!dateValue) return false;
-  const date = dateValue.slice(0, 10);
-  switch (mode) {
-    case "month":
-      return date.startsWith(year + "-" + month);
-    case "quarter": {
-      const q = Number(quarter);
-      const months = [0, 1, 2].map((offset) =>
-        String((q - 1) * 3 + 1 + offset).padStart(2, "0"),
-      );
-      return months.some((m) => date.startsWith(year + "-" + m));
-    }
-    case "year":
-      return date.startsWith(year);
-    case "custom":
-      return date >= customStart && date <= customEnd;
-  }
 }
 
 // ─── Period helpers (preserved) ───────────────────────────────────────────────
@@ -371,41 +361,9 @@ function getCategoryOfTransaction(
   return categories.find((category) => category.id === transaction.categoryId);
 }
 
-// Category classification and "real expense"/saving/investment-allocation
-// semantics are canonical — see financeCalculations.ts. Do not reconstruct
-// them here; a local heuristic here previously drifted from the canonical
-// keyword/planningGroup rules used by Dashboard/Budgets/AI.
-function categoryMapOf(categories: Category[]): Map<string, Category> {
-  return new Map(categories.map((category) => [category.id, category]));
-}
-
-function isSavingTransaction(
-  transaction: Transaction,
-  categories: Category[],
-): boolean {
-  return isSavingAllocationTransaction(transaction, categoryMapOf(categories));
-}
-
-function isInvestmentTransaction(
-  transaction: Transaction,
-  categories: Category[],
-): boolean {
-  return isInvestmentAllocationTransaction(
-    transaction,
-    categoryMapOf(categories),
-  );
-}
-
-function isRealExpenseTransaction(
-  transaction: Transaction,
-  categories: Category[],
-): boolean {
-  return isCanonicalRealExpenseTransaction(
-    transaction,
-    categoryMapOf(categories),
-  );
-}
-
+// FINANCE-FLOW-SSOT-1: flow classification lives in financeCalculations.ts.
+// Reports may aggregate the canonical real-expense collection for charts, but
+// it must not reconstruct saving/investment allocation semantics locally.
 function sumTransactions(transactions: Transaction[]): number {
   return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
 }
@@ -417,35 +375,11 @@ function getRealExpenseTotal(
   return getTotalExpense(transactions, categories);
 }
 
-function getSavingCapitalTotal(
-  transactions: Transaction[],
-  categories: Category[],
-): number {
-  return sumTransactions(
-    transactions.filter((transaction) =>
-      isSavingTransaction(transaction, categories),
-    ),
-  );
-}
-
-function getInvestmentCapitalTotal(
-  transactions: Transaction[],
-  categories: Category[],
-): number {
-  return sumTransactions(
-    transactions.filter((transaction) =>
-      isInvestmentTransaction(transaction, categories),
-    ),
-  );
-}
-
 function getRealSpendingByCategory(
   transactions: Transaction[],
   categories: Category[],
 ) {
-  const realExpenses = transactions.filter((transaction) =>
-    isRealExpenseTransaction(transaction, categories),
-  );
+  const realExpenses = getRealExpenseTransactions(transactions, categories);
   const total = sumTransactions(realExpenses);
   const map = new Map<string, number>();
 
@@ -468,47 +402,37 @@ function buildMonthlyReportRow(
   monthKey: string,
   transactions: Transaction[],
   categories: Category[],
-  savings: ReportSaving[],
+  savingMovements: SavingAllocationMovement[],
+  forexCashTransactions: ForexCashTransaction[],
 ) {
   const rowYear = monthKey.slice(0, 4);
   const rowMonth = monthKey.slice(5, 7);
-  const monthTransactions = transactions.filter((transaction) =>
-    transaction.date.startsWith(monthKey),
-  );
-  const inc = getTotalIncome(monthTransactions);
-  const exp = getRealExpenseTotal(monthTransactions, categories);
-  const savingCapitalFromTransactions = getSavingCapitalTotal(
-    monthTransactions,
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-31`;
+  const flow = calculateFinanceFlowSnapshot({
+    transactions,
     categories,
-  );
-  const savingCapitalFromSavings = savings
-    .filter((saving) => (saving.createdAt ?? "").startsWith(monthKey))
-    .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
-  const savingCapital =
-    savingCapitalFromSavings > 0
-      ? savingCapitalFromSavings
-      : savingCapitalFromTransactions;
-  const investmentCapital = getInvestmentCapitalTotal(
-    monthTransactions,
-    categories,
-  );
-  const futureAllocation = savingCapital + investmentCapital;
+    savingMovements,
+    forexCashTransactions,
+    dateRange: { startDate: monthStart, endDate: monthEnd },
+  });
+
   return {
     key: monthKey,
     month: "T" + Number(rowMonth),
     periodLabel: "T" + Number(rowMonth) + "/" + rowYear,
-    thu: inc / 1e6,
-    chi: exp / 1e6,
-    tietKiem: savingCapital / 1e6,
-    dauTu: investmentCapital / 1e6,
-    tichLuy: futureAllocation / 1e6,
-    dongTienRong: (inc - exp) / 1e6,
-    income: inc,
-    expense: exp,
-    savingAllocation: savingCapital,
-    investmentAllocation: investmentCapital,
-    futureAllocation,
-    cashFlow: inc - exp,
+    thu: flow.income / 1e6,
+    chi: flow.realExpense / 1e6,
+    tietKiem: flow.savingAllocation / 1e6,
+    dauTu: flow.investmentAllocation / 1e6,
+    tichLuy: flow.futureAllocation / 1e6,
+    dongTienRong: flow.netCashFlow / 1e6,
+    income: flow.income,
+    expense: flow.realExpense,
+    savingAllocation: flow.savingAllocation,
+    investmentAllocation: flow.investmentAllocation,
+    futureAllocation: flow.futureAllocation,
+    cashFlow: flow.netCashFlow,
   };
 }
 
@@ -535,6 +459,9 @@ export default function ReportsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [savings, setSavings] = useState<ReportSaving[]>([]);
+  const [savingMovements, setSavingMovements] = useState<
+    SavingAllocationMovement[]
+  >([]);
   const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
   const [forexCashTransactions, setForexCashTransactions] = useState<
     ForexCashTransaction[]
@@ -606,24 +533,40 @@ export default function ReportsPage() {
     async function load() {
       try {
         await initFinanceDemoData();
-        const [w, inv, cat, txn, dbt, gls, bdg, fxAcc, fxTxn, savingResult] =
-          await Promise.all([
-            getWallets(),
-            getInvestments(),
-            getCategories(),
-            getTransactions(),
-            getDebts(),
-            getGoals(),
-            getBudgets(),
-            getForexAccounts(),
-            getForexCashTransactions(),
-            supabase
-              ? supabase
-                  .from("savings")
-                  .select("*")
-                  .order("created_at", { ascending: false })
-              : Promise.resolve({ data: [], error: null }),
-          ]);
+        const [
+          w,
+          inv,
+          cat,
+          txn,
+          dbt,
+          gls,
+          bdg,
+          fxAcc,
+          fxTxn,
+          savingResult,
+          savingMovementResult,
+        ] = await Promise.all([
+          getWallets(),
+          getInvestments(),
+          getCategories(),
+          getTransactions(),
+          getDebts(),
+          getGoals(),
+          getBudgets(),
+          getForexAccounts(),
+          getForexCashTransactions(),
+          supabase
+            ? supabase
+                .from("savings")
+                .select("*")
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+          supabase
+            ? supabase
+                .from("saving_transactions")
+                .select("type, amount, transaction_date, created_at")
+            : Promise.resolve({ data: [], error: null }),
+        ]);
 
         // FINANCE-DATA-1C: this raw "savings" read is a mandatory
         // dependency of this load cycle too — savings-derived report
@@ -633,6 +576,9 @@ export default function ReportsPage() {
         // reportsLoadError to null).
         if (savingResult.error) {
           throw savingResult.error;
+        }
+        if (savingMovementResult.error) {
+          throw savingMovementResult.error;
         }
 
         setWallets(w);
@@ -646,6 +592,11 @@ export default function ReportsPage() {
         setForexCashTransactions(fxTxn);
         setSavings(
           ((savingResult.data ?? []) as SavingRow[]).map(mapSavingRow),
+        );
+        setSavingMovements(
+          ((savingMovementResult.data ?? []) as SavingTransactionRow[]).map(
+            mapSavingAllocationMovement,
+          ),
         );
         setReportsLoadError(null);
       } catch (error) {
@@ -672,43 +623,26 @@ export default function ReportsPage() {
 
   // ── Core summary ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
-    const income = getTotalIncome(filtered);
-    const expense = getRealExpenseTotal(filtered, categories);
-    const savingAllocationFromTransactions = getSavingCapitalTotal(
-      filtered,
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: filtered,
       categories,
-    );
-    const savingAllocationFromSavings = savings
-      .filter((saving) =>
-        isDateInPeriod(
-          saving.createdAt,
-          periodMode,
-          year,
-          month,
-          quarter,
-          customStart,
-          customEnd,
-        ),
-      )
-      .reduce((sum, saving) => sum + getSavingPrincipal(saving), 0);
-    const savingAllocation =
-      savingAllocationFromSavings > 0
-        ? savingAllocationFromSavings
-        : savingAllocationFromTransactions;
-    const investmentAllocation = getInvestmentCapitalTotal(
-      filtered,
-      categories,
-    );
-    const futureAllocation = savingAllocation + investmentAllocation;
-    const cashFlowAfterExpense = income - expense;
+      savingMovements,
+      forexCashTransactions,
+      dateRange,
+    });
+    const income = flow.income;
+    const expense = flow.realExpense;
+    const savingAllocation = flow.savingAllocation;
+    const investmentAllocation = flow.investmentAllocation;
+    const futureAllocation = flow.futureAllocation;
+    const cashFlowAfterExpense = flow.netCashFlow;
     const availableAfterFutureAllocation =
       cashFlowAfterExpense - futureAllocation;
     const cashFlowRate =
       income > 0
         ? Math.round((cashFlowAfterExpense / income) * 1000) / 10
         : 0;
-    const allocationRate =
-      income > 0 ? Math.round((futureAllocation / income) * 1000) / 10 : 0;
+    const allocationRate = flow.futureAllocationRate;
     const netWorthBreakdown = calculateNetWorth({
       wallets,
       savings,
@@ -753,6 +687,8 @@ export default function ReportsPage() {
     goals,
     transactions,
     savings,
+    savingMovements,
+    dateRange,
     periodMode,
     year,
     month,
@@ -771,10 +707,17 @@ export default function ReportsPage() {
           year + "-" + String(index + 1).padStart(2, "0"),
           transactions,
           categories,
-          savings,
+          savingMovements,
+          forexCashTransactions,
         ),
       ),
-    [transactions, year, categories, savings],
+    [
+      transactions,
+      year,
+      categories,
+      savingMovements,
+      forexCashTransactions,
+    ],
   );
 
   const periodMonthKeys = useMemo(
@@ -790,20 +733,24 @@ export default function ReportsPage() {
     [periodMode, year, month, quarter, customStart, customEnd],
   );
 
-  const periodSavings = useMemo(
+  const periodSavingMovements = useMemo(
     () =>
-      savings.filter((saving) =>
-        isDateInPeriod(
-          saving.createdAt,
-          periodMode,
-          year,
-          month,
-          quarter,
-          customStart,
-          customEnd,
-        ),
+      filterByDateRange(
+        savingMovements,
+        dateRange,
+        (movement) => movement.date,
       ),
-    [savings, periodMode, year, month, quarter, customStart, customEnd],
+    [dateRange, savingMovements],
+  );
+
+  const periodForexCashTransactions = useMemo(
+    () =>
+      filterByDateRange(
+        forexCashTransactions,
+        dateRange,
+        (transaction) => transaction.transactionDate,
+      ),
+    [dateRange, forexCashTransactions],
   );
 
   const periodMonthly = useMemo(
@@ -813,10 +760,17 @@ export default function ReportsPage() {
           monthKey,
           filtered,
           categories,
-          periodSavings,
+          periodSavingMovements,
+          periodForexCashTransactions,
         ),
       ),
-    [periodMonthKeys, filtered, categories, periodSavings],
+    [
+      periodMonthKeys,
+      filtered,
+      categories,
+      periodSavingMovements,
+      periodForexCashTransactions,
+    ],
   );
 
   // ── Spending breakdown (preserved) ────────────────────────────────────────

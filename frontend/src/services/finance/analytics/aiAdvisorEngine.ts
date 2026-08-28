@@ -426,7 +426,7 @@ export function runAdvisor(input: AdvisorInput): AdvisorResult {
     smartBudget,
     financialForecast,
     anomalies: detectSpendingAnomalies(transactions, categories),
-    forecast: computeMonthlyForecast(transactions),
+    forecast: computeMonthlyForecast(transactions, 6, categories),
     goalPredictions: predictGoalAchievement(
       goals,
       transactions,
