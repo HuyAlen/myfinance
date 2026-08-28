@@ -327,6 +327,12 @@ function validateTransactionForm(form: TransactionFormState): string | null {
   return null;
 }
 
+function getAccountStatusLabel(status: ForexAccount["status"]) {
+  if (status === "active") return "Đang hoạt động";
+  if (status === "inactive") return "Tạm ngưng";
+  return "Đã lưu trữ";
+}
+
 export default function InvestmentsPage() {
   const [accounts, setAccounts] = useState<ForexAccount[]>([]);
   const [transactions, setTransactions] = useState<ForexCashTransaction[]>([]);
@@ -847,52 +853,53 @@ export default function InvestmentsPage() {
   }
 
   return (
-    <section className="space-y-5">
-      <div className="rounded-4xl border border-sky-100 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+    <section className="space-y-4 sm:space-y-5">
+      <div className="rounded-3xl border border-[#D7E3EE] bg-white p-4 shadow-[0_8px_24px_rgba(54,83,107,0.08)] sm:rounded-4xl sm:p-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-100">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-12 sm:rounded-2xl">
               <Landmark size={21} />
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">
-                Forex Management
+                Đầu tư
               </p>
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+              <h1 className="mt-0.5 text-[22px] font-bold tracking-tight text-[#36536B] sm:mt-1 sm:text-3xl">
                 Đầu tư Forex
               </h1>
-              <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-500">
-                Quản lý tài khoản, nạp/rút vốn, giá trị tài khoản hiện tại và
-                lời/lỗ trading trên một trang duy nhất.
+              <p className="mt-1 max-w-2xl text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm sm:leading-6">
+                Theo dõi vốn, giá trị hiện tại và lời/lỗ Forex.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid grid-cols-[44px_1fr_1fr] gap-2 sm:flex sm:flex-row">
             <button
               type="button"
               onClick={() => void reload()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+              aria-label="Làm mới dữ liệu Forex"
+              title="Làm mới"
+              className="inline-flex size-11 items-center justify-center rounded-xl border border-[#D9E7F4] bg-white text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:w-auto sm:px-4"
             >
               <RefreshCw size={16} />
-              Làm mới
+              <span className="sr-only sm:not-sr-only sm:ml-2 sm:text-sm sm:font-bold">Làm mới</span>
             </button>
             <button
               type="button"
               onClick={() => openCreateTransaction()}
               disabled={accounts.length === 0}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 text-sm font-black text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#CFE1F2] bg-[#F3F8FF] px-3 text-[13px] font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC] disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-2xl sm:px-4 sm:text-sm"
             >
               <ArrowUpRight size={16} />
-              Ghi nạp/rút
+              Nạp / rút
             </button>
             <button
               type="button"
               onClick={openCreateAccount}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 text-sm font-black text-white shadow-lg shadow-sky-100 transition hover:bg-sky-700"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-3 text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(47,128,237,0.18)] transition hover:bg-blue-600 sm:rounded-2xl sm:px-4 sm:text-sm"
             >
               <Plus size={16} />
-              Thêm tài khoản
+              Thêm TK
             </button>
           </div>
         </div>
@@ -912,7 +919,7 @@ export default function InvestmentsPage() {
           </div>
         ) : null}
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="-mx-4 mt-4 flex snap-x snap-proximity gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-1 scrollbar-none sm:mx-0 sm:mt-5 sm:grid sm:grid-cols-2 sm:gap-3 sm:px-0 xl:grid-cols-6">
           <SummaryCard
             label="Tài khoản"
             value={`${summary.activeCount}/${summary.accountCount}`}
@@ -976,13 +983,13 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-              Accounts
+              Danh mục đầu tư
             </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">
+            <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
               Tài khoản Forex
             </h2>
           </div>
@@ -991,7 +998,7 @@ export default function InvestmentsPage() {
           </span>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-2">
           {isLoading && accounts.length === 0 ? (
             <div className="col-span-full rounded-3xl bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
               Đang tải dữ liệu Forex...
@@ -1031,12 +1038,12 @@ export default function InvestmentsPage() {
           {accountMetrics.map((account) => (
             <article
               key={account.id}
-              className="rounded-3xl border border-slate-200 bg-white p-5 transition hover:border-sky-200 hover:shadow-lg hover:shadow-sky-50"
+              className="rounded-2xl border border-[#DCE6EF] bg-white p-4 transition hover:border-sky-200 hover:shadow-md sm:rounded-3xl sm:p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-base font-black text-slate-950">
+                    <h3 className="min-w-0 break-words text-[15px] font-bold leading-5 text-[#36536B] sm:text-base">
                       {account.name}
                     </h3>
                     <span
@@ -1046,7 +1053,7 @@ export default function InvestmentsPage() {
                           : "bg-slate-100 text-slate-500"
                       }`}
                     >
-                      {account.status}
+                      {getAccountStatusLabel(account.status)}
                     </span>
                   </div>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -1059,21 +1066,23 @@ export default function InvestmentsPage() {
                   <button
                     type="button"
                     onClick={() => openEditAccount(account)}
-                    className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-sky-50 hover:text-sky-600"
+                    aria-label={`Sửa ${account.name}`}
+                    className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:bg-sky-50 hover:text-sky-600 sm:size-10"
                   >
                     <Edit3 size={15} />
                   </button>
                   <button
                     type="button"
                     onClick={() => requestDeleteAccount(account)}
-                    className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    aria-label={`Xóa ${account.name}`}
+                    className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:bg-rose-50 hover:text-rose-600 sm:size-10"
                   >
                     <Trash2 size={15} />
                   </button>
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4">
                 <Metric
                   label="Vốn ròng"
                   value={formatMoney(account.netCashFlow)}
@@ -1113,7 +1122,7 @@ export default function InvestmentsPage() {
                 />
               </div>
 
-              <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3">
+              <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#F6F9FC] p-3 sm:mt-4 sm:rounded-2xl">
                 <TinyMetric
                   label="Đã nạp"
                   value={formatMoney(account.deposits)}
@@ -1125,24 +1134,22 @@ export default function InvestmentsPage() {
                 <TinyMetric label="Phí" value={formatMoney(account.fees)} />
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-xs font-bold text-slate-400">
+              <div className="mt-3">
+                <p className="mb-2 text-[11px] font-semibold text-[#7C91A6]">
                   {account.transactionCount} giao dịch
                 </p>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => openEditAccount(account)}
-                    className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-700 transition hover:bg-amber-100"
+                    className="min-h-11 rounded-xl border border-[#D9E7F4] bg-[#F3F8FF] px-2 text-xs font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC]"
                   >
-                    {account.currentEquity === null
-                      ? "Nhập giá trị hiện tại"
-                      : "Cập nhật giá trị"}
+                    {account.currentEquity === null ? "Nhập giá trị" : "Cập nhật"}
                   </button>
                   <button
                     type="button"
                     onClick={() => openCreateTransaction(account.id, "deposit")}
-                    className="min-h-10 rounded-xl bg-emerald-100 px-3 text-xs font-black text-emerald-700"
+                    className="min-h-11 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700"
                   >
                     Nạp
                   </button>
@@ -1151,7 +1158,7 @@ export default function InvestmentsPage() {
                     onClick={() =>
                       openCreateTransaction(account.id, "withdrawal")
                     }
-                    className="min-h-10 rounded-xl bg-blue-100 px-3 text-xs font-black text-blue-700"
+                    className="min-h-11 rounded-xl bg-blue-50 px-3 text-xs font-bold text-blue-700"
                   >
                     Rút
                   </button>
@@ -1162,13 +1169,13 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-              Cash Flow History
+              Dòng tiền
             </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950">
+            <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
               Lịch sử nạp/rút
             </h2>
           </div>
@@ -1182,7 +1189,7 @@ export default function InvestmentsPage() {
             Chưa có giao dịch nạp/rút.
           </div>
         ) : (
-          <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-3xl border border-slate-200">
+          <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-[#DCE6EF] sm:mt-4 sm:rounded-3xl">
             {transactions.slice(0, 30).map((transaction) => {
               const account = accounts.find(
                 (item) => item.id === transaction.forexAccountId,
@@ -1195,20 +1202,20 @@ export default function InvestmentsPage() {
               return (
                 <div
                   key={transaction.id}
-                  className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-3.5 py-3 sm:flex sm:px-4"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-900">
                       {isDeposit ? "Nạp vào Forex" : "Rút từ Forex"}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                    <p className="mt-0.5 break-words text-[11px] leading-4 text-[#687E93] sm:text-xs">
                       {account?.name ?? "Tài khoản đã xóa"} ·{" "}
                       {wallet?.name ?? "Ví đã xóa"} ·{" "}
                       {formatTransactionDateTime(transaction)}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <div className="flex items-center justify-end gap-2">
                     <div className="text-left sm:text-right">
                       <p
                         className={`font-black ${
@@ -1227,14 +1234,16 @@ export default function InvestmentsPage() {
                     <button
                       type="button"
                       onClick={() => openEditTransaction(transaction)}
-                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400"
+                      aria-label="Sửa giao dịch Forex"
+                      className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] sm:size-10"
                     >
                       <Edit3 size={15} />
                     </button>
                     <button
                       type="button"
                       onClick={() => requestDeleteTransaction(transaction)}
-                      className="flex size-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600"
+                      aria-label="Xóa giao dịch Forex"
+                      className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:text-rose-600 sm:size-10"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -1553,11 +1562,11 @@ function Modal({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-      <div className="flex h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
+    <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+      <div className="flex h-dvh w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-3 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
           <div>
-            <h3 className="text-xl font-black tracking-tight text-slate-950">
+            <h3 className="text-xl font-bold tracking-tight text-[#36536B]">
               {title}
             </h3>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">
@@ -1603,15 +1612,15 @@ function SummaryCard({
   };
 
   return (
-    <div className={`rounded-3xl border p-4 ${tones[tone]}`}>
+    <div className={`w-[168px] shrink-0 snap-start rounded-2xl border p-3.5 sm:w-auto sm:rounded-3xl sm:p-4 ${tones[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.15em] opacity-70">
           {label}
         </p>
         {icon}
       </div>
-      <p className="mt-3 truncate text-lg font-black">{value}</p>
-      <p className="mt-1 text-xs font-semibold opacity-70">{note}</p>
+      <p className="mt-2 whitespace-nowrap text-[15px] font-black tabular-nums sm:mt-3 sm:text-lg" title={value}>{value}</p>
+      <p className="mt-1 min-h-8 text-[10px] font-semibold leading-4 opacity-70 sm:min-h-0 sm:text-xs">{note}</p>
     </div>
   );
 }
@@ -1635,7 +1644,7 @@ function Metric({
   return (
     <div className={`rounded-2xl p-3 ${tones[tone]}`}>
       <p className="text-[9px] font-black uppercase opacity-65">{label}</p>
-      <p className="mt-1 truncate text-sm font-black">{value}</p>
+      <p className="mt-1 whitespace-nowrap text-[12px] font-black tabular-nums sm:text-sm" title={value}>{value}</p>
     </div>
   );
 }
@@ -1644,7 +1653,7 @@ function TinyMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[9px] font-black uppercase text-slate-400">{label}</p>
-      <p className="mt-1 truncate text-xs font-black text-slate-700">{value}</p>
+      <p className="mt-1 whitespace-nowrap text-[11px] font-bold tabular-nums text-[#4E6A82] sm:text-xs" title={value}>{value}</p>
     </div>
   );
 }
