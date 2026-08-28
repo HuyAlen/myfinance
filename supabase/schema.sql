@@ -2538,6 +2538,10 @@ DECLARE
     'net_worth_snapshots'
   ];
   v_required_domains text[];
+  v_source_counts jsonb;
+  v_expected_counts jsonb;
+  v_actual_counts jsonb;
+  v_expected_snapshot_count bigint;
 BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFB01';
@@ -2627,6 +2631,42 @@ BEGIN
   PERFORM 1 FROM jsonb_populate_recordset(NULL::public.forex_cash_transactions, v_restore_data->'forex_cash_transactions');
   PERFORM 1 FROM jsonb_populate_recordset(NULL::public.net_worth_snapshots, v_restore_data->'net_worth_snapshots');
 
+  v_source_counts := jsonb_build_object(
+    'wallets', jsonb_array_length(v_data->'wallets'),
+    'categories', jsonb_array_length(v_data->'categories'),
+    'transactions', jsonb_array_length(v_data->'transactions'),
+    'debts', jsonb_array_length(v_data->'debts'),
+    'goals', jsonb_array_length(v_data->'goals'),
+    'budgets', jsonb_array_length(v_data->'budgets'),
+    'investments', jsonb_array_length(v_data->'investments'),
+    'savings', jsonb_array_length(v_data->'savings'),
+    'saving_transactions', jsonb_array_length(v_data->'saving_transactions'),
+    'forex_accounts', jsonb_array_length(v_data->'forex_accounts'),
+    'forex_cash_transactions', jsonb_array_length(v_data->'forex_cash_transactions'),
+    'net_worth_snapshots', jsonb_array_length(v_data->'net_worth_snapshots')
+  );
+
+  -- SETTINGS-RECOVERY-INTEGRITY-1: once destructive replacement starts,
+  -- freeze the complete persisted write surface. This serializes restore,
+  -- Clear All and Reset Demo against ordinary INSERT/UPDATE/DELETE traffic
+  -- from other tabs so no concurrent write can land in the middle of the
+  -- delete/insert window. SHARE ROW EXCLUSIVE conflicts with ROW EXCLUSIVE
+  -- while still allowing reads of the last committed state.
+  LOCK TABLE
+    public.saving_transactions,
+    public.forex_cash_transactions,
+    public.transactions,
+    public.budgets,
+    public.categories,
+    public.savings,
+    public.forex_accounts,
+    public.wallets,
+    public.debts,
+    public.goals,
+    public.investments,
+    public.net_worth_snapshots
+  IN SHARE ROW EXCLUSIVE MODE;
+
   -- Child/ledger rows first. Snapshot triggers may upsert a temporary current
   -- row while state is replaced; final snapshot replacement below is authoritative.
   DELETE FROM public.saving_transactions WHERE user_id = v_user_id;
@@ -2672,24 +2712,56 @@ BEGIN
     PERFORM public.capture_current_net_worth_snapshot(v_user_id);
   END IF;
 
+  -- Verify the committed candidate state while still inside this PostgreSQL
+  -- transaction. Any mismatch raises MFB05, which aborts the function and
+  -- rolls back every DELETE/INSERT above instead of leaving a half-restore.
+  v_expected_snapshot_count := (v_source_counts->>'net_worth_snapshots')::bigint;
+  IF v_expected_snapshot_count = 0
+     AND (
+       EXISTS (SELECT 1 FROM public.wallets WHERE user_id = v_user_id)
+       OR EXISTS (SELECT 1 FROM public.savings WHERE user_id = v_user_id)
+       OR EXISTS (SELECT 1 FROM public.investments WHERE user_id = v_user_id)
+       OR EXISTS (SELECT 1 FROM public.debts WHERE user_id = v_user_id)
+       OR EXISTS (SELECT 1 FROM public.forex_accounts WHERE user_id = v_user_id)
+       OR EXISTS (SELECT 1 FROM public.forex_cash_transactions WHERE user_id = v_user_id)
+     )
+  THEN
+    v_expected_snapshot_count := 1;
+  END IF;
+
+  v_expected_counts := v_source_counts || jsonb_build_object(
+    'net_worth_snapshots', v_expected_snapshot_count
+  );
+
+  SELECT jsonb_build_object(
+    'wallets', (SELECT count(*) FROM public.wallets WHERE user_id = v_user_id),
+    'categories', (SELECT count(*) FROM public.categories WHERE user_id = v_user_id),
+    'transactions', (SELECT count(*) FROM public.transactions WHERE user_id = v_user_id),
+    'debts', (SELECT count(*) FROM public.debts WHERE user_id = v_user_id),
+    'goals', (SELECT count(*) FROM public.goals WHERE user_id = v_user_id),
+    'budgets', (SELECT count(*) FROM public.budgets WHERE user_id = v_user_id),
+    'investments', (SELECT count(*) FROM public.investments WHERE user_id = v_user_id),
+    'savings', (SELECT count(*) FROM public.savings WHERE user_id = v_user_id),
+    'saving_transactions', (SELECT count(*) FROM public.saving_transactions WHERE user_id = v_user_id),
+    'forex_accounts', (SELECT count(*) FROM public.forex_accounts WHERE user_id = v_user_id),
+    'forex_cash_transactions', (SELECT count(*) FROM public.forex_cash_transactions WHERE user_id = v_user_id),
+    'net_worth_snapshots', (SELECT count(*) FROM public.net_worth_snapshots WHERE user_id = v_user_id)
+  )
+  INTO v_actual_counts;
+
+  IF v_actual_counts IS DISTINCT FROM v_expected_counts THEN
+    RAISE EXCEPTION 'Restore verification failed. expected=%, actual=%',
+      v_expected_counts, v_actual_counts
+      USING ERRCODE = 'MFB05';
+  END IF;
+
   RETURN jsonb_build_object(
     'restored', true,
+    'verified', true,
     'source_version', v_version,
     'source_exported_at', v_exported_at,
-    'counts', jsonb_build_object(
-      'wallets', jsonb_array_length(v_data->'wallets'),
-      'categories', jsonb_array_length(v_data->'categories'),
-      'transactions', jsonb_array_length(v_data->'transactions'),
-      'debts', jsonb_array_length(v_data->'debts'),
-      'goals', jsonb_array_length(v_data->'goals'),
-      'budgets', jsonb_array_length(v_data->'budgets'),
-      'investments', jsonb_array_length(v_data->'investments'),
-      'savings', jsonb_array_length(v_data->'savings'),
-      'saving_transactions', jsonb_array_length(v_data->'saving_transactions'),
-      'forex_accounts', jsonb_array_length(v_data->'forex_accounts'),
-      'forex_cash_transactions', jsonb_array_length(v_data->'forex_cash_transactions'),
-      'net_worth_snapshots', jsonb_array_length(v_data->'net_worth_snapshots')
-    )
+    'source_counts', v_source_counts,
+    'counts', v_actual_counts
   );
 END;
 $$;
@@ -2836,6 +2908,93 @@ $$;
 
 REVOKE ALL ON FUNCTION public.seed_finance_demo_data(jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.seed_finance_demo_data(jsonb) TO authenticated;
+
+
+CREATE OR REPLACE FUNCTION public.clone_previous_month_budgets_atomic(
+  p_target_month text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_target_date date;
+  v_source_month text;
+  v_source public.budgets%ROWTYPE;
+  v_new_id public.budgets.id%TYPE;
+  v_cloned integer := 0;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFBG1';
+  END IF;
+
+  IF p_target_month IS NULL
+     OR p_target_month !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' THEN
+    RAISE EXCEPTION 'Invalid target month' USING ERRCODE = 'MFBG2';
+  END IF;
+
+  v_target_date := to_date(p_target_month || '-01', 'YYYY-MM-DD');
+  v_source_month := to_char(v_target_date - interval '1 month', 'YYYY-MM');
+
+  -- Normal INSERT/UPDATE/DELETE obtains ROW EXCLUSIVE. SHARE ROW EXCLUSIVE
+  -- conflicts with it, giving this low-frequency bulk clone a stable target
+  -- snapshot and preventing a concurrent manual budget write from racing the
+  -- NOT EXISTS check. RLS remains active because this is SECURITY INVOKER.
+  LOCK TABLE public.budgets IN SHARE ROW EXCLUSIVE MODE;
+
+  FOR v_source IN
+    SELECT source_budget.*
+    FROM public.budgets AS source_budget
+    WHERE source_budget.user_id = v_user_id
+      AND source_budget.month = v_source_month
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.budgets AS target_budget
+        WHERE target_budget.user_id = v_user_id
+          AND target_budget.month = p_target_month
+          AND target_budget."categoryId" = source_budget."categoryId"
+      )
+    ORDER BY source_budget.created_at, source_budget.id
+  LOOP
+    -- %TYPE keeps this assignment valid whether the canonical id column is
+    -- text or uuid. PL/pgSQL applies the destination-column assignment cast.
+    v_new_id := gen_random_uuid();
+
+    INSERT INTO public.budgets (
+      id,
+      user_id,
+      "categoryId",
+      month,
+      "limitAmount",
+      "rolloverAmount"
+    )
+    VALUES (
+      v_new_id,
+      v_user_id,
+      v_source."categoryId",
+      p_target_month,
+      v_source."limitAmount",
+      0
+    );
+
+    v_cloned := v_cloned + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'cloned', v_cloned,
+    'source_month', v_source_month,
+    'target_month', p_target_month,
+    'verified', true
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.clone_previous_month_budgets_atomic(text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.clone_previous_month_budgets_atomic(text)
+  TO authenticated;
 
 
 -- End of canonical schema.

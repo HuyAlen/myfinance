@@ -25,6 +25,7 @@ const requiredRpcs = [
   "create_forex_cash_transaction", "update_forex_cash_transaction",
   "delete_forex_cash_transaction", "export_finance_backup",
   "restore_finance_backup", "seed_finance_demo_data",
+  "clone_previous_month_budgets_atomic",
 ] as const;
 
 const forexRpcs = [

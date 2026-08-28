@@ -137,7 +137,8 @@ WITH required(function_name) AS (
     ('delete_forex_cash_transaction'),
     ('delete_forex_account_atomic'),
     ('export_finance_backup'),
-    ('restore_finance_backup')
+    ('restore_finance_backup'),
+    ('clone_previous_month_budgets_atomic')
 )
 SELECT
   r.function_name,
@@ -196,7 +197,7 @@ target_functions AS (
       'create_saving_account','create_saving_movement','delete_saving_account',
       'create_forex_cash_transaction','update_forex_cash_transaction','delete_forex_cash_transaction',
       'delete_forex_account_atomic',
-      'export_finance_backup','restore_finance_backup'
+      'export_finance_backup','restore_finance_backup','clone_previous_month_budgets_atomic'
     )
 ),
 function_grants AS (
@@ -272,3 +273,42 @@ JOIN pg_enum e ON e.enumtypid = t.oid
 WHERE n.nspname = 'public'
   AND t.typname IN ('wallet_type','category_type','transaction_type','recurrence_freq','investment_type')
 ORDER BY t.typname, e.enumsortorder;
+
+-- 11) DB-SSOT-2 critical recovery/cross-domain RPC invariants.
+SELECT
+  strpos(
+    pg_get_functiondef('public.restore_finance_backup(jsonb)'::regprocedure),
+    'MFB05'
+  ) > 0 AS restore_has_post_verify_guard,
+  strpos(
+    pg_get_functiondef('public.restore_finance_backup(jsonb)'::regprocedure),
+    '''verified'', true'
+  ) > 0 AS restore_returns_verified_receipt,
+  strpos(
+    pg_get_functiondef('public.clone_previous_month_budgets_atomic(text)'::regprocedure),
+    'LOCK TABLE public.budgets IN SHARE ROW EXCLUSIVE MODE'
+  ) > 0 AS budget_clone_has_serialized_boundary,
+  strpos(
+    pg_get_functiondef('public.clone_previous_month_budgets_atomic(text)'::regprocedure),
+    '''verified'', true'
+  ) > 0 AS budget_clone_returns_verified_receipt,
+  has_function_privilege(
+    'authenticated',
+    'public.restore_finance_backup(jsonb)',
+    'EXECUTE'
+  ) AS restore_authenticated_can_execute,
+  has_function_privilege(
+    'anon',
+    'public.restore_finance_backup(jsonb)',
+    'EXECUTE'
+  ) AS restore_anon_can_execute,
+  has_function_privilege(
+    'authenticated',
+    'public.clone_previous_month_budgets_atomic(text)',
+    'EXECUTE'
+  ) AS budget_clone_authenticated_can_execute,
+  has_function_privilege(
+    'anon',
+    'public.clone_previous_month_budgets_atomic(text)',
+    'EXECUTE'
+  ) AS budget_clone_anon_can_execute;
