@@ -312,3 +312,52 @@ SELECT
     'public.clone_previous_month_budgets_atomic(text)',
     'EXECUTE'
   ) AS budget_clone_anon_can_execute;
+
+-- --------------------------------------------------------------------------
+-- HOUSEHOLD-IDENTITY-1 shared workspace invariants
+-- --------------------------------------------------------------------------
+SELECT
+  to_regclass('public.households') IS NOT NULL AS has_households,
+  to_regclass('public.household_members') IS NOT NULL AS has_household_members,
+  to_regclass('public.household_invites') IS NOT NULL AS has_household_invites;
+
+SELECT
+  has_function_privilege('authenticated', 'public.get_current_household_context()', 'EXECUTE') AS authenticated_can_read_household_context,
+  has_function_privilege('anon', 'public.get_current_household_context()', 'EXECUTE') AS anon_can_read_household_context,
+  has_function_privilege('authenticated', 'public.create_household_invite(text,text)', 'EXECUTE') AS authenticated_can_invite,
+  has_function_privilege('anon', 'public.create_household_invite(text,text)', 'EXECUTE') AS anon_can_invite,
+  has_function_privilege('authenticated', 'public.accept_current_household_invite()', 'EXECUTE') AS authenticated_can_accept_invite,
+  has_function_privilege('anon', 'public.accept_current_household_invite()', 'EXECUTE') AS anon_can_accept_invite;
+
+SELECT
+  NOT EXISTS (
+    SELECT 1
+    FROM public.households h
+    LEFT JOIN public.household_members hm
+      ON hm.household_id = h.id
+     AND hm.user_id = h.owner_user_id
+     AND hm.role = 'owner'
+    WHERE hm.user_id IS NULL
+  ) AS every_household_has_owner_membership,
+  NOT EXISTS (
+    SELECT hm.user_id
+    FROM public.household_members hm
+    GROUP BY hm.user_id
+    HAVING count(*) > 1
+  ) AS every_user_has_at_most_one_household;
+
+SELECT
+  strpos(pg_get_functiondef('public.accept_current_household_invite()'::regprocedure), 'email_confirmed_at') > 0 AS invite_accept_requires_confirmed_email,
+  strpos(pg_get_functiondef('public.accept_current_household_invite()'::regprocedure), 'MFH08') > 0 AS invite_accept_has_no_merge_guard;
+
+SELECT
+  strpos(pg_get_functiondef('public.export_finance_backup()'::regprocedure), 'current_finance_scope_owner_user_id') > 0 AS export_uses_household_scope,
+  strpos(pg_get_functiondef('public.restore_finance_backup(jsonb)'::regprocedure), 'current_finance_admin_owner_user_id') > 0 AS restore_is_owner_scoped,
+  strpos(pg_get_functiondef('public.clone_previous_month_budgets_atomic(text)'::regprocedure), 'current_finance_write_owner_user_id') > 0 AS budget_clone_uses_write_scope,
+  strpos(pg_get_functiondef('public.capture_current_net_worth_snapshot(uuid)'::regprocedure), 'current_finance_scope_owner_user_id') > 0 AS net_worth_accepts_household_member_changes;
+
+SELECT tablename, policyname, cmd, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('wallets','transactions','savings','forex_accounts','net_worth_snapshots','households','household_members')
+ORDER BY tablename, policyname;

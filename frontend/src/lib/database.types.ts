@@ -28,6 +28,9 @@ type SavingType =
 type SavingTransactionType = "deposit" | "withdraw" | "interest" | "settlement";
 type ForexAccountStatus = "active" | "inactive" | "archived";
 type ForexCashTransactionType = "deposit" | "withdrawal";
+type HouseholdRole = "owner" | "member" | "viewer";
+type HouseholdInviteRole = "member" | "viewer";
+type HouseholdInviteStatus = "pending" | "accepted" | "revoked" | "expired";
 type AIProvider = "openai" | "local";
 type AIConnectionStatus = "not_tested" | "connected" | "invalid" | "error";
 type AIMessageRole = "user" | "assistant";
@@ -42,6 +45,61 @@ type AIPendingActionStatus =
   | "expired"
   | "failed";
 
+type HouseholdRow = {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+type HouseholdInsert = {
+  id?: string;
+  owner_user_id: string;
+  name?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+type HouseholdUpdate = Partial<HouseholdInsert>;
+type HouseholdMemberRow = {
+  household_id: string;
+  user_id: string;
+  role: HouseholdRole;
+  joined_at: string;
+};
+type HouseholdMemberInsert = {
+  household_id: string;
+  user_id: string;
+  role: HouseholdRole;
+  joined_at?: string;
+};
+type HouseholdMemberUpdate = Partial<HouseholdMemberInsert>;
+type HouseholdInviteRow = {
+  id: string;
+  household_id: string;
+  email: string;
+  role: HouseholdInviteRole;
+  status: HouseholdInviteStatus;
+  invited_by: string;
+  accepted_by: string | null;
+  accepted_at: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+};
+type HouseholdInviteInsert = {
+  id?: string;
+  household_id: string;
+  email: string;
+  role?: HouseholdInviteRole;
+  status?: HouseholdInviteStatus;
+  invited_by: string;
+  accepted_by?: string | null;
+  accepted_at?: string | null;
+  expires_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+type HouseholdInviteUpdate = Partial<HouseholdInviteInsert>;
 type WalletRow = {
   id: string;
   user_id: string;
@@ -597,6 +655,9 @@ type AIUsageLogUpdate = Partial<AIUsageLogInsert>;
 export type Database = {
   public: {
     Tables: {
+      households: { Row: HouseholdRow; Insert: HouseholdInsert; Update: HouseholdUpdate; Relationships: [] };
+      household_members: { Row: HouseholdMemberRow; Insert: HouseholdMemberInsert; Update: HouseholdMemberUpdate; Relationships: [] };
+      household_invites: { Row: HouseholdInviteRow; Insert: HouseholdInviteInsert; Update: HouseholdInviteUpdate; Relationships: [] };
       wallets: { Row: WalletRow; Insert: WalletInsert; Update: WalletUpdate; Relationships: [] };
       categories: {
         Row: CategoryRow;
@@ -693,6 +754,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      get_finance_scope_owner_user_id: { Args: Record<string, never>; Returns: string };
+      get_current_household_context: { Args: Record<string, never>; Returns: Json };
+      create_household_invite: { Args: { p_email: string; p_role?: HouseholdInviteRole }; Returns: Json };
+      accept_current_household_invite: { Args: Record<string, never>; Returns: Json };
+      revoke_household_invite: { Args: { p_invite_id: string }; Returns: Json };
+      remove_household_member: { Args: { p_user_id: string }; Returns: Json };
+      set_household_member_role: { Args: { p_user_id: string; p_role: HouseholdInviteRole }; Returns: Json };
+      rename_current_household: { Args: { p_name: string }; Returns: Json };
       create_finance_transaction: {
         Args: {
           p_id: string; p_type: string; p_amount: number; p_category_id: string; p_wallet_id: string; p_note: string; p_date: string; p_effect_wallet_id_1: string; p_effect_delta_1: number;

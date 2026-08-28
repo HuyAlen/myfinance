@@ -23,11 +23,13 @@ import {
   Trash2,
   Upload,
   User,
+  Users,
   Wallet,
   Zap,
 } from "lucide-react";
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import HouseholdSettingsCard from "@/src/components/settings/HouseholdSettingsCard";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
 import {
@@ -60,6 +62,7 @@ import { DEFAULT_AI_FINANCE_SETTINGS } from "@/src/services/finance/ai-agent/aiS
 // ─── Section nav ──────────────────────────────────────────────────────────────
 const SECTIONS = [
   { id: "profile", label: "Hồ sơ", icon: User },
+  { id: "household", label: "Gia đình", icon: Users },
   { id: "preferences", label: "Tùy chỉnh", icon: Sliders },
   { id: "financial", label: "Tài chính", icon: Wallet },
   { id: "ai", label: "Trợ lý AI", icon: Bot },
@@ -1158,6 +1161,8 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+
+          <HouseholdSettingsCard />
 
           {/* ────────────────────────────────────────────────────────────────
               §2 · TÙY CHỈNH ỨNG DỤNG

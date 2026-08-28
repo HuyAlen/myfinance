@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
+import { HouseholdProvider } from "@/src/components/household/HouseholdProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";
 import { OnboardingProvider } from "@/src/components/onboarding/OnboardingProvider";
 import { ToastProvider } from "@/src/components/ui/ToastProvider";
@@ -56,11 +57,13 @@ export default function RootLayout({
       <body className={beVietnam.variable}>
         <WebVitalsReporter />
         <AuthProvider>
-          <RealtimeProvider>
-            <ToastProvider>
-              <OnboardingProvider>{children}</OnboardingProvider>
-            </ToastProvider>
-          </RealtimeProvider>
+          <HouseholdProvider>
+            <RealtimeProvider>
+              <ToastProvider>
+                <OnboardingProvider>{children}</OnboardingProvider>
+              </ToastProvider>
+            </RealtimeProvider>
+          </HouseholdProvider>
           <ServiceWorkerRegistration />
           <InstallPrompt />
         </AuthProvider>

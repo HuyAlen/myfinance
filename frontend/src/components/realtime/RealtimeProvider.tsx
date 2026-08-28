@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import { supabase } from "@/src/lib/supabase";
 import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 
@@ -53,6 +54,7 @@ const RealtimeContext = createContext<RealtimeContextType>({
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { financeOwnerUserId } = useHousehold();
   const [status, setStatus] = useState<REALTIME_SUBSCRIBE_STATES | "INITIAL">(
     "INITIAL",
   );
@@ -84,7 +86,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const hasReportedRealtimeReadyRef = useRef(false);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !financeOwnerUserId) return;
 
     markInstant("realtime:subscribe:start");
 
@@ -103,7 +105,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       "net_worth_snapshots",
     ];
 
-    const channel = supabase.channel(`myfinance-global-${user.id}`);
+    const channel = supabase.channel(`myfinance-global-${financeOwnerUserId}`);
 
     for (const table of tables) {
       channel.on(
@@ -112,7 +114,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           event: "*",
           schema: "public",
           table,
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${financeOwnerUserId}`,
         },
         () => {
           setLastSync(new Date());
@@ -139,10 +141,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [financeOwnerUserId, user?.id]);
 
-  const effectiveStatus = user?.id ? status : "INITIAL";
-  const effectiveLastSync = user?.id ? lastSync : null;
+  const effectiveStatus = user?.id && financeOwnerUserId ? status : "INITIAL";
+  const effectiveLastSync = user?.id && financeOwnerUserId ? lastSync : null;
 
   return (
     <RealtimeContext.Provider

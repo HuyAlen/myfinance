@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { getCachedFinanceOwnerUserId } from "@/src/services/finance/householdService";
 
 import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
 
@@ -41,11 +42,16 @@ const LOCAL_UI_USER_ID = "local-ui-user";
 // access control, so this is not a security downgrade.
 async function getAuthUserId(): Promise<string | null> {
   if (LOCAL_UI_MODE) return LOCAL_UI_USER_ID;
-
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  return session?.user?.id ?? null;
+  const authUserId = session?.user?.id ?? null;
+  if (!authUserId) return null;
+
+  // HOUSEHOLD-IDENTITY-1: HouseholdProvider resolves and primes the stable
+  // finance-owner scope before finance pages mount. Unit/service consumers that
+  // do not mount the provider retain the legacy single-user fallback.
+  return getCachedFinanceOwnerUserId(authUserId) ?? authUserId;
 }
 
 const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập lại.";
