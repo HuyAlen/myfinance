@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -135,8 +136,44 @@ const isSupabaseConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 );
 
+const FOREX_LOAD_TIMEOUT_MS = 10_000;
+const FOREX_INITIAL_RETRY_DELAY_MS = 750;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function withForexLoadTimeout<T>(
+  label: string,
+  request: PromiseLike<T>,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} phản hồi quá lâu. Vui lòng thử lại.`));
+    }, FOREX_LOAD_TIMEOUT_MS);
+
+    Promise.resolve(request).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function toLocalDateInputValue(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalDateInputValue();
 }
 
 function nowTime(): string {
@@ -275,8 +312,14 @@ function validateTransactionForm(form: TransactionFormState): string | null {
     return "Phí không hợp lệ.";
   }
   if (!form.transactionDate) return "Vui lòng chọn ngày giao dịch.";
-  if (!/^\d{2}:\d{2}$/.test(form.transactionTime)) {
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(form.transactionTime);
+  if (!timeMatch) {
     return "Giờ giao dịch phải theo định dạng HH:mm.";
+  }
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  if (hour > 23 || minute > 59) {
+    return "Giờ giao dịch không hợp lệ.";
   }
   if (form.type === "withdrawal" && fee > amount) {
     return "Phí rút không được lớn hơn số tiền rút.";
@@ -304,30 +347,44 @@ export default function InvestmentsPage() {
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
+  const hasLoadedSnapshotRef = useRef(false);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
+  const pendingReloadAttemptsRef = useRef(1);
+  const mountedRef = useRef(true);
   const { toast } = useToast();
 
   const fetchForexPageData = useCallback(async (): Promise<ForexPageData> => {
-    const loadedWallets = await getWallets();
-
     if (!isSupabaseConfigured) {
       return {
         accounts: [],
         transactions: [],
-        wallets: loadedWallets,
+        wallets: [],
         loadError: "Supabase chưa được cấu hình.",
       };
     }
 
-    const [accountResult, transactionResult] = await Promise.all([
+    const walletsRequest = withForexLoadTimeout("Danh sách ví", getWallets());
+    const accountsRequest = withForexLoadTimeout(
+      "Tài khoản Forex",
       supabase
         .from("forex_accounts")
         .select("*")
         .order("created_at", { ascending: false }),
+    );
+    const transactionsRequest = withForexLoadTimeout(
+      "Lịch sử nạp/rút Forex",
       supabase
         .from("forex_cash_transactions")
         .select("*")
         .order("transaction_date", { ascending: false })
         .order("transaction_time", { ascending: false }),
+    );
+
+    const [loadedWallets, accountResult, transactionResult] = await Promise.all([
+      walletsRequest,
+      accountsRequest,
+      transactionsRequest,
     ]);
 
     if (accountResult.error) throw accountResult.error;
@@ -350,54 +407,100 @@ export default function InvestmentsPage() {
     setTransactions(data.transactions);
     setWallets(data.wallets);
     setLoadError(data.loadError);
+    if (!data.loadError) hasLoadedSnapshotRef.current = true;
   }, []);
 
-  const reload = useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(null);
+  const reload = useCallback(
+    async (attempts = 1): Promise<boolean> => {
+      if (isReloadingRef.current) {
+        pendingReloadRef.current = true;
+        pendingReloadAttemptsRef.current = Math.max(
+          pendingReloadAttemptsRef.current,
+          attempts,
+        );
+        return false;
+      }
 
-    try {
-      const data = await fetchForexPageData();
-      applyForexPageData(data);
-    } catch (error) {
-      setLoadError(
-        error instanceof Error ? error.message : "Không thể tải dữ liệu Forex.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [applyForexPageData, fetchForexPageData]);
+      isReloadingRef.current = true;
+      let finalSuccess = false;
+
+      try {
+        let requestedAttempts = attempts;
+        do {
+          pendingReloadRef.current = false;
+          pendingReloadAttemptsRef.current = 1;
+
+          if (!hasLoadedSnapshotRef.current) setIsLoading(true);
+          setLoadError(null);
+
+          let lastError: unknown = null;
+          let succeeded = false;
+
+          for (let attempt = 0; attempt < requestedAttempts; attempt += 1) {
+            try {
+              const data = await fetchForexPageData();
+              if (!mountedRef.current) return false;
+              if (data.loadError) throw new Error(data.loadError);
+
+              applyForexPageData(data);
+              succeeded = true;
+              finalSuccess = true;
+              break;
+            } catch (error) {
+              lastError = error;
+              if (attempt + 1 < requestedAttempts) {
+                await sleep(FOREX_INITIAL_RETRY_DELAY_MS);
+                if (!mountedRef.current) return false;
+              }
+            }
+          }
+
+          if (!succeeded && mountedRef.current) {
+            setLoadError(
+              lastError instanceof Error
+                ? lastError.message
+                : "Không thể tải dữ liệu Forex.",
+            );
+          }
+
+          if (mountedRef.current) setIsLoading(false);
+
+          requestedAttempts = pendingReloadAttemptsRef.current;
+        } while (pendingReloadRef.current && mountedRef.current);
+      } finally {
+        isReloadingRef.current = false;
+      }
+
+      return finalSuccess;
+    },
+    [applyForexPageData, fetchForexPageData],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadInitialData() {
-      try {
-        const data = await fetchForexPageData();
-        if (cancelled) return;
-
-        applyForexPageData(data);
-      } catch (error) {
-        if (cancelled) return;
-
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Không thể tải dữ liệu Forex.",
-        );
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadInitialData();
+    mountedRef.current = true;
+    void reload(2);
 
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
-  }, [applyForexPageData, fetchForexPageData]);
+  }, [reload]);
+
+  useEffect(() => {
+    const recover = () => {
+      void reload(1);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") recover();
+    };
+
+    window.addEventListener("online", recover);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("online", recover);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [reload]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -464,19 +567,26 @@ export default function InvestmentsPage() {
   }, [accounts, transactions]);
 
   const summary = useMemo(() => {
-    const totalDeposited = accountMetrics.reduce(
+    // Archived accounts remain visible as historical records, but they no
+    // longer represent current portfolio exposure and therefore must not
+    // inflate the headline capital/equity/P&L summary. Inactive accounts are
+    // still owned/current and remain included.
+    const currentPortfolioAccounts = accountMetrics.filter(
+      (account) => account.status !== "archived",
+    );
+    const totalDeposited = currentPortfolioAccounts.reduce(
       (sum, account) => sum + account.deposits,
       0,
     );
-    const totalWithdrawn = accountMetrics.reduce(
+    const totalWithdrawn = currentPortfolioAccounts.reduce(
       (sum, account) => sum + account.withdrawals,
       0,
     );
-    const totalFees = accountMetrics.reduce(
+    const totalFees = currentPortfolioAccounts.reduce(
       (sum, account) => sum + account.fees,
       0,
     );
-    const knownEquityAccounts = accountMetrics.filter(
+    const knownEquityAccounts = currentPortfolioAccounts.filter(
       (account) => account.currentEquity !== null,
     );
     const totalEquity = knownEquityAccounts.reduce(
@@ -693,31 +803,15 @@ export default function InvestmentsPage() {
   function requestDeleteAccount(account: ForexAccount) {
     setPendingAction({
       title: "Xóa tài khoản Forex?",
-      description: `Tài khoản ${account.name} và lịch sử liên quan sẽ bị xóa.`,
+      description: `Tài khoản ${account.name} và lịch sử liên quan sẽ được xóa trong một giao dịch an toàn; số dư ví được hoàn tác tương ứng.`,
       variant: "danger",
       onConfirm: async () => {
-        const transactionIds = transactions
-          .filter((transaction) => transaction.forexAccountId === account.id)
-          .map((transaction) => transaction.id);
-
-        for (const transactionId of transactionIds) {
-          const deleteTransactionResult = await supabase.rpc(
-            "delete_forex_cash_transaction",
-            { p_id: transactionId },
-          );
-          if (deleteTransactionResult.error) {
-            toast({
-              variant: "error",
-              message: deleteTransactionResult.error.message,
-            });
-            return;
-          }
-        }
-
-        const result = await supabase
-          .from("forex_accounts")
-          .delete()
-          .eq("id", account.id);
+        // Correctness boundary: deleting the account, reversing every linked
+        // cash movement, and deleting those ledger rows must commit or roll
+        // back together. Never loop client-side through transactions here.
+        const result = await supabase.rpc("delete_forex_account_atomic", {
+          p_account_id: account.id,
+        });
 
         if (result.error) {
           toast({ variant: "error", message: result.error.message });
@@ -804,8 +898,17 @@ export default function InvestmentsPage() {
         </div>
 
         {loadError ? (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-            {loadError}
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={() => void reload(1)}
+              disabled={isLoading}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
+              Thử lại
+            </button>
           </div>
         ) : null}
 
