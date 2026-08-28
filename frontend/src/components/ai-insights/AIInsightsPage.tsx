@@ -328,7 +328,7 @@ export default function AIInsightsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {insightsLoadError && isInsightsDataReady && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-800">
@@ -343,33 +343,33 @@ export default function AIInsightsPage() {
           </button>
         </div>
       )}
-      <section className="rounded-4xl border border-slate-200 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6 shadow-sm">
-        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+      <section className="rounded-[1.75rem] border border-blue-100 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-4 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="flex items-start justify-between gap-3 sm:gap-5 xl:items-end">
           <div>
-            <p className="text-sm font-bold text-blue-600">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-600">
               Phân tích tài chính thông minh
             </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-1 text-[1.55rem] font-black tracking-tight text-slate-800 sm:mt-2 sm:text-3xl">
               Phân tích tài chính cá nhân
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm">
               Dựa trên giao dịch, ví tiền, mục tiêu và khoản nợ thực tế.
             </p>
           </div>
 
-          <div className="rounded-3xl bg-white/80 px-5 py-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">Điểm sức khỏe tài chính</p>
-            <p className="mt-1 text-4xl font-black text-blue-600">
+          <div className="shrink-0 rounded-2xl border border-blue-100 bg-white/90 px-3 py-2.5 text-right shadow-sm sm:rounded-3xl sm:px-5 sm:py-4">
+            <p className="hidden text-xs font-bold text-slate-500 sm:block">Điểm sức khỏe tài chính</p>
+            <p className="text-2xl font-black leading-none text-blue-600 sm:mt-1 sm:text-4xl">
               {healthV2.total}/100
             </p>
-            <p className="mt-1 text-sm font-bold text-slate-500">
+            <p className="mt-1 max-w-[8rem] text-[10px] font-bold leading-4 text-slate-500 sm:max-w-none sm:text-sm">
               {healthV2.grade} — {healthV2.label}
             </p>
           </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <section data-mobile-kpi-rail className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 md:pb-0">
         <MetricCard
           title="Thu nhập"
           value={formatVND(analysis.income)}
@@ -392,10 +392,10 @@ export default function AIInsightsPage() {
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1fr_0.8fr]">
+        <div data-insight-list className="order-2 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6 xl:order-1">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+            <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-100 sm:size-12">
               <Brain size={22} />
             </div>
             <div>
@@ -415,8 +415,8 @@ export default function AIInsightsPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div data-next-actions className="order-1 space-y-4 sm:space-y-6 xl:order-2">
+          <div className="rounded-[1.75rem] border border-blue-100 bg-blue-50/40 p-4 shadow-sm sm:rounded-4xl sm:bg-white sm:p-6">
             <h2 className="text-xl font-black text-slate-900">
               Việc nên làm tiếp theo
             </h2>
@@ -424,11 +424,11 @@ export default function AIInsightsPage() {
               Gợi ý hành động đơn giản, dễ thực hiện.
             </p>
 
-            <div className="mt-6 space-y-3">
+            <div className="mt-4 space-y-2.5 sm:mt-6 sm:space-y-3">
               {actionItems.map((item, index) => (
                 <div
                   key={item}
-                  className="flex gap-3 rounded-3xl bg-slate-50 p-4"
+                  className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:bg-slate-50 sm:p-4 sm:shadow-none sm:ring-0"
                 >
                   <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
                     {index + 1}
@@ -441,7 +441,7 @@ export default function AIInsightsPage() {
             </div>
           </div>
 
-          <div className="rounded-4xl border border-slate-200 bg-linear-to-br from-emerald-50 to-blue-50 p-6 shadow-sm">
+          <div className="rounded-[1.75rem] border border-blue-100 bg-linear-to-br from-blue-50/70 to-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
             <h2 className="text-xl font-black text-slate-900">Tóm tắt nhanh</h2>
 
             <div className="mt-5 space-y-4">
@@ -464,8 +464,8 @@ export default function AIInsightsPage() {
       </section>
 
       {/* ── Health Score V2 ──────────────────────────────────────────────── */}
-      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="grid gap-4 sm:gap-6 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-100">
               <ShieldCheck size={22} />
@@ -482,7 +482,7 @@ export default function AIInsightsPage() {
 
           <div className="mt-5 flex items-center gap-5">
             <div
-              className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
+              className={`flex size-20 flex-col items-center justify-center rounded-full p-1 shadow-md sm:size-24 sm:shadow-lg ${
                 healthV2.grade === "A"
                   ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : healthV2.grade === "B"
@@ -555,7 +555,7 @@ export default function AIInsightsPage() {
 
           <div className="mt-5 flex items-center gap-5">
             <div
-              className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
+              className={`flex size-20 flex-col items-center justify-center rounded-full p-1 shadow-md sm:size-24 sm:shadow-lg ${
                 riskScore.level === "low"
                   ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : riskScore.level === "medium"
@@ -603,7 +603,7 @@ export default function AIInsightsPage() {
       </section>
 
       {/* ── Emergency Fund Intelligence ───────────────────────────────────── */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-teal-500 to-emerald-400 text-white shadow-lg shadow-teal-100">
             <PiggyBank size={22} />
@@ -620,7 +620,7 @@ export default function AIInsightsPage() {
           {/* Score dial */}
           <div className="flex shrink-0 flex-col items-center gap-2">
             <div
-              className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
+              className={`flex size-20 flex-col items-center justify-center rounded-full p-1 shadow-md sm:size-24 sm:shadow-lg ${
                 emergencyFund.status === "excellent"
                   ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : emergencyFund.status === "good"
@@ -690,13 +690,13 @@ export default function AIInsightsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs text-slate-500">Hiện có</p>
-                <p className="mt-1 truncate text-sm font-black text-slate-900">
+                <p className="mt-1 break-words text-[13px] font-black leading-5 text-slate-900 sm:text-sm">
                   {formatVND(emergencyFund.liquidCash)}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 text-center">
                 <p className="text-xs text-slate-500">Mục tiêu (6 tháng)</p>
-                <p className="mt-1 truncate text-sm font-black text-slate-900">
+                <p className="mt-1 break-words text-[13px] font-black leading-5 text-slate-900 sm:text-sm">
                   {formatVND(emergencyFund.targetAmount)}
                 </p>
               </div>
@@ -711,7 +711,7 @@ export default function AIInsightsPage() {
                   {emergencyFund.shortfall > 0 ? "Còn thiếu" : "Vượt mục tiêu"}
                 </p>
                 <p
-                  className={`mt-1 truncate text-sm font-black ${emergencyFund.shortfall > 0 ? "text-rose-700" : "text-emerald-700"}`}
+                  className={`mt-1 break-words text-[13px] font-black leading-5 sm:text-sm ${emergencyFund.shortfall > 0 ? "text-rose-700" : "text-emerald-700"}`}
                 >
                   {formatVND(emergencyFund.shortfall)}
                 </p>
@@ -747,7 +747,7 @@ export default function AIInsightsPage() {
 
       {/* ── Spending Anomalies ────────────────────────────────────────────── */}
       {anomalies.length > 0 && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-orange-400 to-rose-500 text-white shadow-lg shadow-orange-100">
               <Activity size={22} />
@@ -819,9 +819,9 @@ export default function AIInsightsPage() {
       )}
 
       {/* ── Monthly Forecast ──────────────────────────────────────────────── */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section data-forecast-section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-100 sm:size-12">
             <TrendingUp size={22} />
           </div>
           <div>
@@ -916,7 +916,29 @@ export default function AIInsightsPage() {
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">
             Ba kịch bản dự báo — Tháng {financialForecast.forecastMonth}
           </h3>
-          <div className="overflow-x-auto rounded-2xl border border-slate-100">
+          <div data-mobile-scenario-cards className="grid gap-2.5 sm:hidden">
+            {([
+              { s: financialForecast.best, label: "Tốt nhất", surface: "border-emerald-100 bg-emerald-50/60" },
+              { s: financialForecast.expected, label: "Kỳ vọng", surface: "border-blue-100 bg-blue-50/50" },
+              { s: financialForecast.worst, label: "Thận trọng", surface: "border-rose-100 bg-rose-50/50" },
+            ] as const).map(({ s, label, surface }) => (
+              <div key={s.scenarioKey} className={`rounded-2xl border p-3 ${surface}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-slate-700">{label}</span>
+                  <span className={`text-sm font-black ${s.projectedSaving >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                    {s.projectedSaving >= 0 ? "+" : ""}{formatVND(s.projectedSaving)}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                  <span>Thu nhập</span><strong className="text-right text-slate-700">{formatVND(s.projectedIncome)}</strong>
+                  <span>Chi tiêu</span><strong className="text-right text-slate-700">{formatVND(s.projectedExpense)}</strong>
+                  <span>Số dư cuối tháng</span><strong className="text-right text-slate-700">{formatVND(s.endOfMonthBalance)}</strong>
+                  <span>Tăng trưởng NW</span><strong className="text-right text-slate-700">{s.netWorthGrowthPercent !== null ? `${s.netWorthGrowthPercent >= 0 ? "+" : ""}${s.netWorthGrowthPercent}%` : "—"}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -1008,7 +1030,7 @@ export default function AIInsightsPage() {
 
       {/* ── Goal Predictions ──────────────────────────────────────────────── */}
       {goalPredictions.length > 0 && (
-        <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-100">
               <Target size={22} />
@@ -1083,8 +1105,8 @@ export default function AIInsightsPage() {
       )}
 
       {/* ── Smart Budget AI ───────────────────────────────────────────────── */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex items-center gap-3">
+      <section data-budget-section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+        <div className="mb-4 flex items-center gap-3 sm:mb-6">
           <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-100">
             <BarChart2 size={22} />
           </div>
@@ -1148,7 +1170,32 @@ export default function AIInsightsPage() {
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">
             Chi tiết danh mục
           </h3>
-          <div className="overflow-x-auto rounded-2xl border border-slate-100">
+          <div data-mobile-budget-cards className="grid gap-2.5 sm:hidden">
+            {smartBudget.categoryAnalysis
+              .filter((c) => c.actualSpend > 0 || c.budgetLimit > 0)
+              .sort((a, b) => b.actualSpend - a.actualSpend)
+              .slice(0, 8)
+              .map((c) => (
+                <div key={c.categoryId} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 text-sm font-black text-slate-800">{c.categoryName}</p>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${c.status === "over" ? "bg-rose-100 text-rose-700" : c.status === "near" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      {c.status === "over" ? "Vượt" : c.status === "near" ? "Gần giới hạn" : c.status === "on-track" ? "Tốt" : "Theo dõi"}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-slate-400">Ngân sách</span><p className="font-bold text-slate-700">{c.budgetLimit > 0 ? formatVND(c.budgetLimit) : "—"}</p></div>
+                    <div className="text-right"><span className="text-slate-400">Thực tế</span><p className="font-black text-slate-800">{formatVND(c.actualSpend)}</p></div>
+                  </div>
+                  {c.budgetLimit > 0 && (
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                      <div className={`h-full rounded-full ${c.usagePercent > 100 ? "bg-rose-500" : c.usagePercent >= 85 ? "bg-amber-400" : "bg-blue-500"}`} style={{ width: `${Math.min(100, c.usagePercent)}%` }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -1255,7 +1302,7 @@ export default function AIInsightsPage() {
         {smartBudget.recommendedBudgets.length > 0 && (
           <div>
             <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">
-              Đề xuất ngân sách từ AI
+              Đề xuất ngân sách
             </h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {smartBudget.recommendedBudgets.map((rec) => (
@@ -1285,14 +1332,14 @@ export default function AIInsightsPage() {
       </section>
 
       {/* ── FIRE Calculator ───────────────────────────────────────────────── */}
-      <section className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section data-fire-section className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-linear-to-br from-orange-500 to-rose-500 text-white shadow-lg shadow-orange-100">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 sm:size-12">
             <Flame size={22} />
           </div>
           <div>
             <h2 className="text-xl font-black text-slate-900">
-              FIRE Calculator
+              Lộ trình FIRE
             </h2>
             <p className="text-sm text-slate-500">
               Financial Independence, Retire Early — SWR{" "}
@@ -1306,7 +1353,7 @@ export default function AIInsightsPage() {
         <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="flex shrink-0 flex-col items-center gap-2">
             <div
-              className={`flex size-24 flex-col items-center justify-center rounded-full p-1 shadow-lg ${
+              className={`flex size-20 flex-col items-center justify-center rounded-full p-1 shadow-md sm:size-24 sm:shadow-lg ${
                 fire.status === "achieved"
                   ? "bg-linear-to-br from-emerald-400 to-teal-500 shadow-emerald-100"
                   : fire.status === "close"
@@ -1485,9 +1532,9 @@ function MetricCard({
         : "text-blue-600";
 
   return (
-    <div className="rounded-[1.7rem] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="min-w-[10.25rem] snap-start rounded-2xl border border-blue-100 bg-white p-4 shadow-sm md:min-w-0 md:rounded-[1.7rem] md:border-slate-200 md:p-5">
       <p className="text-sm font-bold text-slate-500">{title}</p>
-      <p className={`mt-3 text-2xl font-black ${color}`}>{value}</p>
+      <p className={`mt-2 whitespace-nowrap text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight md:mt-3 md:text-2xl ${color}`}>{value}</p>
     </div>
   );
 }
@@ -1503,13 +1550,13 @@ function InsightCard({ insight }: { insight: Insight }) {
           : "border-blue-100 bg-blue-50 text-blue-700";
 
   return (
-    <div className={`rounded-3xl border p-5 ${className}`}>
-      <div className="flex gap-4">
+    <div className={`rounded-2xl border p-4 sm:rounded-3xl sm:p-5 ${className}`}>
+      <div className="flex gap-3 sm:gap-4">
         <div className="mt-0.5">{insight.icon}</div>
 
         <div>
           <h3 className="font-black">{insight.title}</h3>
-          <p className="mt-2 text-sm leading-6 opacity-85">{insight.text}</p>
+          <p className="mt-1.5 text-sm leading-5 opacity-85 sm:mt-2 sm:leading-6">{insight.text}</p>
         </div>
       </div>
     </div>
@@ -1549,10 +1596,10 @@ function ForecastCard({
         ? "bg-amber-50 text-amber-700"
         : "bg-slate-100 text-slate-500";
   return (
-    <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3.5 sm:rounded-3xl sm:p-4">
       <p className="text-xs font-bold text-slate-500">{label}</p>
       <p
-        className={`mt-2 text-2xl font-black ${positive ? "text-emerald-600" : "text-rose-500"}`}
+        className={`mt-2 break-words text-lg font-black leading-6 sm:text-2xl ${positive ? "text-emerald-600" : "text-rose-500"}`}
       >
         {value}
       </p>
