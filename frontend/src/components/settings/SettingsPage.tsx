@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
@@ -74,6 +74,57 @@ const AI_MODEL_OPTIONS = [
   { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
 ];
 
+
+const SETTINGS_STATS_TIMEOUT_MS = 10_000;
+const SETTINGS_INITIAL_RETRY_MS = 750;
+const SETTINGS_LOCAL_VERSION = 1;
+
+type LocalSettingsSnapshot = {
+  version: number;
+  profileName: string;
+  profilePhone: string;
+  timezone: string;
+  lang: string;
+  currency: string;
+  dateFormat: string;
+  defaultPage: string;
+  theme: string;
+  finMonth: string;
+  savingsGoal: string;
+  budgetAlert: string;
+  debtAlert: string;
+  emergencyFund: string;
+  aiInsights: boolean;
+  aiForecast: boolean;
+  aiRisk: boolean;
+  aiGoalCoach: boolean;
+  aiInvestCoach: boolean;
+  notifBudget: boolean;
+  notifGoal: boolean;
+  notifDebt: boolean;
+  notifInvest: boolean;
+  notifWeekly: boolean;
+  notifMonthly: boolean;
+};
+
+function withSettingsTimeout<T>(request: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`[SettingsPage] ${label} timed out`));
+    }, SETTINGS_STATS_TIMEOUT_MS);
+    Promise.resolve(request).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user, session } = useAuth();
@@ -92,6 +143,15 @@ export default function SettingsPage() {
   // failure) settles; statsLoadError marks that attempt as failed.
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [statsLoadError, setStatsLoadError] = useState<string | null>(null);
+  const statsLoadedRef = useRef(false);
+  const statsReloadingRef = useRef(false);
+  const statsPendingReloadRef = useRef(false);
+  const destructiveInFlightRef = useRef(false);
+  const restoreInFlightRef = useRef(false);
+
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [timezone, setTimezone] = useState("Asia/Ho_Chi_Minh");
 
   // Preferences
   const [lang, setLang] = useState("vi");
@@ -132,6 +192,7 @@ export default function SettingsPage() {
     DEFAULT_AI_FINANCE_SETTINGS.sendRuleInsights,
   );
   const [aiSettingsLoading, setAiSettingsLoading] = useState(false);
+  const [aiSettingsLoadError, setAiSettingsLoadError] = useState<string | null>(null);
   const [aiHasStoredApiKey, setAiHasStoredApiKey] = useState(false);
   const [aiMaskedApiKey, setAiMaskedApiKey] = useState("");
   const [aiTestStatus, setAiTestStatus] = useState<
@@ -195,16 +256,15 @@ export default function SettingsPage() {
   // handleClearAll below) never sees an unhandled rejection and their
   // confirm dialog can still close after the reset/clear itself already
   // succeeded.
-  const reloadStats = useCallback(async () => {
+  const reloadStats = useCallback(async (): Promise<boolean> => {
     try {
-      const [wallets, categories, transactions, debts, goals] =
-        await Promise.all([
-          getWallets(),
-          getCategories(),
-          getTransactions(),
-          getDebts(),
-          getGoals(),
-        ]);
+      const [wallets, categories, transactions, debts, goals] = await Promise.all([
+        withSettingsTimeout(getWallets(), "wallets"),
+        withSettingsTimeout(getCategories(), "categories"),
+        withSettingsTimeout(getTransactions(), "transactions"),
+        withSettingsTimeout(getDebts(), "debts"),
+        withSettingsTimeout(getGoals(), "goals"),
+      ]);
 
       setStats({
         wallets: wallets.length,
@@ -213,22 +273,125 @@ export default function SettingsPage() {
         debts: debts.length,
         goals: goals.length,
       });
+      statsLoadedRef.current = true;
       setStatsLoadError(null);
+      return true;
     } catch (error) {
       console.error("[SettingsPage] reloadStats failed:", error);
-      setStatsLoadError("Không thể tải số liệu. Vui lòng tải lại trang.");
+      setStatsLoadError(
+        statsLoadedRef.current
+          ? "Không thể đồng bộ số liệu mới. Đang giữ dữ liệu gần nhất."
+          : "Không thể tải số liệu. Vui lòng thử lại.",
+      );
+      return false;
     } finally {
       setIsLoadingStats(false);
     }
   }, []);
 
+  const runStatsReload = useCallback(async (): Promise<boolean> => {
+    if (statsReloadingRef.current) {
+      statsPendingReloadRef.current = true;
+      return false;
+    }
+    statsReloadingRef.current = true;
+    let ok = false;
+    try {
+      do {
+        statsPendingReloadRef.current = false;
+        ok = await reloadStats();
+      } while (statsPendingReloadRef.current);
+      return ok;
+    } finally {
+      statsReloadingRef.current = false;
+    }
+  }, [reloadStats]);
+
   useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | null = null;
     const timer = window.setTimeout(() => {
-      void reloadStats();
+      void (async () => {
+        const ok = await runStatsReload();
+        if (!ok && !cancelled) {
+          retryTimer = window.setTimeout(() => {
+            void runStatsReload();
+          }, SETTINGS_INITIAL_RETRY_MS);
+        }
+      })();
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [runStatsReload]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void runStatsReload();
+    };
+    const onOnline = () => void runStatsReload();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [runStatsReload]);
+
+  const localSettingsKey = `myfinance-settings-v${SETTINGS_LOCAL_VERSION}:${user?.id ?? "anonymous"}`;
+
+  const buildLocalSettingsSnapshot = useCallback((): LocalSettingsSnapshot => ({
+    version: SETTINGS_LOCAL_VERSION,
+    profileName, profilePhone, timezone, lang, currency, dateFormat, defaultPage, theme,
+    finMonth, savingsGoal, budgetAlert, debtAlert, emergencyFund,
+    aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach,
+    notifBudget, notifGoal, notifDebt, notifInvest, notifWeekly, notifMonthly,
+  }), [profileName, profilePhone, timezone, lang, currency, dateFormat, defaultPage, theme, finMonth, savingsGoal, budgetAlert, debtAlert, emergencyFund, aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach, notifBudget, notifGoal, notifDebt, notifInvest, notifWeekly, notifMonthly]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(localSettingsKey);
+        if (!raw) return;
+
+        const saved = JSON.parse(raw) as Partial<LocalSettingsSnapshot>;
+        if (saved.version !== SETTINGS_LOCAL_VERSION) return;
+
+        if (typeof saved.profileName === "string") setProfileName(saved.profileName);
+        if (typeof saved.profilePhone === "string") setProfilePhone(saved.profilePhone);
+        if (typeof saved.timezone === "string") setTimezone(saved.timezone);
+        if (typeof saved.lang === "string") setLang(saved.lang);
+        if (typeof saved.currency === "string") setCurrency(saved.currency);
+        if (typeof saved.dateFormat === "string") setDateFormat(saved.dateFormat);
+        if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
+        if (typeof saved.theme === "string") setTheme(saved.theme);
+        if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
+        if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
+        if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
+        if (typeof saved.debtAlert === "string") setDebtAlert(saved.debtAlert);
+        if (typeof saved.emergencyFund === "string") setEmergencyFund(saved.emergencyFund);
+        if (typeof saved.aiInsights === "boolean") setAiInsights(saved.aiInsights);
+        if (typeof saved.aiForecast === "boolean") setAiForecast(saved.aiForecast);
+        if (typeof saved.aiRisk === "boolean") setAiRisk(saved.aiRisk);
+        if (typeof saved.aiGoalCoach === "boolean") setAiGoalCoach(saved.aiGoalCoach);
+        if (typeof saved.aiInvestCoach === "boolean") setAiInvestCoach(saved.aiInvestCoach);
+        if (typeof saved.notifBudget === "boolean") setNotifBudget(saved.notifBudget);
+        if (typeof saved.notifGoal === "boolean") setNotifGoal(saved.notifGoal);
+        if (typeof saved.notifDebt === "boolean") setNotifDebt(saved.notifDebt);
+        if (typeof saved.notifInvest === "boolean") setNotifInvest(saved.notifInvest);
+        if (typeof saved.notifWeekly === "boolean") setNotifWeekly(saved.notifWeekly);
+        if (typeof saved.notifMonthly === "boolean") setNotifMonthly(saved.notifMonthly);
+      } catch (error) {
+        console.warn("[SettingsPage] local preferences could not be restored:", error);
+      }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [reloadStats]);
+  }, [localSettingsKey, user?.id]);
 
   const applyAISettings = useCallback((settings: PublicAIFinanceSettings) => {
     setAiProvider(settings.provider);
@@ -261,38 +424,64 @@ export default function SettingsPage() {
     setAiTestLatencyMs(settings.lastTestLatencyMs);
   }, []);
 
-  useEffect(() => {
+  const loadAISettings = useCallback(async (): Promise<boolean> => {
     const accessToken = session?.access_token;
-    if (!user?.id || !accessToken) return;
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
+    if (!user?.id || !accessToken) return false;
+    try {
       setAiSettingsLoading(true);
+      const settings = await withSettingsTimeout(
+        getAIFinanceSettings(accessToken),
+        "AI settings",
+      );
+      applyAISettings(settings);
+      setAiSettingsLoadError(null);
+      return true;
+    } catch (error) {
+      const message =
+        "Không thể tải AI Settings: " +
+        (error instanceof Error ? error.message : "Lỗi không xác định");
+      setAiSettingsLoadError(message);
+      toast({ variant: "error", message });
+      return false;
+    } finally {
+      setAiSettingsLoading(false);
+    }
+  }, [applyAISettings, session?.access_token, toast, user?.id]);
 
-      getAIFinanceSettings(accessToken)
-        .then((settings) => {
-          if (cancelled) return;
-          applyAISettings(settings);
-        })
-        .catch((error: unknown) => {
-          if (cancelled) return;
-          toast({
-            variant: "error",
-            message:
-              "Không thể tải AI Settings: " +
-              (error instanceof Error ? error.message : "Lỗi không xác định"),
-          });
-        })
-        .finally(() => {
-          if (!cancelled) setAiSettingsLoading(false);
-        });
+  useEffect(() => {
+    if (!user?.id || !session?.access_token) return;
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const ok = await loadAISettings();
+        if (!ok && !cancelled) {
+          retryTimer = window.setTimeout(() => {
+            void loadAISettings();
+          }, SETTINGS_INITIAL_RETRY_MS);
+        }
+      })();
     }, 0);
-
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [applyAISettings, session?.access_token, toast, user?.id]);
+  }, [loadAISettings, session?.access_token, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !session?.access_token) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void loadAISettings();
+    };
+    const onOnline = () => void loadAISettings();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [loadAISettings, session?.access_token, user?.id]);
 
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
@@ -303,6 +492,9 @@ export default function SettingsPage() {
       confirmText: "Reset",
       variant: "warning",
       onConfirm: async () => {
+        if (destructiveInFlightRef.current) return;
+        destructiveInFlightRef.current = true;
+        try {
         const { error } = await resetFinanceDemoData();
         if (error) {
           toast({
@@ -311,11 +503,14 @@ export default function SettingsPage() {
           });
           return;
         }
-        await reloadStats();
+        await runStatsReload();
         toast({
           variant: "success",
           message: "Đã reset dữ liệu demo thành công.",
         });
+        } finally {
+          destructiveInFlightRef.current = false;
+        }
       },
     });
   }
@@ -328,13 +523,19 @@ export default function SettingsPage() {
       confirmText: "Xóa tất cả",
       variant: "danger",
       onConfirm: async () => {
+        if (destructiveInFlightRef.current) return;
+        destructiveInFlightRef.current = true;
+        try {
         const { error } = await clearAllUserData();
         if (error) {
           toast({ variant: "error", message: "Lỗi xóa dữ liệu: " + error });
           return;
         }
-        await reloadStats();
+        await runStatsReload();
         toast({ variant: "success", message: "Đã xóa toàn bộ dữ liệu." });
+        } finally {
+          destructiveInFlightRef.current = false;
+        }
       },
     });
   }
@@ -380,6 +581,9 @@ export default function SettingsPage() {
       confirmText: "Khôi phục",
       variant: "warning",
       onConfirm: async () => {
+        if (restoreInFlightRef.current) return;
+        restoreInFlightRef.current = true;
+        try {
         const { error: restoreError } = await restoreFinanceBackup(backup);
         if (restoreError) {
           toast({
@@ -389,11 +593,14 @@ export default function SettingsPage() {
           return;
         }
 
-        await reloadStats();
+        await runStatsReload();
         toast({
           variant: "success",
           message: "Đã khôi phục backup thành công.",
         });
+        } finally {
+          restoreInFlightRef.current = false;
+        }
       },
     });
   }
@@ -446,8 +653,30 @@ export default function SettingsPage() {
 
   // ── Save prefs feedback ────────────────────────────────────────────────────
   function handleSavePrefs() {
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2200);
+    const numericRules = [
+      ["Mục tiêu tiết kiệm", savingsGoal, 0, 100],
+      ["Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100],
+      ["Ngưỡng cảnh báo nợ", debtAlert, 0, 100],
+      ["Quỹ khẩn cấp", emergencyFund, 1, 24],
+    ] as const;
+    for (const [label, raw, min, max] of numericRules) {
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < min || value > max) {
+        toast({ variant: "error", message: `${label} phải nằm trong khoảng ${min}–${max}.` });
+        return;
+      }
+    }
+    try {
+      window.localStorage.setItem(
+        localSettingsKey,
+        JSON.stringify(buildLocalSettingsSnapshot()),
+      );
+      setSaveSuccess(true);
+      window.setTimeout(() => setSaveSuccess(false), 2200);
+      toast({ variant: "success", message: "Đã lưu tùy chỉnh trên trình duyệt này." });
+    } catch {
+      toast({ variant: "error", message: "Không thể lưu tùy chỉnh trên trình duyệt này." });
+    }
   }
 
   function getAISettingsPayload() {
@@ -465,6 +694,18 @@ export default function SettingsPage() {
     };
   }
 
+  function validateAISettingsDraft(): string | null {
+    const temperature = Number(String(aiTemperature).trim());
+    const maxTokens = Number(String(aiMaxTokens).trim());
+    if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
+      return "Temperature phải nằm trong khoảng 0–2.";
+    }
+    if (!Number.isInteger(maxTokens) || maxTokens < 512 || maxTokens > 8192) {
+      return "Max Tokens phải là số nguyên trong khoảng 512–8192.";
+    }
+    return null;
+  }
+
   async function handleSaveAISettings() {
     const accessToken = session?.access_token;
     if (!accessToken) {
@@ -472,6 +713,12 @@ export default function SettingsPage() {
         variant: "error",
         message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
       });
+      return;
+    }
+
+    const validationError = validateAISettingsDraft();
+    if (validationError) {
+      toast({ variant: "error", message: validationError });
       return;
     }
 
@@ -575,12 +822,21 @@ export default function SettingsPage() {
       return;
     }
 
+    const validationError = validateAISettingsDraft();
+    if (validationError) {
+      setAiTestStatus("error");
+      toast({ variant: "error", message: validationError });
+      return;
+    }
+
     const nextApiKey = aiApiKey.trim();
-    if (aiProvider === "openai" && !nextApiKey && !aiHasStoredApiKey) {
+    if (aiProvider === "openai" && (!aiHasStoredApiKey || nextApiKey)) {
       setAiTestStatus("error");
       toast({
         variant: "error",
-        message: "Vui lòng nhập OpenAI API Key trước khi test.",
+        message: nextApiKey
+          ? "Hãy lưu cấu hình trước khi kiểm tra kết nối."
+          : "Vui lòng lưu OpenAI API Key trước khi kiểm tra kết nối.",
       });
       return;
     }
@@ -599,15 +855,6 @@ export default function SettingsPage() {
 
     try {
       setAiSettingsLoading(true);
-
-      // Test luôn cấu hình đang hiển thị. Nếu user vừa nhập key mới,
-      // server sẽ mã hóa và lưu trước khi thực hiện request kiểm tra thật.
-      const savedSettings = await saveAIFinanceSettings(
-        accessToken,
-        getAISettingsPayload(),
-      );
-      applyAISettings(savedSettings);
-      setAiTestStatus("testing");
 
       const result = await testAIFinanceConnection(accessToken);
       setAiTestStatus("success");
@@ -698,6 +945,13 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {statsLoadError && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">{statsLoadError}</p>
+          <button type="button" onClick={() => void runStatsReload()} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800">Thử lại</button>
+        </div>
+      )}
+
       {/* ══ Two-column layout: left nav + content ════════════════════════════ */}
       <div className="flex gap-6 xl:gap-8">
         {/* Left nav — desktop only */}
@@ -748,15 +1002,20 @@ export default function SettingsPage() {
                 <SettingInput label="Email" value={displayEmail} readOnly />
                 <SettingInput
                   label="Họ và tên"
+                  value={profileName}
+                  onChange={setProfileName}
                   placeholder="Nhập tên của bạn..."
                 />
                 <SettingInput
                   label="Số điện thoại"
+                  value={profilePhone}
+                  onChange={setProfilePhone}
                   placeholder="+84 xxx xxx xxx"
                 />
                 <SettingSelect
                   label="Múi giờ"
-                  value="Asia/Ho_Chi_Minh"
+                  value={timezone}
+                  onChange={setTimezone}
                   options={[
                     { value: "Asia/Ho_Chi_Minh", label: "Việt Nam (GMT+7)" },
                     { value: "Asia/Bangkok", label: "Bangkok (GMT+7)" },
@@ -789,7 +1048,7 @@ export default function SettingsPage() {
                   {saveSuccess ? "Đã lưu!" : "Lưu thay đổi"}
                 </button>
                 <p className="text-xs text-slate-400">
-                  Thay đổi được lưu cục bộ
+                  Lưu riêng cho tài khoản này trên trình duyệt
                 </p>
               </div>
             </div>
@@ -1045,6 +1304,13 @@ export default function SettingsPage() {
               title="AI Advisor"
               desc="AI-6.1 Provider Management, model và quy tắc an toàn"
             />
+
+            {aiSettingsLoadError && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">{aiSettingsLoadError}</p>
+                <button type="button" onClick={() => void loadAISettings()} className="min-h-11 shrink-0 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800">Thử lại</button>
+              </div>
+            )}
 
             <div className="mt-4 overflow-hidden rounded-4xl border border-blue-100 bg-white shadow-sm">
               <div className="border-b border-blue-50 bg-linear-to-br from-blue-50 via-white to-cyan-50 p-6">
@@ -1484,6 +1750,7 @@ export default function SettingsPage() {
                   onChange={() => setAiInvestCoach((v) => !v)}
                 />
               </div>
+              <button type="button" onClick={handleSavePrefs} className="mt-4 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">Lưu tính năng AI</button>
             </div>
           </div>
 
@@ -1547,6 +1814,7 @@ export default function SettingsPage() {
                   onChange={() => setNotifMonthly((v) => !v)}
                 />
               </div>
+              <button type="button" onClick={handleSavePrefs} className="mt-4 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">Lưu thông báo</button>
             </div>
           </div>
 
@@ -1952,8 +2220,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Xóa vĩnh viễn tất cả dữ liệu tài chính trên thiết bị hiện
-                      tại. Không thể hoàn tác.
+                      Xóa vĩnh viễn toàn bộ dữ liệu tài chính trong tài khoản này trên cloud. Không thể hoàn tác.
                     </p>
                   </div>
                   <button
@@ -2085,7 +2352,7 @@ function SettingInput({
       </label>
       <input
         type="text"
-        defaultValue={value}
+        value={value ?? ""}
         placeholder={placeholder}
         readOnly={readOnly}
         onChange={(e) => onChange?.(e.target.value)}

@@ -27,7 +27,7 @@ describe("SettingsPage stat pills distinguish load failure from a real zero (FIN
   });
 
   it("reloadStats clears the error on success and sets a message on failure, without touching stats", () => {
-    const start = source.indexOf("const reloadStats = useCallback(async () => {");
+    const start = source.indexOf("const reloadStats = useCallback(async (): Promise<boolean> => {");
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf("}, []);", start);
     expect(end).toBeGreaterThan(start);
