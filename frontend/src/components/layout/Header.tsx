@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import {
   useRealtime,
   useRealtimeTable,
@@ -464,6 +465,7 @@ export default function Header({
   sidebarOpen = false,
 }: HeaderProps) {
   const { user } = useAuth();
+  const { context: householdContext } = useHousehold();
   const router = useRouter();
   const pathname = usePathname();
   const {
@@ -497,6 +499,7 @@ export default function Header({
   // appData/notifList/hasHeaderDataLoaded.
   const [appData, setAppData] = useState<AppData>(EMPTY);
   const [notifList, setNotifList] = useState<NotificationItem[]>([]);
+  const [notificationReadRevision, setNotificationReadRevision] = useState(0);
   const loadedRef = useRef(false);
   // FINANCE-DATA-1B: appData/notifList start empty until the idle load
   // below succeeds. "Không có thông báo mới" / "Không tìm thấy kết quả"
@@ -537,7 +540,33 @@ export default function Header({
     compactName.charAt(0).toUpperCase() ||
     displayEmail.charAt(0).toUpperCase() ||
     "U";
-  const unreadCount = notifList.filter((n) => !n.read).length;
+  // HOUSEHOLD-WORKSPACE-1: pending family invites join the global bell.
+  // Read state remains a client preference only; membership/authorization is
+  // always resolved by the server-side household RPCs.
+  const householdInviteNotifications = useMemo<NotificationItem[]>(() => {
+    void notificationReadRevision;
+    const readIds = readNotificationIds();
+    return (householdContext?.pendingInvites ?? []).map((invite) => {
+      const id = `household-invite-${invite.id}`;
+      const householdName = invite.householdName || "Gia đình MyFinance";
+      const inviter = invite.invitedByEmail || "Chủ gia đình";
+      return {
+        id,
+        title: "Lời mời gia đình",
+        body: `${inviter} mời bạn tham gia ${householdName} với quyền ${
+          invite.role === "viewer" ? "Chỉ xem" : "Thành viên"
+        }.`,
+        href: "/settings#settings-household",
+        tone: "info" as const,
+        read: readIds.has(id),
+      };
+    });
+  }, [householdContext?.pendingInvites, notificationReadRevision]);
+  const visibleNotifList = useMemo(
+    () => [...householdInviteNotifications, ...notifList],
+    [householdInviteNotifications, notifList],
+  );
+  const unreadCount = visibleNotifList.filter((n) => !n.read).length;
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
 
@@ -881,16 +910,17 @@ export default function Header({
     setNotifList((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
+    setNotificationReadRevision((revision) => revision + 1);
     setNotifOpen(false);
     router.push(href);
   }
 
   function handleMarkAllRead() {
-    setNotifList((prev) => {
-      const next = prev.map((n) => ({ ...n, read: true }));
-      persistNotificationIds(next.map((n) => n.id));
-      return next;
-    });
+    const readIds = readNotificationIds();
+    for (const notification of visibleNotifList) readIds.add(notification.id);
+    persistNotificationIds(readIds);
+    setNotifList((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotificationReadRevision((revision) => revision + 1);
   }
 
   function handleAIAdvisor() {
@@ -1446,8 +1476,8 @@ export default function Header({
 
                   {/* List */}
                   <div className="max-h-105 overflow-y-auto">
-                    {notifList.length > 0 ? (
-                      notifList.map((n) => {
+                    {visibleNotifList.length > 0 ? (
+                      visibleNotifList.map((n) => {
                         const dot =
                           n.tone === "warning"
                             ? "bg-amber-400"

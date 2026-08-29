@@ -205,8 +205,10 @@ describe("HOUSEHOLD-IDENTITY-1 shared finance workspace", () => {
     );
     expect(settings).toContain('{ id: "household", label: "Gia đình", icon: Users }');
     expect(settings).toContain("<HouseholdSettingsCard />");
-    expect(householdSettings).toContain("if (accepted) window.location.reload()");
-    expect(householdSettings).toContain("h\u1ec7 th\u1ed1ng ch\u01b0a t\u1ef1 g\u1eedi email m\u1eddi");
+    expect(householdSettings).toContain("switchWorkspace");
+    expect(householdSettings).toContain("handleLeave");
+    expect(householdSettings).toContain("leaveHousehold");
+    expect(householdSettings).toContain("aria-label={`R\u1eddi ${label}`}");
   });
 
   it("does not turn AI persistence into household-shared data", () => {

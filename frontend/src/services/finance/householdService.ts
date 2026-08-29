@@ -1,6 +1,12 @@
 import { supabase } from "@/src/lib/supabase";
 
 export type HouseholdRole = "owner" | "member" | "viewer";
+export type HouseholdInviteStatus =
+  | "pending"
+  | "accepted"
+  | "revoked"
+  | "expired"
+  | "declined";
 
 export type HouseholdSummary = {
   id: string;
@@ -20,21 +26,44 @@ export type HouseholdMember = {
 export type HouseholdInvite = {
   id: string;
   householdId: string;
+  householdName: string;
   email: string;
   role: Exclude<HouseholdRole, "owner">;
-  status: "pending" | "accepted" | "revoked" | "expired";
+  status: HouseholdInviteStatus;
   invitedBy: string;
+  invitedByEmail: string;
   createdAt: string;
   expiresAt: string;
+};
+
+export type FinanceWorkspace = {
+  householdId: string;
+  name: string;
+  ownerUserId: string;
+  financeOwnerUserId: string;
+  role: HouseholdRole;
+  isPersonal: boolean;
+  isActive: boolean;
+  memberCount: number;
 };
 
 export type HouseholdContext = {
   household: HouseholdSummary;
   role: HouseholdRole;
   financeOwnerUserId: string;
+  activeHouseholdId: string;
+  personalHouseholdId: string;
+  workspaces: FinanceWorkspace[];
   members: HouseholdMember[];
   invites: HouseholdInvite[];
+  pendingInvites: HouseholdInvite[];
   pendingInvite: HouseholdInvite | null;
+};
+
+export type HouseholdInviteAcceptance = {
+  householdId: string;
+  activeHouseholdId: string;
+  personalHouseholdId: string;
 };
 
 const LOCAL_UI_MODE =
@@ -51,6 +80,20 @@ const LOCAL_CONTEXT: HouseholdContext = {
   },
   role: "owner",
   financeOwnerUserId: "local-ui-user",
+  activeHouseholdId: "local-ui-household",
+  personalHouseholdId: "local-ui-household",
+  workspaces: [
+    {
+      householdId: "local-ui-household",
+      name: "Gia đình MyFinance",
+      ownerUserId: "local-ui-user",
+      financeOwnerUserId: "local-ui-user",
+      role: "owner",
+      isPersonal: true,
+      isActive: true,
+      memberCount: 1,
+    },
+  ],
   members: [
     {
       userId: "local-ui-user",
@@ -60,6 +103,7 @@ const LOCAL_CONTEXT: HouseholdContext = {
     },
   ],
   invites: [],
+  pendingInvites: [],
   pendingInvite: null,
 };
 
@@ -81,6 +125,10 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 function asRole(value: unknown): HouseholdRole {
   return value === "owner" || value === "member" || value === "viewer"
     ? value
@@ -93,22 +141,46 @@ function parseInvite(value: unknown): HouseholdInvite | null {
   const householdId = asString(value.household_id);
   const email = asString(value.email);
   const role = value.role === "viewer" ? "viewer" : "member";
-  const status =
+  const status: HouseholdInviteStatus =
     value.status === "accepted" ||
     value.status === "revoked" ||
-    value.status === "expired"
+    value.status === "expired" ||
+    value.status === "declined"
       ? value.status
       : "pending";
   if (!id || !householdId || !email) return null;
   return {
     id,
     householdId,
+    householdName: asString(value.household_name),
     email,
     role,
     status,
     invitedBy: asString(value.invited_by),
+    invitedByEmail: asString(value.invited_by_email),
     createdAt: asString(value.created_at),
     expiresAt: asString(value.expires_at),
+  };
+}
+
+function parseWorkspace(value: unknown): FinanceWorkspace | null {
+  if (!isRecord(value)) return null;
+  const householdId = asString(value.household_id);
+  const ownerUserId = asString(value.owner_user_id);
+  const financeOwnerUserId = asString(
+    value.finance_owner_user_id,
+    ownerUserId,
+  );
+  if (!householdId || !ownerUserId || !financeOwnerUserId) return null;
+  return {
+    householdId,
+    name: asString(value.name, "Gia đình MyFinance"),
+    ownerUserId,
+    financeOwnerUserId,
+    role: asRole(value.role),
+    isPersonal: value.is_personal === true,
+    isActive: value.is_active === true,
+    memberCount: Math.max(0, Math.trunc(asNumber(value.member_count))),
   };
 }
 
@@ -116,7 +188,6 @@ function parseContext(value: unknown): HouseholdContext {
   if (!isRecord(value) || !isRecord(value.household)) {
     throw new Error("Máy chủ trả về household context không hợp lệ.");
   }
-
   const household = value.household;
   const id = asString(household.id);
   const ownerUserId = asString(household.owner_user_id);
@@ -147,6 +218,40 @@ function parseContext(value: unknown): HouseholdContext {
         .filter((invite): invite is HouseholdInvite => invite !== null)
     : [];
 
+  const pendingInvite = parseInvite(value.pending_invite);
+  const pendingInvites = Array.isArray(value.pending_invites)
+    ? value.pending_invites
+        .map(parseInvite)
+        .filter((invite): invite is HouseholdInvite => invite !== null)
+    : pendingInvite
+      ? [pendingInvite]
+      : [];
+
+  const activeHouseholdId = asString(value.active_household_id, id);
+  const personalHouseholdId = asString(value.personal_household_id);
+  const parsedWorkspaces = Array.isArray(value.workspaces)
+    ? value.workspaces
+        .map(parseWorkspace)
+        .filter((workspace): workspace is FinanceWorkspace => workspace !== null)
+    : [];
+  const workspaces =
+    parsedWorkspaces.length > 0
+      ? parsedWorkspaces
+      : [
+          {
+            householdId: id,
+            name: asString(household.name, "Gia đình MyFinance"),
+            ownerUserId,
+            financeOwnerUserId,
+            role: asRole(value.role),
+            isPersonal:
+              personalHouseholdId === id ||
+              (!personalHouseholdId && asRole(value.role) === "owner"),
+            isActive: true,
+            memberCount: members.length,
+          },
+        ];
+
   return {
     household: {
       id,
@@ -157,9 +262,16 @@ function parseContext(value: unknown): HouseholdContext {
     },
     role: asRole(value.role),
     financeOwnerUserId,
+    activeHouseholdId,
+    personalHouseholdId:
+      personalHouseholdId ||
+      workspaces.find((workspace) => workspace.isPersonal)?.householdId ||
+      id,
+    workspaces,
     members,
     invites,
-    pendingInvite: parseInvite(value.pending_invite),
+    pendingInvites,
+    pendingInvite: pendingInvite ?? pendingInvites[0] ?? null,
   };
 }
 
@@ -180,11 +292,15 @@ function mapHouseholdError(error: { code?: string; message?: string }): string {
     case "MFH07":
       return "Không tìm thấy lời mời đang chờ cho tài khoản này.";
     case "MFH08":
-      return "Tài khoản được mời đã có dữ liệu tài chính riêng. Chưa thể tự động gộp hai không gian dữ liệu.";
+      return "Hai không gian tài chính độc lập không được tự động gộp.";
     case "MFH09":
       return "Không thể thay đổi hoặc xóa chủ gia đình ở giai đoạn này.";
     case "MFH10":
       return "Vui lòng xác nhận email của tài khoản trước khi tham gia gia đình.";
+    case "MFH11":
+      return "Không gian tài chính này không còn khả dụng cho tài khoản của bạn.";
+    case "MFH12":
+      return "Không thể rời không gian cá nhân hoặc không gian mà bạn đang là chủ sở hữu.";
     default:
       return error.message || "Không thể cập nhật gia đình MyFinance.";
   }
@@ -208,7 +324,6 @@ export async function getFinanceOwnerUserId(): Promise<string | null> {
   if (scopeCache?.authUserId === authUserId) {
     return scopeCache.financeOwnerUserId;
   }
-
   const { data, error } = await supabase.rpc(
     "get_finance_scope_owner_user_id",
   );
@@ -234,16 +349,12 @@ export async function getHouseholdContext(): Promise<HouseholdContext> {
     invalidateFinanceScopeCache();
     throw new Error("Không có phiên đăng nhập. Vui lòng đăng nhập lại.");
   }
-
   const { data, error } = await supabase.rpc("get_current_household_context");
   if (error) {
     console.error("[householdService] getHouseholdContext:", error.message);
     throw new Error(mapHouseholdError(error));
   }
   const context = parseContext(data);
-
-  // Do not let a response from the previous auth identity prime the cache for
-  // a newly signed-in user during a fast account switch.
   const {
     data: { session: sessionAfter },
   } = await supabase.auth.getSession();
@@ -273,11 +384,71 @@ export async function createHouseholdInvite(
   return invite;
 }
 
-export async function acceptCurrentHouseholdInvite(): Promise<void> {
-  const { data, error } = await supabase.rpc("accept_current_household_invite");
-  if (error) throw new Error(mapHouseholdError(error));
+function parseAcceptance(data: unknown): HouseholdInviteAcceptance {
   if (!isRecord(data) || data.accepted !== true) {
     throw new Error("Máy chủ chưa xác nhận việc tham gia gia đình.");
+  }
+  const householdId = asString(data.household_id);
+  const activeHouseholdId = asString(data.active_household_id);
+  const personalHouseholdId = asString(data.personal_household_id);
+  if (!householdId) {
+    throw new Error("Máy chủ chưa trả về không gian gia đình vừa tham gia.");
+  }
+  return {
+    householdId,
+    activeHouseholdId,
+    personalHouseholdId,
+  };
+}
+
+export async function acceptHouseholdInvite(
+  inviteId: string,
+): Promise<HouseholdInviteAcceptance> {
+  const { data, error } = await supabase.rpc("accept_household_invite", {
+    p_invite_id: inviteId,
+  });
+  if (error) throw new Error(mapHouseholdError(error));
+  const receipt = parseAcceptance(data);
+  invalidateFinanceScopeCache();
+  return receipt;
+}
+
+export async function acceptCurrentHouseholdInvite(): Promise<HouseholdInviteAcceptance> {
+  const { data, error } = await supabase.rpc("accept_current_household_invite");
+  if (error) throw new Error(mapHouseholdError(error));
+  const receipt = parseAcceptance(data);
+  invalidateFinanceScopeCache();
+  return receipt;
+}
+
+export async function declineHouseholdInvite(inviteId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("decline_household_invite", {
+    p_invite_id: inviteId,
+  });
+  if (error) throw new Error(mapHouseholdError(error));
+  if (!isRecord(data) || data.declined !== true) {
+    throw new Error("Máy chủ chưa xác nhận việc từ chối lời mời.");
+  }
+}
+
+export async function switchFinanceWorkspace(householdId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("switch_finance_workspace", {
+    p_household_id: householdId,
+  });
+  if (error) throw new Error(mapHouseholdError(error));
+  if (!isRecord(data) || data.switched !== true) {
+    throw new Error("Máy chủ chưa xác nhận không gian tài chính mới.");
+  }
+  invalidateFinanceScopeCache();
+}
+
+export async function leaveHousehold(householdId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("leave_household", {
+    p_household_id: householdId,
+  });
+  if (error) throw new Error(mapHouseholdError(error));
+  if (!isRecord(data) || data.left !== true) {
+    throw new Error("Máy chủ chưa xác nhận việc rời gia đình.");
   }
   invalidateFinanceScopeCache();
 }
