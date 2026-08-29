@@ -8,6 +8,9 @@ const read = (relative: string) =>
 
 const pageRoute = read("frontend/app/activity/page.tsx");
 const activityPage = read("frontend/src/components/activity/ActivityPage.tsx");
+const presentation = read(
+  "frontend/src/components/activity/activityAuditPresentation.ts",
+);
 const service = read("frontend/src/services/finance/auditService.ts");
 const sidebar = read("frontend/src/components/layout/Sidebar.tsx");
 const bottomNav = read("frontend/src/components/layout/BottomNav.tsx");
@@ -81,13 +84,39 @@ describe("AUDIT-UI-1 Activity History & Changed by UX", () => {
     expect(activityPage).toContain("household?.name");
   });
 
-  it("surfaces before/after field changes without exposing only raw JSON", () => {
-    expect(activityPage).toContain("getFieldChanges");
-    expect(activityPage).toContain("event.before_data");
-    expect(activityPage).toContain("event.after_data");
-    expect(activityPage).toContain("formatAuditValue");
-    expect(activityPage).toContain("Trước → Sau");
-    expect(activityPage).toContain("→");
+  it("derives true before/after changes and never invents a diff from an incomplete legacy snapshot", () => {
+    expect(activityPage).toContain("buildAuditPresentation");
+    expect(presentation).toContain("event.before_data");
+    expect(presentation).toContain("event.after_data");
+    expect(presentation).toContain("getChangedRows");
+    expect(presentation).toContain("valuesEqual");
+    expect(presentation).toContain('heading: "Trước → Sau"');
+    expect(presentation).toContain('heading: "Dữ liệu ghi nhận"');
+    expect(presentation).toContain("incompleteComparison: true");
+    expect(activityPage).toContain("không suy diễn trường thay đổi");
+  });
+
+  it("resolves finance references and canonical values into readable labels", () => {
+    expect(activityPage).toContain("getWallets()");
+    expect(activityPage).toContain("getCategories()");
+    expect(activityPage).toContain("getSavings()");
+    expect(activityPage).toContain("getForexAccounts()");
+    expect(activityPage).toContain("createAuditReferenceLabels");
+    expect(presentation).toContain('categoryId: "Danh mục"');
+    expect(presentation).toContain('walletId: "Ví"');
+    expect(presentation).toContain('source_type: "Nguồn"');
+    expect(presentation).toContain('destination_type: "Đích"');
+    expect(presentation).toContain('expense: "Chi tiêu"');
+    expect(presentation).toContain('external: "Bên ngoài"');
+  });
+
+  it("uses action-specific audit semantics instead of calling every snapshot a changed field", () => {
+    expect(presentation).toContain('heading: "Dữ liệu đã tạo"');
+    expect(presentation).toContain('heading: "Dữ liệu đã xóa"');
+    expect(presentation).toContain('return `${count} trường thay đổi`');
+    expect(presentation).toContain('return `${count} trường dữ liệu`');
+    expect(activityPage).toContain("presentation.heading");
+    expect(activityPage).toContain("presentation.countText");
   });
 
   it("uses stable cursor pagination with an explicit page boundary instead of unbounded append", () => {

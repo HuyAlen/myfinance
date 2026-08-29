@@ -26,7 +26,6 @@ import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
-import type { Json } from "@/src/lib/database.types";
 import {
   AUDIT_ENTITY_TYPES,
   getFinanceAuditEvents,
@@ -35,6 +34,21 @@ import {
   type FinanceAuditCursor,
   type FinanceAuditEvent,
 } from "@/src/services/finance/auditService";
+import {
+  getCategories,
+  getForexAccounts,
+  getSavings,
+  getWallets,
+} from "@/src/services/finance/financeStorage";
+import {
+  EMPTY_AUDIT_REFERENCE_LABELS,
+  auditAction,
+  auditEntityType,
+  buildAuditPresentation,
+  createAuditReferenceLabels,
+  getEntityName,
+  type AuditReferenceLabels,
+} from "@/src/components/activity/activityAuditPresentation";
 
 const PAGE_SIZE = 30;
 
@@ -81,246 +95,6 @@ const ROLE_LABELS = {
   member: "Thành viên",
   viewer: "Chỉ xem",
 } as const;
-
-const HIDDEN_FIELDS = new Set([
-  "id",
-  "user_id",
-  "created_at",
-  "updated_at",
-]);
-
-const FIELD_PRIORITY = [
-  "name",
-  "type",
-  "amount",
-  "balance",
-  "totalamount",
-  "remainingamount",
-  "minimumpayment",
-  "targetamount",
-  "currentamount",
-  "limitamount",
-  "rolloveramount",
-  "investedamount",
-  "currentvalue",
-  "averagecost",
-  "currentprice",
-  "totalAmount",
-  "remainingAmount",
-  "targetAmount",
-  "currentAmount",
-  "limitAmount",
-  "investedAmount",
-  "currentValue",
-  "current_equity",
-  "date",
-  "transaction_date",
-  "month",
-  "note",
-  "notes",
-];
-
-const MONEY_FIELDS = new Set([
-  "amount",
-  "balance",
-  "totalamount",
-  "remainingamount",
-  "targetamount",
-  "currentamount",
-  "limitamount",
-  "investedamount",
-  "currentvalue",
-  "totalAmount",
-  "remainingAmount",
-  "minimumPayment",
-  "targetAmount",
-  "currentAmount",
-  "limitAmount",
-  "rolloverAmount",
-  "investedAmount",
-  "currentValue",
-  "averageCost",
-  "currentPrice",
-  "current_equity",
-  "fee",
-  "default_amount",
-]);
-
-const FIELD_LABELS: Record<string, string> = {
-  name: "Tên",
-  type: "Loại",
-  amount: "Số tiền",
-  balance: "Số dư",
-  currency: "Tiền tệ",
-  totalamount: "Tổng nợ",
-  remainingamount: "Nợ còn lại",
-  interestrate: "Lãi suất",
-  minimumpayment: "Thanh toán tối thiểu",
-  duedate: "Ngày đến hạn",
-  loantermmonths: "Kỳ hạn",
-  targetamount: "Mục tiêu",
-  currentamount: "Đã tích lũy",
-  categoryid: "Danh mục",
-  walletid: "Ví",
-  transfertowalletid: "Ví nhận",
-  isrecurring: "Định kỳ",
-  nextrundate: "Lần chạy tiếp",
-  limitamount: "Hạn mức",
-  rolloveramount: "Chuyển dư",
-  warningthreshold: "Cảnh báo",
-  criticalthreshold: "Nguy cấp",
-  investedamount: "Vốn đầu tư",
-  currentvalue: "Giá trị hiện tại",
-  purchasedate: "Ngày mua",
-  averagecost: "Giá vốn TB",
-  currentprice: "Giá hiện tại",
-  totalAmount: "Tổng nợ",
-  remainingAmount: "Nợ còn lại",
-  interestRate: "Lãi suất",
-  minimumPayment: "Thanh toán tối thiểu",
-  dueDate: "Ngày đến hạn",
-  loanTermMonths: "Kỳ hạn",
-  targetAmount: "Mục tiêu",
-  currentAmount: "Đã tích lũy",
-  categoryId: "Danh mục",
-  walletId: "Ví",
-  transferToWalletId: "Ví nhận",
-  date: "Ngày",
-  month: "Tháng",
-  limitAmount: "Hạn mức",
-  rolloverAmount: "Chuyển dư",
-  warningThreshold: "Cảnh báo",
-  criticalThreshold: "Nguy cấp",
-  investedAmount: "Vốn đầu tư",
-  currentValue: "Giá trị hiện tại",
-  current_equity: "Equity",
-  quantity: "Số lượng",
-  averageCost: "Giá vốn TB",
-  currentPrice: "Giá hiện tại",
-  wallet_id: "Ví liên kết",
-  saving_id: "Khoản tiết kiệm",
-  forex_account_id: "Tài khoản Forex",
-  interest_rate: "Lãi suất",
-  maturity_date: "Ngày đáo hạn",
-  transaction_date: "Ngày giao dịch",
-  transaction_time: "Giờ giao dịch",
-  note: "Ghi chú",
-  notes: "Ghi chú",
-  status: "Trạng thái",
-  broker: "Broker",
-  account_number: "Số tài khoản",
-  isRecurring: "Định kỳ",
-  recurrence: "Chu kỳ",
-  nextRunDate: "Lần chạy tiếp",
-};
-
-type AuditRecord = Record<string, Json | undefined>;
-type FieldChange = {
-  key: string;
-  before: Json | undefined;
-  after: Json | undefined;
-};
-
-function isRecord(value: Json | null): value is AuditRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function auditAction(value: string): AuditAction {
-  return value === "insert" || value === "delete" ? value : "update";
-}
-
-function auditEntityType(value: string): AuditEntityType | null {
-  return (AUDIT_ENTITY_TYPES as readonly string[]).includes(value)
-    ? (value as AuditEntityType)
-    : null;
-}
-
-function valuesEqual(left: Json | undefined, right: Json | undefined) {
-  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
-}
-
-function sortFields(keys: string[]) {
-  return [...keys].sort((left, right) => {
-    const leftPriority = FIELD_PRIORITY.indexOf(left);
-    const rightPriority = FIELD_PRIORITY.indexOf(right);
-    if (leftPriority >= 0 || rightPriority >= 0) {
-      if (leftPriority < 0) return 1;
-      if (rightPriority < 0) return -1;
-      return leftPriority - rightPriority;
-    }
-    return left.localeCompare(right, "vi");
-  });
-}
-
-function getFieldChanges(event: FinanceAuditEvent): FieldChange[] {
-  const before = isRecord(event.before_data) ? event.before_data : {};
-  const after = isRecord(event.after_data) ? event.after_data : {};
-  const keys = sortFields(
-    Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).filter(
-      (key) => !HIDDEN_FIELDS.has(key),
-    ),
-  );
-
-  return keys
-    .filter((key) => !valuesEqual(before[key], after[key]))
-    .map((key) => ({ key, before: before[key], after: after[key] }));
-}
-
-function formatVND(value: number) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function formatAuditValue(key: string, value: Json | undefined): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Có" : "Không";
-  if (typeof value === "number") {
-    return MONEY_FIELDS.has(key)
-      ? formatVND(value)
-      : new Intl.NumberFormat("vi-VN").format(value);
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) return "—";
-    return value.map((item) => String(item ?? "")).join(", ");
-  }
-  if (typeof value === "object") return JSON.stringify(value) ?? "—";
-  if (
-    (key.toLowerCase().includes("date") || key.endsWith("_at")) &&
-    /^\d{4}-\d{2}-\d{2}/.test(value)
-  ) {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return new Intl.DateTimeFormat("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(parsed);
-    }
-  }
-  return value;
-}
-
-function getSnapshot(event: FinanceAuditEvent): AuditRecord {
-  if (isRecord(event.after_data)) return event.after_data;
-  if (isRecord(event.before_data)) return event.before_data;
-  return {};
-}
-
-function getEntityName(event: FinanceAuditEvent, entityLabel: string): string {
-  const row = getSnapshot(event);
-  for (const key of ["name", "note", "notes"]) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  if (typeof row.amount === "number") {
-    return `${entityLabel} ${formatVND(row.amount)}`;
-  }
-  if (typeof row.month === "string" && row.month) return row.month;
-  return event.entity_id ? `#${event.entity_id.slice(0, 8)}` : entityLabel;
-}
 
 function formatEventTime(value: string) {
   const date = new Date(value);
@@ -377,20 +151,6 @@ function toAuditBounds(startDate: string, endDate: string) {
   };
 }
 
-function primaryChangeLabel(event: FinanceAuditEvent) {
-  const first = getFieldChanges(event)[0];
-  if (!first) return "Không có trường dữ liệu hiển thị";
-  const action = auditAction(event.action);
-  const fieldLabel = FIELD_LABELS[first.key] ?? first.key;
-  if (action === "insert") {
-    return `${fieldLabel}: ${formatAuditValue(first.key, first.after)}`;
-  }
-  if (action === "delete") {
-    return `${fieldLabel}: ${formatAuditValue(first.key, first.before)}`;
-  }
-  return `${fieldLabel}: ${formatAuditValue(first.key, first.before)} → ${formatAuditValue(first.key, first.after)}`;
-}
-
 export default function ActivityPage() {
   const { user } = useAuth();
   const { context, household, loading: householdLoading } = useHousehold();
@@ -398,6 +158,9 @@ export default function ActivityPage() {
   useSuppressGlobalFabsWhileOpen(true);
 
   const [events, setEvents] = useState<FinanceAuditEvent[]>([]);
+  const [referenceLabels, setReferenceLabels] = useState<AuditReferenceLabels>(
+    EMPTY_AUDIT_REFERENCE_LABELS,
+  );
   const [entityFilter, setEntityFilter] = useState<AuditEntityType | "all">(
     "all",
   );
@@ -485,6 +248,35 @@ export default function ActivityPage() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [mobileFiltersOpen]);
+
+  useEffect(() => {
+    if (householdLoading || !household?.id) return;
+    let cancelled = false;
+
+    setReferenceLabels(EMPTY_AUDIT_REFERENCE_LABELS);
+    void Promise.allSettled([
+      getWallets(),
+      getCategories(),
+      getSavings(),
+      getForexAccounts(),
+    ]).then(([wallets, categories, savings, forexAccounts]) => {
+      if (cancelled) return;
+      setReferenceLabels(
+        createAuditReferenceLabels({
+          wallets: wallets.status === "fulfilled" ? wallets.value : [],
+          categories:
+            categories.status === "fulfilled" ? categories.value : [],
+          savings: savings.status === "fulfilled" ? savings.value : [],
+          forexAccounts:
+            forexAccounts.status === "fulfilled" ? forexAccounts.value : [],
+        }),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [household?.id, householdLoading]);
 
   const actorOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -925,7 +717,11 @@ export default function ActivityPage() {
                     event.actor_user_id === user?.id
                       ? `Bạn · ${actorEmail}`
                       : actorEmail;
-                  const changes = getFieldChanges(event);
+                  const presentation = buildAuditPresentation(
+                    event,
+                    referenceLabels,
+                  );
+                  const detailRows = presentation.rows;
                   const entityName = getEntityName(event, entityMeta.label);
 
                   return (
@@ -967,10 +763,10 @@ export default function ActivityPage() {
 
                           <div className="mt-1.5 min-w-0 sm:mt-0">
                             <p className="truncate text-[11px] font-bold text-slate-500 sm:text-[12px]">
-                              {primaryChangeLabel(event)}
+                              {presentation.primaryText}
                             </p>
                             <p className="mt-0.5 text-[9px] font-semibold text-slate-300 sm:text-[10px]">
-                              {changes.length} trường thay đổi · Nhấn để xem chi tiết
+                              {presentation.countText} · Nhấn để xem chi tiết
                             </p>
                           </div>
                         </div>
@@ -1008,33 +804,44 @@ export default function ActivityPage() {
                           <div className="min-w-0 space-y-1.5">
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                                Trước → Sau
+                                {presentation.heading}
                               </p>
                               <span className="text-[9px] font-bold text-slate-300">
-                                {changes.length} trường
+                                {presentation.countText}
                               </span>
                             </div>
-                            {changes.length === 0 ? (
+                            {presentation.incompleteComparison ? (
+                              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-700">
+                                Audit cũ không có đủ snapshot trước và sau. MyFinance chỉ hiển thị dữ liệu đã ghi nhận, không suy diễn trường thay đổi.
+                              </p>
+                            ) : null}
+                            {detailRows.length === 0 ? (
                               <p className="rounded-xl bg-white px-3 py-2 text-[10px] font-semibold text-slate-400">
-                                Không có trường hiển thị thay đổi sau khi loại bỏ metadata kỹ thuật.
+                                Không có dữ liệu nghiệp vụ hiển thị sau khi loại bỏ metadata kỹ thuật.
                               </p>
                             ) : (
-                              changes.map((change) => (
+                              detailRows.map((change) => (
                                 <div
                                   key={change.key}
                                   className="grid min-w-0 grid-cols-[76px_minmax(0,1fr)] items-start gap-2 rounded-xl border border-slate-100 bg-white px-2.5 py-2 text-[10px] sm:grid-cols-[104px_minmax(0,1fr)] sm:px-3 sm:text-[11px]"
                                 >
                                   <span className="font-black text-slate-500">
-                                    {FIELD_LABELS[change.key] ?? change.key}
+                                    {change.label}
                                   </span>
                                   <div className="min-w-0 font-semibold text-slate-700">
-                                    {action === "insert" ? (
+                                    {presentation.mode === "created" ? (
                                       <span className="break-words font-black text-emerald-700">
-                                        {formatAuditValue(change.key, change.after)}
+                                        {change.afterText}
                                       </span>
-                                    ) : action === "delete" ? (
+                                    ) : presentation.mode === "deleted" ? (
                                       <span className="break-words text-rose-700 line-through decoration-rose-300">
-                                        {formatAuditValue(change.key, change.before)}
+                                        {change.beforeText}
+                                      </span>
+                                    ) : presentation.mode === "snapshot" ? (
+                                      <span className="break-words font-bold text-slate-600">
+                                        {change.afterText !== "—"
+                                          ? change.afterText
+                                          : change.beforeText}
                                       </span>
                                     ) : (
                                       <div className="min-w-0 space-y-1.5 sm:grid sm:grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)] sm:items-start sm:gap-1.5 sm:space-y-0">
@@ -1043,7 +850,7 @@ export default function ActivityPage() {
                                             Trước
                                           </span>
                                           <span className="block min-w-0 break-words text-[11px] text-slate-400 line-through decoration-slate-300 sm:text-[11px]">
-                                            {formatAuditValue(change.key, change.before)}
+                                            {change.beforeText}
                                           </span>
                                         </div>
                                         <span className="block text-center text-[11px] font-black text-slate-300 sm:hidden">
@@ -1057,7 +864,7 @@ export default function ActivityPage() {
                                             Sau
                                           </span>
                                           <span className="block min-w-0 break-words text-[11px] font-black text-blue-700 sm:text-[11px]">
-                                            {formatAuditValue(change.key, change.after)}
+                                            {change.afterText}
                                           </span>
                                         </div>
                                       </div>

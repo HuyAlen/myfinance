@@ -7,6 +7,13 @@ const activityPage = readFileSync(
   path.join(repoRoot, "frontend/src/components/activity/ActivityPage.tsx"),
   "utf8",
 );
+const presentation = readFileSync(
+  path.join(
+    repoRoot,
+    "frontend/src/components/activity/activityAuditPresentation.ts",
+  ),
+  "utf8",
+);
 
 describe("AUDIT-UI-1.1 compact activity hierarchy", () => {
   it("suppresses the global quick-action FAB while the read-only activity ledger is open", () => {
@@ -45,12 +52,15 @@ describe("AUDIT-UI-1.1 compact activity hierarchy", () => {
     expect(activityPage).toContain("formatEventTime(event.created_at)");
   });
 
-  it("gives old and new values equal readable columns with the new value emphasized", () => {
+  it("gives true old and new values equal readable columns while preserving action-specific headings", () => {
     expect(activityPage).toContain(
       "grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)]",
     );
     expect(activityPage).toContain("line-through decoration-slate-300");
     expect(activityPage).toContain("font-black text-blue-700");
-    expect(activityPage).toContain("Trước → Sau");
+    expect(activityPage).toContain("presentation.heading");
+    expect(presentation).toContain('heading: "Trước → Sau"');
+    expect(presentation).toContain('heading: "Dữ liệu đã tạo"');
+    expect(presentation).toContain('heading: "Dữ liệu đã xóa"');
   });
 });
