@@ -13,6 +13,9 @@ const migration = read(
 const schema = read("supabase/schema.sql");
 const verification = read("supabase/schema-verification.sql");
 const databaseTypes = read("frontend/src/lib/database.types.ts");
+const membershipHardening = read(
+  "frontend/supabase/household-membership-1-single-active-household.sql",
+);
 
 function extractSharedBody(sql: string) {
   const startMarker = "-- BEGIN AUDIT-TRAIL-1 SHARED BODY";
@@ -94,6 +97,27 @@ describe("AUDIT-TRAIL-1 canonical append-only finance audit log", () => {
     expect(normalizedMigration).toContain("using errcode = 'mfa02'");
   });
 
+
+  it("binds the latest audit stamp override to the active household instead of an arbitrary membership row", () => {
+    const normalizedHardening = normalize(membershipHardening);
+    const stampStart = normalizedHardening.indexOf(
+      "create or replace function public.stamp_finance_audit_log_insert()",
+    );
+    const stampEnd = normalizedHardening.indexOf(
+      "revoke all on function public.stamp_finance_audit_log_insert()",
+      stampStart,
+    );
+    const stamp = normalizedHardening.slice(stampStart, stampEnd);
+
+    expect(stampStart).toBeGreaterThan(-1);
+    expect(stampEnd).toBeGreaterThan(stampStart);
+    expect(stamp).toContain(
+      "v_household_id := public.current_household_id()",
+    );
+    expect(stamp).toContain("hm.household_id = v_household_id");
+    expect(stamp).toContain("hm.user_id = v_actor_user_id");
+    expect(stamp).not.toContain("limit 1");
+  });
   it("is append-only even beyond RLS by rejecting UPDATE and DELETE in a table trigger", () => {
     expect(normalizedMigration).toContain(
       "create or replace function public.reject_finance_audit_log_mutation()",

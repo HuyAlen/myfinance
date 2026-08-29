@@ -14,6 +14,9 @@ const migration = read(
 const verification = read(
   "frontend/supabase/household-workspace-1-verification.sql",
 );
+const membershipHardening = read(
+  "frontend/supabase/household-membership-1-single-active-household.sql",
+);
 const service = read("frontend/src/services/finance/householdService.ts");
 const provider = read(
   "frontend/src/components/household/HouseholdProvider.tsx",
@@ -105,11 +108,12 @@ describe("HOUSEHOLD-WORKSPACE-1 multi-workspace membership", () => {
     expect(realtime).toContain("financeOwnerUserId");
   });
 
-  it("accepts a specific in-app invite only for the authenticated account email and does not auto-switch or merge data", () => {
+  it("keeps the original invite migration non-destructive while the later membership hardening owns active-workspace reconciliation", () => {
     const accept = functionSlice(
       "accept_household_invite(p_invite_id uuid)",
       "accept_current_household_invite()",
     );
+    const hardening = normalize(membershipHardening);
     expect(accept).toContain("i.id = p_invite_id");
     expect(accept).toContain("lower(i.email) = v_email");
     expect(accept).toContain("i.status = 'pending'");
@@ -117,9 +121,11 @@ describe("HOUSEHOLD-WORKSPACE-1 multi-workspace membership", () => {
     expect(accept).not.toContain("email_confirmed_at");
     expect(accept).toContain("on conflict (household_id, user_id) do update");
     expect(accept).toContain("intentionally do not switch active_household_id here");
-    expect(accept).not.toContain("delete from public.categories");
-    expect(accept).not.toContain("delete from public.household_members");
-    expect(accept).not.toContain("delete from public.households");
+    expect(hardening).toContain("'active_household_id', v_invite.household_id");
+    expect(hardening).toContain("active_household_id = excluded.active_household_id");
+    expect(hardening).not.toContain("delete from public.wallets");
+    expect(hardening).not.toContain("delete from public.transactions");
+    expect(hardening).not.toContain("delete from public.savings");
   });
 
   it("supports explicit decline and workspace switching while validating membership server-side", () => {
