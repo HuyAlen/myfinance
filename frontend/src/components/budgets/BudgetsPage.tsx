@@ -55,6 +55,10 @@ import ConfirmDialog, {
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { computeSmartBudget } from "@/src/services/finance/analytics";
+import {
+  buildBudgetPeriodRollups,
+  type BudgetPeriodRollup,
+} from "./budgetPeriodRollup";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -62,6 +66,13 @@ type FormState = {
   categoryId: string;
   month: string;
   limitAmount: string;
+};
+
+type BudgetCardModel = Budget & {
+  isPeriodRollup?: boolean;
+  periodSpent?: number;
+  periodMonthCount?: number;
+  periodBreakdown?: BudgetPeriodRollup["breakdown"];
 };
 
 const emptyForm: FormState = {
@@ -398,17 +409,60 @@ export default function BudgetsPage() {
     );
   }, [budgets, dateRange.endDate, dateRange.startDate]);
 
+  // BUDGET-PERIOD-AGGREGATION-1: monthly rows remain the storage/edit model,
+  // while every selected period gets one canonical category rollup. Full
+  // months contribute 100% of their limit; custom boundary months contribute
+  // only the calendar-day share that intersects the selected date range.
+  const periodBudgetRollups = useMemo(
+    () =>
+      buildBudgetPeriodRollups({
+        budgets: filteredBudgets,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        getSpent,
+      }),
+    [
+      dateRange.endDate,
+      dateRange.startDate,
+      filteredBudgets,
+      getSpent,
+    ],
+  );
+
+  const displayBudgets = useMemo<BudgetCardModel[]>(() => {
+    if (filterMode === "month") return filteredBudgets;
+
+    return periodBudgetRollups.map((rollup) => ({
+      id: `period:${rollup.categoryId}:${dateRange.startDate}:${dateRange.endDate}`,
+      categoryId: rollup.categoryId,
+      month: activeMonth,
+      limitAmount: rollup.limit,
+      isPeriodRollup: true,
+      periodSpent: rollup.spent,
+      periodMonthCount: rollup.monthCount,
+      periodBreakdown: rollup.breakdown,
+    }));
+  }, [
+    activeMonth,
+    dateRange.endDate,
+    dateRange.startDate,
+    filterMode,
+    filteredBudgets,
+    periodBudgetRollups,
+  ]);
+
+
   // ── Selected-period budget summary ─────────────────────────────────────────
   const filteredSummary = useMemo(() => {
-    const realExpenseBudgets = filteredBudgets.filter((budget) =>
-      isRealExpenseGroup(budget.categoryId),
+    const realExpenseRollups = periodBudgetRollups.filter((rollup) =>
+      isRealExpenseGroup(rollup.categoryId),
     );
-    const totalLimit = realExpenseBudgets.reduce(
-      (s, b) => s + b.limitAmount,
+    const totalLimit = realExpenseRollups.reduce(
+      (sum, rollup) => sum + rollup.limit,
       0,
     );
-    const totalSpent = realExpenseBudgets.reduce(
-      (s, b) => s + getSpent(b),
+    const totalSpent = realExpenseRollups.reduce(
+      (sum, rollup) => sum + rollup.spent,
       0,
     );
     return {
@@ -417,8 +471,7 @@ export default function BudgetsPage() {
       remaining: totalLimit - totalSpent,
       percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
-  }, [filteredBudgets, getSpent, isRealExpenseGroup]);
-
+  }, [isRealExpenseGroup, periodBudgetRollups]);
   const budgetForecast = useMemo(() => {
     if (filterMode === "month") {
       return getBudgetForecast(
@@ -454,32 +507,32 @@ export default function BudgetsPage() {
       limit: number;
       projectedSpend: number;
     };
-
     const fixedItems: PlanningBudgetItem[] = [];
     const variableItems: PlanningBudgetItem[] = [];
     const savingItems: PlanningBudgetItem[] = [];
     const investmentItems: PlanningBudgetItem[] = [];
     const uncategorizedItems: PlanningBudgetItem[] = [];
 
-    filteredBudgets.forEach((budget) => {
-      const category = categoryById.get(budget.categoryId);
+    periodBudgetRollups.forEach((rollup) => {
+      const category = categoryById.get(rollup.categoryId);
       const categoryName = category?.name ?? "Danh mục";
       const group = getCategoryPlanningGroup(category);
-      const spent = getSpent(budget);
-      const forecast = getBudgetForecast(
-        budget.limitAmount,
-        spent,
-        budget.month,
-      );
+      const projectedSpend =
+        filterMode === "month"
+          ? getBudgetForecast(
+              rollup.limit,
+              rollup.spent,
+              rollup.months[0] ?? activeMonth,
+            ).projectedSpend
+          : rollup.spent;
       const item: PlanningBudgetItem = {
-        categoryId: budget.categoryId,
+        categoryId: rollup.categoryId,
         categoryName,
         group,
-        spent,
-        limit: budget.limitAmount,
-        projectedSpend: forecast.projectedSpend,
+        spent: rollup.spent,
+        limit: rollup.limit,
+        projectedSpend,
       };
-
       if (group === "fixed") {
         fixedItems.push(item);
       } else if (group === "variable") {
@@ -492,7 +545,6 @@ export default function BudgetsPage() {
         uncategorizedItems.push(item);
       }
     });
-
     const sumBy = (
       items: PlanningBudgetItem[],
       key: "spent" | "limit" | "projectedSpend",
@@ -502,7 +554,6 @@ export default function BudgetsPage() {
     const variableLimit = sumBy(variableItems, "limit");
     const savingLimit = sumBy(savingItems, "limit");
     const investmentLimit = sumBy(investmentItems, "limit");
-
     const classifyPlanningTransaction = (
       transaction: Transaction,
     ): CategoryPlanningGroup | null => {
@@ -517,7 +568,6 @@ export default function BudgetsPage() {
       if (transactionType === "saving") {
         return "saving";
       }
-
       if (transactionType === "investment") {
         return "investment";
       }
@@ -533,7 +583,6 @@ export default function BudgetsPage() {
 
       return categoryGroup === "income" ? null : categoryGroup;
     };
-
     const actualPlanningSpent = periodTransactions.reduce(
       (summary, transaction) => {
         const group = classifyPlanningTransaction(transaction);
@@ -550,7 +599,6 @@ export default function BudgetsPage() {
         investment: 0,
       },
     );
-
     const fixedSpent = actualPlanningSpent.fixed;
     const variableSpent = actualPlanningSpent.variable;
     const savingSpent = actualPlanningSpent.saving;
@@ -588,7 +636,6 @@ export default function BudgetsPage() {
       savingRatio,
     );
     const fixedStatus = getFixedCostStatus(fixedRatio);
-
     return {
       fixedItems,
       variableItems,
@@ -619,14 +666,14 @@ export default function BudgetsPage() {
       effectiveIncome,
     };
   }, [
+    activeMonth,
     categoryById,
-    filteredBudgets,
+    filterMode,
     filteredSummary.totalLimit,
-    getSpent,
+    periodBudgetRollups,
     periodIncome,
     periodTransactions,
   ]);
-
   const budgetHealthScore = useMemo(() => {
     if (filteredSummary.totalLimit <= 0) return 0;
 
@@ -694,25 +741,15 @@ export default function BudgetsPage() {
     previousMonthBudgets.length > 0;
 
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
-  const pieData = useMemo(() => {
-    const limitByCategory = new Map<string, number>();
-    filteredBudgets.forEach((budget) => {
-      limitByCategory.set(
-        budget.categoryId,
-        (limitByCategory.get(budget.categoryId) ?? 0) + budget.limitAmount,
-      );
-    });
-
-    return Array.from(limitByCategory.entries()).map(
-      ([categoryId, value], index) => ({
-        name: categories.find((category) => category.id === categoryId)?.name ??
-          "Khác",
-        value,
+  const pieData = useMemo(
+    () =>
+      periodBudgetRollups.map((rollup, index) => ({
+        name: categoryById.get(rollup.categoryId)?.name ?? "Khác",
+        value: rollup.limit,
         color: PIE_COLORS[index % PIE_COLORS.length],
-      }),
-    );
-  }, [filteredBudgets, categories]);
-
+      })),
+    [categoryById, periodBudgetRollups],
+  );
   // ── NEW: Health score ─────────────────────────────────────────────────────
   const healthGrade =
     budgetHealthScore >= 85
@@ -943,7 +980,11 @@ export default function BudgetsPage() {
             <KpiCard
               label="Tổng ngân sách"
               value={formatVND(filteredSummary.totalLimit)}
-              sub={filteredBudgets.length + " ngân sách · " + filterLabel}
+              sub={
+                filterMode === "month"
+                  ? filteredBudgets.length + " ngân sách · " + filterLabel
+                  : displayBudgets.length + " danh mục ngân sách · " + filterLabel
+              }
               tone="blue"
               icon={<Target size={16} />}
             />
@@ -1204,33 +1245,38 @@ export default function BudgetsPage() {
         <div className="mb-3 flex items-center gap-2 px-1 sm:mb-4">
           <div className="size-1.5 rounded-full bg-blue-600" />
           <p className="text-sm font-black text-slate-700">
-            {filteredBudgets.length} ngân sách · {filterLabel}
+            {filterMode === "month"
+              ? `${filteredBudgets.length} ngân sách · ${filterLabel}`
+              : `${displayBudgets.length} danh mục ngân sách · ${filterLabel}`}
           </p>
         </div>
-
         <div className="grid gap-3 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {filteredBudgets.map((budget) => {
+          {displayBudgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
-            const spent = getSpent(budget);
+            const spent = budget.periodSpent ?? getSpent(budget);
             const pct =
               budget.limitAmount > 0
                 ? Math.round((spent / budget.limitAmount) * 100)
                 : 0;
             const remaining = budget.limitAmount - spent;
-
             const analysis = categoryAnalysisMap.get(budget.categoryId);
-            const status: string =
-              analysis?.status ??
-              (spent > budget.limitAmount
+            const status: string = budget.isPeriodRollup
+              ? spent > budget.limitAmount
                 ? "over"
                 : spent >= budget.limitAmount * 0.85
                   ? "near"
-                  : "on-track");
-            const trend = analysis?.trend ?? "stable";
-
+                  : "on-track"
+              : analysis?.status ??
+                (spent > budget.limitAmount
+                  ? "over"
+                  : spent >= budget.limitAmount * 0.85
+                    ? "near"
+                    : "on-track");
+            const trend = budget.isPeriodRollup
+              ? "stable"
+              : analysis?.trend ?? "stable";
             const s = STATUS_STYLE[status] ?? STATUS_STYLE["on-track"];
             const label = STATUS_LABEL[status] ?? "Đúng hạn mức";
-
             return (
               <div
                 key={budget.id}
@@ -1261,9 +1307,9 @@ export default function BudgetsPage() {
                         >
                           {label}
                         </span>
-                        {filterMode !== "month" && (
+                        {budget.isPeriodRollup && (
                           <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                            {budget.month}
+                            {budget.periodMonthCount} tháng
                           </span>
                         )}
                         {trend === "increasing" && (
@@ -1280,32 +1326,43 @@ export default function BudgetsPage() {
                   </div>
                   <div className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
                     <Link
-                      href={buildTransactionsHref({
-                        categoryId: budget.categoryId,
-                        month: budget.month,
-                      })}
+                      href={
+                        budget.isPeriodRollup
+                          ? buildTransactionsHref({
+                              categoryId: budget.categoryId,
+                              dateFrom: dateRange.startDate,
+                              dateTo: dateRange.endDate,
+                            })
+                          : buildTransactionsHref({
+                              categoryId: budget.categoryId,
+                              month: budget.month,
+                            })
+                      }
                       aria-label="Xem giao dịch"
                       className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600"
                     >
                       <ArrowUpRight size={13} />
                     </Link>
-                    <button
-                      onClick={() => openEditForm(budget)}
-                      aria-label="Sửa ngân sách"
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      <Edit3 size={13} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(budget.id)}
-                      aria-label="Xóa ngân sách"
-                      className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {!budget.isPeriodRollup && (
+                      <>
+                        <button
+                          onClick={() => openEditForm(budget)}
+                          aria-label="Sửa ngân sách"
+                          className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(budget.id)}
+                          aria-label="Xóa ngân sách"
+                          className="flex size-8 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-
                 <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-5 sm:gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
@@ -1329,7 +1386,6 @@ export default function BudgetsPage() {
                     </p>
                   </div>
                 </div>
-
                 <div className="mt-3 sm:mt-4">
                   <div className="mb-1.5 flex items-center justify-between text-xs">
                     <span
@@ -1366,38 +1422,90 @@ export default function BudgetsPage() {
                     />
                   </div>
                 </div>
-
+                {budget.isPeriodRollup &&
+                  budget.periodBreakdown &&
+                  budget.periodBreakdown.length > 0 && (
+                    <details className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-600 sm:mt-4">
+                      <summary className="cursor-pointer font-black text-[#4B6478]">
+                        Chi tiết {budget.periodMonthCount} tháng
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {budget.periodBreakdown.map((row) => (
+                          <div
+                            key={row.budgetId}
+                            className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2 first:border-0 first:pt-0"
+                          >
+                            <div>
+                              <p className="font-bold text-slate-700">{row.month}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-400">
+                                {row.overlapDays < row.daysInMonth
+                                  ? `${row.overlapDays}/${row.daysInMonth} ngày trong kỳ`
+                                  : "Đủ tháng"}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-black text-slate-700">
+                                {formatVND(row.spent)} / {formatVND(row.effectiveLimit)}
+                              </p>
+                              {row.effectiveLimit !== row.originalLimit && (
+                                <p className="mt-0.5 text-[10px] text-slate-400">
+                                  Gốc {formatVND(row.originalLimit)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 {/* BUDGETS-MOBILE-POLISH-1: mobile keeps the same direct action access as desktop. */}
-                <div className="mt-3 grid grid-cols-3 gap-2 lg:hidden">
+                <div
+                  className={
+                    budget.isPeriodRollup
+                      ? "mt-3 grid grid-cols-1 gap-2 lg:hidden"
+                      : "mt-3 grid grid-cols-3 gap-2 lg:hidden"
+                  }
+                >
                   <Link
-                    href={buildTransactionsHref({
-                      categoryId: budget.categoryId,
-                      month: budget.month,
-                    })}
+                    href={
+                        budget.isPeriodRollup
+                          ? buildTransactionsHref({
+                              categoryId: budget.categoryId,
+                              dateFrom: dateRange.startDate,
+                              dateTo: dateRange.endDate,
+                            })
+                          : buildTransactionsHref({
+                              categoryId: budget.categoryId,
+                              month: budget.month,
+                            })
+                      }
                     className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-emerald-100 bg-emerald-50/40 px-1 text-[11px] font-bold text-emerald-700"
                   >
                     <ArrowUpRight size={12} />
                     Giao dịch
                   </Link>
-                  <button
-                    onClick={() => openEditForm(budget)}
-                    className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-slate-200 px-1 text-[11px] font-bold text-[#61788F]"
-                  >
-                    <Edit3 size={12} />
-                    Sửa
-                  </button>
-                  <button
-                    onClick={() => handleDelete(budget.id)}
-                    className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-rose-100 px-1 text-[11px] font-bold text-rose-500"
-                  >
-                    <Trash2 size={12} />
-                    Xóa
-                  </button>
+                  {!budget.isPeriodRollup && (
+                    <>
+                      <button
+                        onClick={() => openEditForm(budget)}
+                        className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-slate-200 px-1 text-[11px] font-bold text-[#61788F]"
+                      >
+                        <Edit3 size={12} />
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDelete(budget.id)}
+                        className="flex min-h-9 items-center justify-center gap-1 rounded-xl border border-rose-100 px-1 text-[11px] font-bold text-rose-500"
+                      >
+                        <Trash2 size={12} />
+                        Xóa
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );
           })}
-
           {/* FINANCE-DATA-1B: "Chưa có ngân sách nào" is a real financial
               conclusion — it must not render while we're still loading, or
               worse, when the initial load actually FAILED (getBudgets now
@@ -1412,7 +1520,6 @@ export default function BudgetsPage() {
               </h3>
             </div>
           )}
-
           {filteredBudgets.length === 0 &&
             !isLoadingBudgets &&
             budgetsLoadError && (
@@ -1428,7 +1535,6 @@ export default function BudgetsPage() {
                 </p>
               </div>
             )}
-
           {/* Empty state */}
           {filteredBudgets.length === 0 &&
             !isLoadingBudgets &&
@@ -1457,7 +1563,6 @@ export default function BudgetsPage() {
                     <Plus size={15} />
                     Tạo ngân sách
                   </button>
-
                   {canClonePreviousBudget && (
                     <button
                       type="button"
@@ -1476,7 +1581,6 @@ export default function BudgetsPage() {
             )}
         </div>
       </section>
-
       {/* ══════════════════════════════════════════════════════════════════
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
