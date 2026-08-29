@@ -114,3 +114,134 @@ button {
     background-color: #e2e8f0; /* slate-200 */
   }
 }
+
+/* APP-VISUAL-CONTRAST-1: unified financial surface system */
+:root {
+  --finance-page: #edf3f8;
+  --finance-page-deep: #e7eef5;
+  --finance-surface: #ffffff;
+  --finance-surface-soft: #f4f8fb;
+  --finance-surface-muted: #edf3f7;
+  --finance-border: #c7d5e2;
+  --finance-border-strong: #adc0d0;
+  --finance-text: #294760;
+  --finance-text-secondary: #4e687e;
+  --finance-muted: #6f8597;
+  --finance-primary: #2f80ed;
+  --finance-shadow-soft: 0 6px 18px rgba(35, 67, 92, 0.085);
+  --finance-shadow-card: 0 12px 30px rgba(35, 67, 92, 0.105);
+  --finance-shadow-strong: 0 18px 44px rgba(35, 67, 92, 0.13);
+}
+
+/*
+ * The authenticated shell owns the visual hierarchy so Dashboard, Transactions,
+ * Wallets, Budgets, Goals, Categories, Reports, Savings, Investments, Debts,
+ * Settings and Activity all inherit the same financial surface language without
+ * changing any domain calculation, data flow, RLS or realtime behavior.
+ */
+.finance-shell {
+  background: var(--finance-page);
+  color: var(--finance-text);
+}
+
+.finance-main {
+  background:
+    radial-gradient(circle at 82% -12%, rgba(47, 128, 237, 0.075), transparent 34rem),
+    linear-gradient(180deg, #f3f7fb 0%, var(--finance-page) 18rem);
+}
+
+.finance-header {
+  border-color: var(--finance-border-strong);
+  background: rgba(255, 255, 255, 0.985);
+  box-shadow: 0 4px 16px rgba(35, 67, 92, 0.065);
+}
+
+.finance-sidebar {
+  border-color: var(--finance-border);
+  background: #fbfdff;
+  box-shadow: 12px 0 34px rgba(35, 67, 92, 0.075);
+}
+
+.finance-bottom-nav {
+  border-color: var(--finance-border-strong);
+  background: rgba(255, 255, 255, 0.985);
+  box-shadow: 0 -10px 28px rgba(35, 67, 92, 0.11);
+}
+
+/* Common Tailwind palette bridge: strengthen hierarchy, keep primary/status hues. */
+.finance-shell .border-slate-100 { border-color: #d8e2eb; }
+.finance-shell .border-slate-200 { border-color: var(--finance-border); }
+.finance-shell .bg-slate-50 { background-color: var(--finance-surface-soft); }
+.finance-shell .bg-slate-100 { background-color: var(--finance-surface-muted); }
+.finance-shell .text-slate-400 { color: var(--finance-muted); }
+.finance-shell .text-slate-500 { color: var(--finance-text-secondary); }
+.finance-shell .text-slate-600 { color: #405b72; }
+
+.finance-shell [class~="border-[#DCE6EF]"],
+.finance-shell [class~="border-[#D7E3EE]"],
+.finance-shell [class~="border-[#DBE6EF]"] {
+  border-color: var(--finance-border);
+}
+
+.finance-shell [class~="border-[#DDE7F0]"],
+.finance-shell [class~="border-[#E2EAF2]"] {
+  border-color: var(--finance-border-strong);
+}
+
+.finance-shell [class~="text-[#36536B]"] { color: var(--finance-text); }
+.finance-shell [class~="text-[#3F5F79]"] { color: #36536c; }
+.finance-shell [class~="text-[#5F7890]"],
+.finance-shell [class~="text-[#607A92]"],
+.finance-shell [class~="text-[#61788F]"] { color: #536d84; }
+.finance-shell [class~="text-[#687E93]"] { color: var(--finance-text-secondary); }
+.finance-shell [class~="text-[#7890A3]"],
+.finance-shell [class~="text-[#7C91A5]"] { color: var(--finance-muted); }
+
+.finance-shell [class~="bg-[#F3F7FB]"],
+.finance-shell [class~="bg-[#F3F8FF]"],
+.finance-shell [class~="bg-[#F8FAFC]"] {
+  background-color: var(--finance-surface-soft);
+}
+
+/* Strengthen real card surfaces without making compact controls feel heavy. */
+.finance-main section.shadow-sm,
+.finance-main article.shadow-sm,
+.finance-main div[class*="rounded"][class*="border"][class*="bg-white"][class*="shadow-sm"] {
+  box-shadow: var(--finance-shadow-soft);
+}
+
+.finance-main > * > section[class*="rounded"][class*="border"][class*="bg-white"] {
+  border-color: var(--finance-border);
+  box-shadow: var(--finance-shadow-card);
+}
+
+@media (max-width: 767px) {
+  .finance-main {
+    background: linear-gradient(180deg, #f2f6fa 0%, var(--finance-page) 15rem);
+  }
+
+  .finance-sidebar {
+    box-shadow: 16px 0 40px rgba(35, 67, 92, 0.16);
+  }
+}
+
+/* APP-VISUAL-CONTRAST-1.1: iPhone readability + surface balance */
+:root {
+  --finance-primary-text: #2563eb;
+}
+
+@media (max-width: 767px) {
+  .finance-shell {
+    --finance-muted: #586f82;
+    --finance-shadow-soft: 0 3px 10px rgba(35, 67, 92, 0.065);
+    --finance-shadow-card: 0 7px 18px rgba(35, 67, 92, 0.085);
+  }
+
+  .finance-header {
+    box-shadow: 0 3px 10px rgba(35, 67, 92, 0.055);
+  }
+
+  .finance-bottom-nav {
+    box-shadow: 0 -6px 18px rgba(35, 67, 92, 0.085);
+  }
+}

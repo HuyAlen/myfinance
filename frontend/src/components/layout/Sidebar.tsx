@@ -82,7 +82,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       aria-label="Menu chính"
       aria-hidden={!isOpen}
       className={[
-        "fixed inset-y-0 left-0 z-40 flex w-[min(18rem,85vw)] flex-col border-r border-slate-100 bg-white px-3 py-5 shadow-xl shadow-slate-200/40 lg:w-72",
+        "finance-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(18rem,85vw)] flex-col border-r border-slate-100 bg-white px-3 py-5 shadow-xl shadow-slate-200/40 lg:w-72",
         "transition-transform duration-300 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}
@@ -91,7 +91,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       <button
         onClick={onClose}
         aria-label="Đóng menu"
-        className="absolute right-4 top-5 rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 lg:hidden"
+        className="absolute right-3 top-4 flex size-11 items-center justify-center rounded-2xl bg-slate-100 p-0 text-slate-500 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 lg:hidden"
       >
         <X size={18} />
       </button>
@@ -119,7 +119,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       <nav className="no-scrollbar flex-1 space-y-5 overflow-y-auto pb-3">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="mb-1.5 px-3 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
               {group.label}
             </p>
             <div className="space-y-0.5">
@@ -135,7 +135,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     href={item.href}
                     onClick={onClose}
                     className={[
-                      "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150",
+                      "flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150",
                       active
                         ? "bg-blue-600 text-white shadow-md shadow-blue-200/70"
                         : "text-slate-600 hover:bg-blue-50 hover:text-blue-700",
