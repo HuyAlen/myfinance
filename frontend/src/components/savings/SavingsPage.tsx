@@ -1772,7 +1772,10 @@ export default function SavingsPage({
             </span>
           </div>
 
-          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#EAF0F6] sm:mt-5 sm:h-4">
+          <div
+            data-dark-surface="savings-emergency-progress-track"
+            className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#EAF0F6] sm:mt-5 sm:h-4"
+          >
             <div
               className="h-full rounded-full bg-linear-to-r from-blue-600 to-cyan-500 transition-all"
               style={{ width: `${savingsExperience.emergencyProgress}%` }}
@@ -1810,10 +1813,14 @@ export default function SavingsPage({
             nạp thêm.
           </p>
 
-          <div className="mt-3 divide-y divide-[#E5EDF4] overflow-hidden rounded-2xl border border-[#DCE6EF] bg-[#F8FBFE] sm:mt-4 sm:space-y-3 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent">
+          <div
+            data-dark-surface="savings-forecast-list"
+            className="mt-3 divide-y divide-[#E5EDF4] overflow-hidden rounded-2xl border border-[#DCE6EF] bg-[#F8FBFE] sm:mt-4 sm:space-y-3 sm:divide-y-0 sm:overflow-visible sm:border-0 sm:bg-transparent"
+          >
             {savingsAnalytics.projection.map((item) => (
               <div
                 key={item.years}
+                data-dark-surface="savings-forecast-item"
                 className="px-3 py-2.5 sm:rounded-2xl sm:border sm:border-blue-100 sm:bg-blue-50/60 sm:p-3"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -1957,7 +1964,10 @@ export default function SavingsPage({
             />
           </label>
 
-          <div className="no-scrollbar flex snap-x snap-proximity gap-1 overflow-x-auto rounded-xl bg-[#F6F9FC] p-1 scroll-px-1 lg:ml-auto lg:rounded-2xl lg:p-1.5">
+          <div
+            data-dark-surface="savings-filter-tabs"
+            className="no-scrollbar flex snap-x snap-proximity gap-1 overflow-x-auto rounded-xl bg-[#F6F9FC] p-1 scroll-px-1 lg:ml-auto lg:rounded-2xl lg:p-1.5"
+          >
             {filters.map((filter) => {
               const isActive = activeFilter === filter.key;
               return (
@@ -2094,7 +2104,10 @@ export default function SavingsPage({
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3">
-                    <div className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3">
+                    <div
+                      data-dark-surface="savings-account-meta"
+                      className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3"
+                    >
                       <p className="text-[10px] font-black uppercase text-slate-400">
                         Lãi suất
                       </p>
@@ -2104,7 +2117,10 @@ export default function SavingsPage({
                           : "Linh hoạt"}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3">
+                    <div
+                      data-dark-surface="savings-account-meta"
+                      className="rounded-xl bg-[#F6F9FC] p-2.5 sm:rounded-2xl sm:p-3"
+                    >
                       <p className="text-[10px] font-black uppercase text-slate-400">
                         Đáo hạn
                       </p>
@@ -2124,7 +2140,10 @@ export default function SavingsPage({
                         </span>
                         <span className="text-slate-700">{progress}%</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        data-dark-surface="savings-account-progress-track"
+                        className="h-2 overflow-hidden rounded-full bg-slate-100"
+                      >
                         <div
                           className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-400"
                           style={{ width: `${progress}%` }}

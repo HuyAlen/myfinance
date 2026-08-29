@@ -14,10 +14,12 @@ import {
   Folder,
   Landmark,
   LogOut,
+  Moon,
   ReceiptText,
   Search,
   Settings,
   Sparkles,
+  Sun,
   Target,
   PiggyBank,
   User,
@@ -27,6 +29,7 @@ import {
 
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
+import { useTheme } from "@/src/components/theme/ThemeProvider";
 import {
   useRealtime,
   useRealtimeTable,
@@ -466,6 +469,7 @@ export default function Header({
 }: HeaderProps) {
   const { user } = useAuth();
   const { context: householdContext } = useHousehold();
+  const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const {
@@ -940,6 +944,10 @@ export default function Header({
       setSearchQuery("");
       setSearchFocus(false);
     }
+  }
+
+  function handleQuickThemeToggle() {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   }
 
   function closeAll() {
@@ -1424,6 +1432,32 @@ export default function Header({
             <span className="hidden rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide xl:inline">
               Beta
             </span>
+          </button>
+
+          {/* Quick theme toggle: explicit light/dark switch. System mode stays
+              available in Settings; the first quick-toggle press pins the
+              opposite of the currently resolved device theme. */}
+          <button
+            type="button"
+            onClick={handleQuickThemeToggle}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#DBE6EF] bg-white p-0 text-[#607A92] shadow-[0_3px_10px_rgba(54,83,107,0.06)] transition hover:bg-[#F3F8FF] hover:text-[#2F80ED] active:scale-[.96]"
+            aria-label={
+              resolvedTheme === "dark"
+                ? "Chuyển sang giao diện sáng"
+                : "Chuyển sang giao diện tối"
+            }
+            title={
+              resolvedTheme === "dark"
+                ? "Chuyển sang giao diện sáng"
+                : "Chuyển sang giao diện tối"
+            }
+            data-theme-toggle="quick"
+          >
+            {resolvedTheme === "dark" ? (
+              <Sun size={17} aria-hidden="true" />
+            ) : (
+              <Moon size={17} aria-hidden="true" />
+            )}
           </button>
 
           {/* Notification bell */}

@@ -541,7 +541,10 @@ export default function GoalsPage() {
                       {goal.pct}%
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                  <div
+                    data-dark-surface="goal-priority-progress-track"
+                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-white"
+                  >
                     <div
                       className="h-full rounded-full bg-[#2F80ED]"
                       style={{ width: `${Math.min(goal.pct, 100)}%` }}
@@ -643,7 +646,10 @@ export default function GoalsPage() {
                 </div>
 
                 {/* 3-col mini stats */}
-                <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-[#F6F9FC] p-2.5 sm:mt-5 sm:gap-2 sm:rounded-2xl sm:p-3">
+                <div
+                  data-dark-surface="goal-card-metrics"
+                  className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-[#F6F9FC] p-2.5 sm:mt-5 sm:gap-2 sm:rounded-2xl sm:p-3"
+                >
                   <div className="min-w-0 text-center">
                     <p className="text-[8.5px] font-bold uppercase tracking-wide text-[#8CA0B3] sm:text-[9px]">
                       Mục tiêu
@@ -729,7 +735,10 @@ export default function GoalsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-[#EDF3F8] sm:h-3">
+                  <div
+                    data-dark-surface="goal-progress-track"
+                    className="h-2.5 overflow-hidden rounded-full bg-[#EDF3F8] sm:h-3"
+                  >
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
@@ -741,7 +750,10 @@ export default function GoalsPage() {
                 </div>
 
                 {/* V3 forecast */}
-                <div className="mt-3 rounded-xl border border-[#DCE6EF] bg-[#F7FAFE] p-2.5 sm:mt-4 sm:rounded-2xl sm:p-3">
+                <div
+                  data-dark-surface="goal-forecast"
+                  className="mt-3 rounded-xl border border-[#DCE6EF] bg-[#F7FAFE] p-2.5 sm:mt-4 sm:rounded-2xl sm:p-3"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-wide text-[#2F80ED] sm:text-[10px]">

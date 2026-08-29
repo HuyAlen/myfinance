@@ -5,6 +5,8 @@ import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
+import { useTheme } from "@/src/components/theme/ThemeProvider";
+import { isThemePreference } from "@/src/lib/theme";
 
 import {
   AlertTriangle,
@@ -165,6 +167,7 @@ function withSettingsTimeout<T>(request: Promise<T>, label: string): Promise<T> 
 export default function SettingsPage() {
   const { user, session } = useAuth();
   const { status, lastSync } = useRealtime();
+  const { theme, setTheme } = useTheme();
 
   const [stats, setStats] = useState<SettingsStats>({
     wallets: 0,
@@ -201,7 +204,7 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState("VND");
   const [dateFormat, setDateFormat] = useState("dd/mm/yyyy");
   const [defaultPage, setDefaultPage] = useState("/");
-  const [theme, setTheme] = useState("light");
+
 
   // Financial settings
   const [finMonth, setFinMonth] = useState("1");
@@ -437,7 +440,7 @@ export default function SettingsPage() {
       if (typeof saved.currency === "string") setCurrency(saved.currency);
       if (typeof saved.dateFormat === "string") setDateFormat(saved.dateFormat);
       if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
-      if (typeof saved.theme === "string") setTheme(saved.theme);
+      if (isThemePreference(saved.theme)) setTheme(saved.theme);
       if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
       if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
       if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
@@ -1301,14 +1304,15 @@ export default function SettingsPage() {
                       Giao diện
                     </p>
                     <p className="text-xs text-slate-400">
-                      Chế độ sáng hoặc tối
+                      Sáng, tối hoặc theo giao diện thiết bị
                     </p>
                   </div>
                   <div className="flex gap-1.5">
-                    {[
+                    {([
                       { val: "light", label: "Sáng" },
-                      { val: "system", label: "Tự động" },
-                    ].map((opt) => (
+                      { val: "dark", label: "Tối" },
+                      { val: "system", label: "Thiết bị" },
+                    ] as const).map((opt) => (
                       <button
                         key={opt.val}
                         onClick={() => setTheme(opt.val)}

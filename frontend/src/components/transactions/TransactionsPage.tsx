@@ -2320,7 +2320,10 @@ export default function TransactionsPage() {
         className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm"
       >
         {/* Feed header */}
-        <div className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5">
+        <div
+          data-dark-surface="transaction-feed-summary"
+          className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3.5"
+        >
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <p className="text-sm font-black text-blue-700">
               {sorted.length} giao dịch
@@ -2420,7 +2423,10 @@ export default function TransactionsPage() {
                   );
                 return (
                   <div key={date}>
-                    <div className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 backdrop-blur sm:px-6 sm:py-2.5">
+                    <div
+                      data-dark-surface="transaction-day-header"
+                      className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 backdrop-blur sm:px-6 sm:py-2.5"
+                    >
                       <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                         <div className="flex shrink-0 items-center gap-1.5">
                           <span className="whitespace-nowrap text-[12px] font-black text-slate-800 sm:text-sm">

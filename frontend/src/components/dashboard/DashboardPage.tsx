@@ -2714,8 +2714,14 @@ export default function DashboardPage() {
 
       {/* Executive overview */}
       {/* DASHBOARD-VISUAL-CONTRAST-1: stronger soft-blue surface depth. Keep the established airy palette, but separate the executive shell, nested financial cards, and supporting copy more clearly. */}
-      <section className="overflow-hidden rounded-3xl border border-[#C6D8E6] bg-white shadow-[0_16px_38px_rgba(45,76,102,0.14)] sm:rounded-4xl">
-        <div className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F6FB] p-4 sm:p-7">
+      <section
+        data-dashboard-surface="hero-shell"
+        className="overflow-hidden rounded-3xl border border-[#C6D8E6] bg-white shadow-[0_16px_38px_rgba(45,76,102,0.14)] sm:rounded-4xl"
+      >
+        <div
+          data-dashboard-surface="hero-gradient"
+          className="bg-linear-to-br from-white via-[#F9FCFF] to-[#F1F6FB] p-4 sm:p-7"
+        >
           {/* DASH-MOBILE-POLISH-2.1: True Soft Blue hierarchy.
               Mobile uses visibly lighter blue/slate ink rather than dark navy; the
               headline carries emphasis through scale while support surfaces stay airy.
@@ -2728,12 +2734,16 @@ export default function DashboardPage() {
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2F80ED] sm:text-xs">
                 Tài sản & nợ
               </p>
-              <h1 className="mt-1.5 text-[22px] font-extrabold tracking-tight text-[#294A66] sm:mt-2 sm:text-3xl">
+              <h1
+                data-dashboard-ink="hero-title"
+                className="mt-1.5 text-[22px] font-extrabold tracking-tight text-[#294A66] sm:mt-2 sm:text-3xl"
+              >
                 Tài sản ròng
               </h1>
             </div>
             <button
               type="button"
+              data-dashboard-action="reports"
               onClick={() => router.push("/reports")}
               className="mt-0.5 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-[#C4D9EA] bg-white px-2.5 text-xs font-bold text-[#1F6FCA] shadow-[0_4px_12px_rgba(47,128,237,0.12)] transition hover:border-[#AFCBE2] hover:bg-[#F1F7FD] sm:px-3 sm:text-sm"
             >
@@ -2754,7 +2764,10 @@ export default function DashboardPage() {
               <div className="h-10 w-52 animate-pulse rounded-lg bg-slate-200/80 sm:h-12 sm:w-64" />
             )}
 
-            <p className="mt-2 max-w-xl text-[13px] font-medium leading-5 text-[#5C7388] sm:text-sm">
+            <p
+              data-dashboard-ink="hero-copy"
+              className="mt-2 max-w-xl text-[13px] font-medium leading-5 text-[#5C7388] sm:text-sm"
+            >
               Tổng tài sản sau khi trừ nợ phải trả.
             </p>
 
@@ -2824,13 +2837,22 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-[#CADAE7] bg-[#FCFEFF] p-3.5 shadow-[0_8px_20px_rgba(45,76,102,0.10)] sm:mt-5 sm:rounded-3xl sm:p-4">
+          <div
+            data-dashboard-surface="networth-history"
+            className="mt-4 rounded-2xl border border-[#CADAE7] bg-[#FCFEFF] p-3.5 shadow-[0_8px_20px_rgba(45,76,102,0.10)] sm:mt-5 sm:rounded-3xl sm:p-4"
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-extrabold text-[#294A66]">
+                <p
+                  data-dashboard-ink="history-title"
+                  className="text-sm font-extrabold text-[#294A66]"
+                >
                   Biến động tài sản ròng
                 </p>
-                <p className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs">
+                <p
+                  data-dashboard-ink="history-copy"
+                  className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs"
+                >
                   Snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
                 </p>
               </div>
@@ -2867,16 +2889,25 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : netWorthHistorySummary.snapshotCount === 1 ? (
-              <div className="mt-3 rounded-xl border border-[#BFD6EC] bg-[#F1F7FD] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:rounded-2xl sm:p-4">
+              <div
+                data-dashboard-surface="networth-snapshot"
+                className="mt-3 rounded-xl border border-[#BFD6EC] bg-[#F1F7FD] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:rounded-2xl sm:p-4"
+              >
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
                       Snapshot đã ghi nhận
                     </p>
-                    <p className="mt-1.5 text-lg font-extrabold tracking-tight tabular-nums text-[#31536F] sm:text-xl">
+                    <p
+                      data-dashboard-ink="snapshot-value"
+                      className="mt-1.5 text-lg font-extrabold tracking-tight tabular-nums text-[#31536F] sm:text-xl"
+                    >
                       {formatVND(Number(netWorthHistorySummary.latestPoint!.value))}
                     </p>
-                    <p className="mt-1 text-[11px] font-semibold text-[#5C7388] sm:text-xs">
+                    <p
+                      data-dashboard-ink="snapshot-copy"
+                      className="mt-1 text-[11px] font-semibold text-[#5C7388] sm:text-xs"
+                    >
                       Tháng {String(netWorthHistorySummary.latestPoint!.month).padStart(2, "0")}/{selectedYear}
                     </p>
                   </div>
@@ -2889,7 +2920,10 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <p className="mt-2.5 border-t border-[#C9DCEB] pt-2.5 text-[10px] font-medium leading-4 text-[#5C7388] sm:text-[11px]">
+                <p
+                  data-dashboard-ink="snapshot-copy"
+                  className="mt-2.5 border-t border-[#C9DCEB] pt-2.5 text-[10px] font-medium leading-4 text-[#5C7388] sm:text-[11px]"
+                >
                   Lịch sử bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedYear}; tháng chưa ghi nhận vẫn là dữ liệu chưa biết.
                 </p>
               </div>
@@ -3696,15 +3730,22 @@ function HeroMini({
 }) {
   return (
     <div
+      data-dashboard-surface="hero-mini"
       className={`min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#CADAE7] bg-[#FCFEFF] p-3 shadow-[0_7px_18px_rgba(45,76,102,0.10)] sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-[#B9CDDC] sm:hover:shadow-[0_10px_24px_rgba(45,76,102,0.13)] ${className}`}
     >
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
-        <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-7 ${iconClass}`}>
+        <div
+          data-dashboard-surface="hero-mini-icon"
+          className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-7 ${iconClass}`}
+        >
           {icon}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="whitespace-nowrap text-[11.5px] font-bold leading-tight tracking-[-0.01em] text-[#506A82] sm:font-semibold sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]">
+          <p
+            data-dashboard-ink="hero-mini-label"
+            className="whitespace-nowrap text-[11.5px] font-bold leading-tight tracking-[-0.01em] text-[#506A82] sm:font-semibold sm:line-clamp-1 sm:text-[9px] sm:leading-3.5 sm:tracking-normal xl:text-[8px] 2xl:text-[10px]"
+          >
             {label}
           </p>
           {isLoading ? (

@@ -245,3 +245,691 @@ button {
     box-shadow: 0 -6px 18px rgba(35, 67, 92, 0.085);
   }
 }
+
+/* APP-DARK-MODE-1: cross-page dark financial theme */
+:root[data-theme="dark"] {
+  --background: #0f1720;
+  --foreground: #e7eef5;
+  --finance-page: #0f1720;
+  --finance-page-deep: #0b1219;
+  --finance-surface: #17212b;
+  --finance-surface-soft: #1d2a35;
+  --finance-surface-muted: #243442;
+  --finance-border: #314556;
+  --finance-border-strong: #42586b;
+  --finance-text: #e7eef5;
+  --finance-text-secondary: #b7c5d1;
+  --finance-muted: #91a4b4;
+  --finance-primary: #5ba2ff;
+  --finance-primary-text: #7db4ff;
+  --finance-surface-elevated: #1b2834;
+  --finance-surface-strong: #21303d;
+  --finance-semantic-blue-surface: rgba(59, 130, 246, 0.14);
+  --finance-semantic-cyan-surface: rgba(6, 182, 212, 0.13);
+  --finance-semantic-emerald-surface: rgba(16, 185, 129, 0.13);
+  --finance-semantic-rose-surface: rgba(244, 63, 94, 0.13);
+  --finance-semantic-amber-surface: rgba(245, 158, 11, 0.13);
+  --finance-semantic-violet-surface: rgba(139, 92, 246, 0.13);
+  --finance-shadow-soft: 0 5px 18px rgba(0, 0, 0, 0.24);
+  --finance-shadow-card: 0 12px 30px rgba(0, 0, 0, 0.31);
+  --finance-shadow-strong: 0 18px 44px rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme="dark"],
+:root[data-theme="dark"] body {
+  background: var(--finance-page);
+  color: var(--finance-text);
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .finance-shell {
+  background: var(--finance-page);
+  color: var(--finance-text);
+}
+
+:root[data-theme="dark"] .finance-main {
+  background:
+    radial-gradient(circle at 82% -12%, rgba(91, 162, 255, 0.14), transparent 34rem),
+    linear-gradient(180deg, #121d27 0%, var(--finance-page) 18rem);
+}
+
+:root[data-theme="dark"] .finance-header {
+  border-color: var(--finance-border-strong);
+  background: rgba(18, 28, 38, 0.975);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .finance-sidebar {
+  border-color: var(--finance-border);
+  background: #131e28;
+  box-shadow: 12px 0 34px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .finance-bottom-nav {
+  border-color: var(--finance-border-strong);
+  background: rgba(18, 28, 38, 0.98);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.34);
+}
+
+/* Neutral Tailwind surfaces and text — applies to authenticated pages, dialogs,
+ * sheets, toasts and auth screens without changing status/action hues. */
+:root[data-theme="dark"] body .bg-white,
+:root[data-theme="dark"] body [class~="bg-white/80"],
+:root[data-theme="dark"] body [class~="bg-white/90"],
+:root[data-theme="dark"] body [class~="bg-white/95"] {
+  background-color: var(--finance-surface);
+}
+
+:root[data-theme="dark"] body .bg-slate-50 { background-color: var(--finance-surface-soft); }
+:root[data-theme="dark"] body .bg-slate-100 { background-color: var(--finance-surface-muted); }
+:root[data-theme="dark"] body .bg-slate-200 { background-color: #2b3c4b; }
+:root[data-theme="dark"] body .text-slate-950,
+:root[data-theme="dark"] body .text-slate-900,
+:root[data-theme="dark"] body .text-slate-800 { color: var(--finance-text); }
+:root[data-theme="dark"] body .text-slate-700 { color: #d2dde6; }
+:root[data-theme="dark"] body .text-slate-600 { color: #c0cdd8; }
+:root[data-theme="dark"] body .text-slate-500 { color: #a9bac8; }
+:root[data-theme="dark"] body .text-slate-400 { color: var(--finance-muted); }
+:root[data-theme="dark"] body .border-slate-100 { border-color: #293b49; }
+:root[data-theme="dark"] body .border-slate-200 { border-color: var(--finance-border); }
+:root[data-theme="dark"] body .border-slate-300 { border-color: var(--finance-border-strong); }
+:root[data-theme="dark"] body .divide-slate-100 > :not(:last-child) { border-color: #293b49; }
+:root[data-theme="dark"] body .divide-slate-200 > :not(:last-child) { border-color: var(--finance-border); }
+
+/* Bridge the custom blue-gray palette used by Dashboard/Budgets/Goals/Savings. */
+:root[data-theme="dark"] .finance-shell [class~="text-[#36536B]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#3F5F79]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#23466F]"] { color: var(--finance-text); }
+:root[data-theme="dark"] .finance-shell [class~="text-[#5F7890]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#607A92]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#61788F]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#687E93]"] { color: var(--finance-text-secondary); }
+:root[data-theme="dark"] .finance-shell [class~="text-[#7890A3]"],
+:root[data-theme="dark"] .finance-shell [class~="text-[#7C91A5]"] { color: var(--finance-muted); }
+
+:root[data-theme="dark"] .finance-shell [class~="border-[#DCE6EF]"],
+:root[data-theme="dark"] .finance-shell [class~="border-[#D7E3EE]"],
+:root[data-theme="dark"] .finance-shell [class~="border-[#DBE6EF]"],
+:root[data-theme="dark"] .finance-shell [class~="border-[#DDE7F0]"],
+:root[data-theme="dark"] .finance-shell [class~="border-[#E2EAF2]"] { border-color: var(--finance-border); }
+
+:root[data-theme="dark"] .finance-shell [class~="bg-[#EAF3FC]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F3F7FB]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F3F8FF]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F8FAFC]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F9FCFF]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F1F6FB]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F1F7FC]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#EDF4FA]"],
+:root[data-theme="dark"] .finance-shell [class~="bg-[#F4F8FB]"] {
+  background-color: var(--finance-surface-soft);
+}
+:root[data-theme="dark"] .finance-shell [class~="bg-[#E9F9F2]"] { background-color: rgba(5, 150, 105, 0.16); }
+:root[data-theme="dark"] .finance-shell [class~="text-[#087A57]"] { color: #6ee7b7; }
+:root[data-theme="dark"] .finance-shell [class~="bg-blue-50/45"],
+:root[data-theme="dark"] .finance-shell [class~="bg-blue-50/50"],
+:root[data-theme="dark"] .finance-shell [class~="bg-blue-50/70"] { background-color: rgba(37, 99, 235, 0.14); }
+
+/* Pastel financial/status surfaces keep their semantic hue, but stop glowing white. */
+:root[data-theme="dark"] body .bg-blue-50 { background-color: rgba(37, 99, 235, 0.16); }
+:root[data-theme="dark"] body .bg-blue-100 { background-color: rgba(37, 99, 235, 0.22); }
+:root[data-theme="dark"] body .border-blue-100,
+:root[data-theme="dark"] body .border-blue-200 { border-color: rgba(96, 165, 250, 0.32); }
+:root[data-theme="dark"] body .text-blue-500,
+:root[data-theme="dark"] body .text-blue-600,
+:root[data-theme="dark"] body .text-blue-700,
+:root[data-theme="dark"] body .text-blue-800 { color: #93c5fd; }
+
+:root[data-theme="dark"] body .bg-cyan-50 { background-color: rgba(8, 145, 178, 0.15); }
+:root[data-theme="dark"] body .bg-cyan-100 { background-color: rgba(8, 145, 178, 0.22); }
+:root[data-theme="dark"] body .border-cyan-100,
+:root[data-theme="dark"] body .border-cyan-200 { border-color: rgba(103, 232, 249, 0.28); }
+:root[data-theme="dark"] body .text-cyan-500,
+:root[data-theme="dark"] body .text-cyan-600,
+:root[data-theme="dark"] body .text-cyan-700,
+:root[data-theme="dark"] body .text-cyan-800 { color: #67e8f9; }
+
+:root[data-theme="dark"] body .bg-emerald-50 { background-color: rgba(5, 150, 105, 0.15); }
+:root[data-theme="dark"] body .bg-emerald-100 { background-color: rgba(5, 150, 105, 0.22); }
+:root[data-theme="dark"] body .border-emerald-100,
+:root[data-theme="dark"] body .border-emerald-200 { border-color: rgba(110, 231, 183, 0.3); }
+:root[data-theme="dark"] body .text-emerald-500,
+:root[data-theme="dark"] body .text-emerald-600,
+:root[data-theme="dark"] body .text-emerald-700,
+:root[data-theme="dark"] body .text-emerald-800 { color: #6ee7b7; }
+
+:root[data-theme="dark"] body .bg-rose-50 { background-color: rgba(225, 29, 72, 0.15); }
+:root[data-theme="dark"] body .bg-rose-100 { background-color: rgba(225, 29, 72, 0.22); }
+:root[data-theme="dark"] body .border-rose-100,
+:root[data-theme="dark"] body .border-rose-200 { border-color: rgba(253, 164, 175, 0.3); }
+:root[data-theme="dark"] body .text-rose-500,
+:root[data-theme="dark"] body .text-rose-600,
+:root[data-theme="dark"] body .text-rose-700,
+:root[data-theme="dark"] body .text-rose-800 { color: #fda4af; }
+
+:root[data-theme="dark"] body .bg-amber-50 { background-color: rgba(217, 119, 6, 0.15); }
+:root[data-theme="dark"] body .bg-amber-100 { background-color: rgba(217, 119, 6, 0.22); }
+:root[data-theme="dark"] body .border-amber-100,
+:root[data-theme="dark"] body .border-amber-200 { border-color: rgba(252, 211, 77, 0.3); }
+:root[data-theme="dark"] body .text-amber-500,
+:root[data-theme="dark"] body .text-amber-600,
+:root[data-theme="dark"] body .text-amber-700,
+:root[data-theme="dark"] body .text-amber-800 { color: #fcd34d; }
+
+:root[data-theme="dark"] body .bg-violet-50,
+:root[data-theme="dark"] body .bg-indigo-50 { background-color: rgba(124, 58, 237, 0.15); }
+:root[data-theme="dark"] body .bg-violet-100,
+:root[data-theme="dark"] body .bg-indigo-100 { background-color: rgba(124, 58, 237, 0.22); }
+:root[data-theme="dark"] body .text-violet-500,
+:root[data-theme="dark"] body .text-violet-600,
+:root[data-theme="dark"] body .text-violet-700,
+:root[data-theme="dark"] body .text-violet-800,
+:root[data-theme="dark"] body .text-indigo-500,
+:root[data-theme="dark"] body .text-indigo-600,
+:root[data-theme="dark"] body .text-indigo-700,
+:root[data-theme="dark"] body .text-indigo-800 { color: #c4b5fd; }
+
+/* Light gradients used by Reports/Debts/Settings become dark tinted gradients. */
+:root[data-theme="dark"] body [class~="from-blue-50"] { --tw-gradient-from: rgba(30, 64, 175, 0.24); }
+:root[data-theme="dark"] body [class~="from-white"] { --tw-gradient-from: var(--finance-surface) !important; }
+:root[data-theme="dark"] body [class~="via-white"] { --tw-gradient-via: #18242f !important; }
+:root[data-theme="dark"] body [class~="to-cyan-50"] { --tw-gradient-to: rgba(8, 145, 178, 0.16); }
+:root[data-theme="dark"] body [class~="to-blue-50"] { --tw-gradient-to: rgba(30, 64, 175, 0.2); }
+:root[data-theme="dark"] body [class~="via-[#F9FCFF]"] { --tw-gradient-via: #17212b; }
+:root[data-theme="dark"] body [class~="to-[#F1F6FB]"] { --tw-gradient-to: #1d2a35; }
+:root[data-theme="dark"] body [class~="to-[#F1F7FC]"] { --tw-gradient-to: #1d2a35; }
+:root[data-theme="dark"] body [class~="from-[#F9FCFF]"] { --tw-gradient-from: #17212b; }
+
+/* APP-DARK-MODE-1.3: dark surface consistency, semantic contrast and cross-page polish.
+ *
+ * The app intentionally keeps light-mode utility classes in feature components so
+ * Light remains the source visual language. Dark mode translates only those
+ * light surfaces/inks into shared dark tokens here. Exact utility selectors are
+ * used instead of broad element selectors so primary gradients, white-on-brand
+ * content and financial status meaning remain intact. */
+
+/* APP-DARK-MODE-1.3.1: white-surface scope integrity.
+ *
+ * Core light surfaces must be translated at the document/body boundary, not
+ * behind an optional wrapper class. AppShell owns several finance-* hooks, but
+ * feature content can render without being a descendant of `.finance-main`.
+ * Scoping white-card translation to that hook allowed real `bg-white` cards to
+ * leak back into Dark mode on Dashboard. Keep the selector exact and force the
+ * translated surface so Tailwind utility order can never reintroduce Light. */
+:root[data-theme="dark"] body .bg-white,
+:root[data-theme="dark"] body [class~="bg-white/60"],
+:root[data-theme="dark"] body [class~="bg-white/70"],
+:root[data-theme="dark"] body [class~="bg-white/75"],
+:root[data-theme="dark"] body [class~="bg-white/80"],
+:root[data-theme="dark"] body [class~="bg-white/85"],
+:root[data-theme="dark"] body [class~="bg-white/90"],
+:root[data-theme="dark"] body [class~="bg-white/95"] {
+  background-color: var(--finance-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="border-white/55"],
+:root[data-theme="dark"] body [class~="border-white/60"],
+:root[data-theme="dark"] body [class~="border-white/70"] {
+  border-color: var(--finance-border) !important;
+}
+
+/* Dashboard's soft-blue hierarchy evolved through several polish passes. Keep
+ * all supported legacy/current ink tokens readable so a single older card can
+ * never become dark-on-dark after a cross-page refactor. */
+:root[data-theme="dark"] body [class~="text-[#2F80ED]"] {
+  color: var(--finance-primary-text) !important;
+}
+:root[data-theme="dark"] body [class~="text-[#087A57]"],
+:root[data-theme="dark"] body [class~="text-[#0F9F70]"] {
+  color: #6ee7b7 !important;
+}
+
+:root[data-theme="dark"] body [class~="text-[#173A6A]"],
+:root[data-theme="dark"] body [class~="text-[#23466F]"],
+:root[data-theme="dark"] body [class~="text-[#24384B]"],
+:root[data-theme="dark"] body [class~="text-[#274A6D]"],
+:root[data-theme="dark"] body [class~="text-[#334E68]"],
+:root[data-theme="dark"] body [class~="text-[#36536B]"],
+:root[data-theme="dark"] body [class~="text-[#3F5F79]"],
+:root[data-theme="dark"] body [class~="text-[#4A6783]"],
+:root[data-theme="dark"] body [class~="text-[#4F6B85]"],
+:root[data-theme="dark"] body [class~="text-[#526D87]"],
+:root[data-theme="dark"] body [class~="text-[#52718F]"] {
+  color: var(--finance-text) !important;
+}
+
+:root[data-theme="dark"] body [class~="text-[#5F7890]"],
+:root[data-theme="dark"] body [class~="text-[#607A92]"],
+:root[data-theme="dark"] body [class~="text-[#61788F]"],
+:root[data-theme="dark"] body [class~="text-[#687E93]"],
+:root[data-theme="dark"] body [class~="text-[#718AA1]"],
+:root[data-theme="dark"] body [class~="text-[#7D93A8]"],
+:root[data-theme="dark"] body [class~="text-[#8196AA]"],
+:root[data-theme="dark"] body [class~="text-[#879AAF]"],
+:root[data-theme="dark"] body [class~="text-[#587A9B]"] {
+  color: var(--finance-text-secondary) !important;
+}
+
+:root[data-theme="dark"] body [class~="text-[#7890A3]"],
+:root[data-theme="dark"] body [class~="text-[#7C91A5]"],
+:root[data-theme="dark"] body [class~="text-[#8AA0B5]"],
+:root[data-theme="dark"] body [class~="text-[#8CA0B3]"],
+:root[data-theme="dark"] body [class~="text-[#A0B1C2]"] {
+  color: var(--finance-muted) !important;
+}
+
+:root[data-theme="dark"] body [class~="border-[#D7E3EE]"],
+:root[data-theme="dark"] body [class~="border-[#D9E7F4]"],
+:root[data-theme="dark"] body [class~="border-[#DBE6EF]"],
+:root[data-theme="dark"] body [class~="border-[#DCE6EF]"],
+:root[data-theme="dark"] body [class~="border-[#DDE7F0]"],
+:root[data-theme="dark"] body [class~="border-[#E2EAF2]"],
+:root[data-theme="dark"] body [class~="border-[#E4ECF3]"],
+:root[data-theme="dark"] body [class~="border-[#E5EDF4]"],
+:root[data-theme="dark"] body [class~="border-[#E6EDF5]"],
+:root[data-theme="dark"] body [class~="border-[#CFE1F4]"],
+:root[data-theme="dark"] body [class~="border-[#E8F0F7]"] {
+  border-color: var(--finance-border) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-[#EAF3FC]"],
+:root[data-theme="dark"] body [class~="bg-[#EEFBF6]"],
+:root[data-theme="dark"] body [class~="bg-[#EDF4FA]"],
+:root[data-theme="dark"] body [class~="bg-[#EEF3FA]"],
+:root[data-theme="dark"] body [class~="bg-[#EFF6FF]"],
+:root[data-theme="dark"] body [class~="bg-[#F0F7FF]"],
+:root[data-theme="dark"] body [class~="bg-[#F1F6FB]"],
+:root[data-theme="dark"] body [class~="bg-[#F1F7FC]"],
+:root[data-theme="dark"] body [class~="bg-[#F3F7FB]"],
+:root[data-theme="dark"] body [class~="bg-[#F3F8FF]"],
+:root[data-theme="dark"] body [class~="bg-[#F4F8FB]"],
+:root[data-theme="dark"] body [class~="bg-[#F8FAFC]"],
+:root[data-theme="dark"] body [class~="bg-[#F8FBFD]"],
+:root[data-theme="dark"] body [class~="bg-[#F8FBFE]"],
+:root[data-theme="dark"] body [class~="bg-[#F8FBFF]"],
+:root[data-theme="dark"] body [class~="bg-[#F9FCFF]"],
+:root[data-theme="dark"] body [class~="bg-[#FAFCFE]"] {
+  background-color: var(--finance-surface-soft) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-[#F3F8FE]"] {
+  background-color: var(--finance-semantic-blue-surface) !important;
+}
+:root[data-theme="dark"] body [class~="bg-[#F1FBF7]"] {
+  background-color: var(--finance-semantic-emerald-surface) !important;
+}
+:root[data-theme="dark"] body [class~="bg-[#FFF5F6]"] {
+  background-color: var(--finance-semantic-rose-surface) !important;
+}
+:root[data-theme="dark"] body [class~="bg-[#F5F6FF]"] {
+  background-color: var(--finance-semantic-violet-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="divide-[#E5EDF4]"] > :not(:last-child) {
+  border-color: var(--finance-border) !important;
+}
+
+/* Neutral translucent bars (Reports filters, dense mobile toolbars). */
+:root[data-theme="dark"] body [class~="bg-slate-50/60"],
+:root[data-theme="dark"] body [class~="bg-slate-50/70"],
+:root[data-theme="dark"] body [class~="bg-slate-50/80"],
+:root[data-theme="dark"] body [class~="bg-slate-50/90"] {
+  background-color: var(--finance-surface-soft) !important;
+}
+:root[data-theme="dark"] body [class~="bg-slate-100/60"],
+:root[data-theme="dark"] body [class~="bg-slate-100/70"],
+:root[data-theme="dark"] body [class~="bg-slate-100/80"] {
+  background-color: var(--finance-surface-muted) !important;
+}
+
+/* Semi-transparent status utilities are distinct Tailwind classes, so the
+ * base .bg-*-50/.bg-*-100 bridge does not catch them. Map the variants used
+ * by KPI cards, DailyMetric, toasts and recovery banners explicitly. */
+:root[data-theme="dark"] body [class~="bg-blue-50/45"],
+:root[data-theme="dark"] body [class~="bg-blue-50/50"],
+:root[data-theme="dark"] body [class~="bg-blue-50/60"],
+:root[data-theme="dark"] body [class~="bg-blue-50/70"],
+:root[data-theme="dark"] body [class~="bg-blue-50/80"],
+:root[data-theme="dark"] body [class~="bg-blue-50/90"],
+:root[data-theme="dark"] body [class~="bg-blue-50/95"],
+:root[data-theme="dark"] body [class~="bg-blue-100/70"] {
+  background-color: var(--finance-semantic-blue-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-cyan-50/60"],
+:root[data-theme="dark"] body [class~="bg-cyan-50/70"],
+:root[data-theme="dark"] body [class~="bg-cyan-50/90"],
+:root[data-theme="dark"] body [class~="bg-cyan-50/95"],
+:root[data-theme="dark"] body [class~="bg-cyan-100/70"] {
+  background-color: var(--finance-semantic-cyan-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-emerald-50/60"],
+:root[data-theme="dark"] body [class~="bg-emerald-50/70"],
+:root[data-theme="dark"] body [class~="bg-emerald-50/90"],
+:root[data-theme="dark"] body [class~="bg-emerald-50/95"],
+:root[data-theme="dark"] body [class~="bg-emerald-100/70"] {
+  background-color: var(--finance-semantic-emerald-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-rose-50/60"],
+:root[data-theme="dark"] body [class~="bg-rose-50/70"],
+:root[data-theme="dark"] body [class~="bg-rose-50/90"],
+:root[data-theme="dark"] body [class~="bg-rose-50/95"],
+:root[data-theme="dark"] body [class~="bg-rose-100/70"] {
+  background-color: var(--finance-semantic-rose-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-amber-50/60"],
+:root[data-theme="dark"] body [class~="bg-amber-50/70"],
+:root[data-theme="dark"] body [class~="bg-amber-50/90"],
+:root[data-theme="dark"] body [class~="bg-amber-50/95"],
+:root[data-theme="dark"] body [class~="bg-amber-100/70"] {
+  background-color: var(--finance-semantic-amber-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="bg-violet-50/60"],
+:root[data-theme="dark"] body [class~="bg-violet-50/70"],
+:root[data-theme="dark"] body [class~="bg-violet-50/90"],
+:root[data-theme="dark"] body [class~="bg-violet-50/95"],
+:root[data-theme="dark"] body [class~="bg-violet-100/70"],
+:root[data-theme="dark"] body [class~="bg-indigo-50/60"],
+:root[data-theme="dark"] body [class~="bg-indigo-50/70"],
+:root[data-theme="dark"] body [class~="bg-indigo-50/90"],
+:root[data-theme="dark"] body [class~="bg-indigo-50/95"],
+:root[data-theme="dark"] body [class~="bg-indigo-100/70"] {
+  background-color: var(--finance-semantic-violet-surface) !important;
+}
+
+:root[data-theme="dark"] body [class~="border-blue-100/70"],
+:root[data-theme="dark"] body [class~="border-blue-200/70"] { border-color: rgba(96, 165, 250, 0.32); }
+:root[data-theme="dark"] body [class~="border-cyan-100/70"],
+:root[data-theme="dark"] body [class~="border-cyan-200/70"] { border-color: rgba(103, 232, 249, 0.28); }
+:root[data-theme="dark"] body [class~="border-emerald-100/70"],
+:root[data-theme="dark"] body [class~="border-emerald-200/70"] { border-color: rgba(110, 231, 183, 0.3); }
+:root[data-theme="dark"] body [class~="border-rose-100/70"],
+:root[data-theme="dark"] body [class~="border-rose-200/70"] { border-color: rgba(253, 164, 175, 0.3); }
+:root[data-theme="dark"] body [class~="border-amber-100/70"],
+:root[data-theme="dark"] body [class~="border-amber-200/70"] { border-color: rgba(252, 211, 77, 0.3); }
+:root[data-theme="dark"] body [class~="border-violet-100/70"],
+:root[data-theme="dark"] body [class~="border-violet-200/70"],
+:root[data-theme="dark"] body [class~="border-indigo-100/70"],
+:root[data-theme="dark"] body [class~="border-indigo-200/70"] { border-color: rgba(196, 181, 253, 0.3); }
+
+:root[data-theme="dark"] body .border-violet-100,
+:root[data-theme="dark"] body .border-violet-200,
+:root[data-theme="dark"] body .border-indigo-100,
+:root[data-theme="dark"] body .border-indigo-200 {
+  border-color: rgba(196, 181, 253, 0.3);
+}
+
+/* Semantic KPI gradients (Transactions + other summary cards). `to-white`
+ * was the primary reason the cards still looked like Light mode: changing a
+ * background-color cannot alter a gradient stop, so both ends are translated. */
+:root[data-theme="dark"] body [class~="from-blue-50"] {
+  --tw-gradient-from: rgba(59, 130, 246, 0.2) !important;
+}
+:root[data-theme="dark"] body [class~="from-cyan-50"] {
+  --tw-gradient-from: rgba(6, 182, 212, 0.18) !important;
+}
+:root[data-theme="dark"] body [class~="from-emerald-50"] {
+  --tw-gradient-from: rgba(16, 185, 129, 0.18) !important;
+}
+:root[data-theme="dark"] body [class~="from-rose-50"] {
+  --tw-gradient-from: rgba(244, 63, 94, 0.18) !important;
+}
+:root[data-theme="dark"] body [class~="from-amber-50"] {
+  --tw-gradient-from: rgba(245, 158, 11, 0.18) !important;
+}
+:root[data-theme="dark"] body [class~="from-violet-50"],
+:root[data-theme="dark"] body [class~="from-indigo-50"] {
+  --tw-gradient-from: rgba(139, 92, 246, 0.18) !important;
+}
+:root[data-theme="dark"] body [class~="to-white"] {
+  --tw-gradient-to: rgba(27, 40, 52, 0.98) !important;
+}
+
+/* Sidebar sync status and older Dashboard hero gradients use their own stops. */
+:root[data-theme="dark"] body [class~="from-slate-50"] {
+  --tw-gradient-from: #1b2834 !important;
+}
+:root[data-theme="dark"] body [class~="to-blue-50/40"] {
+  --tw-gradient-to: rgba(59, 130, 246, 0.13) !important;
+}
+:root[data-theme="dark"] body [class~="from-[#F8FBFF]"] {
+  --tw-gradient-from: #17212b !important;
+}
+:root[data-theme="dark"] body [class~="via-[#F8FBFF]"] {
+  --tw-gradient-via: #1a2732 !important;
+}
+:root[data-theme="dark"] body [class~="via-[#FCFEFF]"] {
+  --tw-gradient-via: #1a2732 !important;
+}
+:root[data-theme="dark"] body [class~="to-[#EDF6FF]"] {
+  --tw-gradient-to: #1d2a35 !important;
+}
+
+/* Variant states that otherwise re-introduce a white flash while typing or
+ * hovering on dark search/filter surfaces. */
+:root[data-theme="dark"] body [class~="focus-within:bg-white"]:focus-within,
+:root[data-theme="dark"] body [class~="hover:bg-white"]:hover,
+:root[data-theme="dark"] body [class~="hover:bg-white/70"]:hover {
+  background-color: var(--finance-surface-elevated) !important;
+}
+
+/* Deliberate topbar affordance: Sun stays visually identifiable without a
+ * bright white square floating in the dark header. */
+:root[data-theme="dark"] [data-theme-toggle="quick"] {
+  background: var(--finance-surface-elevated) !important;
+  border-color: var(--finance-border-strong) !important;
+  color: #fcd34d !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.24) !important;
+}
+:root[data-theme="dark"] [data-theme-toggle="quick"]:hover {
+  background: var(--finance-surface-strong) !important;
+  color: #fde68a !important;
+}
+
+:root[data-theme="dark"] body [class~="h-1.5"][class~="rounded-full"][class~="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Dark cards should read as layered surfaces, not light cards with recolored
+ * text. Keep custom light shadows from blooming blue/white on the dark canvas. */
+:root[data-theme="dark"] body section[class~="bg-white"],
+:root[data-theme="dark"] body article[class~="bg-white"],
+:root[data-theme="dark"] body div[class~="bg-white"][class*="shadow-"] {
+  box-shadow: var(--finance-shadow-card) !important;
+}
+
+/* Dark interaction states: avoid pale flashes on desktop hover / iPhone press. */
+:root[data-theme="dark"] body [class~="hover:bg-blue-50"]:hover { background-color: rgba(37, 99, 235, 0.16); }
+:root[data-theme="dark"] body [class~="hover:bg-slate-50"]:hover { background-color: var(--finance-surface-soft); }
+:root[data-theme="dark"] body [class~="hover:bg-slate-100"]:hover { background-color: var(--finance-surface-muted); }
+:root[data-theme="dark"] body [class~="hover:bg-rose-50"]:hover { background-color: rgba(225, 29, 72, 0.15); }
+:root[data-theme="dark"] body [class~="active:bg-[#F3F7FB]"]:active,
+:root[data-theme="dark"] body [class~="hover:bg-[#F3F8FF]"]:hover { background-color: var(--finance-surface-muted); }
+
+/* Native form controls should belong to the same dark surface, including iPhone. */
+:root[data-theme="dark"] body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+:root[data-theme="dark"] body select,
+:root[data-theme="dark"] body textarea {
+  background-color: #16232d;
+  border-color: var(--finance-border);
+  color: var(--finance-text);
+}
+:root[data-theme="dark"] body input::placeholder,
+:root[data-theme="dark"] body textarea::placeholder { color: #8296a7; }
+:root[data-theme="dark"] body option {
+  background: #17212b;
+  color: var(--finance-text);
+}
+:root[data-theme="dark"] body input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] body input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.82);
+}
+
+/* Recharts defaults otherwise keep light tooltip/grid chrome. */
+:root[data-theme="dark"] .recharts-cartesian-grid line { stroke: #314556; }
+:root[data-theme="dark"] .recharts-text { fill: #9fb1bf; }
+:root[data-theme="dark"] .recharts-default-tooltip {
+  background: #17212b !important;
+  border-color: #42586b !important;
+  color: #e7eef5 !important;
+}
+:root[data-theme="dark"] .recharts-tooltip-label,
+:root[data-theme="dark"] .recharts-tooltip-item { color: #e7eef5 !important; }
+
+:root[data-theme="dark"] ::selection { background: rgba(91, 162, 255, 0.32); }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #42586b; }
+
+:root[data-theme="dark"] .skeleton-pulse {
+  background-color: #1d2a35;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="dark"] .skeleton-pulse {
+    animation-name: skeleton-pulse-dark;
+  }
+}
+@keyframes skeleton-pulse-dark {
+  0%, 100% { background-color: #1d2a35; }
+  50% { background-color: #2a3b49; }
+}
+
+@media (max-width: 767px) {
+  :root[data-theme="dark"] .finance-main {
+    background: linear-gradient(180deg, #121d27 0%, var(--finance-page) 15rem);
+  }
+  :root[data-theme="dark"] .finance-header {
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.24);
+  }
+  :root[data-theme="dark"] .finance-sidebar {
+    box-shadow: 16px 0 40px rgba(0, 0, 0, 0.36);
+  }
+  :root[data-theme="dark"] .finance-bottom-nav {
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* APP-DARK-MODE-1.3.2: Dashboard native dark surfaces & runtime integrity.
+ * Dashboard intentionally keeps its established light-palette utility classes
+ * for Light mode. Semantic data hooks below give Dark mode a stable runtime
+ * contract that does not depend on translating arbitrary Tailwind literals. */
+:root[data-theme="dark"] [data-dashboard-surface="hero-shell"] {
+  background-color: var(--finance-surface) !important;
+  border-color: var(--finance-border) !important;
+  box-shadow: 0 18px 42px rgba(2, 8, 23, 0.28) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-surface="hero-gradient"] {
+  background: linear-gradient(135deg, #17212b 0%, #18242f 52%, #1d2a35 100%) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-surface="hero-mini"] {
+  background-color: var(--finance-surface-elevated) !important;
+  border-color: #3a5061 !important;
+  box-shadow: 0 8px 20px rgba(2, 8, 23, 0.24) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-surface="hero-mini-icon"] {
+  background-color: rgba(47, 128, 237, 0.16) !important;
+  color: #7db4ff !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-surface="networth-history"] {
+  background-color: var(--finance-surface-elevated) !important;
+  border-color: #3a5061 !important;
+  box-shadow: 0 10px 26px rgba(2, 8, 23, 0.22) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-surface="networth-snapshot"] {
+  background-color: rgba(37, 99, 235, 0.12) !important;
+  border-color: rgba(125, 180, 255, 0.3) !important;
+  box-shadow: inset 0 1px 0 rgba(148, 197, 255, 0.06) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-action="reports"] {
+  background-color: #1b2834 !important;
+  border-color: #466074 !important;
+  color: #7db4ff !important;
+  box-shadow: 0 5px 14px rgba(2, 8, 23, 0.22) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-action="reports"]:hover {
+  background-color: #21313e !important;
+  border-color: #5c7a90 !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-ink="hero-title"],
+:root[data-theme="dark"] [data-dashboard-ink="history-title"],
+:root[data-theme="dark"] [data-dashboard-ink="snapshot-value"] {
+  color: var(--finance-text) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-ink="hero-copy"],
+:root[data-theme="dark"] [data-dashboard-ink="history-copy"],
+:root[data-theme="dark"] [data-dashboard-ink="snapshot-copy"] {
+  color: var(--finance-text-secondary) !important;
+}
+
+:root[data-theme="dark"] [data-dashboard-ink="hero-mini-label"] {
+  color: #c5d3df !important;
+}
+
+/* APP-DARK-MODE-1.3.3: cross-page native dark surfaces & residual light elimination.
+ * These hooks intentionally own only the residual Light surfaces observed at
+ * runtime. They avoid broad utility translation so existing Light mode, mobile
+ * hierarchy and semantic status colors remain unchanged. */
+:root[data-theme="dark"] [data-dark-surface="transaction-feed-summary"] {
+  background: linear-gradient(180deg, rgba(35, 52, 66, 0.96), rgba(29, 42, 53, 0.96)) !important;
+  border-color: var(--finance-border) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="transaction-day-header"] {
+  background: rgba(23, 33, 43, 0.97) !important;
+  border-color: var(--finance-border) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="goal-card-metrics"],
+:root[data-theme="dark"] [data-dark-surface="category-stats"],
+:root[data-theme="dark"] [data-dark-surface="savings-account-meta"],
+:root[data-theme="dark"] [data-dark-surface="investment-capital-summary"] {
+  background: var(--finance-surface-strong) !important;
+  border-color: var(--finance-border) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="goal-forecast"] {
+  background: rgba(59, 130, 246, 0.10) !important;
+  border-color: rgba(125, 180, 255, 0.24) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="goal-progress-track"],
+:root[data-theme="dark"] [data-dark-surface="goal-priority-progress-track"],
+:root[data-theme="dark"] [data-dark-surface="savings-emergency-progress-track"],
+:root[data-theme="dark"] [data-dark-surface="savings-account-progress-track"] {
+  background: #2a3a47 !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="savings-forecast-list"] {
+  background: var(--finance-surface-soft) !important;
+  border-color: var(--finance-border) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="savings-forecast-item"] {
+  background: var(--finance-semantic-blue-surface) !important;
+  border-color: rgba(125, 180, 255, 0.24) !important;
+}
+
+:root[data-theme="dark"] [data-dark-surface="savings-filter-tabs"] {
+  background: var(--finance-surface-strong) !important;
+  border-color: var(--finance-border) !important;
+}
+
+@media (max-width: 639px) {
+  /* Categories intentionally use only a divider on compact cards. Preserve that
+   * density while still preventing desktop responsive utilities from leaking. */
+  :root[data-theme="dark"] [data-dark-surface="category-stats"] {
+    background: transparent !important;
+    border-color: var(--finance-border) !important;
+  }
+}

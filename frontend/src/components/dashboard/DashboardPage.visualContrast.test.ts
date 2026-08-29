@@ -47,4 +47,15 @@ describe("Dashboard visual contrast hierarchy", () => {
     expect(source).toContain("border-emerald-300 bg-[#E5F7EF] text-[#076B4D]");
     expect(source).toContain("border-rose-200 bg-rose-50/95 text-rose-700");
   });
+
+  it("exposes semantic Dashboard hooks so Dark mode never depends on generic white-card translation", () => {
+    expect(source).toContain('data-dashboard-surface="hero-shell"');
+    expect(source).toContain('data-dashboard-surface="hero-gradient"');
+    expect(source).toContain('data-dashboard-surface="hero-mini"');
+    expect(source).toContain('data-dashboard-surface="networth-history"');
+    expect(source).toContain('data-dashboard-surface="networth-snapshot"');
+    expect(source).toContain('data-dashboard-ink="hero-title"');
+    expect(source).toContain('data-dashboard-ink="hero-mini-label"');
+    expect(source).toContain('data-dashboard-action="reports"');
+  });
 });

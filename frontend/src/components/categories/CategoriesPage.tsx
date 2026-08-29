@@ -1037,7 +1037,10 @@ export default function CategoriesPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-4 border-t border-slate-100 pt-2.5 sm:mt-4 sm:grid-cols-2 sm:rounded-2xl sm:border-0 sm:bg-slate-50 sm:p-3">
+                <div
+                  data-dark-surface="category-stats"
+                  className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-4 border-t border-slate-100 pt-2.5 sm:mt-4 sm:grid-cols-2 sm:rounded-2xl sm:border-0 sm:bg-slate-50 sm:p-3"
+                >
                   <div className="min-w-0">
                     <p className="text-[9px] font-black uppercase tracking-wide text-slate-400">
                       Giao dịch

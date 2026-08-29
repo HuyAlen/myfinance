@@ -1365,7 +1365,10 @@ export default function InvestmentsPage() {
                 />
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#F6F9FC] p-3 sm:mt-4 sm:rounded-2xl">
+              <div
+                data-dark-surface="investment-capital-summary"
+                className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#F6F9FC] p-3 sm:mt-4 sm:rounded-2xl"
+              >
                 <TinyMetric
                   label="Đã nạp"
                   value={formatMoney(account.deposits)}
