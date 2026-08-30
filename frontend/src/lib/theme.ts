@@ -8,6 +8,10 @@ export function isThemePreference(value: unknown): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";
 }
 
+export function isResolvedTheme(value: unknown): value is ResolvedTheme {
+  return value === "light" || value === "dark";
+}
+
 export function resolveThemePreference(
   preference: ThemePreference,
   prefersDark: boolean,

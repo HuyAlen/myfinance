@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -469,9 +476,10 @@ export default function Header({
 }: HeaderProps) {
   const { user } = useAuth();
   const { context: householdContext } = useHousehold();
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
+  const quickThemeTouchAtRef = useRef(0);
   const {
     filterMode,
     setFilterMode,
@@ -947,7 +955,18 @@ export default function Header({
   }
 
   function handleQuickThemeToggle() {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+    // A touchend on iOS is followed by a synthetic click. Ignore that second
+    // activation so one tap always means exactly one theme transition.
+    if (Date.now() - quickThemeTouchAtRef.current < 700) return;
+    toggleTheme();
+  }
+
+  function handleQuickThemeTouchEnd(
+    event: ReactTouchEvent<HTMLButtonElement>,
+  ) {
+    if (event.cancelable) event.preventDefault();
+    quickThemeTouchAtRef.current = Date.now();
+    toggleTheme();
   }
 
   function closeAll() {
@@ -1439,8 +1458,9 @@ export default function Header({
               opposite of the currently resolved device theme. */}
           <button
             type="button"
+            onTouchEnd={handleQuickThemeTouchEnd}
             onClick={handleQuickThemeToggle}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#DBE6EF] bg-white p-0 text-[#607A92] shadow-[0_3px_10px_rgba(54,83,107,0.06)] transition hover:bg-[#F3F8FF] hover:text-[#2F80ED] active:scale-[.96]"
+            className="flex h-11 w-11 touch-manipulation select-none shrink-0 items-center justify-center rounded-2xl border border-[#DBE6EF] bg-white p-0 text-[#607A92] shadow-[0_3px_10px_rgba(54,83,107,0.06)] transition hover:bg-[#F3F8FF] hover:text-[#2F80ED] active:scale-[.96] [-webkit-tap-highlight-color:transparent]"
             aria-label={
               resolvedTheme === "dark"
                 ? "Chuyển sang giao diện sáng"
@@ -1451,7 +1471,9 @@ export default function Header({
                 ? "Chuyển sang giao diện sáng"
                 : "Chuyển sang giao diện tối"
             }
+            aria-pressed={resolvedTheme === "dark"}
             data-theme-toggle="quick"
+            data-theme-toggle-touch="ios-safe"
           >
             {resolvedTheme === "dark" ? (
               <Sun size={17} aria-hidden="true" />

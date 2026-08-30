@@ -43,21 +43,41 @@ describe("APP-DARK-MODE-1 cross-page theme contract", () => {
     expect(provider).toContain('root.dataset.theme = resolvedTheme');
     expect(provider).toContain('root.style.colorScheme = resolvedTheme');
     expect(provider).toContain('media.addEventListener("change", onSystemThemeChange)');
+    expect(provider).toContain('window.addEventListener("pageshow", onPageShow)');
+    expect(provider).toContain('document.addEventListener("visibilitychange", onVisibilityChange)');
     expect(provider).toContain('themeRef.current !== "system"');
     expect(provider).toContain('meta[name="theme-color"]');
   });
 
   it("exposes a compact topbar quick toggle without duplicating theme authority", () => {
     expect(header).toContain('import { useTheme } from "@/src/components/theme/ThemeProvider";');
-    expect(header).toContain('const { resolvedTheme, setTheme } = useTheme();');
+    expect(header).toContain('const { resolvedTheme, toggleTheme } = useTheme();');
     expect(header).toContain('data-theme-toggle="quick"');
-    expect(header).toContain('setTheme(resolvedTheme === "dark" ? "light" : "dark")');
+    expect(header).toContain('toggleTheme();');
     expect(header).toContain('Chuyển sang giao diện sáng');
     expect(header).toContain('Chuyển sang giao diện tối');
     expect(header).toContain('<Sun size={17} aria-hidden="true" />');
     expect(header).toContain('<Moon size={17} aria-hidden="true" />');
-    expect(header).toContain('h-11 w-11 shrink-0');
+    expect(header).toContain('h-11 w-11');
+    expect(header).toContain('shrink-0');
     expect(header).not.toContain('THEME_STORAGE_KEY');
+  });
+
+  it("keeps the iPhone quick toggle touch-safe and resynchronizes Safari/PWA lifecycle state", () => {
+    expect(provider).toContain("toggleTheme: () => void");
+    expect(provider).toContain("isResolvedTheme(domTheme)");
+    expect(provider).toContain("document.documentElement.dataset.theme");
+    expect(provider).toContain('querySelectorAll<HTMLMetaElement>(\'meta[name="theme-color"]\')');
+    expect(provider).toContain('window.addEventListener("pageshow", onPageShow)');
+    expect(provider).toContain('window.addEventListener("storage", onStorage)');
+    expect(provider).toContain('document.addEventListener("visibilitychange", onVisibilityChange)');
+    expect(header).toContain("quickThemeTouchAtRef");
+    expect(header).toContain("onTouchEnd={handleQuickThemeTouchEnd}");
+    expect(header).toContain("event.preventDefault()");
+    expect(header).toContain("touch-manipulation");
+    expect(header).toContain("[-webkit-tap-highlight-color:transparent]");
+    expect(header).toContain('data-theme-toggle-touch="ios-safe"');
+    expect(header).toContain('aria-pressed={resolvedTheme === "dark"}');
   });
 
   it("defines a dark financial token system instead of a black inversion", () => {
