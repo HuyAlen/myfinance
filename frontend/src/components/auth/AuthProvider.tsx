@@ -53,6 +53,12 @@ const LOCAL_UI_SESSION: Session = {
   user: LOCAL_UI_USER,
 };
 
+// Auth bootstrap must never be allowed to hold AppShell's startup skeleton
+// forever. This is intentionally longer than a normal local-storage session
+// read so a legitimate token refresh still has room to complete on a slow
+// connection, while providing a deterministic fail-closed escape hatch.
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() =>
     LOCAL_UI_MODE ? LOCAL_UI_USER : null,
@@ -83,8 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     };
 
-    // Development-only UI mode. This bypasses Supabase auth so the
-    // frontend can be inspected locally without a reachable Supabase project.
+    // Development-only UI mode. State is already initialized synchronously by
+    // the lazy useState initializers above, so this effect only reports ready.
     if (LOCAL_UI_MODE) {
       reportAuthReady();
       return;
@@ -92,28 +98,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let active = true;
 
-    // Normal Supabase authentication.
-    void supabase.auth.getSession().then(({ data: { session } }) => {
+    // Every auth-state event increments this revision. The initial getSession
+    // result is only allowed to commit if no newer auth event (or timeout) has
+    // happened first. This prevents a stale bootstrap response from clobbering
+    // a newer SIGNED_IN / TOKEN_REFRESHED state.
+    let authStateRevision = 0;
+    const initialRevision = authStateRevision;
+
+    const applyResolvedSession = (nextSession: Session | null) => {
       if (!active) return;
 
-      setSession(session);
-      setUser(session?.user ?? null);
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
       setLoading(false);
       reportAuthReady();
-    });
+    };
+
+    const settleBootstrapFailure = (reason: unknown) => {
+      if (!active || authStateRevision !== initialRevision) return;
+
+      // Invalidate the outstanding initial request so a late resolution cannot
+      // overwrite a newer state after we have already failed closed.
+      authStateRevision += 1;
+      setSession(null);
+      setUser(null);
+      setLoading(false);
+
+      // Do not include tokens/session payloads in logs. Supabase error objects
+      // may carry implementation details, so only emit a bounded message.
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : "Unable to resolve initial auth session.";
+      console.error("[AuthProvider] Initial session bootstrap failed:", message);
+    };
+
+    const initialSessionTimeout = window.setTimeout(() => {
+      settleBootstrapFailure(
+        `Session bootstrap exceeded ${AUTH_SESSION_TIMEOUT_MS}ms.`,
+      );
+    }, AUTH_SESSION_TIMEOUT_MS);
+
+    // Normal Supabase authentication. Handle both failure shapes Supabase can
+    // surface here: a resolved result carrying `error`, and a rejected Promise.
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session: initialSession }, error }) => {
+        if (!active || authStateRevision !== initialRevision) return;
+
+        window.clearTimeout(initialSessionTimeout);
+
+        if (error) {
+          settleBootstrapFailure(error.message);
+          return;
+        }
+
+        applyResolvedSession(initialSession);
+      })
+      .catch((error: unknown) => {
+        if (!active || authStateRevision !== initialRevision) return;
+
+        window.clearTimeout(initialSessionTimeout);
+        settleBootstrapFailure(error);
+      });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
 
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+      authStateRevision += 1;
+      window.clearTimeout(initialSessionTimeout);
+      applyResolvedSession(nextSession);
     });
 
     return () => {
       active = false;
+      window.clearTimeout(initialSessionTimeout);
       subscription.unsubscribe();
     };
   }, []);
