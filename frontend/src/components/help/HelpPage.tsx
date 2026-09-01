@@ -28,8 +28,15 @@ import {
   Zap,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type IconComponent = React.ComponentType<{ size?: number; strokeWidth?: number }>;
+// HELP-CANONICAL-FINANCE-1
+// Help copy mirrors the product's current canonical finance semantics. This
+// page stays informational only: calculation authority remains in the shared
+// finance services and each feature page.
+
+type IconComponent = React.ComponentType<{
+  size?: number;
+  strokeWidth?: number;
+}>;
 
 type Guide = {
   id: string;
@@ -85,7 +92,6 @@ type OnboardStep = {
   shadow: string;
 };
 
-// ─── Data: Onboarding Steps ──────────────────────────────────────────────────
 const ONBOARDING_STEPS: OnboardStep[] = [
   {
     step: 1,
@@ -142,7 +148,7 @@ const ONBOARDING_STEPS: OnboardStep[] = [
   {
     step: 5,
     title: "Tạo mục tiêu đầu tiên",
-    desc: "Thiết lập mục tiêu tiết kiệm có kỳ hạn để đạt được ước mơ tài chính.",
+    desc: "Thiết lập mục tiêu tiết kiệm có kỳ hạn để theo dõi tiến độ tài chính.",
     icon: Target,
     href: "/goals",
     cta: "Đặt mục tiêu",
@@ -154,28 +160,27 @@ const ONBOARDING_STEPS: OnboardStep[] = [
   },
 ];
 
-// ─── Data: Checklist ─────────────────────────────────────────────────────────
+// ONBOARDING-SSOT-1 is intentionally out of scope for this package. Keep the
+// existing Help checklist storage contract unchanged here.
 const CHECKLIST_ITEMS: ChecklistItem[] = [
-  { id: "profile",     label: "Hoàn thành hồ sơ",          href: "/settings",     desc: "Cập nhật tên và thông tin cá nhân" },
-  { id: "wallet",      label: "Tạo ví đầu tiên",            href: "/wallets",      desc: "Thêm ít nhất một ví tiền" },
-  { id: "transaction", label: "Thêm giao dịch đầu tiên",    href: "/transactions", desc: "Ghi lại khoản thu hoặc chi đầu tiên" },
-  { id: "budget",      label: "Tạo ngân sách",              href: "/budgets",      desc: "Đặt ngân sách cho ít nhất một danh mục" },
-  { id: "goal",        label: "Tạo mục tiêu",               href: "/goals",        desc: "Thiết lập mục tiêu tài chính đầu tiên" },
-  { id: "data",        label: "Kết nối dữ liệu",            href: "/settings",     desc: "Xem trạng thái đồng bộ Supabase" },
-  { id: "report",      label: "Xem báo cáo",                href: "/reports",      desc: "Khám phá phân tích tài chính" },
+  { id: "profile", label: "Hoàn thành hồ sơ", href: "/settings", desc: "Cập nhật tên và thông tin cá nhân" },
+  { id: "wallet", label: "Tạo ví đầu tiên", href: "/wallets", desc: "Thêm ít nhất một ví tiền" },
+  { id: "transaction", label: "Thêm giao dịch đầu tiên", href: "/transactions", desc: "Ghi lại khoản thu hoặc chi đầu tiên" },
+  { id: "budget", label: "Tạo ngân sách", href: "/budgets", desc: "Đặt ngân sách cho ít nhất một danh mục" },
+  { id: "goal", label: "Tạo mục tiêu", href: "/goals", desc: "Thiết lập mục tiêu tài chính đầu tiên" },
+  { id: "data", label: "Kết nối dữ liệu", href: "/settings", desc: "Xem trạng thái đồng bộ Supabase" },
+  { id: "report", label: "Xem báo cáo", href: "/reports", desc: "Khám phá phân tích tài chính" },
 ];
 
-// ─── Data: Quick Flow ────────────────────────────────────────────────────────
 const QUICK_FLOW: QuickFlowStep[] = [
-  { num: 1, title: "Tạo ví",           desc: "Thêm tài khoản ngân hàng, tiền mặt",   href: "/wallets",      numBg: "bg-blue-600",   numText: "text-white" },
-  { num: 2, title: "Thêm giao dịch",   desc: "Ghi chép thu chi hàng ngày",           href: "/transactions", numBg: "bg-emerald-600",numText: "text-white" },
-  { num: 3, title: "Tạo ngân sách",    desc: "Kiểm soát chi tiêu theo tháng",        href: "/budgets",      numBg: "bg-cyan-600",   numText: "text-white" },
-  { num: 4, title: "Tạo mục tiêu",     desc: "Đặt mục tiêu tiết kiệm cụ thể",       href: "/goals",        numBg: "bg-indigo-600", numText: "text-white" },
-  { num: 5, title: "Theo dõi Dashboard",desc: "Xem tổng quan tài chính mỗi ngày",   href: "/",             numBg: "bg-violet-600", numText: "text-white" },
-  { num: 6, title: "Xem AI Insights",  desc: "Nhận tư vấn thông minh từ AI",         href: "/ai-insights",  numBg: "bg-rose-500",   numText: "text-white" },
+  { num: 1, title: "Tạo ví", desc: "Thêm tài khoản ngân hàng, tiền mặt", href: "/wallets", numBg: "bg-blue-600", numText: "text-white" },
+  { num: 2, title: "Thêm giao dịch", desc: "Ghi chép thu chi hàng ngày", href: "/transactions", numBg: "bg-emerald-600", numText: "text-white" },
+  { num: 3, title: "Tạo ngân sách", desc: "Kiểm soát chi tiêu theo tháng", href: "/budgets", numBg: "bg-cyan-600", numText: "text-white" },
+  { num: 4, title: "Tạo mục tiêu", desc: "Đặt mục tiêu tiết kiệm cụ thể", href: "/goals", numBg: "bg-indigo-600", numText: "text-white" },
+  { num: 5, title: "Theo dõi Dashboard", desc: "Xem tổng quan tài chính mỗi ngày", href: "/", numBg: "bg-violet-600", numText: "text-white" },
+  { num: 6, title: "Xem AI Insights", desc: "Xem phân tích và gợi ý từ dữ liệu", href: "/ai-insights", numBg: "bg-rose-500", numText: "text-white" },
 ];
 
-// ─── Data: Feature Guides ────────────────────────────────────────────────────
 const FEATURE_GUIDES: Guide[] = [
   {
     id: "dashboard",
@@ -187,20 +192,20 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-blue-700",
     accentBorder: "border-blue-200",
     accentIcon: "bg-blue-100 text-blue-600",
-    purpose: "Xem toàn bộ tình hình tài chính trong một màn hình: Financial Health Score, Net Worth, dòng tiền, ngân sách và mục tiêu. Trung tâm điều hành tài chính cá nhân.",
-    when: "Mở đầu mỗi ngày để nắm bắt tình hình. Xem bất cứ khi nào cần đánh giá nhanh sức khoẻ tài chính tổng thể.",
+    purpose: "Xem nhanh tình hình tài chính trong một màn hình: Net Worth, dòng tiền, quỹ khẩn cấp, ngân sách, mục tiêu và các chỉ số sức khỏe tài chính.",
+    when: "Mở khi cần đánh giá nhanh trạng thái tài chính hiện tại hoặc kiểm tra xu hướng theo kỳ.",
     howTo: [
       "Mở MyFinance → Dashboard hiển thị ngay trang chủ",
-      "Xem Financial Health Score (0–100 điểm) ở phần đầu",
-      "Kiểm tra Net Worth = Tổng tài sản − Tổng nợ",
-      "Xem biểu đồ dòng tiền 12 tháng gần nhất",
-      "Đọc AI Smart Insights ở cuối trang để nhận gợi ý",
+      "Đọc Net Worth theo balance sheet chuẩn: Ví tiền + Tiết kiệm + Portfolio + Forex − Tổng nợ",
+      "Kiểm tra Thu, Chi thực và dòng tiền của kỳ đang chọn",
+      "Xem Quỹ khẩn cấp theo số tháng chi tiêu thực bình quân của các tháng đã hoàn tất — không dùng tháng hiện tại đang chạy dở làm mẫu số",
+      "Mở các hành động/gợi ý để đi tới đúng trang dữ liệu cần xử lý",
     ],
-    example: "Sáng thứ Hai: Health Score 72/100. Net Worth tháng này tăng 2.3M so với tháng trước. Chi tiêu tuần này đang ở 65% ngân sách — vẫn ổn.",
+    example: "Đầu tháng mới chỉ phát sinh một ít chi tiêu, Dashboard vẫn không dùng khoản chi nhỏ của vài ngày đầu tháng để kết luận quỹ khẩn cấp đủ hàng chục tháng; coverage dựa trên baseline các tháng đã hoàn tất.",
     tips: [
-      "Kiểm tra Dashboard mỗi sáng chỉ 1 phút để giữ nhịp",
-      "Health Score giảm liên tục → cần xem lại chi tiêu",
-      "Net Worth tăng đều đặn = bạn đang đi đúng hướng",
+      "Net Worth là snapshot hiện tại, còn dòng tiền phụ thuộc kỳ đang chọn",
+      "Savings, Portfolio và Forex đều là tài sản riêng trên balance sheet, không nằm trong số dư Ví",
+      "Nếu chưa đủ dữ liệu tháng hoàn tất, coverage quỹ khẩn cấp có thể hiển thị chưa đủ dữ liệu thay vì kết luận sai",
     ],
   },
   {
@@ -213,26 +218,26 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-emerald-700",
     accentBorder: "border-emerald-200",
     accentIcon: "bg-emerald-100 text-emerald-600",
-    purpose: "Ghi chép mọi khoản thu nhập, chi tiêu và chuyển tiền giữa các ví. Trung tâm dữ liệu của toàn bộ ứng dụng — tất cả phân tích đều dựa trên đây.",
-    when: "Sau mỗi lần mua hàng, nhận lương hoặc chuyển tiền. Càng ghi sớm sau giao dịch càng chính xác.",
+    purpose: "Ghi chép thu nhập, chi tiêu và chuyển tiền giữa các ví. Đây là nguồn dữ liệu dòng tiền cho Dashboard, Budgets và Reports.",
+    when: "Sau khi phát sinh thu nhập, chi tiêu hoặc chuyển tiền cần được ghi nhận.",
     howTo: [
-      "Nhấn nút 'Thêm giao dịch' ở góc trên phải",
-      "Chọn loại: Thu nhập / Chi tiêu / Chuyển tiền",
-      "Nhập số tiền và chọn danh mục phù hợp",
-      "Chọn ví tiền và thêm ghi chú mô tả",
-      "Nhấn Lưu → số dư ví tự động cập nhật ngay lập tức",
+      "Nhấn 'Thêm giao dịch'",
+      "Chọn đúng loại: Thu nhập / Chi tiêu / Chuyển tiền",
+      "Nhập số tiền, danh mục, ví và ngày giao dịch",
+      "Dùng Chuyển tiền khi di chuyển tiền giữa các ví của chính bạn",
+      "Lưu để cập nhật ledger và các chỉ số liên quan",
     ],
-    example: "6/6 sáng: Chi 45,000đ ăn sáng → Danh mục 'Ăn uống' → Ví 'Tiền mặt'. Số dư tự trừ 45K. Tháng 6 đã chi 1.2M/3M ngân sách ăn uống.",
+    example: "Chi 45.000đ ăn sáng được tính là chi thực. Chuyển 2M từ ngân hàng sang ví khác của bạn là transfer, không phải một khoản chi tiêu mới.",
     tips: [
-      "Ghi ngay sau giao dịch để không quên",
-      "Dùng 'Chuyển tiền' khi chuyển giữa các ví (không phải Chi)",
-      "Bật Định kỳ cho các khoản cố định hàng tháng (thuê nhà, học phí)",
-      "Dùng tính năng Lọc và xuất CSV để phân tích sâu hơn",
+      "Ghi giao dịch sớm để số liệu theo kỳ chính xác",
+      "Không đổi transfer thành expense chỉ để khớp số dư",
+      "Các khoản phân bổ tương lai như Savings/Investment được theo dõi tách khỏi chi tiêu sinh hoạt thực",
+      "Dùng bộ lọc và CSV khi cần đối soát chi tiết",
     ],
   },
   {
     id: "wallets",
-    title: "Ví Tiền · Tài khoản",
+    title: "Ví Tiền · Thanh khoản",
     icon: Wallet,
     href: "/wallets",
     accentBg: "bg-cyan-600",
@@ -240,21 +245,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-cyan-700",
     accentBorder: "border-cyan-200",
     accentIcon: "bg-cyan-100 text-cyan-600",
-    purpose: "Quản lý tất cả tài khoản tài chính: tiền mặt, ngân hàng, ví điện tử, tài khoản đầu tư. Số dư tự động cập nhật theo giao dịch.",
-    when: "Khi mở tài khoản mới. Khi cần cập nhật số dư thực tế. Khi muốn theo dõi tổng tài sản đang có.",
+    purpose: "Quản lý tiền mặt, tài khoản ngân hàng và ví điện tử. Ví là phần tài sản thanh khoản/spendable; Savings, Portfolio và Forex được quản lý ở domain riêng.",
+    when: "Khi mở tài khoản thanh toán mới, cần đối soát số dư hoặc muốn xem tiền có thể chi tiêu ngay.",
     howTo: [
       "Vào 'Ví Tiền' → nhấn 'Thêm ví tiền'",
-      "Chọn loại ví: Tiền mặt / Ngân hàng / Ví điện tử / Đầu tư",
-      "Nhập tên ví và số dư hiện tại (chính xác nhất có thể)",
-      "Lưu → ví xuất hiện trong danh sách và tổng tài sản",
-      "Tất cả giao dịch sau đó sẽ tự cập nhật số dư ví",
+      "Chọn loại ví phù hợp như tiền mặt, ngân hàng hoặc ví điện tử",
+      "Nhập tên ví và số dư hiện tại",
+      "Dùng giao dịch để ghi nhận các thay đổi số dư thường xuyên",
+      "Dùng 'Chuyển tiền' khi chuyển giữa hai ví để không làm tăng chi tiêu thực",
     ],
-    example: "Tạo 3 ví: 'MB Bank' (48M), 'Tiền mặt' (1.5M), 'MoMo' (300K). Tổng tài sản hiển thị: 49.8M. Dashboard cập nhật ngay.",
+    example: "MB Bank 48M + Tiền mặt 1,5M + MoMo 300K là phần Ví. Một sổ tiết kiệm 20M và Portfolio 30M vẫn góp vào Net Worth nhưng không được cộng lẫn vào số dư Ví.",
     tips: [
-      "Tạo ví riêng cho từng tài khoản ngân hàng thực tế",
-      "Dùng 'Chuyển tiền' (không phải Chi) để chuyển giữa ví",
-      "Cập nhật số dư thực tế định kỳ để khớp với ngân hàng",
-      "Tạo ví 'Quỹ khẩn cấp' riêng để không đụng vào",
+      "Tách từng tài khoản thực tế thành từng ví để dễ đối soát",
+      "Không tạo ví giả để đại diện cho Savings hoặc Portfolio nếu đã dùng đúng module tương ứng",
+      "Số dư Ví không đồng nghĩa với Tổng tài sản",
+      "Dùng transfer cho luồng tiền nội bộ giữa các ví",
     ],
   },
   {
@@ -267,21 +272,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-indigo-700",
     accentBorder: "border-indigo-200",
     accentIcon: "bg-indigo-100 text-indigo-600",
-    purpose: "Phân loại thu nhập và chi tiêu thành các nhóm rõ ràng. Là nền tảng để phân tích xu hướng, ngân sách và báo cáo.",
-    when: "Khi thiết lập lần đầu để tạo bộ danh mục cơ bản. Khi xuất hiện nhu cầu chi tiêu mới chưa có danh mục phù hợp.",
+    purpose: "Phân loại thu nhập và chi tiêu thành các nhóm rõ ràng để Budgets, Reports và các phân tích dùng cùng một ngữ nghĩa.",
+    when: "Khi thiết lập lần đầu hoặc khi phát sinh một loại thu/chi mới chưa có danh mục phù hợp.",
     howTo: [
-      "Vào 'Danh Mục' → xem danh sách có sẵn",
+      "Vào 'Danh Mục' → xem danh sách hiện có",
       "Nhấn 'Thêm danh mục' để tạo loại mới",
-      "Đặt tên rõ ràng và chọn loại: Thu nhập hoặc Chi tiêu",
-      "Lưu → danh mục xuất hiện khi tạo giao dịch",
-      "Xem thống kê chi tiêu theo danh mục trong Báo cáo",
+      "Chọn đúng loại Thu nhập hoặc Chi tiêu",
+      "Dùng danh mục đó khi tạo giao dịch",
+      "Review danh mục không còn dùng để giữ báo cáo dễ đọc",
     ],
-    example: "Danh mục Chi: Ăn uống, Đi lại, Giải trí, Nhà ở, Y tế, Mua sắm. Danh mục Thu: Lương, Freelance, Đầu tư, Thưởng.",
+    example: "Chi: Ăn uống, Đi lại, Nhà ở, Y tế. Thu: Lương, Freelance, Thưởng. Transfer không cần được ngụy trang thành một danh mục chi.",
     tips: [
-      "Giữ 8–15 danh mục để dễ quản lý và phân tích",
-      "Đặt tên đơn nghĩa, không chồng chéo",
-      "Hạn chế dùng danh mục 'Khác' — quá chung chung",
-      "Review và dọn dẹp danh mục không dùng mỗi quý",
+      "Giữ danh mục đủ chi tiết nhưng tránh trùng nghĩa",
+      "Hạn chế danh mục 'Khác' nếu có thể phân loại rõ",
+      "Budget và Reports dùng phân loại chi thực nhất quán",
+      "Review định kỳ để tránh dữ liệu bị phân mảnh",
     ],
   },
   {
@@ -294,26 +299,26 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-violet-700",
     accentBorder: "border-violet-200",
     accentIcon: "bg-violet-100 text-violet-600",
-    purpose: "Đặt giới hạn chi tiêu theo danh mục mỗi tháng. Nhận cảnh báo tự động khi gần hoặc vượt hạn mức.",
-    when: "Đầu mỗi tháng để lập kế hoạch chi tiêu. Khi muốn kiểm soát một khoản chi cụ thể đang bị lạm phát.",
+    purpose: "Đặt hạn mức chi tiêu theo danh mục cho từng tháng và so sánh với chi tiêu thực được phân loại canonical.",
+    when: "Đầu tháng hoặc khi cần điều chỉnh hạn mức cho một danh mục cụ thể.",
     howTo: [
       "Vào 'Ngân Sách' → nhấn 'Thêm ngân sách'",
       "Chọn danh mục và tháng áp dụng",
-      "Nhập hạn mức (ví dụ: 3,000,000đ/tháng cho Ăn uống)",
-      "App tự tính % đã chi so với hạn mức theo thời gian thực",
-      "Nhận cảnh báo khi đạt 80% và 100% hạn mức",
+      "Nhập hạn mức phù hợp với kế hoạch của bạn",
+      "Theo dõi phần đã chi từ các giao dịch chi thực của danh mục",
+      "Review các danh mục gần/vượt hạn mức và điều chỉnh hành vi hoặc kế hoạch khi cần",
     ],
-    example: "Tháng 6: Ngân sách Ăn uống 3M. Đến ngày 15 đã chi 1.8M (60%) → đang ổn. Dự báo: cuối tháng ~3.4M → cần cắt giảm 400K.",
+    example: "Ngân sách Ăn uống 3M; chi thực đã ghi nhận 1,8M thì tiến độ là 60%. Chuyển tiền nội bộ hoặc khoản phân bổ Savings/Investment không được biến thành chi ăn uống.",
     tips: [
-      "Đặt ngân sách dựa trên chi tiêu thực tế tháng trước",
-      "Bắt đầu với 3–5 danh mục chi lớn nhất của bạn",
+      "Đặt ngân sách dựa trên dữ liệu thực tế và ưu tiên của bạn",
+      "Bắt đầu với 3–5 danh mục chi lớn nhất",
       "Theo dõi chi tiêu theo danh mục và ngân sách bạn tự thiết lập",
-      "Budget Intelligence phân tích xu hướng và cảnh báo tự động",
+      "Không cần ép kế hoạch vào một tỷ lệ phân bổ cố định cho mọi người",
     ],
   },
   {
     id: "goals",
-    title: "Mục Tiêu · Tiết kiệm",
+    title: "Mục Tiêu · Funding progress",
     icon: Target,
     href: "/goals",
     accentBg: "bg-rose-600",
@@ -321,21 +326,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-rose-700",
     accentBorder: "border-rose-200",
     accentIcon: "bg-rose-100 text-rose-600",
-    purpose: "Thiết lập và theo dõi mục tiêu tiết kiệm có kỳ hạn. Tự động tính tốc độ tiết kiệm cần thiết và dự báo ngày đạt mục tiêu.",
-    when: "Khi có kế hoạch mua sắm lớn, du lịch, mua nhà/xe. Hoặc xây dựng quỹ dự phòng khẩn cấp.",
+    purpose: "Thiết lập mục tiêu tài chính và theo dõi tiến độ bằng snapshot funding chuẩn, có thể kết hợp số tiền gốc của Goal với Savings được liên kết và các funding transaction tương ứng.",
+    when: "Khi lập quỹ khẩn cấp, kế hoạch mua sắm lớn hoặc mục tiêu tài chính có số tiền đích.",
     howTo: [
       "Vào 'Mục Tiêu' → nhấn 'Thêm mục tiêu'",
-      "Đặt tên, số tiền mục tiêu và deadline kỳ vọng",
-      "Nhập số tiền hiện đã tích luỹ",
-      "App tính số tiền cần tiết kiệm mỗi tháng để đạt mục tiêu",
-      "Cập nhật 'Đã tích luỹ' định kỳ để theo dõi tiến độ",
+      "Đặt tên, số tiền mục tiêu và deadline nếu cần",
+      "Liên kết đúng tài khoản Savings khi muốn Savings tự đóng góp vào tiến độ Goal",
+      "Theo dõi số tiền hiệu lực và % tiến độ từ canonical funding snapshot",
+      "Dùng dự báo/gợi ý mức đóng góp để điều chỉnh kế hoạch thay vì nhập trùng tiền ở nhiều nơi",
     ],
-    example: "Mục tiêu 'Mua xe': 300M. Đã có: 50M. Deadline: 24 tháng. → App tính: cần tiết kiệm 10.4M/tháng. AI dự báo: đạt mục tiêu tháng 6/2028.",
+    example: "Goal Quỹ khẩn cấp 120M liên kết với Savings đang có 13,07M sẽ phản ánh khoảng 11% tiến độ mà không cần cộng thủ công lại cùng một số tiền ở hai nơi.",
     tips: [
-      "Mục tiêu đầu tiên nên là Quỹ khẩn cấp 3–6 tháng chi tiêu",
-      "Tự động chuyển tiền tiết kiệm vào đầu tháng",
-      "Chia mục tiêu lớn thành các milestone nhỏ hơn",
-      "AI Goal Coach gợi ý tốc độ tiết kiệm và cách đạt nhanh hơn",
+      "Liên kết đúng Savings để tránh tiến độ Goal lệch với số dư thực",
+      "Không cộng cùng một khoản funding hai lần",
+      "Quỹ khẩn cấp thường đặt mục tiêu theo nhiều tháng chi tiêu, nhưng % Goal và số tháng coverage là hai chỉ số khác nhau",
+      "Review tiến độ theo dòng tiền thực tế thay vì chỉ nhìn deadline",
     ],
   },
   {
@@ -348,21 +353,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-amber-700",
     accentBorder: "border-amber-200",
     accentIcon: "bg-amber-100 text-amber-700",
-    purpose: "Theo dõi tất cả khoản nợ (ngân hàng, bạn bè, thẻ tín dụng) và lập kế hoạch trả nợ tối ưu để tiết kiệm lãi.",
-    when: "Khi vay tiền bất kỳ ai. Khi trả một phần nợ. Khi muốn tối ưu thứ tự trả nợ để giảm thiểu lãi suất.",
+    purpose: "Theo dõi dư nợ và lập kế hoạch trả nợ. Trang phân biệt tỷ lệ nợ trên tài sản với gánh nặng trả nợ hàng tháng trên thu nhập.",
+    when: "Khi thêm khoản vay, cập nhật dư nợ hoặc cần xác định khoản nên ưu tiên thanh toán.",
     howTo: [
       "Vào 'Nợ & Khoản Vay' → nhấn 'Thêm khoản nợ'",
-      "Nhập tên, tổng số nợ ban đầu và số còn lại hiện tại",
-      "Thêm lãi suất và kỳ hạn (nếu là nợ ngân hàng)",
-      "Cập nhật số còn lại sau mỗi lần thanh toán",
-      "Xem AI Debt Coach để tối ưu thứ tự trả nợ",
+      "Nhập số dư nợ, lãi suất và mức trả tối thiểu nếu có",
+      "Cập nhật dư nợ còn lại theo tiến độ thanh toán",
+      "Xem Debt Ratio = Tổng dư nợ ÷ Tổng tài sản để đánh giá đòn bẩy balance sheet",
+      "Xem Gợi ý trả nợ; chiến lược Avalanche ưu tiên khoản có lãi suất cao hơn",
     ],
-    example: "Vay MB Bank: 100M gốc, lãi 8%/năm, còn 72M. Vay bạn: 5M, 0% lãi, còn 5M → AI khuyến nghị: trả ngân hàng trước, tiết kiệm 1.2M lãi.",
+    example: "Nếu tổng dư nợ là 200M và tổng tài sản hiện tại là 1 tỷ thì Debt Ratio là 20%. Nếu tổng mức trả tối thiểu mỗi tháng là 12M trên thu nhập tháng 40M thì gánh nặng trả nợ tháng là 30% — đây là chỉ số khác.",
     tips: [
-      "Chiến lược Avalanche: trả nợ lãi suất cao trước — tiết kiệm nhất",
-      "Chiến lược Snowball: trả nợ nhỏ nhất trước — tạo động lực",
-      "Mục tiêu: Debt Ratio < 40% thu nhập hàng tháng",
-      "Không vay mới khi tổng nợ > 50% thu nhập năm",
+      "Debt Ratio trong MyFinance là dư nợ / tổng tài sản, không phải dư nợ / thu nhập tháng",
+      "Gánh nặng trả nợ tháng dùng tổng minimum payment / thu nhập tháng",
+      "Avalanche ưu tiên lãi suất cao nhất để giảm chi phí lãi",
+      "Các gợi ý trả nợ là rule-based/deterministic; không gắn nhãn AI khi không có AI tham gia",
     ],
   },
   {
@@ -384,12 +389,12 @@ const FEATURE_GUIDES: Guide[] = [
       "Ghi nhận Nạp / Rút trên từng tài khoản Forex để theo dõi vốn ròng",
       "App tổng hợp Portfolio + Forex nhưng vẫn tách P&L/ROI theo từng sub-domain",
     ],
-    example: "FPT: vốn 20M → giá trị 24.8M; Forex Main Equity 30M. Trang Đầu Tư hiển thị riêng hiệu suất Portfolio/Forex và tổng giá trị đầu tư 54.8M.",
+    example: "FPT: vốn 20M → giá trị 24,8M; Forex Main Equity 30M. Trang Đầu Tư hiển thị riêng hiệu suất Portfolio/Forex và tổng giá trị đầu tư 54,8M.",
     tips: [
-      "Đa dạng hóa: không để quá 50% vào một loại tài sản",
-      "Cập nhật giá hiện tại mỗi tuần để ROI chính xác",
-      "ROI âm liên tục 6 tháng → cân nhắc tái cơ cấu danh mục",
-      "Điểm Portfolio Health < 60 → cần tăng đa dạng hóa",
+      "Đánh giá ROI trong bối cảnh thời gian và rủi ro, không dùng một ngưỡng lợi nhuận cố định cho mọi tài sản",
+      "Cập nhật current value / Forex Equity để snapshot hiện tại chính xác",
+      "Portfolio và Forex là hai nguồn dữ liệu riêng nhưng cùng đóng góp vào balance sheet",
+      "Phân bổ tài sản nên phù hợp khẩu vị rủi ro và thời hạn của chính bạn, không có một tỷ lệ mẫu đúng cho tất cả",
     ],
   },
   {
@@ -402,26 +407,26 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-purple-700",
     accentBorder: "border-purple-200",
     accentIcon: "bg-purple-100 text-purple-600",
-    purpose: "Phân tích xu hướng tài chính, so sánh theo tháng/năm và dự báo tình hình tài chính 6 tháng tới.",
-    when: "Cuối tháng để đánh giá hiệu quả. Đầu năm để lập kế hoạch. Khi cần hiểu rõ chi tiêu ở đâu nhiều nhất.",
+    purpose: "Phân tích tài chính theo kỳ bằng cùng balance sheet và cash-flow semantics với Dashboard: tài sản/nợ hiện tại, thu nhập, chi thực và các khoản phân bổ tương lai được tách rõ.",
+    when: "Cuối tháng, cuối quý hoặc khi cần đối chiếu xu hướng giữa các kỳ.",
     howTo: [
-      "Vào 'Báo cáo' → xem tổng quan tài chính tháng hiện tại",
-      "Chọn khoảng thời gian để phân tích kỳ cụ thể",
-      "Xem biểu đồ Donut phân bổ chi tiêu theo danh mục",
-      "Phân tích xu hướng thu chi 12 tháng bằng biểu đồ đường",
-      "Đọc phần Dự báo và AI Summary ở cuối trang",
+      "Vào 'Báo cáo' và chọn kỳ cần phân tích",
+      "Đọc Net Worth từ canonical balance sheet hiện tại",
+      "Xem Thu nhập và Chi thực của kỳ",
+      "Xem Savings/Investment allocation tách khỏi real expense để biết tiền đã được phân bổ cho tương lai",
+      "Dùng các biểu đồ và export để đối soát theo danh mục/kỳ",
     ],
-    example: "Tháng 5: Thu 30M, Chi 22M, Tiết kiệm 8M (26.7%). Ăn uống chiếm 23.6% tổng chi (5.2M). Xu hướng: chi tiêu tháng này giảm 8% so với tháng 4.",
+    example: "Trong một kỳ có Thu 30M, Chi thực 18M và phân bổ 5M sang Savings/Investment, Reports giữ 18M là expense và 5M là future allocation thay vì cộng cả hai thành 23M chi tiêu sinh hoạt.",
     tips: [
-      "So sánh tháng này vs tháng trước để thấy xu hướng rõ ràng",
-      "Tỷ lệ tiết kiệm mục tiêu: ≥ 20% thu nhập hàng tháng",
-      "Export CSV cuối năm để lưu trữ hồ sơ tài chính",
-      "Dự báo AI dựa trên pattern 6 tháng gần nhất",
+      "So sánh các kỳ cùng semantics thay vì chỉ nhìn một con số tổng",
+      "Transfer nội bộ không tạo thêm expense",
+      "Savings/Investment allocation được theo dõi riêng khỏi chi thực",
+      "Net Worth hiện tại và cash flow theo kỳ là hai lát cắt khác nhau",
     ],
   },
   {
     id: "ai-insights",
-    title: "AI Advisor · Tư vấn",
+    title: "AI Insights · Phân tích",
     icon: Bot,
     href: "/ai-insights",
     accentBg: "bg-fuchsia-600",
@@ -429,21 +434,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-fuchsia-700",
     accentBorder: "border-fuchsia-200",
     accentIcon: "bg-fuchsia-100 text-fuchsia-600",
-    purpose: "Nhận tư vấn tài chính cá nhân hoá từ AI dựa trên dữ liệu thực tế của bạn. Không phán xét — chỉ gợi ý cụ thể.",
-    when: "Hàng tuần để review tình hình. Khi cần gợi ý cải thiện cụ thể. Khi muốn hiểu điểm yếu tài chính cần khắc phục.",
+    purpose: "Xem các phân tích, dự báo và gợi ý dựa trên dữ liệu tài chính đã ghi nhận. AI không thay thế dữ liệu nguồn hoặc các calculation service canonical.",
+    when: "Khi muốn hiểu xu hướng, bất thường hoặc cần một góc nhìn bổ sung từ dữ liệu đã có.",
     howTo: [
-      "Vào 'AI Advisor' → xem Health Score và Risk Score",
-      "Đọc từng AI Insight card (mỗi card là một phân tích riêng)",
-      "Xem Financial Forecast — dự báo 6 tháng tới",
-      "Kiểm tra Spending Anomalies — các bất thường chi tiêu",
-      "Thực hiện các gợi ý hành động để cải thiện điểm số",
+      "Vào 'AI Insights'",
+      "Kiểm tra dữ liệu/kỳ mà insight đang dựa vào",
+      "Đọc Health/Risk/Forecast theo ngữ cảnh thay vì xem như cam kết kết quả",
+      "Mở trang nguồn khi cần kiểm tra giao dịch, nợ, đầu tư hoặc mục tiêu cụ thể",
+      "Ưu tiên sửa dữ liệu nguồn nếu insight phản ánh số liệu chưa đầy đủ",
     ],
-    example: "AI phát hiện: 'Chi Giải trí tháng 5 cao hơn trung bình 3 tháng 45%. Dự báo vượt ngân sách 800K.' → Áp dụng: giảm 2 buổi ăn ngoài/tuần.",
+    example: "Nếu một insight cảnh báo chi tiêu tăng, hãy mở Transactions/Reports để kiểm tra real expense và danh mục trước khi hành động.",
     tips: [
-      "Kiểm tra AI Insights ít nhất 1 lần mỗi tuần",
-      "Health Score ≥ 80 = tài chính lành mạnh và bền vững",
-      "Thực hiện ít nhất 1 gợi ý AI mỗi tháng để cải thiện",
-      "Dữ liệu càng nhiều và đầy đủ → AI phân tích càng chính xác",
+      "AI chỉ hữu ích khi dữ liệu đầu vào đủ và đúng",
+      "Phân biệt gợi ý AI với các rule deterministic trên các page khác",
+      "Không dùng dự báo như một cam kết lợi nhuận",
+      "Đối chiếu lại dữ liệu nguồn trước quyết định tài chính quan trọng",
     ],
   },
   {
@@ -456,76 +461,112 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-slate-700",
     accentBorder: "border-slate-200",
     accentIcon: "bg-slate-100 text-slate-600",
-    purpose: "Tuỳ chỉnh ứng dụng: thông tin cá nhân, ngôn ngữ, thông báo tự động và quản lý dữ liệu (xuất/nhập/reset).",
-    when: "Lần đầu sử dụng để cấu hình đúng. Khi cần thay đổi thông báo. Khi muốn xuất/nhập/backup dữ liệu.",
+    purpose: "Quản lý hồ sơ, giao diện, cấu hình AI, household và các tùy chọn ứng dụng có sẵn.",
+    when: "Khi cần thay đổi thông tin cá nhân, theme hoặc cấu hình tính năng.",
     howTo: [
-      "Vào 'Cài Đặt' → chọn mục cần thay đổi từ menu trái",
-      "Cập nhật Hồ sơ: tên, email, múi giờ, đơn vị tiền tệ",
-      "Tuỳ chỉnh Preferences: ngôn ngữ, định dạng ngày tháng",
-      "Bật thông báo Budget Alert và Goal Alert",
-      "Xuất dữ liệu CSV hoặc nhập từ file JSON backup",
+      "Vào 'Cài Đặt'",
+      "Cập nhật hồ sơ và tùy chọn tài khoản",
+      "Chọn giao diện sáng / tối / theo hệ thống",
+      "Kiểm tra các cấu hình AI nếu bạn sử dụng AI Finance",
+      "Review household và các thiết lập dữ liệu đang khả dụng",
     ],
-    example: "Cấu hình ban đầu: bật Budget Alert (80%), tắt Weekly Summary. Đặt đơn vị VND. Xuất dữ liệu cuối quý để backup.",
+    example: "Bạn có thể chọn Dark Mode trong Settings hoặc dùng quick toggle trên Header; theme vẫn dùng cùng một nguồn cấu hình.",
     tips: [
-      "Bật Budget Alert (80%) để nhận cảnh báo trước khi vượt",
-      "Xuất dữ liệu định kỳ mỗi tháng để backup an toàn",
-      "Thiết lập 'Tháng tài chính' bắt đầu từ ngày nhận lương",
-      "Kết nối Supabase để đồng bộ dữ liệu đa thiết bị",
+      "Không chia sẻ khóa AI hoặc thông tin đăng nhập",
+      "Review thiết lập sau khi thay đổi thiết bị",
+      "Giữ cấu hình đồng bộ với cách bạn thực sự dùng app",
+      "Dùng Help khi cần hiểu semantics trước khi thay đổi dữ liệu tài chính",
     ],
   },
 ];
 
-// ─── Data: FAQ ────────────────────────────────────────────────────────────────
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "net-worth",
-    q: "Tài sản ròng (Net Worth) là gì?",
-    a: "Tài sản ròng là thước đo tài chính quan trọng nhất, phản ánh sức khoẻ tài chính thực sự của bạn. Net Worth dương và tăng theo thời gian = đang đi đúng hướng tới tự do tài chính.",
-    formula: "Net Worth = Tổng ví tiền + Đầu tư − Tổng nợ",
+    q: "Tài sản ròng (Net Worth) trong MyFinance được tính thế nào?",
+    a: "MyFinance dùng một balance sheet chuẩn cho snapshot hiện tại. Ví tiền, Savings, Portfolio và Forex cùng đóng góp vào Tổng tài sản; sau đó trừ Tổng nợ. Vì vậy số dư Ví chỉ là một phần của Net Worth, không phải toàn bộ tài sản.",
+    formula: "Net Worth = Ví tiền + Tiết kiệm + Portfolio + Forex − Tổng nợ",
   },
   {
     id: "debt-ratio",
-    q: "Debt Ratio là gì? Bao nhiêu là an toàn?",
-    a: "Debt Ratio đo lường gánh nặng nợ so với thu nhập. Dưới 30% là an toàn, 30–50% cần chú ý và cần lên kế hoạch trả nợ, trên 50% là nguy hiểm — cần ưu tiên trả nợ ngay.",
-    formula: "Debt Ratio = Tổng nợ ÷ Thu nhập tháng × 100%",
+    q: "Debt Ratio khác gánh nặng trả nợ hàng tháng thế nào?",
+    a: "Debt Ratio trên domain Nợ đo dư nợ còn lại so với Tổng tài sản hiện tại. Gánh nặng trả nợ hàng tháng là chỉ số khác: tổng mức trả tối thiểu hàng tháng so với thu nhập tháng. Không dùng Tổng nợ ÷ Thu nhập tháng để gọi là Debt Ratio.",
+    formula: "Debt Ratio = Tổng dư nợ ÷ Tổng tài sản × 100% · Debt service / income = Tổng minimum payment ÷ Thu nhập tháng × 100%",
   },
   {
     id: "health-score",
-    q: "Financial Health Score là gì? Điểm bao nhiêu là tốt?",
-    a: "Điểm 0–100 đánh giá toàn diện sức khoẻ tài chính dựa trên 10 yếu tố: tỷ lệ tiết kiệm, debt ratio, quỹ khẩn cấp, ROI đầu tư, tuân thủ ngân sách, tiến độ mục tiêu... Điểm ≥ 80 là tốt, 60–79 là khá, dưới 60 cần cải thiện.",
-    formula: "Health Score = Σ(10 yếu tố × trọng số) / 100",
+    q: "Financial Health Score là gì?",
+    a: "Đây là điểm 0–100 tổng hợp 10 yếu tố có trọng số như saving rate, cash flow, debt ratio, quỹ khẩn cấp, tiến độ mục tiêu và tuân thủ ngân sách. Hãy xem điểm cùng các factor/note đi kèm thay vì coi một ngưỡng duy nhất là kết luận tài chính tuyệt đối.",
   },
   {
     id: "roi",
     q: "ROI là gì? Tính như thế nào?",
-    a: "ROI (Return on Investment) là tỷ lệ lợi nhuận so với vốn bỏ ra. ROI dương = đang lãi, âm = đang lỗ. ROI ≥ 10%/năm được coi là tốt với đầu tư thông thường tại Việt Nam. VN-Index trung bình ~12%/năm.",
+    a: "ROI (Return on Investment) đo mức lãi/lỗ so với vốn đã đầu tư. Không có một ngưỡng ROI cố định phù hợp cho mọi tài sản; cần đọc cùng thời gian nắm giữ, mức rủi ro và loại tài sản.",
     formula: "ROI = (Giá trị hiện tại − Vốn đầu tư) ÷ Vốn đầu tư × 100%",
   },
   {
     id: "emergency-fund",
-    q: "Quỹ khẩn cấp là gì? Cần bao nhiêu tiền?",
-    a: "Quỹ khẩn cấp là khoản tiền thanh khoản cao để đối phó khi mất việc, bệnh tật, sự cố bất ngờ. Không được đầu tư hay tiêu vào việc khác. Mức khuyến nghị: 3–6 tháng tổng chi tiêu sinh hoạt của bạn.",
-    formula: "Quỹ khẩn cấp = Chi tiêu/tháng × (3 đến 6 tháng)",
+    q: "Quỹ khẩn cấp và số tháng coverage được tính thế nào?",
+    a: "Mục tiêu quỹ thường được đặt theo nhiều tháng chi tiêu. Trên Dashboard, số tháng coverage dùng số dư quỹ chia cho chi tiêu thực bình quân của tối đa 6 tháng đã hoàn tất gần nhất có dữ liệu; tháng hiện tại đang chạy dở không được dùng làm mẫu số chính. Nếu chưa có đủ bằng chứng tháng hoàn tất, Dashboard có thể hiển thị chưa đủ dữ liệu thay vì báo đạt sai.",
+    formula: "Số tháng quỹ khẩn cấp = Số dư quỹ ÷ Chi tiêu thực bình quân các tháng đã hoàn tất",
   },
   {
     id: "saving-rate",
-    q: "Tỷ lệ tiết kiệm bao nhiêu là đủ?",
-    a: "Tỷ lệ tiết kiệm 10% là tối thiểu, 20% là tốt, ≥ 30% là xuất sắc. Người theo đuổi FIRE (Financial Independence, Retire Early) thường tiết kiệm 50–70% thu nhập. Bắt đầu từ 10% và tăng dần.",
-    formula: "Tỷ lệ tiết kiệm = (Thu nhập − Chi tiêu) ÷ Thu nhập × 100%",
+    q: "Tỷ lệ tiết kiệm trong MyFinance nên đọc thế nào?",
+    a: "Saving rate phản ánh phần thu nhập còn lại sau chi tiêu thực. Savings/Investment allocation được theo dõi riêng như phân bổ cho tương lai, nên cần phân biệt chúng với chi tiêu sinh hoạt khi đọc Reports và Dashboard.",
+    formula: "Saving Rate = (Thu nhập − Chi tiêu thực) ÷ Thu nhập × 100%",
   },
   {
-    id: "faster-goal",
-    q: "Làm sao để đạt mục tiêu tài chính nhanh hơn?",
-    a: "5 chiến lược: (1) Tăng thu nhập — làm thêm, freelance, đầu tư sinh lời. (2) Giảm chi không cần thiết — review ngân sách mỗi tháng. (3) Tự động hoá tiết kiệm — chuyển tiền đầu tháng trước khi tiêu. (4) Đầu tư tiền tiết kiệm để sinh lãi kép. (5) Theo dõi tiến độ hàng tuần để duy trì động lực.",
+    id: "goal-funding",
+    q: "Vì sao tiến độ Goal có thể thay đổi theo Savings?",
+    a: "Goal dùng canonical funding snapshot. Khi Goal được liên kết với Savings, số dư/funding hợp lệ từ tài khoản liên kết có thể đóng góp vào effective current amount. Cơ chế này giúp Goals và Savings không hiển thị hai tiến độ mâu thuẫn cho cùng một nguồn tiền.",
   },
   {
     id: "diversification",
-    q: "Đa dạng hóa danh mục đầu tư như thế nào?",
-    a: "Không đặt tất cả vào một loại tài sản. Ví dụ phân bổ phổ biến cho nhà đầu tư trẻ Việt Nam: 40% cổ phiếu Việt, 20% quỹ ETF, 20% vàng SJC, 10% crypto, 10% tiền mặt/trái phiếu. Điều chỉnh theo độ tuổi và mức chịu rủi ro cá nhân.",
+    q: "Nên phân bổ Portfolio theo tỷ lệ nào?",
+    a: "Không có một tỷ lệ cổ phiếu, ETF, vàng, crypto hay tiền mặt cố định phù hợp với mọi người. Hãy đa dạng hóa theo thời hạn mục tiêu, nhu cầu thanh khoản và mức chịu rủi ro của bạn; MyFinance theo dõi giá trị/ROI chứ không áp một công thức phân bổ bắt buộc.",
   },
 ];
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+const GLOSSARY_ITEMS = [
+  {
+    term: "Net Worth",
+    formula: "Ví + Savings + Portfolio + Forex − Nợ",
+    color: "emerald",
+    desc: "Snapshot tài sản ròng hiện tại theo canonical balance sheet. Số dư Ví chỉ là một phần của Tổng tài sản.",
+  },
+  {
+    term: "Debt Ratio",
+    formula: "Dư nợ ÷ Tổng tài sản × 100%",
+    color: "rose",
+    desc: "Mức đòn bẩy trên balance sheet. Đây không phải tỷ lệ dư nợ chia cho thu nhập tháng.",
+  },
+  {
+    term: "Debt Service / Income",
+    formula: "Minimum payments ÷ Thu nhập tháng × 100%",
+    color: "amber",
+    desc: "Gánh nặng thanh toán nợ hàng tháng, được tách khỏi Debt Ratio.",
+  },
+  {
+    term: "Emergency Coverage",
+    formula: "Số dư quỹ ÷ TB chi thực tháng hoàn tất",
+    color: "blue",
+    desc: "Dashboard dùng baseline ổn định từ tối đa 6 tháng đã hoàn tất, không phóng đại coverage vì đầu tháng mới chi ít.",
+  },
+  {
+    term: "ROI",
+    formula: "(Giá trị − Vốn) ÷ Vốn × 100%",
+    color: "cyan",
+    desc: "Tỷ lệ lãi/lỗ đầu tư. Cần đọc cùng thời gian và rủi ro; không có một ngưỡng tốt cố định cho mọi tài sản.",
+  },
+  {
+    term: "Budget Adherence",
+    formula: "Chi thực danh mục ÷ Hạn mức × 100%",
+    color: "violet",
+    desc: "So sánh real expense của danh mục với ngân sách. Transfer và future allocation không được biến thành chi sinh hoạt.",
+  },
+] as const;
+
 export default function HelpPage() {
   const [search, setSearch] = useState("");
   const [activeGuide, setActiveGuide] = useState<string | null>(null);
@@ -533,7 +574,9 @@ export default function HelpPage() {
   const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return {};
     try {
-      return JSON.parse(localStorage.getItem("mf-checklist") ?? "{}") as Record<string, boolean>;
+      return JSON.parse(
+        localStorage.getItem("mf-checklist") ?? "{}",
+      ) as Record<string, boolean>;
     } catch {
       return {};
     }
@@ -542,21 +585,26 @@ export default function HelpPage() {
   function toggleCheck(id: string) {
     setChecklist((prev) => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem("mf-checklist", JSON.stringify(next)); } catch { /* noop */ }
+      try {
+        localStorage.setItem("mf-checklist", JSON.stringify(next));
+      } catch {
+        // Local checklist is non-critical. ONBOARDING-SSOT-1 will consolidate it.
+      }
       return next;
     });
   }
 
+  // Accent-insensitive search is intentionally left to HELP-UX-1.
   const filteredGuides = useMemo(() => {
     if (!search.trim()) return FEATURE_GUIDES;
     const q = search.toLowerCase();
     return FEATURE_GUIDES.filter(
-      (g) =>
-        g.title.toLowerCase().includes(q) ||
-        g.purpose.toLowerCase().includes(q) ||
-        g.howTo.some((s) => s.toLowerCase().includes(q)) ||
-        g.tips.some((t) => t.toLowerCase().includes(q)) ||
-        g.example.toLowerCase().includes(q),
+      (guide) =>
+        guide.title.toLowerCase().includes(q) ||
+        guide.purpose.toLowerCase().includes(q) ||
+        guide.howTo.some((step) => step.toLowerCase().includes(q)) ||
+        guide.tips.some((tip) => tip.toLowerCase().includes(q)) ||
+        guide.example.toLowerCase().includes(q),
     );
   }, [search]);
 
@@ -564,21 +612,18 @@ export default function HelpPage() {
     if (!search.trim()) return FAQ_ITEMS;
     const q = search.toLowerCase();
     return FAQ_ITEMS.filter(
-      (f) =>
-        f.q.toLowerCase().includes(q) ||
-        f.a.toLowerCase().includes(q) ||
-        (f.formula ?? "").toLowerCase().includes(q),
+      (faq) =>
+        faq.q.toLowerCase().includes(q) ||
+        faq.a.toLowerCase().includes(q) ||
+        (faq.formula ?? "").toLowerCase().includes(q),
     );
   }, [search]);
 
-  const checkCount = CHECKLIST_ITEMS.filter((c) => checklist[c.id]).length;
+  const checkCount = CHECKLIST_ITEMS.filter((item) => checklist[item.id]).length;
   const checkPct = Math.round((checkCount / CHECKLIST_ITEMS.length) * 100);
 
   return (
     <div className="space-y-5">
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 1 · Hero Header + AI Search
-          ════════════════════════════════════════════════════════════════════ */}
       <section className="overflow-hidden rounded-4xl border border-blue-100 shadow-sm">
         <div className="relative bg-linear-to-br from-blue-50 via-white to-cyan-50 px-6 pb-8 pt-7 sm:px-8">
           <div className="absolute right-6 top-6 opacity-10">
@@ -592,38 +637,38 @@ export default function HelpPage() {
             Hướng Dẫn
           </h1>
           <p className="relative mt-1 text-sm text-slate-500">
-            Onboarding, hướng dẫn tính năng, FAQ và mẹo tối ưu tài chính cá nhân.
+            Onboarding, hướng dẫn tính năng, FAQ và ngữ nghĩa tài chính đang dùng trong MyFinance.
           </p>
 
-          {/* Search bar */}
           <div className="relative mt-6 flex items-center gap-2.5 rounded-2xl border border-blue-200 bg-white px-4 py-3 shadow-sm transition-all focus-within:border-blue-400 focus-within:shadow-md">
             <Search size={16} className="shrink-0 text-blue-400" />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder='Tìm hướng dẫn... "thêm giao dịch", "ROI", "ngân sách"'
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder='Tìm hướng dẫn... "Net Worth", "nợ", "quỹ khẩn cấp"'
               className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
             />
-            {search && (
+            {search ? (
               <button
+                type="button"
                 onClick={() => setSearch("")}
+                aria-label="Xóa tìm kiếm"
                 className="shrink-0 text-slate-400 transition-colors hover:text-slate-600"
               >
                 <X size={14} />
               </button>
-            )}
-            {search && (
+            ) : null}
+            {search ? (
               <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700">
                 {filteredGuides.length + filteredFaq.length} kết quả
               </span>
-            )}
+            ) : null}
           </div>
 
-          {/* Stat chips */}
           <div className="relative mt-5 flex flex-wrap gap-2">
             {[
-              { label: "11 tính năng", icon: Sparkles },
-              { label: "8 câu hỏi", icon: Lightbulb },
+              { label: `${FEATURE_GUIDES.length} tính năng`, icon: Sparkles },
+              { label: `${FAQ_ITEMS.length} câu hỏi`, icon: Lightbulb },
               { label: "5 bước bắt đầu", icon: Zap },
             ].map(({ label, icon: Icon }) => (
               <span
@@ -638,26 +683,21 @@ export default function HelpPage() {
         </div>
       </section>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 2 · Quick Start Flow
-          ════════════════════════════════════════════════════════════════════ */}
-      {!search && (
+      {!search ? (
         <section className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-linear-to-r from-blue-50/60 to-cyan-50/40 px-6 py-4">
             <div className="flex items-center gap-2">
               <Star size={14} className="text-blue-600" />
-              <p className="text-sm font-black text-slate-800">
-                Tôi nên làm gì đầu tiên?
-              </p>
+              <p className="text-sm font-black text-slate-800">Tôi nên làm gì đầu tiên?</p>
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Quy trình khuyến nghị để bắt đầu quản lý tài chính hiệu quả.
+              Quy trình khuyến nghị để bắt đầu quản lý tài chính.
             </p>
           </div>
 
           <div className="p-5">
-            <div className="-mx-1 flex gap-3 overflow-x-auto pb-2 no-scrollbar px-1">
-              {QUICK_FLOW.map((step, i) => (
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+              {QUICK_FLOW.map((step, index) => (
                 <Link
                   key={step.num}
                   href={step.href}
@@ -673,17 +713,13 @@ export default function HelpPage() {
                     >
                       {step.num}
                     </div>
-                    {i < QUICK_FLOW.length - 1 && (
+                    {index < QUICK_FLOW.length - 1 ? (
                       <div className="h-px flex-1 bg-slate-100" />
-                    )}
+                    ) : null}
                   </div>
                   <div>
-                    <p className="text-sm font-black text-slate-900">
-                      {step.title}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                      {step.desc}
-                    </p>
+                    <p className="text-sm font-black text-slate-900">{step.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-slate-500">{step.desc}</p>
                   </div>
                   <div className="mt-auto flex items-center gap-1 text-[11px] font-bold text-blue-600">
                     Đi tới
@@ -694,68 +730,53 @@ export default function HelpPage() {
             </div>
           </div>
         </section>
-      )}
+      ) : null}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 3 · Onboarding Steps
-          ════════════════════════════════════════════════════════════════════ */}
-      {!search && (
+      {!search ? (
         <section>
           <div className="mb-3 flex items-center gap-2 px-1">
             <div className="size-1.5 rounded-full bg-blue-600" />
-            <p className="text-sm font-black text-slate-700">
-              Bắt đầu trong 5 bước
-            </p>
+            <p className="text-sm font-black text-slate-700">Bắt đầu trong 5 bước</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {ONBOARDING_STEPS.map((s) => {
-              const Icon = s.icon;
+            {ONBOARDING_STEPS.map((step) => {
+              const Icon = step.icon;
               return (
                 <Link
-                  key={s.step}
-                  href={s.href}
+                  key={step.step}
+                  href={step.href}
                   className={[
                     "group flex flex-col gap-4 rounded-4xl border p-5 transition-all hover:shadow-lg active:scale-[.98]",
-                    s.light,
-                    s.border,
+                    step.light,
+                    step.border,
                   ].join(" ")}
                 >
                   <div className="flex items-center justify-between">
                     <div
                       className={[
                         "flex size-10 items-center justify-center rounded-2xl text-white shadow-md",
-                        s.bg,
-                        "shadow-" + s.shadow,
+                        step.bg,
+                        step.shadow,
                       ].join(" ")}
                     >
                       <Icon size={18} strokeWidth={2.5} />
                     </div>
                     <span
                       className={[
-                        "flex size-6 items-center justify-center rounded-xl text-xs font-black",
-                        s.bg,
-                        "text-white",
+                        "flex size-6 items-center justify-center rounded-xl text-xs font-black text-white",
+                        step.bg,
                       ].join(" ")}
                     >
-                      {s.step}
+                      {step.step}
                     </span>
                   </div>
                   <div>
-                    <p className={["text-sm font-black", s.text].join(" ")}>
-                      {s.title}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-600">
-                      {s.desc}
-                    </p>
+                    <p className={["text-sm font-black", step.text].join(" ")}>{step.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">{step.desc}</p>
                   </div>
-                  <div
-                    className={[
-                      "mt-auto flex items-center gap-1 text-[11px] font-black",
-                      s.text,
-                    ].join(" ")}
-                  >
-                    {s.cta}
+                  <div className={["mt-auto flex items-center gap-1 text-[11px] font-black", step.text].join(" ")}>
+                    {step.cta}
                     <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5" />
                   </div>
                 </Link>
@@ -763,21 +784,16 @@ export default function HelpPage() {
             })}
           </div>
         </section>
-      )}
+      ) : null}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 4 · Setup Checklist
-          ════════════════════════════════════════════════════════════════════ */}
-      {!search && (
+      {!search ? (
         <section className="overflow-hidden rounded-4xl border border-emerald-200 bg-white shadow-sm">
           <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50/60 to-white px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 size={14} className="text-emerald-600" />
-                  <p className="text-sm font-black text-slate-800">
-                    Checklist thiết lập
-                  </p>
+                  <p className="text-sm font-black text-slate-800">Checklist thiết lập</p>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Hoàn thành để trải nghiệm đầy đủ MyFinance.
@@ -791,30 +807,31 @@ export default function HelpPage() {
               </div>
             </div>
 
-            {/* Progress bar */}
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100">
               <div
                 className="h-full rounded-full bg-linear-to-r from-emerald-500 to-emerald-400 transition-all duration-700"
-                style={{ width: checkPct + "%" }}
+                style={{ width: `${checkPct}%` }}
               />
             </div>
-            {checkPct === 100 && (
+            {checkPct === 100 ? (
               <p className="mt-1.5 text-xs font-bold text-emerald-600">
                 Xuất sắc! Bạn đã thiết lập xong MyFinance.
               </p>
-            )}
+            ) : null}
           </div>
 
           <div className="divide-y divide-slate-50 p-2">
             {CHECKLIST_ITEMS.map((item) => {
-              const done = !!checklist[item.id];
+              const done = Boolean(checklist[item.id]);
               return (
                 <div
                   key={item.id}
                   className="flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-colors hover:bg-slate-50"
                 >
                   <button
+                    type="button"
                     onClick={() => toggleCheck(item.id)}
+                    aria-label={done ? `Đánh dấu chưa hoàn thành: ${item.label}` : `Đánh dấu hoàn thành: ${item.label}`}
                     className="shrink-0 transition-all active:scale-90"
                   >
                     {done ? (
@@ -824,12 +841,7 @@ export default function HelpPage() {
                     )}
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p
-                      className={[
-                        "text-sm font-bold",
-                        done ? "text-slate-400 line-through" : "text-slate-800",
-                      ].join(" ")}
-                    >
+                    <p className={["text-sm font-bold", done ? "text-slate-400 line-through" : "text-slate-800"].join(" ")}>
                       {item.label}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-400">{item.desc}</p>
@@ -845,31 +857,25 @@ export default function HelpPage() {
             })}
           </div>
         </section>
-      )}
+      ) : null}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 5 · Feature Guides
-          ════════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="mb-3 flex items-center gap-2 px-1">
           <BookOpen size={14} className="text-blue-600" />
-          <p className="text-sm font-black text-slate-700">
-            Hướng dẫn từng tính năng
-          </p>
-          {search && (
+          <p className="text-sm font-black text-slate-700">Hướng dẫn từng tính năng</p>
+          {search ? (
             <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700">
               {filteredGuides.length} / {FEATURE_GUIDES.length}
             </span>
-          )}
+          ) : null}
         </div>
 
         {filteredGuides.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-4xl border border-dashed border-slate-200 py-16 text-center">
             <Search size={32} className="text-slate-300" />
-            <p className="mt-3 text-sm font-bold text-slate-400">
-              Không tìm thấy hướng dẫn phù hợp
-            </p>
+            <p className="mt-3 text-sm font-bold text-slate-400">Không tìm thấy hướng dẫn phù hợp</p>
             <button
+              type="button"
               onClick={() => setSearch("")}
               className="mt-3 text-xs font-bold text-blue-600 hover:underline"
             >
@@ -886,35 +892,25 @@ export default function HelpPage() {
                   key={guide.id}
                   className={[
                     "overflow-hidden rounded-4xl border transition-all duration-200",
-                    open ? guide.accentBorder + " shadow-md" : "border-slate-200",
+                    open ? `${guide.accentBorder} shadow-md` : "border-slate-200",
                   ].join(" ")}
                 >
-                  {/* Guide header / toggle */}
                   <button
                     type="button"
-                    onClick={() =>
-                      setActiveGuide(open ? null : guide.id)
-                    }
+                    onClick={() => setActiveGuide(open ? null : guide.id)}
                     className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-slate-50"
                   >
-                    <div
-                      className={[
-                        "flex size-10 shrink-0 items-center justify-center rounded-2xl",
-                        guide.accentIcon,
-                      ].join(" ")}
-                    >
+                    <div className={["flex size-10 shrink-0 items-center justify-center rounded-2xl", guide.accentIcon].join(" ")}>
                       <Icon size={18} strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-black text-slate-900">{guide.title}</p>
-                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
-                        {guide.purpose}
-                      </p>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{guide.purpose}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Link
                         href={guide.href}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(event) => event.stopPropagation()}
                         className={[
                           "hidden items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition-all hover:opacity-90 sm:flex",
                           guide.accentBg,
@@ -931,105 +927,54 @@ export default function HelpPage() {
                     </div>
                   </button>
 
-                  {/* Guide body */}
-                  {open && (
+                  {open ? (
                     <div className="border-t border-slate-100 px-6 pb-6 pt-5">
                       <div className="grid gap-5 lg:grid-cols-2">
-                        {/* Left col */}
                         <div className="space-y-4">
-                          {/* Purpose */}
                           <div>
-                            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-slate-400">
-                              Mục đích
-                            </p>
-                            <p className="text-sm leading-6 text-slate-700">
-                              {guide.purpose}
-                            </p>
+                            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-slate-400">Mục đích</p>
+                            <p className="text-sm leading-6 text-slate-700">{guide.purpose}</p>
                           </div>
-
-                          {/* When */}
                           <div>
-                            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-slate-400">
-                              Khi nào sử dụng
-                            </p>
-                            <p className="text-sm leading-6 text-slate-700">
-                              {guide.when}
-                            </p>
+                            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-slate-400">Khi nào sử dụng</p>
+                            <p className="text-sm leading-6 text-slate-700">{guide.when}</p>
                           </div>
-
-                          {/* How-to steps */}
                           <div>
-                            <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
-                              Cách sử dụng
-                            </p>
+                            <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">Cách sử dụng</p>
                             <ol className="space-y-2">
-                              {guide.howTo.map((step, i) => (
-                                <li
-                                  key={i}
-                                  className="flex items-start gap-2.5"
-                                >
-                                  <span
-                                    className={[
-                                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-lg text-[10px] font-black text-white",
-                                      guide.accentBg,
-                                    ].join(" ")}
-                                  >
-                                    {i + 1}
+                              {guide.howTo.map((step, index) => (
+                                <li key={`${guide.id}-step-${index}`} className="flex items-start gap-2.5">
+                                  <span className={["mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-lg text-[10px] font-black text-white", guide.accentBg].join(" ")}>
+                                    {index + 1}
                                   </span>
-                                  <span className="text-sm leading-6 text-slate-700">
-                                    {step}
-                                  </span>
+                                  <span className="text-sm leading-6 text-slate-700">{step}</span>
                                 </li>
                               ))}
                             </ol>
                           </div>
                         </div>
 
-                        {/* Right col */}
                         <div className="space-y-4">
-                          {/* Example */}
-                          <div
-                            className={[
-                              "rounded-2xl border p-4",
-                              guide.accentLight,
-                              guide.accentBorder,
-                            ].join(" ")}
-                          >
-                            <p
-                              className={[
-                                "mb-2 text-[11px] font-black uppercase tracking-wide",
-                                guide.accentText,
-                              ].join(" ")}
-                            >
+                          <div className={["rounded-2xl border p-4", guide.accentLight, guide.accentBorder].join(" ")}>
+                            <p className={["mb-2 text-[11px] font-black uppercase tracking-wide", guide.accentText].join(" ")}>
                               Ví dụ thực tế
                             </p>
-                            <p className="text-sm leading-6 text-slate-700">
-                              {guide.example}
-                            </p>
+                            <p className="text-sm leading-6 text-slate-700">{guide.example}</p>
                           </div>
-
-                          {/* Tips */}
                           <div>
                             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-slate-400">
                               <Lightbulb size={11} />
                               Mẹo tối ưu
                             </p>
                             <ul className="space-y-2">
-                              {guide.tips.map((tip, i) => (
-                                <li key={i} className="flex items-start gap-2.5">
-                                  <Star
-                                    size={12}
-                                    className={["mt-1 shrink-0", guide.accentText].join(" ")}
-                                  />
-                                  <span className="text-sm leading-6 text-slate-700">
-                                    {tip}
-                                  </span>
+                              {guide.tips.map((tip, index) => (
+                                <li key={`${guide.id}-tip-${index}`} className="flex items-start gap-2.5">
+                                  <Star size={12} className={["mt-1 shrink-0", guide.accentText].join(" ")} />
+                                  <span className="text-sm leading-6 text-slate-700">{tip}</span>
                                 </li>
                               ))}
                             </ul>
                           </div>
-
-                          {/* CTA */}
                           <Link
                             href={guide.href}
                             className={[
@@ -1043,7 +988,7 @@ export default function HelpPage() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -1051,71 +996,48 @@ export default function HelpPage() {
         )}
       </section>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 6 · Financial Glossary (Tooltip terms)
-          ════════════════════════════════════════════════════════════════════ */}
-      {!search && (
+      {!search ? (
         <section className="overflow-hidden rounded-4xl border border-indigo-200 bg-white shadow-sm">
           <div className="border-b border-indigo-100 bg-linear-to-r from-indigo-50/60 to-white px-6 py-4">
             <div className="flex items-center gap-2">
               <Lightbulb size={14} className="text-indigo-600" />
-              <p className="text-sm font-black text-slate-800">
-                Thuật ngữ tài chính
-              </p>
+              <p className="text-sm font-black text-slate-800">Thuật ngữ tài chính</p>
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Giải thích các chỉ số quan trọng trong MyFinance.
+              Các chỉ số dưới đây dùng cùng ngữ nghĩa với các page tài chính hiện tại.
             </p>
           </div>
 
           <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { term: "Financial Health Score", formula: "Tổng hợp 10 yếu tố tài chính", color: "blue", desc: "Điểm 0–100 đánh giá toàn diện sức khoẻ tài chính. ≥ 80 = Tốt, 60–79 = Khá, < 60 = Cần cải thiện." },
-              { term: "Net Worth", formula: "Tài sản − Tổng nợ", color: "emerald", desc: "Tài sản ròng — thước đo tài chính quan trọng nhất. Tăng đều = đang trên đường tới tự do tài chính." },
-              { term: "Debt Ratio", formula: "Nợ ÷ Thu nhập × 100%", color: "rose", desc: "Tỷ lệ gánh nặng nợ. < 30% = an toàn, 30–50% = cảnh báo, > 50% = nguy hiểm cần xử lý ngay." },
-              { term: "ROI", formula: "(Giá trị − Vốn) ÷ Vốn × 100%", color: "cyan", desc: "Return on Investment — tỷ lệ lợi nhuận đầu tư. ROI ≥ 10%/năm là mục tiêu tốt cho nhà đầu tư dài hạn." },
-              { term: "Budget Adherence", formula: "Chi thực ÷ Hạn mức × 100%", color: "violet", desc: "Tỷ lệ tuân thủ ngân sách. 100% = vượt ngân sách. Mục tiêu: < 80% để có biên độ an toàn." },
-              { term: "Saving Rate", formula: "(Thu − Chi) ÷ Thu × 100%", color: "amber", desc: "Tỷ lệ tiết kiệm. Tối thiểu 10%, tốt 20%, xuất sắc ≥ 30%. Tiết kiệm sớm = hưởng lãi kép lâu hơn." },
-            ].map(({ term, formula, color, desc }) => (
+            {GLOSSARY_ITEMS.map(({ term, formula, color, desc }) => (
               <div
                 key={term}
                 className={[
                   "rounded-2xl border p-4",
-                  "border-" + color + "-200",
-                  "bg-" + color + "-50/50",
+                  `border-${color}-200`,
+                  `bg-${color}-50/50`,
                 ].join(" ")}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className={["text-sm font-black", "text-" + color + "-700"].join(" ")}>
-                    {term}
-                  </p>
-                </div>
-                <div className={["mt-2 rounded-xl px-3 py-1.5", "bg-" + color + "-100"].join(" ")}>
-                  <p className={["font-mono text-[11px] font-bold", "text-" + color + "-700"].join(" ")}>
-                    {formula}
-                  </p>
+                <p className={["text-sm font-black", `text-${color}-700`].join(" ")}>{term}</p>
+                <div className={["mt-2 rounded-xl px-3 py-1.5", `bg-${color}-100`].join(" ")}>
+                  <p className={["font-mono text-[11px] font-bold", `text-${color}-700`].join(" ")}>{formula}</p>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-600">{desc}</p>
               </div>
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 7 · FAQ
-          ════════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="mb-3 flex items-center gap-2 px-1">
           <div className="size-1.5 rounded-full bg-amber-500" />
-          <p className="text-sm font-black text-slate-700">
-            Câu hỏi thường gặp
-          </p>
-          {search && (
+          <p className="text-sm font-black text-slate-700">Câu hỏi thường gặp</p>
+          {search ? (
             <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-700">
               {filteredFaq.length} / {FAQ_ITEMS.length}
             </span>
-          )}
+          ) : null}
         </div>
 
         {filteredFaq.length === 0 ? (
@@ -1131,9 +1053,7 @@ export default function HelpPage() {
                   key={faq.id}
                   className={[
                     "overflow-hidden rounded-4xl border transition-all",
-                    open
-                      ? "border-amber-300 shadow-sm"
-                      : "border-slate-200 hover:border-amber-200",
+                    open ? "border-amber-300 shadow-sm" : "border-slate-200 hover:border-amber-200",
                   ].join(" ")}
                 >
                   <button
@@ -1141,12 +1061,8 @@ export default function HelpPage() {
                     onClick={() => setOpenFaq(open ? null : faq.id)}
                     className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-amber-50/40"
                   >
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-xs font-black text-amber-700">
-                      ?
-                    </div>
-                    <p className="flex-1 text-sm font-bold text-slate-800">
-                      {faq.q}
-                    </p>
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-xs font-black text-amber-700">?</div>
+                    <p className="flex-1 text-sm font-bold text-slate-800">{faq.q}</p>
                     {open ? (
                       <ChevronUp size={16} className="shrink-0 text-amber-500" />
                     ) : (
@@ -1154,21 +1070,17 @@ export default function HelpPage() {
                     )}
                   </button>
 
-                  {open && (
+                  {open ? (
                     <div className="border-t border-amber-100 bg-amber-50/30 px-6 pb-5 pt-4">
                       <p className="text-sm leading-6 text-slate-700">{faq.a}</p>
-                      {faq.formula && (
+                      {faq.formula ? (
                         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-100/60 px-4 py-3">
-                          <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">
-                            Công thức
-                          </p>
-                          <p className="mt-1 font-mono text-sm font-bold text-amber-800">
-                            {faq.formula}
-                          </p>
+                          <p className="text-[10px] font-black uppercase tracking-wide text-amber-600">Công thức</p>
+                          <p className="mt-1 font-mono text-sm font-bold text-amber-800">{faq.formula}</p>
                         </div>
-                      )}
+                      ) : null}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -1176,20 +1088,13 @@ export default function HelpPage() {
         )}
       </section>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          SECTION 8 · Footer CTA
-          ════════════════════════════════════════════════════════════════════ */}
-      {!search && (
+      {!search ? (
         <section className="overflow-hidden rounded-4xl border border-blue-200 bg-linear-to-br from-blue-600 via-blue-700 to-cyan-600 shadow-lg shadow-blue-200/60">
           <div className="px-6 py-7 text-center sm:px-10">
-            <p className="text-[11px] font-black uppercase tracking-widest text-blue-200">
-              Sẵn sàng bắt đầu?
-            </p>
-            <h2 className="mt-2 text-2xl font-black text-white">
-              Bắt đầu quản lý tài chính ngay hôm nay
-            </h2>
+            <p className="text-[11px] font-black uppercase tracking-widest text-blue-200">Sẵn sàng bắt đầu?</p>
+            <h2 className="mt-2 text-2xl font-black text-white">Bắt đầu quản lý tài chính ngay hôm nay</h2>
             <p className="mt-2 text-sm text-blue-200">
-              Mỗi ngày theo dõi tài chính = mỗi ngày gần hơn tới tự do tài chính.
+              Ghi dữ liệu đúng domain trước, sau đó dùng Dashboard và Reports để đọc một bức tranh nhất quán.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
@@ -1216,7 +1121,7 @@ export default function HelpPage() {
             </div>
           </div>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }
