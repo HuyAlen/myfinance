@@ -27,6 +27,11 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import {
+  CHECKLIST_ITEMS,
+  useOnboarding,
+  type ChecklistItemId,
+} from "../onboarding/OnboardingProvider";
 
 // HELP-CANONICAL-FINANCE-1
 // Help copy mirrors the product's current canonical finance semantics. This
@@ -60,13 +65,6 @@ type FaqItem = {
   q: string;
   a: string;
   formula?: string;
-};
-
-type ChecklistItem = {
-  id: string;
-  label: string;
-  href: string;
-  desc: string;
 };
 
 type QuickFlowStep = {
@@ -160,17 +158,9 @@ const ONBOARDING_STEPS: OnboardStep[] = [
   },
 ];
 
-// ONBOARDING-SSOT-1 is intentionally out of scope for this package. Keep the
-// existing Help checklist storage contract unchanged here.
-const CHECKLIST_ITEMS: ChecklistItem[] = [
-  { id: "profile", label: "Hoàn thành hồ sơ", href: "/settings", desc: "Cập nhật tên và thông tin cá nhân" },
-  { id: "wallet", label: "Tạo ví đầu tiên", href: "/wallets", desc: "Thêm ít nhất một ví tiền" },
-  { id: "transaction", label: "Thêm giao dịch đầu tiên", href: "/transactions", desc: "Ghi lại khoản thu hoặc chi đầu tiên" },
-  { id: "budget", label: "Tạo ngân sách", href: "/budgets", desc: "Đặt ngân sách cho ít nhất một danh mục" },
-  { id: "goal", label: "Tạo mục tiêu", href: "/goals", desc: "Thiết lập mục tiêu tài chính đầu tiên" },
-  { id: "data", label: "Kết nối dữ liệu", href: "/settings", desc: "Xem trạng thái đồng bộ Supabase" },
-  { id: "report", label: "Xem báo cáo", href: "/reports", desc: "Khám phá phân tích tài chính" },
-];
+// ONBOARDING-SSOT-1
+// Help renders the exact same checklist model/state as the global onboarding
+// surfaces. Persistence and legacy migration live only in OnboardingProvider.
 
 const QUICK_FLOW: QuickFlowStep[] = [
   { num: 1, title: "Tạo ví", desc: "Thêm tài khoản ngân hàng, tiền mặt", href: "/wallets", numBg: "bg-blue-600", numText: "text-white" },
@@ -571,27 +561,16 @@ export default function HelpPage() {
   const [search, setSearch] = useState("");
   const [activeGuide, setActiveGuide] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
-  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      return JSON.parse(
-        localStorage.getItem("mf-checklist") ?? "{}",
-      ) as Record<string, boolean>;
-    } catch {
-      return {};
-    }
-  });
+  const {
+    checklist,
+    checklistCount: checkCount,
+    checklistTotal,
+    isFullyOnboarded,
+    setChecklistItem,
+  } = useOnboarding();
 
-  function toggleCheck(id: string) {
-    setChecklist((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      try {
-        localStorage.setItem("mf-checklist", JSON.stringify(next));
-      } catch {
-        // Local checklist is non-critical. ONBOARDING-SSOT-1 will consolidate it.
-      }
-      return next;
-    });
+  function toggleCheck(id: ChecklistItemId) {
+    setChecklistItem(id, !checklist[id]);
   }
 
   // Accent-insensitive search is intentionally left to HELP-UX-1.
@@ -619,8 +598,9 @@ export default function HelpPage() {
     );
   }, [search]);
 
-  const checkCount = CHECKLIST_ITEMS.filter((item) => checklist[item.id]).length;
-  const checkPct = Math.round((checkCount / CHECKLIST_ITEMS.length) * 100);
+  const checkPct = checklistTotal > 0
+    ? Math.round((checkCount / checklistTotal) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -796,12 +776,12 @@ export default function HelpPage() {
                   <p className="text-sm font-black text-slate-800">Checklist thiết lập</p>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Hoàn thành để trải nghiệm đầy đủ MyFinance.
+                  Đồng bộ với tiến độ onboarding trên toàn bộ MyFinance.
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-2xl font-black text-emerald-600">
-                  {checkCount}/{CHECKLIST_ITEMS.length}
+                  {checkCount}/{checklistTotal}
                 </p>
                 <p className="text-xs text-slate-400">hoàn thành</p>
               </div>
@@ -813,7 +793,7 @@ export default function HelpPage() {
                 style={{ width: `${checkPct}%` }}
               />
             </div>
-            {checkPct === 100 ? (
+            {isFullyOnboarded ? (
               <p className="mt-1.5 text-xs font-bold text-emerald-600">
                 Xuất sắc! Bạn đã thiết lập xong MyFinance.
               </p>

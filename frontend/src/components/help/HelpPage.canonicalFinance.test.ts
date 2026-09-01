@@ -85,9 +85,7 @@ describe("HELP-CANONICAL-FINANCE-1 canonical cross-page guidance", () => {
     expect(help).toContain("không có một tỷ lệ mẫu đúng cho tất cả");
   });
 
-  it("does not accidentally absorb the separate onboarding or search UX packages", () => {
-    expect(help).toContain('localStorage.getItem("mf-checklist")');
-    expect(help).toContain('localStorage.setItem("mf-checklist"');
+  it("keeps the separate search UX package unchanged", () => {
     expect(help).toContain("search.toLowerCase()");
   });
 });
