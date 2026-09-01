@@ -1,5 +1,7 @@
 "use client";
 
+import { calculateEmergencyCoverageSnapshot } from "@/src/services/finance/emergencyCoverage";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -447,7 +449,9 @@ function toLocalDateKey(value: string | Date) {
  */
 function getDashboardFetchRange(selectedYear: number) {
   const currentYear = new Date().getFullYear();
-  const minYear = Math.min(selectedYear, currentYear);
+  // DASH-EMERGENCY-FUND-BASELINE-1: include one year before the
+  // earliest selected/current year so January still has completed-month evidence.
+  const minYear = Math.min(selectedYear, currentYear) - 1;
   const maxYear = Math.max(selectedYear, currentYear);
   return {
     startDate: `${minYear}-01-01`,
@@ -555,7 +559,7 @@ export default function DashboardPage() {
   //   goalsReady           goals + cumulative goal-funding transactions + savings
   //                        → goalMeta/goalSnapshot, "Mục tiêu"
   //   emergencyFundReady   savings + transactions + categories
-  //                        → savingsSnapshot.emergencyFund / summary.monthlyExpense
+  //                        → emergency fund balance / stable completed-month expense baseline
   //                          (monthlyExpense is baseSummary's own field, but it is
   //                          mathematically getMonthlyExpenseEstimate(transactions,
   //                          categories) — it does NOT depend on wallets/
@@ -2100,10 +2104,22 @@ export default function DashboardPage() {
 
   const netCashFlow = summary.income - summary.expense;
 
-  const emergencyMonthsExact = useMemo(() => {
-    if (summary.monthlyExpense <= 0) return 0;
-    return savingsSnapshot.emergencyFund / summary.monthlyExpense;
-  }, [savingsSnapshot.emergencyFund, summary.monthlyExpense]);
+  // DASH-EMERGENCY-FUND-BASELINE-1: use completed-month expense evidence
+  // rather than the in-progress selected month, which can wildly inflate coverage.
+  const emergencyCoverage = useMemo(
+    () =>
+      calculateEmergencyCoverageSnapshot({
+        emergencyFundBalance: savingsSnapshot.emergencyFund,
+        transactions,
+        categories,
+        lookbackMonths: 6,
+        minimumMonths: 3,
+      }),
+    [categories, savingsSnapshot.emergencyFund, transactions],
+  );
+  // Downstream consumers share this one stable value. When evidence is absent,
+  // scoring fails closed at zero while the visible KPI renders unavailable.
+  const emergencyMonthsExact = emergencyCoverage.coverageMonths ?? 0;
 
   const financialStructure = useMemo(
     () =>
@@ -2414,12 +2430,19 @@ export default function DashboardPage() {
     },
     {
       title: "Quỹ khẩn cấp",
-      value: `${formatOneDecimal(emergencyMonthsExact)} tháng`,
-      note:
-        emergencyMonthsExact >= 3
-          ? "Đạt mức tối thiểu"
-          : "Mục tiêu tối thiểu 3 tháng",
-      tone: emergencyMonthsExact >= 3 ? "good" : "danger",
+      value: emergencyCoverage.isReliable
+        ? `${formatOneDecimal(emergencyMonthsExact)} tháng`
+        : "—",
+      note: emergencyCoverage.isReliable
+        ? emergencyMonthsExact >= 3
+          ? `Đủ ≥3 tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
+          : `Mục tiêu ≥3 tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
+        : "Chưa đủ dữ liệu tháng hoàn tất",
+      tone: !emergencyCoverage.isReliable
+        ? "neutral"
+        : emergencyMonthsExact >= 3
+          ? "good"
+          : "danger",
       icon: ShieldCheck,
       ready: emergencyFundReady,
       // Snapshot metric (savingsSnapshot.emergencyFund aggregates
