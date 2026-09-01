@@ -463,11 +463,14 @@ export default function SettingsPage() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [authProfileName, localSettingsKey, user?.id]);
+  }, [authProfileName, localSettingsKey, setTheme, user?.id]);
 
   useEffect(() => {
     if (!user?.id || !authProfileName) return;
-    setProfileName(authProfileName);
+    const timer = window.setTimeout(() => {
+      setProfileName(authProfileName);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [authProfileName, user?.id]);
   const applyAISettings = useCallback((settings: PublicAIFinanceSettings) => {
     setAiProvider(settings.provider);

@@ -250,7 +250,10 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
 
   const activeContext =
     authUserId && contextAuthUserId === authUserId ? context : null;
-  const workspaces = activeContext?.workspaces ?? [];
+  const workspaces = useMemo(
+    () => activeContext?.workspaces ?? [],
+    [activeContext],
+  );
   const activeWorkspace =
     workspaces.find(
       (workspace) =>

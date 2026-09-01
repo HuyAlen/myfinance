@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
@@ -25,7 +24,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Cell, Pie, PieChart } from "recharts";
-
 import type {
   Budget,
   Category,
@@ -42,7 +40,6 @@ import {
   getTransactions,
   updateBudget,
 } from "@/src/services/finance/financeStorage";
-
 import {
   calculateBudgetSpending,
   formatVND,
@@ -59,7 +56,6 @@ import {
   buildBudgetPeriodRollups,
   type BudgetPeriodRollup,
 } from "./budgetPeriodRollup";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
   id?: string;
@@ -80,7 +76,6 @@ const emptyForm: FormState = {
   month: "2026-06",
   limitAmount: "",
 };
-
 const PIE_COLORS = [
   "#2563eb",
   "#10b981",
@@ -97,7 +92,6 @@ const PIE_COLORS = [
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
-
 function getMonthMeta(month: string) {
   const [yearRaw, monthRaw] = month.split("-").map(Number);
   const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
@@ -108,7 +102,6 @@ function getMonthMeta(month: string) {
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const isCurrentMonth =
     now.getFullYear() === year && now.getMonth() === monthIndex;
-
   const elapsedDays = isCurrentMonth
     ? clampNumber(now.getDate(), 1, daysInMonth)
     : daysInMonth;
@@ -122,7 +115,6 @@ function getMonthMeta(month: string) {
     isCurrentMonth,
   };
 }
-
 function getBudgetForecast(limitAmount: number, spent: number, month: string) {
   const meta = getMonthMeta(month);
   const dailyPace = meta.elapsedDays > 0 ? spent / meta.elapsedDays : 0;
@@ -137,7 +129,6 @@ function getBudgetForecast(limitAmount: number, spent: number, month: string) {
     meta.remainingDays > 0
       ? Math.max(0, (limitAmount - spent) / meta.remainingDays)
       : 0;
-
   const confidenceLevel = !meta.isCurrentMonth
     ? "high"
     : meta.elapsedDays < 10
@@ -152,7 +143,6 @@ function getBudgetForecast(limitAmount: number, spent: number, month: string) {
       : confidenceLevel === "medium"
         ? "Độ tin cậy trung bình"
         : "Độ tin cậy cao";
-
   const confidenceNote =
     confidenceLevel === "low"
       ? `Dữ liệu mới ${meta.elapsedDays} ngày, dự báo có thể dao động mạnh.`
@@ -164,7 +154,6 @@ function getBudgetForecast(limitAmount: number, spent: number, month: string) {
 
   const confidenceWeight =
     confidenceLevel === "low" ? 0.35 : confidenceLevel === "medium" ? 0.65 : 1;
-
   return {
     ...meta,
     dailyPace,
@@ -180,7 +169,6 @@ function getBudgetForecast(limitAmount: number, spent: number, month: string) {
     isProjectedOver: projectedRemaining < 0,
   };
 }
-
 function getPreviousMonthKey(month: string) {
   const [yearRaw, monthRaw] = month.split("-").map(Number);
   const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
@@ -194,7 +182,6 @@ function getPreviousMonthKey(month: string) {
     String(previous.getMonth() + 1).padStart(2, "0")
   );
 }
-
 function getFixedCostStatus(ratio: number) {
   if (ratio <= 40) {
     return {
@@ -215,7 +202,6 @@ function getFixedCostStatus(ratio: number) {
       border: "border-amber-100",
     };
   }
-
   return {
     label: "Rủi ro cao",
     tone: "danger" as const,
@@ -224,7 +210,6 @@ function getFixedCostStatus(ratio: number) {
     border: "border-rose-100",
   };
 }
-
 function getStabilityScore(
   fixedRatio: number,
   variableRatio: number,
@@ -246,12 +231,10 @@ function getStabilityScore(
     savingRatio >= 20
       ? Math.min(12, (savingRatio - 20) * 0.5)
       : -(20 - savingRatio) * 1.2;
-
   return Math.round(
     clampNumber(82 - fixedPenalty - variablePenalty + savingBonus, 0, 100),
   );
 }
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -280,7 +263,6 @@ export default function BudgetsPage() {
     filterLabel,
     dateRange,
   } = useDateFilter();
-
   // ── PRESERVED: reloadData ─────────────────────────────────────────────────
   const reloadData = useCallback(async () => {
     // FINANCE-DATA-1: getBudgets/getCategories/getTransactions now reject
@@ -309,7 +291,6 @@ export default function BudgetsPage() {
       setIsLoadingBudgets(false);
     }
   }, []);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void reloadData();
@@ -317,13 +298,11 @@ export default function BudgetsPage() {
 
     return () => window.clearTimeout(timer);
   }, [reloadData]);
-
   // REALTIME-NAV-INTEGRITY-1: category planning-group/type changes affect
   // which budgets are considered real-expense budgets and how their cards are
   // labelled. Keep every read dependency in the realtime contract, not only
   // the two tables that hold budget/transaction rows themselves.
   useRealtimeTable(["budgets", "transactions", "categories"], reloadData);
-
   // ── PRESERVED: expense categories ─────────────────────────────────────────
   const expenseCategories = useMemo(
     () =>
@@ -340,7 +319,6 @@ export default function BudgetsPage() {
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
-
   const getCategoryGroup = useCallback(
     (categoryId: string): CategoryPlanningGroup => {
       return getCategoryPlanningGroup(categoryById.get(categoryId));
@@ -355,7 +333,6 @@ export default function BudgetsPage() {
     },
     [getCategoryGroup],
   );
-
   // MYFINANCE-CROSSPAGE-1: Budget analytics consume the same exact global
   // dateRange as Dashboard/Transactions/Reports. Budget rows remain monthly
   // planning artifacts, but their spending is intersected with the selected
@@ -368,7 +345,6 @@ export default function BudgetsPage() {
       }),
     [dateRange.endDate, dateRange.startDate, transactions],
   );
-
   // ── Canonical: delegates to calculateBudgetSpending ───────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
   function getSpent(budget: Budget) {
@@ -378,7 +354,6 @@ export default function BudgetsPage() {
       categories,
     }).spent;
   }
-
   // ── NEW: Smart Budget analytics ───────────────────────────────────────────
   const smartBudget = useMemo(
     () => computeSmartBudget(transactions, categories, budgets),
@@ -392,7 +367,6 @@ export default function BudgetsPage() {
       ),
     [isRealExpenseGroup, smartBudget.violations],
   );
-
   const realExpenseTrends = useMemo(
     () =>
       smartBudget.overspendingTrend.filter((item) =>
@@ -400,7 +374,6 @@ export default function BudgetsPage() {
       ),
     [isRealExpenseGroup, smartBudget.overspendingTrend],
   );
-
   const filteredBudgets = useMemo(() => {
     const startMonth = dateRange.startDate.slice(0, 7);
     const endMonth = dateRange.endDate.slice(0, 7);
@@ -408,7 +381,6 @@ export default function BudgetsPage() {
       (budget) => budget.month >= startMonth && budget.month <= endMonth,
     );
   }, [budgets, dateRange.endDate, dateRange.startDate]);
-
   // BUDGET-PERIOD-AGGREGATION-1: monthly rows remain the storage/edit model,
   // while every selected period gets one canonical category rollup. Full
   // months contribute 100% of their limit; custom boundary months contribute
@@ -428,10 +400,8 @@ export default function BudgetsPage() {
       getSpent,
     ],
   );
-
   const displayBudgets = useMemo<BudgetCardModel[]>(() => {
     if (filterMode === "month") return filteredBudgets;
-
     return periodBudgetRollups.map((rollup) => ({
       id: `period:${rollup.categoryId}:${dateRange.startDate}:${dateRange.endDate}`,
       categoryId: rollup.categoryId,
@@ -450,7 +420,6 @@ export default function BudgetsPage() {
     filteredBudgets,
     periodBudgetRollups,
   ]);
-
 
   // ── Selected-period budget summary ─────────────────────────────────────────
   const filteredSummary = useMemo(() => {
@@ -480,7 +449,6 @@ export default function BudgetsPage() {
         activeMonth,
       );
     }
-
     // A multi-month/global custom period is already an aggregate; do not
     // extrapolate that aggregate as though all spending happened in the
     // anchor month. Health uses the actual selected-period utilization.
@@ -489,7 +457,6 @@ export default function BudgetsPage() {
       confidenceWeight: 1,
     };
   }, [activeMonth, filterMode, filteredSummary]);
-
   const periodIncome = useMemo(
     () =>
       periodTransactions
@@ -497,7 +464,6 @@ export default function BudgetsPage() {
         .reduce((sum, transaction) => sum + transaction.amount, 0),
     [periodTransactions],
   );
-
   const financialPlanning = useMemo(() => {
     type PlanningBudgetItem = {
       categoryId: string;
@@ -512,7 +478,6 @@ export default function BudgetsPage() {
     const savingItems: PlanningBudgetItem[] = [];
     const investmentItems: PlanningBudgetItem[] = [];
     const uncategorizedItems: PlanningBudgetItem[] = [];
-
     periodBudgetRollups.forEach((rollup) => {
       const category = categoryById.get(rollup.categoryId);
       const categoryName = category?.name ?? "Danh mục";
@@ -549,7 +514,6 @@ export default function BudgetsPage() {
       items: PlanningBudgetItem[],
       key: "spent" | "limit" | "projectedSpend",
     ) => items.reduce((sum, item) => sum + item[key], 0);
-
     const fixedLimit = sumBy(fixedItems, "limit");
     const variableLimit = sumBy(variableItems, "limit");
     const savingLimit = sumBy(savingItems, "limit");
@@ -560,7 +524,6 @@ export default function BudgetsPage() {
       const transactionType = String(transaction.type);
       const category = categoryById.get(transaction.categoryId);
       const categoryGroup = getCategoryPlanningGroup(category);
-
       if (transactionType === "income" || transactionType === "transfer") {
         return null;
       }
@@ -580,7 +543,6 @@ export default function BudgetsPage() {
       ) {
         return categoryGroup;
       }
-
       return categoryGroup === "income" ? null : categoryGroup;
     };
     const actualPlanningSpent = periodTransactions.reduce(
@@ -676,7 +638,6 @@ export default function BudgetsPage() {
   ]);
   const budgetHealthScore = useMemo(() => {
     if (filteredSummary.totalLimit <= 0) return 0;
-
     const currentUsagePenalty =
       filteredSummary.percent <= 70
         ? 0
@@ -689,7 +650,6 @@ export default function BudgetsPage() {
         ? 0
         : Math.min(28, (budgetForecast.projectedPercent - 100) * 0.7) *
           budgetForecast.confidenceWeight;
-
     const violationPenalty = Math.min(18, realExpenseViolations.length * 5);
     const trendPenalty = Math.min(10, realExpenseTrends.length * 3);
     const fixedCostPenalty =
@@ -698,7 +658,6 @@ export default function BudgetsPage() {
         : financialPlanning.fixedRatio <= 60
           ? (financialPlanning.fixedRatio - 40) * 0.4
           : 8 + (financialPlanning.fixedRatio - 60) * 0.65;
-
     return Math.round(
       clampNumber(
         100 -
@@ -718,7 +677,6 @@ export default function BudgetsPage() {
     realExpenseTrends.length,
     realExpenseViolations.length,
   ]);
-
   // ── NEW: Category analysis lookup map ─────────────────────────────────────
   const categoryAnalysisMap = useMemo(
     () => new Map(smartBudget.categoryAnalysis.map((a) => [a.categoryId, a])),
@@ -734,12 +692,10 @@ export default function BudgetsPage() {
     () => budgets.filter((budget) => budget.month === previousMonth),
     [budgets, previousMonth],
   );
-
   const canClonePreviousBudget =
     filterMode === "month" &&
     filteredBudgets.length === 0 &&
     previousMonthBudgets.length > 0;
-
   // ── NEW: Pie data for budget allocation ───────────────────────────────────
   const pieData = useMemo(
     () =>
@@ -759,7 +715,6 @@ export default function BudgetsPage() {
         : budgetHealthScore >= 55
           ? { gradient: "from-amber-400 to-orange-500", label: "Cần chú ý" }
           : { gradient: "from-rose-500 to-red-500", label: "Cần cải thiện" };
-
   // ── PRESERVED: CRUD ───────────────────────────────────────────────────────
   function openCreateForm() {
     setSaveError(null);
@@ -773,7 +728,6 @@ export default function BudgetsPage() {
 
   useQuickActionCreateIntent(openCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
-
   // Contextual entity focus from Dashboard/Header (?budgetId=...): scroll to
   // and briefly highlight the matching card once it renders. A missing or
   // already-deleted budgetId is ignored — the page just loads normally.
@@ -783,12 +737,10 @@ export default function BudgetsPage() {
     null,
   );
   const focusedBudgetIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (!focusBudgetId || focusedBudgetIdRef.current === focusBudgetId) return;
     const el = document.getElementById(`budget-card-${focusBudgetId}`);
     if (!el) return;
-
     focusedBudgetIdRef.current = focusBudgetId;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     const highlightTimer = window.setTimeout(
@@ -804,7 +756,6 @@ export default function BudgetsPage() {
       window.clearTimeout(clearTimer);
     };
   }, [focusBudgetId, filteredBudgets]);
-
   function openEditForm(budget: Budget) {
     setForm({
       id: budget.id,
@@ -814,7 +765,6 @@ export default function BudgetsPage() {
     });
     setIsFormOpen(true);
   }
-
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const limitAmount = Number(form.limitAmount);
@@ -849,7 +799,6 @@ export default function BudgetsPage() {
     setIsFormOpen(false);
     setForm(emptyForm);
   }
-
   async function handleClonePreviousBudget() {
     if (!canClonePreviousBudget || isCloningPrevious) return;
 
@@ -859,7 +808,6 @@ export default function BudgetsPage() {
       // CROSS-DOMAIN-INTEGRITY-1: cloning is one server transaction. Never
       // reintroduce a client loop of independently committed addBudget calls.
       const result = await clonePreviousMonthBudgets(activeMonth);
-
       if (result.error) {
         toast({
           variant: "error",
@@ -876,7 +824,6 @@ export default function BudgetsPage() {
         await reloadData();
         return;
       }
-
       toast({
         variant: "success",
         message: `Đã sao chép ${result.cloned} ngân sách từ tháng ${previousMonth}.`,
@@ -886,7 +833,6 @@ export default function BudgetsPage() {
       setIsCloningPrevious(false);
     }
   }
-
   function handleDelete(id: string) {
     setPendingAction({
       title: "Xóa ngân sách?",
@@ -904,7 +850,6 @@ export default function BudgetsPage() {
       },
     });
   }
-
   // ─── Status helpers ───────────────────────────────────────────────────────
   const STATUS_STYLE: Record<
     string,
@@ -936,7 +881,6 @@ export default function BudgetsPage() {
       border: "border-blue-100",
     },
   };
-
   const STATUS_LABEL: Record<string, string> = {
     over: "Vượt ngân sách",
     near: "Sắp đạt giới hạn",
@@ -944,7 +888,6 @@ export default function BudgetsPage() {
     "no-budget": "Chưa có ngân sách",
     "no-spend": "Chưa chi tiêu",
   };
-
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3.5 overflow-x-hidden sm:space-y-6">
@@ -974,7 +917,6 @@ export default function BudgetsPage() {
               Tạo ngân sách
             </button>
           </div>
-
           {/* Executive KPI cards */}
           <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
@@ -1048,14 +990,12 @@ export default function BudgetsPage() {
                   <ShieldCheck size={16} />
                 </span>
               </div>
-
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-rose-100 sm:mt-3 sm:h-2">
                 <div
                   className="h-full rounded-full bg-rose-500"
                   style={{ width: Math.min(budgetHealthScore, 100) + "%" }}
                 />
               </div>
-
               <p className="mt-1.5 line-clamp-1 text-[10px] font-semibold leading-4 text-rose-600/80 sm:mt-2 sm:line-clamp-2 sm:text-[11px]">
                 {filteredSummary.remaining < 0
                   ? `${realExpenseViolations.length} danh mục cần rà soát · ${healthGrade.label}`
@@ -1065,7 +1005,6 @@ export default function BudgetsPage() {
           </div>
         </div>
       </section>
-
       {filteredSummary.totalLimit > 0 && (
         <section>
           <div
@@ -1103,7 +1042,6 @@ export default function BudgetsPage() {
                 </p>
               </div>
             </div>
-
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <MetricTile
                 label="Đã chi cố định"
@@ -1121,7 +1059,6 @@ export default function BudgetsPage() {
                 sub="Planning score"
               />
             </div>
-
             <div className="mt-3 space-y-1.5 sm:mt-4 sm:space-y-2">
               {financialPlanning.fixedItems.slice(0, 3).map((item) => (
                 <div
@@ -1144,10 +1081,8 @@ export default function BudgetsPage() {
               )}
             </div>
           </div>
-
         </section>
       )}
-
       {budgets.length > 0 && (
         <section className="rounded-2xl border border-[#DCE6EF] bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
           <div className="mb-3 flex items-center gap-2.5 sm:mb-5 sm:gap-3">
@@ -1163,7 +1098,6 @@ export default function BudgetsPage() {
               </p>
             </div>
           </div>
-
           {pieData.length > 0 ? (
             <div className="flex flex-col gap-3 sm:gap-6 lg:flex-row lg:items-center">
               <div className="flex shrink-0 justify-center">
@@ -1236,7 +1170,6 @@ export default function BudgetsPage() {
           )}
         </section>
       )}
-
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 4 · Budget Cards
           ══════════════════════════════════════════════════════════════════ */}
@@ -1585,8 +1518,8 @@ export default function BudgetsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(var(--app-height,100dvh)-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-4xl bg-white shadow-2xl sm:rounded-4xl">
+        <div className="fixed inset-0 z-100 flex items-start justify-center bg-slate-900/40 px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(var(--app-height,100dvh)-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-5">
               <div>
@@ -1604,7 +1537,6 @@ export default function BudgetsPage() {
                 <X size={16} />
               </button>
             </div>
-
             <form
               onSubmit={handleSubmit}
               className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6"
@@ -1630,7 +1562,6 @@ export default function BudgetsPage() {
                     ))}
                   </select>
                 </label>
-
                 {/* Month */}
                 <Input
                   label="Tháng"
@@ -1638,7 +1569,6 @@ export default function BudgetsPage() {
                   value={form.month}
                   onChange={(v) => setForm((p) => ({ ...p, month: v }))}
                 />
-
                 {/* Amount with ₫ prefix */}
                 <div>
                   <CurrencyInput
@@ -1651,7 +1581,6 @@ export default function BudgetsPage() {
                   />
                 </div>
               </div>
-
               {/* Actions */}
               <SaveError
                 message={saveError}
@@ -1676,7 +1605,6 @@ export default function BudgetsPage() {
           </div>
         </div>
       )}
-
       <ConfirmDialog
         action={pendingAction}
         onCancel={() => setPendingAction(null)}
@@ -1686,7 +1614,6 @@ export default function BudgetsPage() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
 function MetricTile({
   label,
   value,
@@ -1704,7 +1631,6 @@ function MetricTile({
     </div>
   );
 }
-
 function KpiCard({
   label,
   value,
@@ -1769,9 +1695,7 @@ function KpiCard({
       icon: "bg-cyan-100 text-cyan-600",
     },
   };
-
   const style = styles[tone];
-
   // Mobile Finance UX: keep the complete amount visible on one line.
   // The font scales down by formatted string length instead of truncating.
   const mobileValueSize =
@@ -1784,7 +1708,6 @@ function KpiCard({
           : value.length >= 11
             ? "text-[14px] tracking-[-0.04em]"
             : "text-[18px] tracking-[-0.03em]";
-
   return (
     <div
       className={
@@ -1822,7 +1745,6 @@ function KpiCard({
             {sub}
           </p>
         </div>
-
         <div
           className={
             "flex size-6.5 shrink-0 items-center justify-center rounded-lg sm:size-9 sm:rounded-2xl " +
@@ -1835,7 +1757,6 @@ function KpiCard({
     </div>
   );
 }
-
 function Input({
   label,
   value,

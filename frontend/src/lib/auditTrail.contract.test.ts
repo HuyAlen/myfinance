@@ -42,7 +42,6 @@ function extractFinanceAuditTable(sql: string) {
 }
 
 const normalizedMigration = normalize(migration);
-const normalizedSchema = normalize(schema);
 const normalizedVerification = normalize(verification);
 const normalizedTypes = normalize(databaseTypes);
 

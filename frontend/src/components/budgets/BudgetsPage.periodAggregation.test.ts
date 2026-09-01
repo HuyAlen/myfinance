@@ -3,7 +3,6 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(path.resolve(__dirname, "BudgetsPage.tsx"), "utf8");
-const normalized = source.replace(/\s+/g, " ");
 
 describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
   it("builds one canonical period rollup model from filtered monthly rows", () => {

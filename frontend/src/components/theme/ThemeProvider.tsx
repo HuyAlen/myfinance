@@ -114,7 +114,9 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     const initialTheme = readStoredThemePreference(
       isThemePreference(bootstrapPreference) ? bootstrapPreference : "system",
     );
-    commitTheme(initialTheme, false);
+    const bootstrapTimer = window.setTimeout(() => {
+      commitTheme(initialTheme, false);
+    }, 0);
 
     const media = window.matchMedia(THEME_MEDIA_QUERY);
     const onSystemThemeChange = () => {
@@ -154,6 +156,7 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      window.clearTimeout(bootstrapTimer);
       media.removeEventListener("change", onSystemThemeChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("storage", onStorage);

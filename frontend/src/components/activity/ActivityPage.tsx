@@ -221,7 +221,10 @@ export default function ActivityPage() {
   );
 
   useEffect(() => {
-    void loadCursorPage(null, []);
+    const timer = window.setTimeout(() => {
+      void loadCursorPage(null, []);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadCursorPage]);
 
   useEffect(() => {
@@ -253,7 +256,11 @@ export default function ActivityPage() {
     if (householdLoading || !household?.id) return;
     let cancelled = false;
 
-    setReferenceLabels(EMPTY_AUDIT_REFERENCE_LABELS);
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setReferenceLabels(EMPTY_AUDIT_REFERENCE_LABELS);
+      }
+    });
     void Promise.allSettled([
       getWallets(),
       getCategories(),

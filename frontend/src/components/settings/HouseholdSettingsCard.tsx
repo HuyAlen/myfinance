@@ -71,7 +71,7 @@ export default function HouseholdSettingsCard() {
         : context?.pendingInvite
           ? [context.pendingInvite]
           : [],
-    [context?.pendingInvite, context?.pendingInvites],
+    [context],
   );
 
   const activeWorkspaceLabel = activeWorkspace?.isPersonal
