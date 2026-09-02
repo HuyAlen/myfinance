@@ -33,7 +33,6 @@ import type {
   Category,
   CategoryPlanningGroup,
   CategoryType,
-
   RecurrenceFrequency,
   Transaction,
   Wallet,
@@ -61,7 +60,7 @@ type CategoryGroup = Extract<
 type ActivityFilter = "all" | "active" | "inactive";
 type TypeFilter = "all" | "income" | "expense";
 type GroupFilter = "all" | CategoryGroup;
-type SortOption = "amount" | "usage" | "name";
+type SortOption = "amount" | "usage" | "name" | "group";
 
 type FormState = {
   id?: string;
@@ -80,7 +79,6 @@ const emptyForm: FormState = {
   name: "",
   type: "expense",
   group: "variable",
-
   isRecurring: false,
   recurrence: "monthly",
   defaultAmount: "",
@@ -196,7 +194,7 @@ export default function CategoriesPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [groupFilter, setGroupFilter] = useState<GroupFilter>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [sortBy, setSortBy] = useState<SortOption>("usage");
+  const [sortBy, setSortBy] = useState<SortOption>("group");
 
   const { toast } = useToast();
 
@@ -358,6 +356,13 @@ export default function CategoriesPage() {
         return true;
       })
       .sort((a, b) => {
+        if (sortBy === "group") {
+          const groupOrder =
+            GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group);
+          return groupOrder !== 0
+            ? groupOrder
+            : a.name.localeCompare(b.name, "vi");
+        }
         if (sortBy === "name") return a.name.localeCompare(b.name, "vi");
         if (sortBy === "amount") return b.total - a.total;
         return b.count - a.count;
@@ -375,7 +380,7 @@ export default function CategoriesPage() {
     typeFilter !== "all",
     groupFilter !== "all",
     activityFilter !== "all",
-    sortBy !== "usage",
+    sortBy !== "group",
   ].filter(Boolean).length;
 
   function resetFilters() {
@@ -383,7 +388,7 @@ export default function CategoriesPage() {
     setTypeFilter("all");
     setGroupFilter("all");
     setActivityFilter("all");
-    setSortBy("usage");
+    setSortBy("group");
   }
 
   function openCreateForm(group: CategoryGroup = "variable") {
@@ -400,7 +405,6 @@ export default function CategoriesPage() {
       name: "",
       group,
       type: getTypeFromGroup(group),
-
       isRecurring: false,
       recurrence: "monthly",
       defaultAmount: "",
@@ -574,7 +578,7 @@ export default function CategoriesPage() {
             <p className="hidden text-[11px] font-black uppercase tracking-[0.2em] text-blue-600 sm:block">
               Category Management
             </p>
-            <h1 className="whitespace-nowrap text-xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
+            <h1 className="truncate text-xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
               Danh mục thu chi
             </h1>
             <p className="mt-1 hidden text-sm text-slate-500 sm:block">
@@ -688,7 +692,9 @@ export default function CategoriesPage() {
                       {stat ? stat.count : "—"}
                     </span>
                   </div>
-                  <p className={`mt-2 whitespace-nowrap text-[10px] font-black tracking-tight sm:mt-3 sm:text-sm sm:tracking-normal ${meta.color}`}>
+                  <p
+                    className={`mt-2 whitespace-nowrap text-[11px] font-black sm:mt-3 sm:text-sm ${meta.color}`}
+                  >
                     <span className="sm:hidden">{meta.shortLabel}</span>
                     <span className="hidden sm:inline">{meta.label}</span>
                   </p>
@@ -839,6 +845,7 @@ export default function CategoriesPage() {
             value={sortBy}
             onChange={(value) => setSortBy(value as SortOption)}
             options={[
+              { value: "group", label: "Loại danh mục" },
               { value: "usage", label: "Dùng nhiều nhất" },
               { value: "amount", label: "Tổng tiền cao nhất" },
               { value: "name", label: "Tên A–Z" },
@@ -848,7 +855,11 @@ export default function CategoriesPage() {
       </section>
 
       {isFilterOpen && (
-        <div className="fixed inset-0 z-90 flex items-end bg-slate-900/35 sm:hidden" role="presentation" onClick={() => setIsFilterOpen(false)}>
+        <div
+          className="fixed inset-0 z-90 flex items-end bg-slate-900/35 sm:hidden"
+          role="presentation"
+          onClick={() => setIsFilterOpen(false)}
+        >
           <div
             role="dialog"
             aria-modal="true"
@@ -858,7 +869,9 @@ export default function CategoriesPage() {
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-black text-slate-900">Bộ lọc danh mục</h2>
+                <h2 className="text-base font-black text-slate-900">
+                  Bộ lọc danh mục
+                </h2>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {activeFilterCount > 0
                     ? `${activeFilterCount} bộ lọc đang áp dụng`
@@ -913,6 +926,7 @@ export default function CategoriesPage() {
                 value={sortBy}
                 onChange={(value) => setSortBy(value as SortOption)}
                 options={[
+                  { value: "group", label: "Loại danh mục" },
                   { value: "usage", label: "Dùng nhiều nhất" },
                   { value: "amount", label: "Tổng tiền cao nhất" },
                   { value: "name", label: "Tên A–Z" },
@@ -1094,25 +1108,25 @@ export default function CategoriesPage() {
             )}
 
           {hasLoadedCategorySnapshot && filteredCategories.length === 0 && (
-              <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-8 text-center sm:p-12 md:col-span-2 xl:col-span-3">
-                <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
-                  <Folder size={22} />
-                </div>
-                <h3 className="mt-4 text-base font-black text-slate-800">
-                  Không tìm thấy danh mục
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Thử đổi từ khóa hoặc xóa bộ lọc hiện tại.
-                </p>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="mt-4 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                >
-                  Xóa bộ lọc
-                </button>
+            <div className="flex flex-col items-center justify-center rounded-4xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-8 text-center sm:p-12 md:col-span-2 xl:col-span-3">
+              <div className="flex size-14 items-center justify-center rounded-3xl bg-blue-100 text-blue-500">
+                <Folder size={22} />
               </div>
-            )}
+              <h3 className="mt-4 text-base font-black text-slate-800">
+                Không tìm thấy danh mục
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Thử đổi từ khóa hoặc xóa bộ lọc hiện tại.
+              </p>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-4 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Xóa bộ lọc
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1386,7 +1400,7 @@ export default function CategoriesPage() {
 function OverviewCardSkeleton() {
   return (
     <div
-      className="h-[72px] min-w-[136px] snap-start animate-pulse rounded-2xl border border-slate-200 bg-slate-50 sm:h-[94px] sm:min-w-0 sm:rounded-3xl"
+      className="h-[72px] min-w-[112px] snap-start animate-pulse rounded-2xl border border-slate-200 bg-slate-50 sm:h-[94px] sm:min-w-0 sm:rounded-3xl"
       aria-hidden="true"
     />
   );
@@ -1412,15 +1426,19 @@ function OverviewCard({
   }[tone];
 
   return (
-    <div className={`min-w-[136px] snap-start rounded-2xl border p-3 sm:min-w-0 sm:rounded-3xl sm:p-4 ${toneClass}`}>
-      <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+    <div
+      className={`min-w-[112px] snap-start rounded-2xl border p-3 sm:min-w-0 sm:rounded-3xl sm:p-4 ${toneClass}`}
+    >
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0">
-          <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.02em] opacity-70 sm:text-[10px] sm:tracking-wide">
+          <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-wide opacity-70 sm:text-[10px]">
             {label}
           </p>
-          <p className="mt-0.5 text-xl font-black tabular-nums sm:mt-1 sm:text-2xl">{value}</p>
+          <p className="mt-0.5 text-xl font-black tabular-nums sm:mt-1 sm:text-2xl">
+            {value}
+          </p>
         </div>
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm sm:size-10 sm:rounded-2xl">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm sm:size-10 sm:rounded-2xl">
           {icon}
         </div>
       </div>
