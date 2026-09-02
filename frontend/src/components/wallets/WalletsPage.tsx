@@ -469,6 +469,14 @@ export default function WalletsPage() {
     [spendableWallets],
   );
 
+  // WALLET-BALANCE-SORT-1: keep the visible wallet list ordered by the
+  // canonical persisted balance, highest first. Copy before sorting so the
+  // authoritative spendable wallet snapshot is never mutated.
+  const sortedSpendableWallets = useMemo(
+    () => [...spendableWallets].sort((a, b) => b.balance - a.balance),
+    [spendableWallets],
+  );
+
   const spendableWalletIds = useMemo(
     () => new Set(spendableWallets.map((wallet) => wallet.id)),
     [spendableWallets],
@@ -1079,7 +1087,7 @@ export default function WalletsPage() {
         </div>
 
         <div className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {spendableWallets.map((wallet) => {
+          {sortedSpendableWallets.map((wallet) => {
             const pct =
               totalAssets > 0
                 ? Math.round((wallet.balance / totalAssets) * 100)
