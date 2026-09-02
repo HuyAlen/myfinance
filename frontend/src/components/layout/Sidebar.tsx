@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
@@ -56,13 +56,50 @@ const NAV_GROUPS = [
   },
 ];
 
+const SIDEBAR_SCROLL_STORAGE_KEY = "myfinance:sidebar-scroll-top";
+
 type SidebarProps = { isOpen: boolean; onClose: () => void };
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const firstRender = useRef(true);
+  const navScrollRef = useRef<HTMLElement | null>(null);
   const { status, lastSync } = useRealtime();
   const connected = status === "SUBSCRIBED";
+
+  // SIDEBAR-SCROLL-RETENTION-1: AppShell can remount on route changes, which
+  // recreates this independently-scrollable nav and would otherwise reset its
+  // scrollTop to 0. Restore before paint, then persist the exact position when
+  // this Sidebar instance unmounts. This intentionally leaves Link's normal
+  // page-scroll behavior enabled; only the sidebar keeps its own position.
+  useLayoutEffect(() => {
+    const nav = navScrollRef.current;
+    if (!nav) return;
+
+    try {
+      const storedScrollTop = window.sessionStorage.getItem(
+        SIDEBAR_SCROLL_STORAGE_KEY,
+      );
+      const savedScrollTop = Number(storedScrollTop);
+      if (storedScrollTop !== null && Number.isFinite(savedScrollTop)) {
+        nav.scrollTop = savedScrollTop;
+      }
+    } catch {
+      // sessionStorage can be unavailable in restricted browser contexts.
+      // Scroll retention is an enhancement; navigation must keep working.
+    }
+
+    return () => {
+      try {
+        window.sessionStorage.setItem(
+          SIDEBAR_SCROLL_STORAGE_KEY,
+          String(nav.scrollTop),
+        );
+      } catch {
+        // Keep route changes resilient when storage is unavailable.
+      }
+    };
+  }, []);
 
   // Auto-close on route change
   useEffect(() => {
@@ -116,7 +153,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </Link>
 
       {/* ══ Navigation Groups ════════════════════════════════════════════════ */}
-      <nav className="no-scrollbar flex-1 space-y-5 overflow-y-auto pb-3">
+      <nav
+        ref={navScrollRef}
+        className="no-scrollbar flex-1 space-y-5 overflow-y-auto pb-3"
+      >
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
             <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
