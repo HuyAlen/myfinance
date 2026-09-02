@@ -25,7 +25,7 @@ describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
   it("keeps monthly CRUD but renders synthetic category cards for multi-period filters", () => {
     expect(source).toContain('filterMode === "month"');
     expect(source).toContain("const displayBudgets = useMemo<BudgetCardModel[]>");
-    expect(source).toContain("{displayBudgets.map((budget) => {");
+    expect(source).toContain("{sortedDisplayBudgets.map((budget) => {");
     expect(source).toContain("!budget.isPeriodRollup");
   });
 

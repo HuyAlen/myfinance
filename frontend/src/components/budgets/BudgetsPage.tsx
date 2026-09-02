@@ -421,6 +421,20 @@ export default function BudgetsPage() {
     periodBudgetRollups,
   ]);
 
+  // BUDGET-SPEND-SORT-1: show the categories with the highest actual spend
+  // first. Use the exact same canonical spend value rendered by each card;
+  // do not sort by budget limit or usage percentage. Copy before sorting so
+  // source state / rollup ordering is never mutated.
+  const sortedDisplayBudgets = useMemo(
+    () =>
+      [...displayBudgets].sort((a, b) => {
+        const spentA = a.periodSpent ?? getSpent(a);
+        const spentB = b.periodSpent ?? getSpent(b);
+        return spentB - spentA;
+      }),
+    [displayBudgets, getSpent],
+  );
+
   // ── Selected-period budget summary ─────────────────────────────────────────
   const filteredSummary = useMemo(() => {
     const realExpenseRollups = periodBudgetRollups.filter((rollup) =>
@@ -1184,7 +1198,7 @@ export default function BudgetsPage() {
           </p>
         </div>
         <div className="grid gap-3 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {displayBudgets.map((budget) => {
+          {sortedDisplayBudgets.map((budget) => {
             const category = categories.find((c) => c.id === budget.categoryId);
             const spent = budget.periodSpent ?? getSpent(budget);
             const pct =
