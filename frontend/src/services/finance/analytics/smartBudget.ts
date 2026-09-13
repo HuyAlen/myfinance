@@ -13,7 +13,7 @@ import type { Budget, Category, Transaction } from "@/src/types/finance";
 
 import {
   calculateBudgetSpending,
-
+  type BudgetSpendingStatus,
 } from "@/src/services/finance/financeCalculations";
 
 import { lastNMonths, linearRegression, mean } from "./shared";
@@ -21,12 +21,7 @@ import type { InsightData } from "./types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type BudgetStatus =
-  | "over" // spending exceeded budget
-  | "near" // spending ≥ 85% of budget
-  | "on-track" // spending < 85% of budget
-  | "no-budget" // no budget set for this category
-  | "no-spend"; // budget set but zero spending
+export type BudgetStatus = BudgetSpendingStatus;
 
 export type SpendingTrend = "increasing" | "stable" | "decreasing";
 
@@ -129,7 +124,7 @@ export function computeSmartBudget(
 
       // Spending in current month — canonical Budget Spending Engine, so a
       // category's spend is computed identically here and on BudgetsPage.
-      const actualSpend = calculateBudgetSpending({
+      const currentSpending = calculateBudgetSpending({
         budget: budget ?? {
           id: cat.id,
           categoryId: cat.id,
@@ -138,7 +133,8 @@ export function computeSmartBudget(
         },
         transactions,
         categories,
-      }).spent;
+      });
+      const actualSpend = currentSpending.spent;
 
       // 3-month historical spending for trend
       const lookbackSpend = months.slice(0, lookbackMonths).map((month) =>
@@ -161,22 +157,9 @@ export function computeSmartBudget(
       const trend: SpendingTrend =
         trendRate > 8 ? "increasing" : trendRate < -8 ? "decreasing" : "stable";
 
-      const usagePercent =
-        budgetLimit > 0 ? Math.round((actualSpend / budgetLimit) * 100) : 0;
+      const usagePercent = currentSpending.usagePercent;
       const variance = actualSpend - budgetLimit;
-
-      let status: BudgetStatus;
-      if (budgetLimit === 0) {
-        status = actualSpend === 0 ? "no-spend" : "no-budget";
-      } else if (actualSpend > budgetLimit) {
-        status = "over";
-      } else if (actualSpend >= budgetLimit * 0.85) {
-        status = "near";
-      } else if (actualSpend === 0) {
-        status = "no-spend";
-      } else {
-        status = "on-track";
-      }
+      const status: BudgetStatus = currentSpending.status;
 
       return {
         categoryId: cat.id,
@@ -237,6 +220,8 @@ export function computeSmartBudget(
       let reasoning: string;
       if (c.status === "over") {
         reasoning = `Vượt ngân sách ${c.usagePercent}%. Đề xuất điều chỉnh lên ${fmtVND(recommended)} dựa trên chi tiêu thực tế.`;
+      } else if (c.status === "at-limit") {
+        reasoning = `Đã dùng hết ngân sách tháng này. Đề xuất ${fmtVND(recommended)} để tạo khoảng đệm phù hợp với chi tiêu thực tế.`;
       } else if (c.trend === "increasing") {
         reasoning = `Chi tiêu tăng ${c.trendRate}%/tháng. Đề xuất ${fmtVND(recommended)} để phù hợp xu hướng.`;
       } else if (c.budgetLimit === 0) {

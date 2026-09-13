@@ -46,10 +46,13 @@ export function buildLocalFinanceAnswer(
 ): AIChatResult {
   const top = context.topExpenseCategories[0];
   const overBudget = context.budgetStatus.find(
-    (item) => item.usagePercent >= 100,
+    (item) => item.status === "over",
+  );
+  const atLimitBudget = context.budgetStatus.find(
+    (item) => item.status === "at-limit",
   );
   const warningBudget = context.budgetStatus.find(
-    (item) => item.usagePercent >= 80 && item.usagePercent < 100,
+    (item) => item.status === "near",
   );
 
   const lines = [
@@ -64,10 +67,12 @@ export function buildLocalFinanceAnswer(
       ? `• Danh mục chi lớn nhất là ${top.category}: ${formatVND(top.amount)}.`
       : "• Chưa có dữ liệu chi tiêu trong tháng này.",
     overBudget
-      ? `• Ngân sách ${overBudget.category} đã dùng ${overBudget.usagePercent}%.`
-      : warningBudget
-        ? `• Ngân sách ${warningBudget.category} đang ở mức cảnh báo ${warningBudget.usagePercent}%.`
-        : "• Chưa phát hiện ngân sách nào vượt ngưỡng 80%.",
+      ? `• Ngân sách ${overBudget.category} đã vượt giới hạn, hiện dùng ${overBudget.usagePercent}%.`
+      : atLimitBudget
+        ? `• Ngân sách ${atLimitBudget.category} đã đạt giới hạn 100%.`
+        : warningBudget
+          ? `• Ngân sách ${warningBudget.category} sắp đạt giới hạn, hiện dùng ${warningBudget.usagePercent}%.`
+          : "• Chưa phát hiện ngân sách nào cần cảnh báo.",
     "",
     "💡 Gợi ý",
     context.totals.currentMonthCashFlow < 0

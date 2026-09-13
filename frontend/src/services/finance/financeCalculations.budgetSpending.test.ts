@@ -147,7 +147,7 @@ describe("calculateBudgetSpending", () => {
     expect(result.status).toBe("no-spend");
   });
 
-  it("is not over budget exactly at the limit", () => {
+  it("classifies exactly at the limit as at-limit, not near or over", () => {
     const result = calculateBudgetSpending({
       budget: budget({ limitAmount: 10_000 }),
       transactions: [tx({ amount: 10_000 })],
@@ -156,6 +156,19 @@ describe("calculateBudgetSpending", () => {
     expect(result.remaining).toBe(0);
     expect(result.usagePercent).toBe(100);
     expect(result.isOverBudget).toBe(false);
+    expect(result.overAmount).toBe(0);
+    expect(result.status).toBe("at-limit");
+  });
+
+  it("keeps a raw sub-limit spend in near even when rounded usagePercent displays 100%", () => {
+    const result = calculateBudgetSpending({
+      budget: budget({ limitAmount: 10_000 }),
+      transactions: [tx({ amount: 9_970 })],
+      categories: [category()],
+    });
+    expect(result.spent).toBeLessThan(result.limit);
+    expect(result.usagePercent).toBe(100);
+    expect(result.status).toBe("near");
   });
 
   it("does not clamp remaining/usagePercent when over limit", () => {

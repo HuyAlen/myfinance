@@ -21,9 +21,9 @@ import type {
  *
  * These tests lock in the ACTUAL, cross-referenced product contract this
  * audit established (not the illustrative 80% example some earlier specs
- * used): "near" is >= 85% of the limit and "over" requires spending to
- * STRICTLY exceed the limit (spent > limit, so exactly 100% is "near", not
- * "over") — the exact same threshold `deriveBudgetSpendingStatus` in
+ * used): "near" is >= 85% but still below the limit, "at-limit" is exact
+ * equality, and "over" requires spending to STRICTLY exceed the limit —
+ * the exact same threshold `deriveBudgetSpendingStatus` in
  * financeCalculations.ts already applies, and the same one
  * dashboardBudgetAttention.ts and BudgetsPage.tsx's own inline
  * classification independently use. Header previously reimplemented this
@@ -41,7 +41,10 @@ function budgetNotificationsOf(
   result: ReturnType<typeof buildFinanceNotifications>,
 ) {
   return result.filter(
-    (n) => n.id.startsWith("bover-") || n.id.startsWith("bnear-"),
+    (n) =>
+      n.id.startsWith("bover-") ||
+      n.id.startsWith("batlimit-") ||
+      n.id.startsWith("bnear-"),
   );
 }
 
@@ -78,7 +81,7 @@ function makeExpense(over: Partial<Transaction> = {}): Transaction {
   };
 }
 
-describe("budget threshold contract (near = >=85% of limit, over = spent > limit strictly)", () => {
+describe("budget threshold contract (near = 85%..<100%, at-limit = 100%, over = >100%)", () => {
   it("79.99% of limit: healthy, no notification", () => {
     const result = buildFinanceNotifications({
       budgets: [makeBudget()],
@@ -119,7 +122,7 @@ describe("budget threshold contract (near = >=85% of limit, over = spent > limit
     expect(budgetNotifs[0].title).toContain("Gần vượt ngân sách");
   });
 
-  it("exactly 100% (spent === limit): near, NOT over — 'at limit' is not yet 'exceeded'", () => {
+  it("exactly 100% (spent === limit): reached limit, not near and not over", () => {
     const result = buildFinanceNotifications({
       budgets: [makeBudget()],
       transactions: [makeExpense({ amount: 1_000_000 })],
@@ -130,8 +133,11 @@ describe("budget threshold contract (near = >=85% of limit, over = spent > limit
     });
     const budgetNotifs = budgetNotificationsOf(result);
     expect(budgetNotifs).toHaveLength(1);
-    expect(budgetNotifs[0].title).toContain("Gần vượt ngân sách");
+    expect(budgetNotifs[0].id).toBe("batlimit-budget-1");
+    expect(budgetNotifs[0].title).toContain("Đã đạt giới hạn");
+    expect(budgetNotifs[0].title).not.toContain("Gần vượt ngân sách");
     expect(budgetNotifs[0].title).not.toContain("Vượt ngân sách");
+    expect(budgetNotifs[0].body).toBe("Đã dùng 100% giới hạn tháng này.");
   });
 
   it("100.01% of limit: over budget", () => {

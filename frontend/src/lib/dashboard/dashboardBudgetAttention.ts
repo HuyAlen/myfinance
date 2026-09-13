@@ -5,7 +5,7 @@
  * (`calculateBudgetSpendingCollection` in financeCalculations.ts) — this
  * module does not compute spend/limit/status itself. It only classifies
  * the canonical per-budget results into the compact summary the Dashboard
- * needs: how many budgets are over/near/healthy, and which item(s) are the
+ * needs: how many budgets are over/at-limit/near/healthy, and which item(s) are the
  * highest priority to show.
  *
  * No React/Supabase dependency, no new query — callers pass in whatever
@@ -22,10 +22,10 @@ export type DashboardBudgetWorstOffender = {
   budgetId: string;
   categoryId: string;
   categoryName: string;
-  /** "over" when this is an actual over-budget item; "near" when nothing
-   * is over budget but this is a closest-to-the-limit warning item (see
-   * the priority chain on `selectWorstOffender` below). */
-  status: "over" | "near";
+  /** "over" when this is an actual over-budget item; "at-limit" when the
+   * limit is exactly exhausted; "near" when the item is still below the
+   * limit but inside the canonical warning band. */
+  status: "over" | "at-limit" | "near";
   spent: number;
   limit: number;
   overAmount: number;
@@ -41,8 +41,11 @@ export type DashboardBudgetAttention = {
    * `overBudgetItems.length` — derived FROM that array (not a separate
    * filter) so the count and the rendered list can never disagree. */
   overBudgetCount: number;
-  /** Canonical status === "near" (spent >= 85% of limit) — the engine's
-   * own warning threshold, not a value invented here. */
+  /** Canonical status === "at-limit" (spent === limit). Kept separate from
+   * both near-limit warnings and true over-budget violations. */
+  atLimitCount: number;
+  /** Canonical status === "near" (spent >= 85% but still < 100% of limit) —
+   * the engine's own warning threshold, not a value invented here. */
   warningCount: number;
   /** Everything else in the collection (status "on-track", "no-spend", or
    * the "no-budget" edge case of a configured 0-limit budget with
@@ -57,16 +60,17 @@ export type DashboardBudgetAttention = {
    * when nothing is over budget. No cap — every over-budget item in the
    * evaluated collection is included. */
   overBudgetItems: DashboardBudgetWorstOffender[];
-  /** The single highest-usagePercent "near" (>=85% of limit) item,
-   * computed independent of over-budget state. Consumers must only
+  /** The single highest-priority non-over warning: exact-limit first, then
+   * the highest-usagePercent "near" item. Computed independent of over-budget
+   * state. Consumers must only
    * display this when `overBudgetItems` is empty — when real over-budget
    * problems exist, they take exclusive precedence over the near-limit
    * summary (see DashboardPage's Budget Attention render branch). */
   topWarning: DashboardBudgetWorstOffender | null;
   /** Backward-compatible single-item view: the highest-priority item
    * overall, following the same priority chain as before this patch —
-   * (1) the top-ranked over-budget item, else (2) the top near-limit
-   * item, else (3) null. Equivalent to
+   * (1) the top-ranked over-budget item, else (2) the top exact/near-limit
+   * warning, else (3) null. Equivalent to
    * `overBudgetItems[0] ?? topWarning ?? null`. Prefer `overBudgetItems`
    * for rendering every over-budget item; this field remains for callers
    * that only need the single most urgent item. */
@@ -82,7 +86,7 @@ function resolveCategoryName(
 
 function toWorstOffender(
   spending: BudgetSpending,
-  status: "over" | "near",
+  status: "over" | "at-limit" | "near",
   categoriesById: Map<string, Category>,
 ): DashboardBudgetWorstOffender {
   return {
@@ -122,20 +126,30 @@ function rankOverBudgetItems(
     .map(({ spending }) => toWorstOffender(spending, "over", categoriesById));
 }
 
-/** The single highest-usagePercent "near" item, or null when none exist.
- * Computed independent of over-budget state — the caller decides whether
- * it is actually appropriate to display (see `topWarning`'s doc comment
- * on DashboardBudgetAttention). */
+/** The single highest-priority non-over warning, or null when none exist.
+ * Exact-limit outranks near-limit even when a raw sub-limit value rounds to
+ * a displayed 100%, so presentation can never confuse rounding with true
+ * equality. Computed independent of over-budget state — the caller decides
+ * whether it is actually appropriate to display. */
 function selectTopWarning(
   spendings: BudgetSpending[],
   categoriesById: Map<string, Category>,
 ): DashboardBudgetWorstOffender | null {
-  const nearCandidates = spendings
-    .filter((spending) => spending.status === "near")
-    .sort((a, b) => b.usagePercent - a.usagePercent);
+  const warningCandidates = spendings
+    .filter(
+      (spending) =>
+        spending.status === "at-limit" || spending.status === "near",
+    )
+    .sort((a, b) => {
+      const aPriority = a.status === "at-limit" ? 1 : 0;
+      const bPriority = b.status === "at-limit" ? 1 : 0;
+      if (aPriority !== bPriority) return bPriority - aPriority;
+      return b.usagePercent - a.usagePercent;
+    });
 
-  if (nearCandidates.length > 0) {
-    return toWorstOffender(nearCandidates[0], "near", categoriesById);
+  if (warningCandidates.length > 0) {
+    const top = warningCandidates[0];
+    return toWorstOffender(top, top.status as "at-limit" | "near", categoriesById);
   }
 
   return null;
@@ -161,6 +175,9 @@ export function buildDashboardBudgetAttention(input: {
   });
 
   const totalBudgets = spendings.length;
+  const atLimitCount = spendings.filter(
+    (spending) => spending.status === "at-limit",
+  ).length;
   const warningCount = spendings.filter(
     (spending) => spending.status === "near",
   ).length;
@@ -171,12 +188,14 @@ export function buildDashboardBudgetAttention(input: {
 
   const overBudgetItems = rankOverBudgetItems(spendings, categoriesById);
   const overBudgetCount = overBudgetItems.length;
-  const healthyCount = totalBudgets - overBudgetCount - warningCount;
+  const healthyCount =
+    totalBudgets - overBudgetCount - atLimitCount - warningCount;
   const topWarning = selectTopWarning(spendings, categoriesById);
 
   return {
     totalBudgets,
     overBudgetCount,
+    atLimitCount,
     warningCount,
     healthyCount,
     overBudgetItems,

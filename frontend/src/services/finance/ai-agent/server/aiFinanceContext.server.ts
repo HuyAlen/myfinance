@@ -23,6 +23,10 @@ import {
   getTotalExpense,
   getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
+import type {
+  BudgetSpending,
+  BudgetSpendingStatus,
+} from "@/src/services/finance/financeCalculations";
 
 type Client = SupabaseClient<Database>;
 
@@ -229,6 +233,7 @@ type FinanceContext = {
     limit: number;
     spent: number;
     usagePercent: number;
+    status: BudgetSpendingStatus;
   }>;
   goals: Array<{
     name: string;
@@ -237,6 +242,19 @@ type FinanceContext = {
     progressPercent: number;
   }>;
 };
+
+export function toFinanceContextBudgetStatus(
+  item: BudgetSpending,
+  category: string,
+): FinanceContext["budgetStatus"][number] {
+  return {
+    category,
+    limit: item.limit,
+    spent: item.spent,
+    usagePercent: item.usagePercent,
+    status: item.status,
+  };
+}
 
 const FINANCE_TIMEZONE = "Asia/Ho_Chi_Minh";
 
@@ -345,12 +363,12 @@ export async function buildServerFinanceContext(
     categories: categories.map(toDomainCategory),
   });
   const budgetStatus = budgetSpending
-    .map((item) => ({
-      category: categoryById.get(item.categoryId) ?? "Khác",
-      limit: item.limit,
-      spent: item.spent,
-      usagePercent: item.usagePercent,
-    }))
+    .map((item) =>
+      toFinanceContextBudgetStatus(
+        item,
+        categoryById.get(item.categoryId) ?? "Khác",
+      ),
+    )
     .sort((a, b) => b.usagePercent - a.usagePercent)
     .slice(0, 10);
 

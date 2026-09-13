@@ -277,7 +277,7 @@ function budgetFindings(input: {
       severity:
         status === "over"
           ? "critical"
-          : status === "near"
+          : status === "at_limit" || status === "near"
             ? "warning"
             : "positive",
       evidence: [

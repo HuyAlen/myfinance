@@ -1231,8 +1231,8 @@ export default function AIInsightsPage() {
                 <div key={c.categoryId} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 text-sm font-black text-slate-800">{c.categoryName}</p>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${c.status === "over" ? "bg-rose-100 text-rose-700" : c.status === "near" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
-                      {c.status === "over" ? "Vượt" : c.status === "near" ? "Gần giới hạn" : c.status === "on-track" ? "Tốt" : "Theo dõi"}
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${c.status === "over" ? "bg-rose-100 text-rose-700" : c.status === "at-limit" ? "bg-orange-100 text-orange-700" : c.status === "near" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      {c.status === "over" ? "Vượt" : c.status === "at-limit" ? "Đạt giới hạn" : c.status === "near" ? "Gần giới hạn" : c.status === "on-track" ? "Tốt" : "Theo dõi"}
                     </span>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
@@ -1241,7 +1241,7 @@ export default function AIInsightsPage() {
                   </div>
                   {c.budgetLimit > 0 && (
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
-                      <div className={`h-full rounded-full ${c.usagePercent > 100 ? "bg-rose-500" : c.usagePercent >= 85 ? "bg-amber-400" : "bg-blue-500"}`} style={{ width: `${Math.min(100, c.usagePercent)}%` }} />
+                      <div className={`h-full rounded-full ${c.status === "over" ? "bg-rose-500" : c.status === "at-limit" ? "bg-orange-500" : c.status === "near" ? "bg-amber-400" : "bg-blue-500"}`} style={{ width: `${Math.min(100, c.usagePercent)}%` }} />
                     </div>
                   )}
                 </div>
@@ -1284,11 +1284,13 @@ export default function AIInsightsPage() {
                             <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
                               <div
                                 className={`h-1.5 rounded-full ${
-                                  c.usagePercent > 100
+                                  c.status === "over"
                                     ? "bg-rose-500"
-                                    : c.usagePercent >= 85
-                                      ? "bg-amber-400"
-                                      : "bg-emerald-500"
+                                    : c.status === "at-limit"
+                                      ? "bg-orange-500"
+                                      : c.status === "near"
+                                        ? "bg-amber-400"
+                                        : "bg-emerald-500"
                                 }`}
                                 style={{
                                   width: `${Math.min(100, c.usagePercent)}%`,
@@ -1324,6 +1326,10 @@ export default function AIInsightsPage() {
                         {c.status === "over" ? (
                           <span className="rounded-lg bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">
                             Vượt
+                          </span>
+                        ) : c.status === "at-limit" ? (
+                          <span className="rounded-lg bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">
+                            Đạt giới hạn
                           </span>
                         ) : c.status === "near" ? (
                           <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">

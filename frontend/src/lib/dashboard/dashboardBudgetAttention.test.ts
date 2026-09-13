@@ -46,6 +46,7 @@ describe("buildDashboardBudgetAttention", () => {
     expect(result).toEqual({
       totalBudgets: 0,
       overBudgetCount: 0,
+      atLimitCount: 0,
       warningCount: 0,
       healthyCount: 0,
       overBudgetItems: [],
@@ -238,6 +239,36 @@ describe("buildDashboardBudgetAttention", () => {
     expect(result.overBudgetItems).toEqual([]);
     expect(result.topWarning?.categoryName).toBe("Ăn uống");
     expect(result.topWarning?.usagePercent).toBe(90);
+  });
+
+  it("5a. exactly at the limit is a distinct highest-priority warning, not healthy, near, or over", () => {
+    const budgets = [
+      makeBudget({ id: "at-limit", categoryId: "c1", limitAmount: 1_000_000 }),
+      makeBudget({ id: "near", categoryId: "c2", limitAmount: 1_000_000 }),
+    ];
+    const categories = [
+      makeCategory({ id: "c1", name: "Nhà ở" }),
+      makeCategory({ id: "c2", name: "Đi lại" }),
+    ];
+    const transactions = [
+      makeTransaction({ categoryId: "c1", amount: 1_000_000 }),
+      makeTransaction({ categoryId: "c2", amount: 900_000 }),
+    ];
+
+    const result = buildDashboardBudgetAttention({
+      budgets,
+      categories,
+      transactions,
+    });
+
+    expect(result.overBudgetCount).toBe(0);
+    expect(result.atLimitCount).toBe(1);
+    expect(result.warningCount).toBe(1);
+    expect(result.healthyCount).toBe(0);
+    expect(result.topWarning?.budgetId).toBe("at-limit");
+    expect(result.topWarning?.status).toBe("at-limit");
+    expect(result.topWarning?.usagePercent).toBe(100);
+    expect(result.worstOffender?.status).toBe("at-limit");
   });
 
   it("5b. mixed state — one over-budget AND one near-limit: only the over-budget item is exposed via overBudgetItems, near data stays available via topWarning but is not mixed into the over-budget list", () => {

@@ -1127,7 +1127,7 @@ export function getDisposableCashFlow(
 // ─── Canonical Budget Spending Engine ──────────────────────────────────────
 //
 // One Budget row (categoryId + month + limitAmount) must produce the same
-// spent/remaining/usagePercent/over-budget result everywhere it is shown.
+// spent/remaining/usagePercent/status result everywhere it is shown.
 // Transaction-type inclusion mirrors BudgetsPage's original getSpent(): a
 // budget on a "saving"/"investment" planning-group category also counts
 // actual saving/investment-typed transactions in that category, since those
@@ -1137,6 +1137,7 @@ export function getDisposableCashFlow(
 
 export type BudgetSpendingStatus =
   | "over"
+  | "at-limit"
   | "near"
   | "on-track"
   | "no-budget"
@@ -1184,12 +1185,13 @@ function matchesBudgetSpending(
   return transactionType === "expense";
 }
 
-function deriveBudgetSpendingStatus(
+export function deriveBudgetSpendingStatus(
   spent: number,
   limit: number,
 ): BudgetSpendingStatus {
   if (limit === 0) return spent === 0 ? "no-spend" : "no-budget";
   if (spent > limit) return "over";
+  if (spent === limit) return "at-limit";
   if (spent >= limit * 0.85) return "near";
   if (spent === 0) return "no-spend";
   return "on-track";

@@ -79,6 +79,7 @@ import {
   calculateFinanceFlowSnapshot,
   calculateFinancialStructureSummary,
   calculateGoalFundingSnapshot,
+  deriveBudgetSpendingStatus,
   filterTransactionsByDateRange,
   formatVND,
   getForexAssetValue,
@@ -2556,6 +2557,11 @@ export default function DashboardPage() {
       budgetLimit > 0 ? Math.round((expense / budgetLimit) * 100) : 0;
     const projectedBudgetUsage =
       budgetLimit > 0 ? Math.round((projectedExpense / budgetLimit) * 100) : 0;
+    const budgetUsageStatus = deriveBudgetSpendingStatus(expense, budgetLimit);
+    const projectedBudgetUsageStatus = deriveBudgetSpendingStatus(
+      projectedExpense,
+      budgetLimit,
+    );
 
     return {
       year,
@@ -2569,6 +2575,8 @@ export default function DashboardPage() {
       budgetLimit,
       budgetUsage,
       projectedBudgetUsage,
+      budgetUsageStatus,
+      projectedBudgetUsageStatus,
     };
   }, [
     budgets,
@@ -3040,16 +3048,20 @@ export default function DashboardPage() {
                   className={`rounded-full px-3 py-1 text-xs font-black ${
                     budgetAttention.overBudgetCount > 0
                       ? "bg-rose-50 text-rose-700"
-                      : budgetAttention.warningCount > 0
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-emerald-50 text-emerald-700"
+                      : budgetAttention.atLimitCount > 0
+                        ? "bg-orange-50 text-orange-700"
+                        : budgetAttention.warningCount > 0
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-emerald-50 text-emerald-700"
                   }`}
                 >
                   {budgetAttention.overBudgetCount > 0
                     ? `${budgetAttention.overBudgetCount}/${budgetAttention.totalBudgets} ngân sách vượt hạn mức`
-                    : budgetAttention.warningCount > 0
-                      ? `${budgetAttention.warningCount}/${budgetAttention.totalBudgets} ngân sách sắp chạm giới hạn`
-                      : `${budgetAttention.totalBudgets}/${budgetAttention.totalBudgets} ngân sách đang trong hạn mức`}
+                    : budgetAttention.atLimitCount > 0
+                      ? `${budgetAttention.atLimitCount}/${budgetAttention.totalBudgets} ngân sách đã đạt giới hạn`
+                      : budgetAttention.warningCount > 0
+                        ? `${budgetAttention.warningCount}/${budgetAttention.totalBudgets} ngân sách sắp chạm giới hạn`
+                        : `${budgetAttention.totalBudgets}/${budgetAttention.totalBudgets} ngân sách đang trong hạn mức`}
                 </span>
               </div>
 
@@ -3089,8 +3101,16 @@ export default function DashboardPage() {
                       <span className="min-w-0 truncate text-sm font-bold text-slate-700">
                         {budgetAttention.topWarning.categoryName}
                       </span>
-                      <span className="shrink-0 text-xs font-black text-amber-600">
-                        Sắp đạt giới hạn
+                      <span
+                        className={`shrink-0 text-xs font-black ${
+                          budgetAttention.topWarning.status === "at-limit"
+                            ? "text-orange-600"
+                            : "text-amber-600"
+                        }`}
+                      >
+                        {budgetAttention.topWarning.status === "at-limit"
+                          ? "Đã đạt giới hạn"
+                          : "Sắp đạt giới hạn"}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
@@ -3185,9 +3205,13 @@ export default function DashboardPage() {
                     : "Chưa lập"
                 }
                 color={
-                  monthlyPulse.budgetUsage > 100
+                  monthlyPulse.budgetUsageStatus === "over"
                     ? "text-rose-500"
-                    : "text-emerald-600"
+                    : monthlyPulse.budgetUsageStatus === "at-limit"
+                      ? "text-orange-600"
+                      : monthlyPulse.budgetUsageStatus === "near"
+                        ? "text-amber-600"
+                        : "text-emerald-600"
                 }
               />
               <MiniStat
@@ -3198,9 +3222,13 @@ export default function DashboardPage() {
                     : "—"
                 }
                 color={
-                  monthlyPulse.projectedBudgetUsage > 100
+                  monthlyPulse.projectedBudgetUsageStatus === "over"
                     ? "text-rose-500"
-                    : "text-emerald-600"
+                    : monthlyPulse.projectedBudgetUsageStatus === "at-limit"
+                      ? "text-orange-600"
+                      : monthlyPulse.projectedBudgetUsageStatus === "near"
+                        ? "text-amber-600"
+                        : "text-emerald-600"
                 }
               />
             </div>

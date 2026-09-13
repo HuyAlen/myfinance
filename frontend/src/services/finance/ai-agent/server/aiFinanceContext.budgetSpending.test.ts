@@ -3,6 +3,7 @@ import {
   toDomainBudget,
   toDomainCategory,
   toDomainTransaction,
+  toFinanceContextBudgetStatus,
 } from "./aiFinanceContext.server";
 import { calculateBudgetSpending } from "@/src/services/finance/financeCalculations";
 
@@ -82,6 +83,56 @@ describe("aiFinanceContext row -> domain adapters agree with the canonical engin
     expect(result.spent).toBe(4_000);
     expect(result.remaining).toBe(6_000);
     expect(result.usagePercent).toBe(40);
+  });
+
+
+  it("carries canonical at-limit status into the AI finance context row", () => {
+    const result = calculateBudgetSpending({
+      budget: toDomainBudget(budgetRow(10_000)),
+      transactions: [
+        toDomainTransaction(
+          transactionRow({
+            id: "t-limit",
+            type: "expense",
+            amount: 10_000,
+            date: "2026-08-20",
+          }),
+        ),
+      ],
+      categories: [toDomainCategory(categoryRow("variable"))],
+    });
+
+    const contextRow = toFinanceContextBudgetStatus(result, "Test Category");
+
+    expect(contextRow).toEqual({
+      category: "Test Category",
+      limit: 10_000,
+      spent: 10_000,
+      usagePercent: 100,
+      status: "at-limit",
+    });
+  });
+
+  it("preserves canonical near status when 99.7% rounds to 100%", () => {
+    const result = calculateBudgetSpending({
+      budget: toDomainBudget(budgetRow(10_000)),
+      transactions: [
+        toDomainTransaction(
+          transactionRow({
+            id: "t-rounded-near",
+            type: "expense",
+            amount: 9_970,
+            date: "2026-08-20",
+          }),
+        ),
+      ],
+      categories: [toDomainCategory(categoryRow("variable"))],
+    });
+
+    const contextRow = toFinanceContextBudgetStatus(result, "Test Category");
+
+    expect(contextRow.usagePercent).toBe(100);
+    expect(contextRow.status).toBe("near");
   });
 
   it("excludes a Savings Finance Engine transfer transaction (regression)", () => {

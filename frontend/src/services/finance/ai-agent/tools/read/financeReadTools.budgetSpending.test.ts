@@ -216,8 +216,9 @@ describe("financeReadTools row -> domain adapters feeding calculateBudgetSpendin
     expect(result.spent).toBe(2_000);
   });
 
-  it("maps canonical status onto the tool's existing over/near/on_track contract", () => {
+  it("preserves the canonical at-limit distinction in the AI budget-status contract", () => {
     expect(toToolStatusLabel("over")).toBe("over");
+    expect(toToolStatusLabel("at-limit")).toBe("at_limit");
     expect(toToolStatusLabel("near")).toBe("near");
     expect(toToolStatusLabel("on-track")).toBe("on_track");
     expect(toToolStatusLabel("no-spend")).toBe("on_track");

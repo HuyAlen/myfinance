@@ -42,6 +42,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 import {
   calculateBudgetSpending,
+  deriveBudgetSpendingStatus,
   formatVND,
   getCategoryPlanningGroup,
 } from "@/src/services/finance/financeCalculations";
@@ -453,6 +454,7 @@ export default function BudgetsPage() {
       totalSpent,
       remaining: totalLimit - totalSpent,
       percent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
+      status: deriveBudgetSpendingStatus(totalSpent, totalLimit),
     };
   }, [isRealExpenseGroup, periodBudgetRollups]);
   const budgetForecast = useMemo(() => {
@@ -874,6 +876,11 @@ export default function BudgetsPage() {
       bar: "#ef4444",
       border: "border-rose-100",
     },
+    "at-limit": {
+      badge: "bg-orange-100 text-orange-700 border-orange-200",
+      bar: "#f97316",
+      border: "border-orange-100",
+    },
     near: {
       badge: "bg-amber-100 text-amber-700 border-amber-200",
       bar: "#f59e0b",
@@ -897,6 +904,7 @@ export default function BudgetsPage() {
   };
   const STATUS_LABEL: Record<string, string> = {
     over: "Vượt ngân sách",
+    "at-limit": "Đã đạt giới hạn",
     near: "Sắp đạt giới hạn",
     "on-track": "Đúng hạn mức",
     "no-budget": "Chưa có ngân sách",
@@ -953,15 +961,27 @@ export default function BudgetsPage() {
             />
             <KpiCard
               label={
-                filteredSummary.remaining < 0 ? "Vượt ngân sách" : "Còn lại"
+                filteredSummary.remaining < 0
+                  ? "Vượt ngân sách"
+                  : filteredSummary.remaining === 0
+                    ? "Đã dùng hết"
+                    : "Còn lại"
               }
               value={formatVND(Math.abs(filteredSummary.remaining))}
               sub={
                 filteredSummary.remaining < 0
                   ? `Vượt ${Math.max(0, filteredSummary.percent - 100)}% hạn mức`
-                  : "Có thể tiếp tục chi"
+                  : filteredSummary.remaining === 0
+                    ? "Đã dùng hết hạn mức"
+                    : "Có thể tiếp tục chi"
               }
-              tone={filteredSummary.remaining < 0 ? "rose" : "emerald"}
+              tone={
+                filteredSummary.remaining < 0
+                  ? "rose"
+                  : filteredSummary.remaining === 0
+                    ? "orange"
+                    : "emerald"
+              }
               icon={
                 filteredSummary.remaining >= 0 ? (
                   <ArrowUpRight size={16} />
@@ -974,18 +994,22 @@ export default function BudgetsPage() {
               label="Tỷ lệ sử dụng"
               value={filteredSummary.percent + "%"}
               sub={
-                filteredSummary.percent >= 100
+                filteredSummary.status === "over"
                   ? "Cần điều chỉnh ngay"
-                  : filteredSummary.percent >= 80
-                    ? "Sắp đạt giới hạn"
-                    : "Trong vùng an toàn"
+                  : filteredSummary.status === "at-limit"
+                    ? "Đã đạt giới hạn"
+                    : filteredSummary.status === "near"
+                      ? "Sắp đạt giới hạn"
+                      : "Trong vùng an toàn"
               }
               tone={
-                filteredSummary.percent >= 100
-                  ? "orange"
-                  : filteredSummary.percent >= 80
-                    ? "amber"
-                    : "cyan"
+                filteredSummary.status === "over"
+                  ? "rose"
+                  : filteredSummary.status === "at-limit"
+                    ? "orange"
+                    : filteredSummary.status === "near"
+                      ? "amber"
+                      : "cyan"
               }
               icon={<ChartPie size={16} />}
             />
@@ -1207,18 +1231,10 @@ export default function BudgetsPage() {
                 : 0;
             const remaining = budget.limitAmount - spent;
             const analysis = categoryAnalysisMap.get(budget.categoryId);
-            const status: string = budget.isPeriodRollup
-              ? spent > budget.limitAmount
-                ? "over"
-                : spent >= budget.limitAmount * 0.85
-                  ? "near"
-                  : "on-track"
-              : analysis?.status ??
-                (spent > budget.limitAmount
-                  ? "over"
-                  : spent >= budget.limitAmount * 0.85
-                    ? "near"
-                    : "on-track");
+            const status = deriveBudgetSpendingStatus(
+              spent,
+              budget.limitAmount,
+            );
             const trend = budget.isPeriodRollup
               ? "stable"
               : analysis?.trend ?? "stable";
@@ -1318,7 +1334,11 @@ export default function BudgetsPage() {
                     <p
                       className={
                         "mt-1 wrap-break-word text-base font-black leading-tight sm:text-xl " +
-                        (status === "over" ? "text-rose-600" : "text-slate-900")
+                        (status === "over"
+                          ? "text-rose-600"
+                          : status === "at-limit"
+                            ? "text-orange-600"
+                            : "text-slate-900")
                       }
                     >
                       {formatVND(spent)}
@@ -1339,21 +1359,27 @@ export default function BudgetsPage() {
                       className={
                         remaining < 0
                           ? "font-bold text-rose-600"
-                          : "font-bold text-emerald-600"
+                          : remaining === 0
+                            ? "font-bold text-orange-600"
+                            : "font-bold text-emerald-600"
                       }
                     >
                       {remaining < 0
                         ? `Vượt ${formatVND(Math.abs(remaining))}`
-                        : `Còn ${formatVND(remaining)}`}
+                        : remaining === 0
+                          ? "Đã dùng hết hạn mức"
+                          : `Còn ${formatVND(remaining)}`}
                     </span>
                     <span
                       className={
                         "font-black " +
                         (status === "over"
                           ? "text-rose-600"
-                          : status === "near"
-                            ? "text-amber-600"
-                            : "text-slate-700")
+                          : status === "at-limit"
+                            ? "text-orange-600"
+                            : status === "near"
+                              ? "text-amber-600"
+                              : "text-slate-700")
                       }
                     >
                       {pct}%

@@ -329,14 +329,14 @@ export function toDomainForexCashTransaction(
   };
 }
 
-// Preserves get_budget_status's existing external response contract
-// ("over" | "near" | "on_track"), which never distinguished "no-budget"/
-// "no-spend" (a zero-limit budget is a rare edge case; both map to
-// "on_track", the closest match to the tool's pre-existing behavior).
+// Preserves the canonical exact-limit distinction in get_budget_status while
+// retaining the existing normalized spellings for the other states. The tool
+// still folds "no-budget"/"no-spend" into "on_track" for backward compatibility.
 export function toToolStatusLabel(
   status: ReturnType<typeof calculateBudgetSpendingCollection>[number]["status"],
-): "over" | "near" | "on_track" {
+): "over" | "at_limit" | "near" | "on_track" {
   if (status === "over") return "over";
+  if (status === "at-limit") return "at_limit";
   if (status === "near") return "near";
   return "on_track";
 }
@@ -807,7 +807,7 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
   name: "get_budget_status",
   mode: "read",
   description:
-    "Get budget limits, actual spending, usage percentage, and over-budget status by category.",
+    "Get budget limits, actual spending, usage percentage, and canonical budget status by category.",
   semantic: {
     capabilities: ["budget_status", "budget_risk"],
     returns: [
@@ -818,7 +818,7 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
       "budgets[].status",
     ],
     useWhen: [
-      "The user asks about budget status, remaining budget, budgets near the limit, or over-budget categories.",
+      "The user asks about budget status, remaining budget, budgets near/reaching the limit, or over-budget categories.",
     ],
     doNotUseWhen: ["The user asks only for raw transactions."],
     examples: [
@@ -900,6 +900,8 @@ export const getBudgetStatusTool: AIFinanceToolRegistration<{
           month,
           budgets: status.sort((a, b) => b.usagePercent - a.usagePercent),
           overBudgetCount: status.filter((item) => item.status === "over")
+            .length,
+          atLimitCount: status.filter((item) => item.status === "at_limit")
             .length,
           nearLimitCount: status.filter((item) => item.status === "near")
             .length,

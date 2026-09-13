@@ -11,9 +11,10 @@
  *      (computed from raw, unrounded spent/limit). A budget at e.g. 99.7%
  *      spent (genuinely under limit) rounds to "100%" and would have been
  *      misreported as "Vượt ngân sách" (exceeded) purely from rounding.
- *      The canonical threshold is also 85% for "near" (matching Budgets
- *      page, Dashboard's Budget Attention layer, and
- *      `deriveBudgetSpendingStatus`), not the 80% Header had invented.
+ *      The canonical threshold is also 85% for "near", with exact equality
+ *      represented separately as "at-limit" (matching Budgets page,
+ *      Dashboard's Budget Attention layer, and `deriveBudgetSpendingStatus`),
+ *      not the 80% Header had invented.
  *   2. "Current month" was computed via `new Date().toISOString().slice(0,
  *      7)` — a UTC conversion. For any user in a timezone behind UTC, the
  *      hours before local midnight are already the next UTC day, so this
@@ -117,6 +118,14 @@ function buildBudgetNotifications(
         id: "bover-" + spending.budgetId,
         title: "Vượt ngân sách · " + label,
         body: "Đã chi " + spending.usagePercent + "% ngân sách tháng này.",
+        href: buildBudgetsHref({ budgetId: spending.budgetId }),
+        tone: "warning",
+      });
+    } else if (spending.status === "at-limit") {
+      out.push({
+        id: "batlimit-" + spending.budgetId,
+        title: "Đã đạt giới hạn · " + label,
+        body: "Đã dùng 100% giới hạn tháng này.",
         href: buildBudgetsHref({ budgetId: spending.budgetId }),
         tone: "warning",
       });
