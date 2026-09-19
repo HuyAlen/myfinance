@@ -56,6 +56,70 @@ export function formatYearMonthInTimeZone(
   return formatISODateInTimeZone(date, timeZone).slice(0, 7);
 }
 
+function getTimeZoneOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  const representedUtc = Date.UTC(
+    Number(values.get("year")),
+    Number(values.get("month")) - 1,
+    Number(values.get("day")),
+    Number(values.get("hour")),
+    Number(values.get("minute")),
+    Number(values.get("second")),
+  );
+  const instantAtWholeSecond = Math.trunc(instant.getTime() / 1000) * 1000;
+  return representedUtc - instantAtWholeSecond;
+}
+
+/**
+ * Converts the end of a calendar date in an explicit IANA timezone into an
+ * exact UTC timestamp. Forex Balance snapshots are timestamptz observations,
+ * so period UI must compare them against a timezone-stable cutoff rather than
+ * parsing `YYYY-MM-DD` as UTC or inheriting the browser's current timezone.
+ */
+export function getEndOfISODateInTimeZone(
+  value: string,
+  timeZone = "Asia/Ho_Chi_Minh",
+): string {
+  if (!isValidISODate(value)) {
+    throw new Error("Invalid ISO calendar date.");
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const localWallClockAsUtc = Date.UTC(
+    year,
+    month - 1,
+    day,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  // Offset can change around DST boundaries in some zones. Resolve once, then
+  // correct with the offset at the candidate instant. Vietnam is fixed UTC+7,
+  // but keeping this generic prevents the helper from encoding that accident.
+  let candidate = new Date(localWallClockAsUtc);
+  let offset = getTimeZoneOffsetMs(candidate, timeZone);
+  candidate = new Date(localWallClockAsUtc - offset);
+  const correctedOffset = getTimeZoneOffsetMs(candidate, timeZone);
+  if (correctedOffset !== offset) {
+    offset = correctedOffset;
+    candidate = new Date(localWallClockAsUtc - offset);
+  }
+
+  return candidate.toISOString();
+}
+
 /**
  * Semantic "YYYY-MM" validation — shape AND a real calendar month (01-12).
  * No year-range restriction is imposed; none exists elsewhere in the

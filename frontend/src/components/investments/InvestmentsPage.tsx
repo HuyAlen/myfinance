@@ -21,13 +21,18 @@ import {
   X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
-import { calculateForexPerformanceSnapshot } from "@/src/services/finance/financeCalculations";
+import {
+  calculateForexPerformanceAsOf,
+  calculateForexPerformanceSnapshot,
+} from "@/src/services/finance/financeCalculations";
+import { getEndOfISODateInTimeZone } from "@/src/lib/date/calendarDate";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
   addForexAccount,
@@ -37,6 +42,7 @@ import {
   deleteForexCashTransaction,
   deleteInvestment,
   getForexAccounts,
+  getForexBalanceSnapshotsUpTo,
   getForexCashTransactions,
   getInvestments,
   getWallets,
@@ -47,6 +53,7 @@ import {
 import type {
   ForexAccount,
   ForexAccountStatus,
+  ForexBalanceSnapshot,
   ForexCashTransaction,
   ForexCashTransactionType,
   Investment,
@@ -93,13 +100,18 @@ type AccountCashMetric = ForexAccount & {
   withdrawals: number;
   tradingProfitLoss: number | null;
   transactionCount: number;
+  periodBalance: number | null;
+  hasAsOfPerformance: boolean;
+  historicalBalanceMissing: boolean;
 };
 
 type InvestmentPageData = {
   investments: Investment[];
   accounts: ForexAccount[];
   transactions: ForexCashTransaction[];
+  balanceSnapshots: ForexBalanceSnapshot[];
   wallets: FinanceWallet[];
+  periodKey: string;
   loadError: string | null;
 };
 
@@ -295,9 +307,17 @@ function getAccountStatusLabel(status: ForexAccount["status"]) {
 
 export default function InvestmentsPage() {
   const searchParams = useSearchParams();
+  const { dateRange, filterLabel } = useDateFilter();
+  const periodCutoffAt = useMemo(
+    () => getEndOfISODateInTimeZone(dateRange.endDate),
+    [dateRange.endDate],
+  );
+  const periodKey = `${dateRange.startDate}:${dateRange.endDate}:${periodCutoffAt}`;
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [accounts, setAccounts] = useState<ForexAccount[]>([]);
   const [transactions, setTransactions] = useState<ForexCashTransaction[]>([]);
+  const [balanceSnapshots, setBalanceSnapshots] = useState<ForexBalanceSnapshot[]>([]);
+  const [loadedPeriodKey, setLoadedPeriodKey] = useState<string | null>(null);
   const [wallets, setWallets] = useState<FinanceWallet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -320,6 +340,11 @@ export default function InvestmentsPage() {
     null,
   );
   const hasLoadedSnapshotRef = useRef(false);
+  const periodRequestRef = useRef({
+    cutoffAt: periodCutoffAt,
+    periodKey,
+  });
+  periodRequestRef.current = { cutoffAt: periodCutoffAt, periodKey };
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
   const pendingReloadAttemptsRef = useRef(1);
@@ -327,12 +352,16 @@ export default function InvestmentsPage() {
   const { toast } = useToast();
 
   const fetchInvestmentPageData = useCallback(async (): Promise<InvestmentPageData> => {
+    const requestedPeriod = periodRequestRef.current;
+
     if (!isSupabaseConfigured) {
       return {
         investments: [],
         accounts: [],
         transactions: [],
+        balanceSnapshots: [],
         wallets: [],
+        periodKey: requestedPeriod.periodKey,
         loadError: "Supabase chưa được cấu hình.",
       };
     }
@@ -350,24 +379,32 @@ export default function InvestmentsPage() {
       "Lịch sử nạp/rút Forex",
       getForexCashTransactions(),
     );
+    const balanceSnapshotsRequest = withInvestmentDomainLoadTimeout(
+      "Lịch sử Balance Forex",
+      getForexBalanceSnapshotsUpTo(requestedPeriod.cutoffAt),
+    );
 
     const [
       loadedInvestments,
       loadedWallets,
       loadedAccounts,
       loadedTransactions,
+      loadedBalanceSnapshots,
     ] = await Promise.all([
       investmentsRequest,
       walletsRequest,
       accountsRequest,
       transactionsRequest,
+      balanceSnapshotsRequest,
     ]);
 
     return {
       investments: loadedInvestments,
       accounts: loadedAccounts,
       transactions: loadedTransactions,
+      balanceSnapshots: loadedBalanceSnapshots,
       wallets: loadedWallets,
+      periodKey: requestedPeriod.periodKey,
       loadError: null,
     };
   }, []);
@@ -376,6 +413,8 @@ export default function InvestmentsPage() {
     setInvestments(data.investments);
     setAccounts(data.accounts);
     setTransactions(data.transactions);
+    setBalanceSnapshots(data.balanceSnapshots);
+    setLoadedPeriodKey(data.periodKey);
     setWallets(data.wallets);
     setLoadError(data.loadError);
     if (!data.loadError) hasLoadedSnapshotRef.current = true;
@@ -454,7 +493,7 @@ export default function InvestmentsPage() {
     return () => {
       mountedRef.current = false;
     };
-  }, [reload]);
+  }, [periodKey, reload]);
 
   useEffect(() => {
     const recover = () => {
@@ -527,46 +566,99 @@ export default function InvestmentsPage() {
     };
   }, [investments]);
 
-  const forexPerformance = useMemo(
+  // FOREX-BALANCE-ASOF-1C: the combined investment headline remains an
+  // explicitly current value because Portfolio has no historical snapshot
+  // model yet. Forex Balance/Profit below are period-aware and never borrow
+  // today's currentEquity for a historical cutoff.
+  const currentForexPerformance = useMemo(
     () => calculateForexPerformanceSnapshot(accounts, transactions),
     [accounts, transactions],
   );
 
+  const periodDataReady = loadedPeriodKey === periodKey;
+
+  const periodTransactions = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) =>
+          transaction.transactionDate >= dateRange.startDate &&
+          transaction.transactionDate <= dateRange.endDate,
+      ),
+    [dateRange.endDate, dateRange.startDate, transactions],
+  );
+
+  const forexPerformance = useMemo(
+    () =>
+      periodDataReady
+        ? calculateForexPerformanceAsOf({
+            forexAccounts: accounts,
+            forexCashTransactions: transactions,
+            balanceSnapshots,
+            asOfDate: dateRange.endDate,
+            cutoffAt: periodCutoffAt,
+          })
+        : null,
+    [
+      accounts,
+      balanceSnapshots,
+      dateRange.endDate,
+      periodCutoffAt,
+      periodDataReady,
+      transactions,
+    ],
+  );
+
   const accountMetrics = useMemo<AccountCashMetric[]>(() => {
     const performanceByAccountId = new Map(
-      forexPerformance.accounts.map((metric) => [metric.accountId, metric]),
+      (forexPerformance?.accounts ?? []).map((metric) => [
+        metric.accountId,
+        metric,
+      ]),
     );
+    const periodCashByAccountId = new Map<
+      string,
+      { deposits: number; withdrawals: number; transactionCount: number }
+    >();
+
+    for (const transaction of periodTransactions) {
+      const metric = periodCashByAccountId.get(transaction.forexAccountId) ?? {
+        deposits: 0,
+        withdrawals: 0,
+        transactionCount: 0,
+      };
+      if (transaction.type === "deposit") metric.deposits += transaction.amount;
+      else metric.withdrawals += transaction.amount;
+      metric.transactionCount += 1;
+      periodCashByAccountId.set(transaction.forexAccountId, metric);
+    }
 
     return accounts.map((account) => {
       const metric = performanceByAccountId.get(account.id);
+      const periodCash = periodCashByAccountId.get(account.id);
       return {
         ...account,
-        deposits: metric?.deposits ?? 0,
-        withdrawals: metric?.withdrawals ?? 0,
+        deposits: periodCash?.deposits ?? 0,
+        withdrawals: periodCash?.withdrawals ?? 0,
         tradingProfitLoss: metric?.profitLoss ?? null,
-        transactionCount: metric?.transactionCount ?? 0,
+        transactionCount: periodCash?.transactionCount ?? 0,
+        periodBalance: metric?.balance ?? null,
+        hasAsOfPerformance: Boolean(metric),
+        historicalBalanceMissing: Boolean(metric && metric.balance === null),
       };
     });
-  }, [accounts, forexPerformance.accounts]);
+  }, [accounts, forexPerformance?.accounts, periodTransactions]);
 
   const summary = useMemo(
     () => ({
-      accountCount: forexPerformance.accountCount,
-      activeCount: forexPerformance.activeAccountCount,
-      currentAccountCount: forexPerformance.currentAccountCount,
-      totalDeposited: forexPerformance.totalDeposited,
-      totalWithdrawn: forexPerformance.totalWithdrawn,
-      totalFees: forexPerformance.totalFees,
-      totalBalance: forexPerformance.totalBalance,
-      currentExposure: forexPerformance.assetValue,
-      totalProfitLoss: forexPerformance.profitLoss ?? 0,
-      roi: forexPerformance.roi,
-      hasBalance: forexPerformance.hasBalance,
-      hasCompleteBalance: forexPerformance.hasCompleteBalance,
-      accountsWithBalance: forexPerformance.accountsWithBalance,
-      accountsUsingFallback: forexPerformance.accountsUsingFallback,
+      accountCount: forexPerformance?.accountCount ?? 0,
+      totalBalance: forexPerformance?.totalBalance ?? null,
+      currentExposure: currentForexPerformance.assetValue,
+      totalProfitLoss: forexPerformance?.profitLoss ?? null,
+      hasCompleteBalance: forexPerformance?.hasCompleteBalance ?? false,
+      accountsMissingBalance: forexPerformance?.accountsMissingBalance ?? 0,
+      periodDataReady,
     }),
-    [forexPerformance],
+    [currentForexPerformance.assetValue, forexPerformance, periodDataReady],
   );
 
   function openCreatePortfolioInvestment() {
@@ -941,11 +1033,11 @@ export default function InvestmentsPage() {
 
         <div className="-mx-4 mt-4 flex snap-x snap-proximity gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-1 scrollbar-none sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-3 sm:px-0 xl:grid-cols-4">
           <SummaryCard
-            label="Tổng giá trị đầu tư"
+            label="Tổng giá trị hiện tại"
             value={formatMoney(
               portfolioSummary.currentValue + summary.currentExposure,
             )}
-            note="Portfolio + tài sản Forex hiện tại"
+            note="Portfolio + Forex hiện tại · không theo bộ lọc kỳ"
             tone="blue"
             icon={<WalletCards size={17} />}
           />
@@ -959,16 +1051,20 @@ export default function InvestmentsPage() {
           <SummaryCard
             label="Balance Forex"
             value={
-              summary.hasBalance
-                ? formatMoney(summary.totalBalance)
-                : "Chưa có dữ liệu"
+              !summary.periodDataReady
+                ? "Đang tải..."
+                : summary.accountCount === 0
+                  ? "Chưa có dữ liệu"
+                  : summary.hasCompleteBalance && summary.totalBalance !== null
+                    ? formatMoney(summary.totalBalance)
+                    : "Chưa đủ dữ liệu"
             }
             note={
-              summary.currentAccountCount === 0
-                ? "Không có tài khoản hiện tại"
-                : summary.hasCompleteBalance
-                  ? `${summary.currentAccountCount} tài khoản hiện tại`
-                  : `${summary.accountsWithBalance}/${summary.currentAccountCount} có Balance · ${summary.accountsUsingFallback} fallback`
+              !summary.periodDataReady
+                ? `Đang tải ${filterLabel}`
+                : summary.accountsMissingBalance > 0
+                  ? `${summary.accountsMissingBalance} tài khoản thiếu Balance lịch sử`
+                  : `Balance as-of cuối ${filterLabel}`
             }
             tone="blue"
             icon={<Landmark size={17} />}
@@ -976,19 +1072,26 @@ export default function InvestmentsPage() {
           <SummaryCard
             label="Profit Forex"
             value={
-              summary.hasBalance
-                ? formatMoney(summary.totalProfitLoss)
-                : "Chưa có dữ liệu"
+              !summary.periodDataReady
+                ? "Đang tải..."
+                : summary.accountCount === 0
+                  ? "Chưa có dữ liệu"
+                  : summary.hasCompleteBalance &&
+                      summary.totalProfitLoss !== null
+                    ? formatMoney(summary.totalProfitLoss)
+                    : "Chưa đủ dữ liệu"
             }
             note={
-              summary.hasBalance
-                ? summary.hasCompleteBalance
-                  ? "Trading Profit · không gồm phí nạp/rút"
-                  : "Chỉ tính tài khoản đã có Balance"
-                : "Nhập Balance để tính"
+              !summary.periodDataReady
+                ? `Đang tải ${filterLabel}`
+                : summary.hasCompleteBalance
+                  ? `Profit as-of cuối ${filterLabel} · không gồm phí nạp/rút`
+                  : "Không suy đoán Profit khi thiếu Balance lịch sử"
             }
             tone={
-              !summary.hasBalance
+              !summary.periodDataReady ||
+              !summary.hasCompleteBalance ||
+              summary.totalProfitLoss === null
                 ? "amber"
                 : summary.totalProfitLoss >= 0
                   ? "emerald"
@@ -1170,13 +1273,24 @@ export default function InvestmentsPage() {
               Tài khoản Forex
             </h2>
             <p className="mt-1 text-xs font-medium text-[#7C91A6] sm:text-sm">
-              Balance, dòng tiền và lợi nhuận theo từng tài khoản.
+              Nạp/rút theo kỳ · Balance và Profit as-of cuối kỳ.
             </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-            {accounts.length} tài khoản
+          <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
+            {filterLabel}
           </span>
         </div>
+
+        {summary.periodDataReady && summary.accountsMissingBalance > 0 ? (
+          <div
+            data-ui="forex-historical-balance-missing"
+            className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-800 sm:mt-4 sm:text-sm"
+          >
+            Chưa có dữ liệu Balance lịch sử cho {summary.accountsMissingBalance}
+            /{summary.accountCount} tài khoản tại {filterLabel}. Balance tổng và
+            Profit tổng được để trống thay vì suy đoán từ dòng tiền.
+          </div>
+        ) : null}
 
         <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4">
           {isLoading && accounts.length === 0 ? (
@@ -1279,31 +1393,45 @@ export default function InvestmentsPage() {
                   <p
                     className="mt-1.5 whitespace-nowrap text-[17px] font-black tabular-nums text-blue-700 sm:text-xl"
                     title={
-                      account.currentEquity == null
-                        ? "Chưa nhập"
-                        : formatMoney(account.currentEquity)
+                      !summary.periodDataReady
+                        ? "Đang tải dữ liệu kỳ"
+                        : account.historicalBalanceMissing
+                          ? "Chưa có dữ liệu Balance lịch sử"
+                          : account.hasAsOfPerformance && account.periodBalance !== null
+                            ? formatMoney(account.periodBalance)
+                            : `Không có dữ liệu tại ${filterLabel}`
                     }
                   >
-                    {account.currentEquity == null
-                      ? "Chưa nhập"
-                      : formatMoney(account.currentEquity)}
+                    {!summary.periodDataReady
+                      ? "Đang tải..."
+                      : account.historicalBalanceMissing
+                        ? "Chưa có lịch sử"
+                        : account.hasAsOfPerformance && account.periodBalance !== null
+                          ? formatMoney(account.periodBalance)
+                          : "Ngoài kỳ"}
                   </p>
                   <p className="mt-1 text-[10px] font-semibold text-blue-600/60">
-                    Balance hiện tại
+                    {!summary.periodDataReady
+                      ? `Đang tải ${filterLabel}`
+                      : account.historicalBalanceMissing
+                        ? "Chưa có dữ liệu Balance lịch sử"
+                        : account.hasAsOfPerformance
+                          ? `As-of cuối ${filterLabel}`
+                          : `Không có dữ liệu tại ${filterLabel}`}
                   </p>
                 </div>
                 <Metric
-                  label="Nạp"
+                  label="Nạp trong kỳ"
                   value={formatMoney(account.deposits)}
                   tone="slate"
                 />
                 <Metric
-                  label="Rút"
+                  label="Rút trong kỳ"
                   value={formatMoney(account.withdrawals)}
                   tone="slate"
                 />
                 <Metric
-                  label="Profit"
+                  label="Profit as-of"
                   value={
                     account.tradingProfitLoss === null
                       ? "—"
@@ -1320,7 +1448,7 @@ export default function InvestmentsPage() {
 
               <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[11px] font-semibold text-[#7C91A6] sm:text-xs">
-                  {account.transactionCount} giao dịch
+                  {account.transactionCount} giao dịch trong {filterLabel}
                 </p>
                 <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
                   <button
@@ -1369,13 +1497,13 @@ export default function InvestmentsPage() {
             </h2>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-            {transactions.length} giao dịch
+            {periodTransactions.length} giao dịch · {filterLabel}
           </span>
         </div>
 
-        {transactions.length === 0 ? (
+        {periodTransactions.length === 0 ? (
           <div className="mt-4 rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center text-sm font-semibold text-slate-500">
-            Chưa có giao dịch nạp/rút.
+            Không có giao dịch nạp/rút trong {filterLabel}.
           </div>
         ) : (
           <div className="mt-3 overflow-hidden rounded-2xl border border-[#DCE6EF] sm:mt-4 sm:rounded-3xl">
@@ -1387,7 +1515,7 @@ export default function InvestmentsPage() {
               <span className="text-right">Thao tác</span>
             </div>
             <div className="divide-y divide-slate-100">
-              {transactions.slice(0, 30).map((transaction) => {
+              {periodTransactions.slice(0, 30).map((transaction) => {
                 const account = accounts.find(
                   (item) => item.id === transaction.forexAccountId,
                 );

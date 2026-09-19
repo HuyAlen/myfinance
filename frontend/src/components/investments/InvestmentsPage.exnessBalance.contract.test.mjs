@@ -10,9 +10,9 @@ assert.ok(accountCardsStart >= 0 && historyStart > accountCardsStart, 'could not
 const accountCards = source.slice(accountCardsStart, historyStart);
 
 assert.match(accountCards, />\s*Balance\s*</);
-assert.match(accountCards, /label="Nạp"/);
-assert.match(accountCards, /label="Rút"/);
-assert.match(accountCards, /label="Profit"/);
+assert.match(accountCards, /label="Nạp trong kỳ"/);
+assert.match(accountCards, /label="Rút trong kỳ"/);
+assert.match(accountCards, /label="Profit as-of"/);
 assert.doesNotMatch(accountCards, /label="Vốn ròng"/);
 assert.doesNotMatch(accountCards, /label="Giá trị tài khoản"/);
 assert.doesNotMatch(accountCards, /label="ROI"/);
@@ -20,11 +20,12 @@ assert.doesNotMatch(accountCards, /label="Phí"/);
 
 assert.ok(normalized.includes('tradingProfitLoss: metric?.profitLoss ?? null,'));
 assert.ok(normalized.includes('calculateForexPerformanceSnapshot(accounts, transactions)'));
+assert.ok(normalized.includes('calculateForexPerformanceAsOf({'));
 assert.ok(!normalized.includes('account.currentEquity - netCashFlow'));
 
 assert.match(source, /label="Balance Forex"/);
 assert.match(source, /label="Profit Forex"/);
-assert.match(source, /label="Tổng giá trị đầu tư"/);
+assert.match(source, /label="Tổng giá trị hiện tại"/);
 assert.doesNotMatch(source, /label="Nạp Forex"/);
 assert.doesNotMatch(source, /label="Rút Forex"/);
 assert.doesNotMatch(source, /label="Vốn ròng Forex"/);

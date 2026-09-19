@@ -35,7 +35,7 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain("Giờ giao dịch không hợp lệ.");
   });
 
-  it("bounds Portfolio, wallets, Forex accounts and Forex cash-ledger reads with a timeout", () => {
+  it("bounds Portfolio, wallets, Forex accounts, cash-ledger and Balance-history reads with a timeout", () => {
     expect(source).toContain("const INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS = 10_000;");
     expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Danh mục Portfolio",\n      getInvestments(),');
     expect(source).toContain('withInvestmentDomainLoadTimeout("Danh sách ví", getWallets())');
@@ -43,17 +43,19 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Lịch sử nạp/rút Forex"');
   });
 
-  it("starts Portfolio, wallet, account and cash-ledger reads before awaiting the combined result", () => {
+  it("starts Portfolio, wallet, account, cash-ledger and Balance-history reads before awaiting the combined result", () => {
     const investmentIndex = source.indexOf("const investmentsRequest =");
     const walletIndex = source.indexOf("const walletsRequest =");
     const accountIndex = source.indexOf("const accountsRequest =");
     const transactionIndex = source.indexOf("const transactionsRequest =");
-    const awaitIndex = source.indexOf("await Promise.all([", transactionIndex);
+    const snapshotIndex = source.indexOf("const balanceSnapshotsRequest =");
+    const awaitIndex = source.indexOf("await Promise.all([", snapshotIndex);
     expect(investmentIndex).toBeGreaterThan(-1);
     expect(walletIndex).toBeGreaterThan(investmentIndex);
     expect(accountIndex).toBeGreaterThan(walletIndex);
     expect(transactionIndex).toBeGreaterThan(accountIndex);
-    expect(awaitIndex).toBeGreaterThan(transactionIndex);
+    expect(snapshotIndex).toBeGreaterThan(transactionIndex);
+    expect(awaitIndex).toBeGreaterThan(snapshotIndex);
   });
 
   it("retries the initial load once after a bounded failure", () => {
@@ -106,10 +108,11 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).not.toContain('rpc("delete_forex_cash_transaction"');
   });
 
-  it("delegates Forex Balance, Profit and current-asset semantics to the canonical performance snapshot", () => {
+  it("delegates current asset value to the current snapshot and period Balance/Profit to the as-of snapshot", () => {
     expect(source).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
+    expect(source).toContain("calculateForexPerformanceAsOf({");
     expect(source).toContain("tradingProfitLoss: metric?.profitLoss ?? null");
-    expect(source).toContain("currentExposure: forexPerformance.assetValue");
+    expect(source).toContain("currentExposure: currentForexPerformance.assetValue");
     expect(source).not.toContain("account.currentEquity - deposits + withdrawals");
     expect(source).not.toContain("account.currentEquity - netCashFlow");
     expect(source).not.toContain('label="Vốn ròng Forex"');
@@ -125,10 +128,11 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(region).not.toContain('"delete_forex_cash_transaction"');
   });
 
-  it("consumes archived/current and partial-Balance semantics from the canonical Forex snapshot", () => {
-    expect(source).toContain("currentAccountCount: forexPerformance.currentAccountCount");
-    expect(source).toContain("hasCompleteBalance: forexPerformance.hasCompleteBalance");
-    expect(source).toContain("accountsUsingFallback: forexPerformance.accountsUsingFallback");
+  it("consumes partial historical-Balance semantics without publishing a fallback aggregate", () => {
+    expect(source).toContain("totalBalance: forexPerformance?.totalBalance ?? null");
+    expect(source).toContain("hasCompleteBalance: forexPerformance?.hasCompleteBalance ?? false");
+    expect(source).toContain("accountsMissingBalance: forexPerformance?.accountsMissingBalance ?? 0");
+    expect(source).toContain("currentExposure: currentForexPerformance.assetValue");
   });
 
   it("subscribes Portfolio, Forex and wallet dependencies through the shared owner channel", () => {

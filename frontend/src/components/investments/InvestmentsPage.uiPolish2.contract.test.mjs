@@ -10,7 +10,7 @@ const summary = source.slice(summaryStart, portfolioStart);
 
 const summaryCardCount = (summary.match(/<SummaryCard/g) ?? []).length;
 assert.equal(summaryCardCount, 4, 'top summary must contain exactly four KPI cards');
-assert.match(summary, /label="Tổng giá trị đầu tư"/);
+assert.match(summary, /label="Tổng giá trị hiện tại"/);
 assert.match(summary, /label="Portfolio"/);
 assert.match(summary, /label="Balance Forex"/);
 assert.match(summary, /label="Profit Forex"/);
@@ -18,7 +18,7 @@ assert.doesNotMatch(summary, /label="Nạp Forex"/);
 assert.doesNotMatch(summary, /label="Rút Forex"/);
 assert.doesNotMatch(summary, /label="Lời \/ lỗ Portfolio"/);
 assert.doesNotMatch(summary, /Balance - Nạp \+ Rút/);
-assert.match(summary, /tài khoản hiện tại|có Balance/);
+assert.match(summary, /Balance as-of cuối|thiếu Balance lịch sử|Đang tải/);
 
 assert.match(source, /data-ui="portfolio-empty-compact"/);
 assert.doesNotMatch(source, /data-ui="portfolio-empty-compact"[^>]*min-h-48/);

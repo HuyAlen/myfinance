@@ -43,10 +43,10 @@ describe("InvestmentsPage unified Portfolio + Forex ownership", () => {
     expect(source).toContain('scrollIntoView({ behavior: "smooth", block: "center" })');
   });
 
-  it("shows a combined top-level investment value using canonical Forex asset semantics", () => {
+  it("keeps the combined Portfolio + Forex headline explicitly current while periodizing Forex detail", () => {
     expect(source).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
-    expect(source).toContain('label="Tổng giá trị đầu tư"');
+    expect(source).toContain('label="Tổng giá trị hiện tại"');
     expect(source).toContain("portfolioSummary.currentValue + summary.currentExposure");
-    expect(source).toContain('note="Portfolio + tài sản Forex hiện tại"');
+    expect(source).toContain('note="Portfolio + Forex hiện tại · không theo bộ lọc kỳ"');
   });
 });

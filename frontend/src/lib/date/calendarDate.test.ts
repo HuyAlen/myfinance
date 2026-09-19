@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getEndOfISODateInTimeZone,
   getMonthDateRange,
   isValidISODate,
   isValidYearMonth,
@@ -103,5 +104,20 @@ describe("isValidISODate", () => {
     // new Date(2026, 1, 31) would silently normalize to March 3 — this must
     // be rejected outright instead of being treated as a valid date.
     expect(isValidISODate("2026-02-31")).toBe(false);
+  });
+});
+
+
+describe("getEndOfISODateInTimeZone", () => {
+  it("builds the exact end-of-day cutoff for the canonical Vietnam finance timezone", () => {
+    expect(getEndOfISODateInTimeZone("2026-08-31")).toBe(
+      "2026-08-31T16:59:59.999Z",
+    );
+  });
+
+  it("rejects an invalid calendar date instead of normalizing it", () => {
+    expect(() => getEndOfISODateInTimeZone("2026-02-31")).toThrow(
+      "Invalid ISO calendar date.",
+    );
   });
 });

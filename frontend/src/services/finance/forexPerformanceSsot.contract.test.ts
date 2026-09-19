@@ -43,7 +43,8 @@ describe("FOREX-PERFORMANCE-SSOT-1", () => {
   it("makes Investments consume the canonical snapshot instead of re-deriving Profit", () => {
     expect(investments).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
     expect(investments).toContain("tradingProfitLoss: metric?.profitLoss ?? null");
-    expect(investments).toContain("currentExposure: forexPerformance.assetValue");
+    expect(investments).toContain("currentExposure: currentForexPerformance.assetValue");
+    expect(investments).toContain("calculateForexPerformanceAsOf({");
     expect(investments).not.toContain("account.currentEquity - deposits + withdrawals");
   });
 

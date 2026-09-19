@@ -64,7 +64,7 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
       "await deleteForexCashTransaction(transaction.id)",
     );
     expect(investments).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
-    expect(investments).toContain("currentExposure: forexPerformance.assetValue");
+    expect(investments).toContain("currentExposure: currentForexPerformance.assetValue");
     expect(investments).not.toContain("account.currentEquity - netCashFlow");
     expect(investments).toContain(
       '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
