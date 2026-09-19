@@ -6,6 +6,7 @@ import type {
   Debt,
   ForexAccount,
   ForexCashTransaction,
+  ForexBalanceSnapshot,
   Goal,
   Investment,
   SavingAccount,
@@ -766,6 +767,258 @@ export function calculateForexPerformanceSnapshot(
   };
 }
 
+export type ForexPerformanceAsOfAccountInput = Pick<
+  ForexAccount,
+  "id" | "status" | "openedAt"
+>;
+
+type ForexPerformanceAsOfTransactionInput = Pick<
+  ForexCashTransaction,
+  "forexAccountId" | "type" | "amount" | "fee" | "transactionDate"
+>;
+
+export type ForexAccountPerformanceAsOfSnapshot = {
+  accountId: string;
+  status: ForexAccount["status"];
+  deposits: number;
+  withdrawals: number;
+  fees: number;
+  netFunding: number;
+  walletCashImpact: number;
+  balance: number | null;
+  assetValue: number | null;
+  profitLoss: number | null;
+  roi: number | null;
+  transactionCount: number;
+  balanceSnapshotId: string | null;
+  balanceCapturedAt: string | null;
+};
+
+export type ForexPerformanceAsOfSnapshot = {
+  asOfDate: string;
+  cutoffAt: string;
+  accounts: ForexAccountPerformanceAsOfSnapshot[];
+  accountCount: number;
+  totalDeposited: number;
+  totalWithdrawn: number;
+  totalFees: number;
+  netFunding: number;
+  walletCashImpact: number;
+  /** Sum of balances that are actually known, even if the aggregate is partial. */
+  knownBalanceTotal: number;
+  /** Authoritative total only when every participating account has a snapshot. */
+  totalBalance: number | null;
+  /** Historical asset value; never falls back to funding when Balance is missing. */
+  assetValue: number | null;
+  profitLoss: number | null;
+  roi: number | null;
+  accountsWithBalance: number;
+  accountsMissingBalance: number;
+  hasBalance: boolean;
+  hasCompleteBalance: boolean;
+};
+
+function normalizeAsOfDate(value: string) {
+  const normalized = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    throw new Error("Invalid Forex as-of date.");
+  }
+  return normalized;
+}
+
+function parseSnapshotTimestamp(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Returns the latest observed broker Balance at or before the exact cutoff.
+ * A future snapshot is never pulled backwards into history.
+ */
+export function getForexBalanceAsOf(
+  snapshots: ForexBalanceSnapshot[],
+  accountId: string,
+  cutoffAt: string,
+): ForexBalanceSnapshot | null {
+  const cutoff = parseSnapshotTimestamp(cutoffAt);
+  if (cutoff === null) throw new Error("Invalid Forex as-of cutoff.");
+
+  let latest: ForexBalanceSnapshot | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+
+  for (const snapshot of snapshots) {
+    if (snapshot.forexAccountId !== accountId) continue;
+    const capturedAt = parseSnapshotTimestamp(snapshot.capturedAt);
+    if (capturedAt === null || capturedAt > cutoff) continue;
+
+    if (
+      capturedAt > latestTime ||
+      (capturedAt === latestTime && latest !== null && snapshot.id > latest.id)
+    ) {
+      latest = snapshot;
+      latestTime = capturedAt;
+    }
+  }
+
+  return latest;
+}
+
+/**
+ * FOREX-BALANCE-ASOF-1
+ *
+ * Historical Forex performance is based only on observed Balance snapshots.
+ * It never reverses today's Balance and never substitutes deposits-withdrawals
+ * when historical Balance is unknown. Cash funding is cut off by economic
+ * transaction date; Balance is cut off by the exact recorded snapshot time.
+ *
+ * Current account status does not erase historical evidence: an archived
+ * account still participates in an old period when it had opened and has
+ * historical cash/snapshot data for that cutoff.
+ */
+export function calculateForexPerformanceAsOf(input: {
+  forexAccounts: ForexPerformanceAsOfAccountInput[];
+  forexCashTransactions: ForexPerformanceAsOfTransactionInput[];
+  balanceSnapshots: ForexBalanceSnapshot[];
+  asOfDate: string;
+  cutoffAt: string;
+}): ForexPerformanceAsOfSnapshot {
+  const asOfDate = normalizeAsOfDate(input.asOfDate);
+  if (parseSnapshotTimestamp(input.cutoffAt) === null) {
+    throw new Error("Invalid Forex as-of cutoff.");
+  }
+
+  const transactionsByAccount = new Map<
+    string,
+    ForexPerformanceAsOfTransactionInput[]
+  >();
+
+  for (const transaction of input.forexCashTransactions) {
+    if (normalizeAsOfDate(transaction.transactionDate) > asOfDate) continue;
+    const list = transactionsByAccount.get(transaction.forexAccountId) ?? [];
+    list.push(transaction);
+    transactionsByAccount.set(transaction.forexAccountId, list);
+  }
+
+  const accounts = input.forexAccounts.flatMap((account) => {
+    const related = transactionsByAccount.get(account.id) ?? [];
+    const balanceSnapshot = getForexBalanceAsOf(
+      input.balanceSnapshots,
+      account.id,
+      input.cutoffAt,
+    );
+    const openedAt = account.openedAt ? normalizeAsOfDate(account.openedAt) : null;
+    const hadOpened = openedAt ? openedAt <= asOfDate : related.length > 0 || balanceSnapshot !== null;
+
+    if (!hadOpened) return [];
+
+    let deposits = 0;
+    let withdrawals = 0;
+    let fees = 0;
+
+    for (const transaction of related) {
+      const amount = normalizeForexMoney(transaction.amount);
+      const fee = normalizeForexMoney(transaction.fee);
+      fees += fee;
+      if (transaction.type === "deposit") deposits += amount;
+      else withdrawals += amount;
+    }
+
+    const netFunding = deposits - withdrawals;
+    const walletCashImpact = netFunding + fees;
+    const balance = balanceSnapshot
+      ? normalizeForexBalance(balanceSnapshot.balance)
+      : null;
+    const assetValue = balance;
+    const profitLoss = balance === null ? null : balance - netFunding;
+    const roi =
+      profitLoss !== null && netFunding > 0
+        ? Math.round((profitLoss / netFunding) * 1000) / 10
+        : null;
+
+    return [
+      {
+        accountId: account.id,
+        status: account.status,
+        deposits,
+        withdrawals,
+        fees,
+        netFunding,
+        walletCashImpact,
+        balance,
+        assetValue,
+        profitLoss,
+        roi,
+        transactionCount: related.length,
+        balanceSnapshotId: balanceSnapshot?.id ?? null,
+        balanceCapturedAt: balanceSnapshot?.capturedAt ?? null,
+      } satisfies ForexAccountPerformanceAsOfSnapshot,
+    ];
+  });
+
+  const accountsWithBalance = accounts.filter(
+    (account) => account.balance !== null,
+  );
+  const knownBalanceTotal = accountsWithBalance.reduce(
+    (sum, account) => sum + (account.balance ?? 0),
+    0,
+  );
+  const hasCompleteBalance =
+    accounts.length === 0 || accountsWithBalance.length === accounts.length;
+  const totalBalance = hasCompleteBalance ? knownBalanceTotal : null;
+  const assetValue = totalBalance;
+  const totalDeposited = accounts.reduce(
+    (sum, account) => sum + account.deposits,
+    0,
+  );
+  const totalWithdrawn = accounts.reduce(
+    (sum, account) => sum + account.withdrawals,
+    0,
+  );
+  const totalFees = accounts.reduce((sum, account) => sum + account.fees, 0);
+  const netFunding = accounts.reduce(
+    (sum, account) => sum + account.netFunding,
+    0,
+  );
+  const walletCashImpact = accounts.reduce(
+    (sum, account) => sum + account.walletCashImpact,
+    0,
+  );
+  const profitLoss =
+    accounts.length === 0
+      ? null
+      : hasCompleteBalance
+        ? accounts.reduce((sum, account) => sum + (account.profitLoss ?? 0), 0)
+        : null;
+  const roiBasis = accounts.reduce(
+    (sum, account) => sum + Math.max(0, account.netFunding),
+    0,
+  );
+  const roi =
+    profitLoss !== null && roiBasis > 0
+      ? Math.round((profitLoss / roiBasis) * 1000) / 10
+      : null;
+
+  return {
+    asOfDate,
+    cutoffAt: input.cutoffAt,
+    accounts,
+    accountCount: accounts.length,
+    totalDeposited,
+    totalWithdrawn,
+    totalFees,
+    netFunding,
+    walletCashImpact,
+    knownBalanceTotal,
+    totalBalance,
+    assetValue,
+    profitLoss,
+    roi,
+    accountsWithBalance: accountsWithBalance.length,
+    accountsMissingBalance: accounts.length - accountsWithBalance.length,
+    hasBalance: accountsWithBalance.length > 0,
+    hasCompleteBalance,
+  };
+}
 /**
  * Gross Forex funding contributed to broker accounts: deposits - withdrawals.
  * Transfer fees are intentionally excluded; they are cash expenses rather than

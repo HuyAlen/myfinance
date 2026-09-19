@@ -17,6 +17,8 @@ import type {
   SavingAccount,
   ForexAccount,
   ForexCashTransaction,
+  ForexBalanceSnapshot,
+  ForexBalanceSnapshotSource,
   Transaction,
   Wallet,
 } from "@/src/types/finance";
@@ -1271,6 +1273,27 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+type ForexBalanceSnapshotDbRow = {
+  id: string;
+  forex_account_id: string;
+  balance: number | string;
+  source: string;
+  source_transaction_id: string | null;
+  captured_at: string;
+};
+
+function fromForexBalanceSnapshotRow(
+  row: ForexBalanceSnapshotDbRow,
+): ForexBalanceSnapshot {
+  return {
+    id: row.id,
+    forexAccountId: row.forex_account_id,
+    balance: Number(row.balance),
+    source: row.source as ForexBalanceSnapshotSource,
+    sourceTransactionId: row.source_transaction_id ?? undefined,
+    capturedAt: row.captured_at,
+  };
+}
 type NetWorthSnapshotDbRow = {
   id: string;
   snapshot_month: string;
@@ -1336,6 +1359,41 @@ export async function getNetWorthSnapshotsInRange(
   );
 }
 
+/**
+ * FOREX-BALANCE-ASOF-1 read boundary. Returns only Balance observations that
+ * existed by the exact cutoff. Historical calculators choose the latest row
+ * per account and never pull a future Balance backwards into an older period.
+ */
+export async function getForexBalanceSnapshotsUpTo(
+  cutoffAt: string,
+): Promise<ForexBalanceSnapshot[]> {
+  if (LOCAL_UI_MODE) return [];
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("forex_balance_snapshots")
+    .select(
+      "id,forex_account_id,balance,source,source_transaction_id,captured_at",
+    )
+    .eq("user_id", userId)
+    .lte("captured_at", cutoffAt)
+    .order("captured_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error(
+      "[financeStorage] getForexBalanceSnapshotsUpTo:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as ForexBalanceSnapshotDbRow[]).map(
+    fromForexBalanceSnapshotRow,
+  );
+}
 export async function getForexAccounts(): Promise<ForexAccount[]> {
   if (LOCAL_UI_MODE) return [];
 

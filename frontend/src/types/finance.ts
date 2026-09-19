@@ -194,6 +194,20 @@ export type ForexAccount = {
   currentEquity?: number | null;
 };
 
+export type ForexBalanceSnapshotSource =
+  | "manual"
+  | "deposit"
+  | "withdrawal"
+  | "backfill";
+
+export type ForexBalanceSnapshot = {
+  id: string;
+  forexAccountId: string;
+  balance: number;
+  source: ForexBalanceSnapshotSource;
+  sourceTransactionId?: string;
+  capturedAt: string;
+};
 export type ForexCashTransaction = {
   id: string;
   forexAccountId: string;
