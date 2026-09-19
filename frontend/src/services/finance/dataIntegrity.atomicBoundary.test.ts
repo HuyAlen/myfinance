@@ -31,12 +31,15 @@ describe("DATA-INTEGRITY-2 database authority", () => {
   });
 
   it("centralizes Forex account and cash-ledger mutation ownership in financeStorage", () => {
-    expect(storage).toContain("current_equity: account.currentEquity ?? null");
+    expect(storage).toContain('supabase.rpc("create_forex_account_atomic"');
+    expect(storage).toContain('supabase.rpc("update_forex_account_atomic"');
     expect(investments).toContain("await updateForexAccount(account)");
     expect(investments).toContain("await addForexAccount(account)");
     expect(investments).toContain("await updateForexCashTransaction(transaction)");
     expect(investments).toContain("await addForexCashTransaction(transaction)");
     expect(investments).toContain("await deleteForexCashTransaction(transaction.id)");
+    expect(storage).not.toContain('.from("forex_accounts")\n    .insert(');
+    expect(storage).not.toContain('.from("forex_accounts")\n    .update(');
     expect(investments).not.toContain('.from("forex_accounts").insert(');
     expect(investments).not.toContain('.from("forex_accounts").update(');
     expect(investments).not.toContain('rpc("create_forex_cash_transaction"');

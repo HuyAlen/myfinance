@@ -795,24 +795,6 @@ function fromForexAccountRow(row: ForexAccountDbRow): ForexAccount {
   };
 }
 
-function toForexAccountRow(
-  account: ForexAccount,
-  userId: string,
-): ForexAccountDbRow {
-  return {
-    id: account.id,
-    user_id: userId,
-    name: account.name,
-    broker: account.broker,
-    account_number: account.accountNumber ?? null,
-    currency: account.currency,
-    status: account.status,
-    opened_at: account.openedAt ?? null,
-    notes: account.notes ?? null,
-    current_equity: account.currentEquity ?? null,
-  };
-}
-
 function fromForexCashTransactionRow(
   row: ForexCashTransactionDbRow,
 ): ForexCashTransaction {
@@ -2805,9 +2787,19 @@ export async function addForexAccount(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const { error } = await supabase
-    .from("forex_accounts")
-    .insert(toForexAccountRow(account, userId));
+  // FOREX-BALANCE-ASOF-1B: account creation and its initial Balance snapshot
+  // are one PostgreSQL transaction. Do not fall back to direct table writes.
+  const { error } = await supabase.rpc("create_forex_account_atomic", {
+    p_id: account.id,
+    p_name: account.name,
+    p_broker: account.broker,
+    p_account_number: account.accountNumber ?? null,
+    p_currency: account.currency,
+    p_status: account.status,
+    p_opened_at: account.openedAt ?? null,
+    p_notes: account.notes ?? null,
+    p_current_equity: account.currentEquity ?? null,
+  });
 
   if (error) {
     console.error("[financeStorage] addForexAccount:", error.message);
@@ -2822,11 +2814,19 @@ export async function updateForexAccount(
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  const { error } = await supabase
-    .from("forex_accounts")
-    .update(toForexAccountRow(account, userId))
-    .eq("id", account.id)
-    .eq("user_id", userId);
+  // FOREX-BALANCE-ASOF-1B: manual Balance changes must append a snapshot in
+  // the same PostgreSQL transaction as the forex_accounts update.
+  const { error } = await supabase.rpc("update_forex_account_atomic", {
+    p_id: account.id,
+    p_name: account.name,
+    p_broker: account.broker,
+    p_account_number: account.accountNumber ?? null,
+    p_currency: account.currency,
+    p_status: account.status,
+    p_opened_at: account.openedAt ?? null,
+    p_notes: account.notes ?? null,
+    p_current_equity: account.currentEquity ?? null,
+  });
 
   if (error) {
     console.error("[financeStorage] updateForexAccount:", error.message);

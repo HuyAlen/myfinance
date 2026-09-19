@@ -28,6 +28,11 @@ type SavingType =
 type SavingTransactionType = "deposit" | "withdraw" | "interest" | "settlement";
 type ForexAccountStatus = "active" | "inactive" | "archived";
 type ForexCashTransactionType = "deposit" | "withdrawal";
+type ForexBalanceSnapshotSource =
+  | "manual"
+  | "deposit"
+  | "withdrawal"
+  | "backfill";
 type HouseholdRole = "owner" | "member" | "viewer";
 type HouseholdInviteRole = "member" | "viewer";
 type HouseholdInviteStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -463,6 +468,26 @@ type ForexCashTransactionInsert = {
 };
 type ForexCashTransactionUpdate = Partial<ForexCashTransactionInsert>;
 
+type ForexBalanceSnapshotRow = {
+  id: string;
+  user_id: string;
+  forex_account_id: string;
+  balance: number;
+  source: ForexBalanceSnapshotSource;
+  source_transaction_id: string | null;
+  captured_at: string;
+};
+type ForexBalanceSnapshotInsert = {
+  id?: string;
+  user_id: string;
+  forex_account_id: string;
+  balance: number;
+  source: ForexBalanceSnapshotSource;
+  source_transaction_id?: string | null;
+  captured_at?: string;
+};
+type ForexBalanceSnapshotUpdate = Partial<ForexBalanceSnapshotInsert>;
+
 type NetWorthSnapshotRow = {
   id: string;
   user_id: string;
@@ -756,6 +781,15 @@ export type Database = {
           { foreignKeyName: "forex_cash_transactions_wallet_id_fkey"; columns: ["wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }
         ];
       };
+      forex_balance_snapshots: {
+        Row: ForexBalanceSnapshotRow;
+        Insert: ForexBalanceSnapshotInsert;
+        Update: ForexBalanceSnapshotUpdate;
+        Relationships: [
+          { foreignKeyName: "forex_balance_snapshots_forex_account_id_fkey"; columns: ["forex_account_id"]; isOneToOne: false; referencedRelation: "forex_accounts"; referencedColumns: ["id"] },
+          { foreignKeyName: "forex_balance_snapshots_source_transaction_id_fkey"; columns: ["source_transaction_id"]; isOneToOne: false; referencedRelation: "forex_cash_transactions"; referencedColumns: ["id"] }
+        ];
+      };
       net_worth_snapshots: {
         Row: NetWorthSnapshotRow;
         Insert: NetWorthSnapshotInsert;
@@ -831,6 +865,14 @@ export type Database = {
         Returns: { saving: SavingRow; wallet: WalletRow; saving_transaction: SavingTransactionRow }[];
       };
       delete_saving_account: { Args: { p_saving_id: string }; Returns: string };
+      create_forex_account_atomic: {
+        Args: { p_id: string; p_name: string; p_broker: string; p_account_number: string | null; p_currency: string; p_status: string; p_opened_at: string | null; p_notes: string | null; p_current_equity: number | null };
+        Returns: ForexAccountRow;
+      };
+      update_forex_account_atomic: {
+        Args: { p_id: string; p_name: string; p_broker: string; p_account_number: string | null; p_currency: string; p_status: string; p_opened_at: string | null; p_notes: string | null; p_current_equity: number | null };
+        Returns: ForexAccountRow;
+      };
       create_forex_cash_transaction: {
         Args: { p_id: string; p_forex_account_id: string; p_wallet_id: string; p_type: string; p_amount: number; p_currency: string; p_fee: number; p_transaction_date: string; p_transaction_time: string; p_notes: string | null };
         Returns: ForexCashTransactionRow;
