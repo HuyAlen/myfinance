@@ -19,7 +19,7 @@ describe("InvestmentsPage unified Portfolio + Forex ownership", () => {
     expect(source).toContain("getInvestments()");
     expect(source).toContain("setInvestments(data.investments)");
     expect(source).toContain("Portfolio");
-    expect(source).toContain("Tài khoản & vốn Forex");
+    expect(source).toContain("Tài khoản Forex");
   });
 
   it("owns full CRUD for Investment[] instead of leaving those assets read-only elsewhere", () => {
@@ -44,9 +44,9 @@ describe("InvestmentsPage unified Portfolio + Forex ownership", () => {
   });
 
   it("shows a combined top-level investment value using canonical Forex asset semantics", () => {
-    expect(source).toContain("getForexAssetValue(accounts, transactions)");
+    expect(source).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
     expect(source).toContain('label="Tổng giá trị đầu tư"');
     expect(source).toContain("portfolioSummary.currentValue + summary.currentExposure");
-    expect(source).toContain('note="Portfolio + Forex"');
+    expect(source).toContain('note="Portfolio + tài sản Forex hiện tại"');
   });
 });

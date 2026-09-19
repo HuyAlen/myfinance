@@ -237,12 +237,12 @@ export const reconciliationBudgets: Budget[] = [
 
 export const reconciliationExpected = {
   income: 20_000_000,
-  realExpense: 9_000_000,
-  realExpenseCount: 2,
+  realExpense: 9_300_000,
+  realExpenseCount: 4,
   savingAllocation: 3_000_000,
-  investmentAllocation: 3_800_000,
-  futureAllocation: 6_800_000,
-  futureAllocationRate: 34,
+  investmentAllocation: 3_500_000,
+  futureAllocation: 6_500_000,
+  futureAllocationRate: 32.5,
   budgetCoveredExpense: 9_000_000,
   goalEffectiveAmount: 6_000_000,
   goalProgressPercent: 60,

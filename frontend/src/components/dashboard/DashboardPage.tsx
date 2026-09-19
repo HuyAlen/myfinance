@@ -82,8 +82,7 @@ import {
   deriveBudgetSpendingStatus,
   filterTransactionsByDateRange,
   formatVND,
-  getForexAssetValue,
-  getForexNetCapital,
+  calculateForexPerformanceSnapshot,
 } from "@/src/services/finance/financeCalculations";
 
 import type {
@@ -926,9 +925,9 @@ export default function DashboardPage() {
       ),
     );
     // Forex cash transactions feed both the canonical Net Worth fallback
-    // (getForexAssetValue falls back to this ledger's net deposits-
-    // withdrawals-fees for any account without a manually-entered
-    // currentEquity — see the PERF-1 Forex correctness patch, unchanged
+    // (getForexAssetValue falls back to this ledger's gross net funding
+    // (deposits - withdrawals; fees stay separate) for any account without a
+    // manually-entered Balance (`currentEquity` compatibility field) — see the PERF-1 Forex correctness patch, unchanged
     // here) and the narrower Forex-card-only readiness group below.
     const forexLedgerPromise = bounded(
       "forex_ledger",
@@ -1288,7 +1287,7 @@ export default function DashboardPage() {
           );
           // A fetch failure is not the same as "no account has equity" —
           // treating it as such would silently push every account onto the
-          // net-capital fallback path even for ones with real equity on
+          // gross-funding fallback path even for ones with real equity on
           // file. Don't apply the (empty) equity map on a genuine failure.
           equityOk = false;
         }
@@ -1360,7 +1359,7 @@ export default function DashboardPage() {
         );
         // A fetch failure is not the same as "no account has equity" — see
         // the identical guard in the FOREX group above. Net Worth's Forex
-        // contribution must not silently fall back to net capital for an
+        // contribution must not silently fall back to gross net funding for an
         // account whose equity genuinely failed to load.
         equityOk = false;
       }
@@ -1813,58 +1812,28 @@ export default function DashboardPage() {
   }, [savings]);
 
   const forexSnapshot = useMemo(() => {
-    const totalDeposited = forexCashTransactions
-      .filter((transaction) => transaction.type === "deposit")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const totalWithdrawn = forexCashTransactions
-      .filter((transaction) => transaction.type === "withdrawal")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const totalFees = forexCashTransactions.reduce(
-      (sum, transaction) => sum + Math.max(0, transaction.fee ?? 0),
-      0,
+    const snapshot = calculateForexPerformanceSnapshot(
+      forexAccounts,
+      forexCashTransactions,
     );
-    // Net capital contributed — a cost-basis figure used for the P&L/ROI
-    // metrics below, and as the canonical fallback asset value for any
-    // account without a manually-entered equity (see getForexAssetValue).
-    const netCapital = getForexNetCapital(forexCashTransactions);
-    // Net worth's actual Forex asset value: each account's current equity
-    // (its real broker-reported value) where entered, falling back to net
-    // capital otherwise — the figure `calculateNetWorth` expects as
-    // `forexAssetValue`. Trading profit/loss (below) is a separate,
-    // presentation-only metric derived FROM this, not part of net worth
-    // itself.
-    const assetValue = getForexAssetValue(forexAccounts, forexCashTransactions);
-    const currentEquity = forexAccounts.reduce((sum, account) => {
-      const record = account as unknown as Record<string, unknown>;
-      const raw =
-        record.currentEquity ?? record.current_equity ?? record.equity ?? null;
-      const value = raw === null || raw === undefined ? null : Number(raw);
-      return sum + (value !== null && Number.isFinite(value) ? value : 0);
-    }, 0);
-    const accountsWithEquity = forexAccounts.filter((account) => {
-      const record = account as unknown as Record<string, unknown>;
-      const raw =
-        record.currentEquity ?? record.current_equity ?? record.equity ?? null;
-      return raw !== null && raw !== undefined && Number.isFinite(Number(raw));
-    }).length;
-    const profitLoss =
-      accountsWithEquity > 0 ? currentEquity - netCapital : null;
-    const roi =
-      profitLoss !== null && netCapital > 0
-        ? Math.round((profitLoss / netCapital) * 1000) / 10
-        : null;
 
     return {
-      balance: netCapital,
-      assetValue,
-      totalDeposited,
-      totalWithdrawn,
-      totalFees,
-      accountCount: forexAccounts.length,
-      currentEquity,
-      accountsWithEquity,
-      profitLoss,
-      roi,
+      // Keep the local `balance` alias to avoid churn in compact Dashboard
+      // presentation tests; semantically this is gross net funding, not broker
+      // Balance. Broker Balance is `currentEquity` below for storage-compat UI.
+      balance: snapshot.netFunding,
+      assetValue: snapshot.assetValue,
+      totalDeposited: snapshot.totalDeposited,
+      totalWithdrawn: snapshot.totalWithdrawn,
+      totalFees: snapshot.totalFees,
+      accountCount: snapshot.accountCount,
+      currentAccountCount: snapshot.currentAccountCount,
+      currentEquity: snapshot.totalBalance,
+      accountsWithEquity: snapshot.accountsWithBalance,
+      accountsUsingFallback: snapshot.accountsUsingFallback,
+      hasCompleteBalance: snapshot.hasCompleteBalance,
+      profitLoss: snapshot.profitLoss,
+      roi: snapshot.roi,
     };
   }, [forexAccounts, forexCashTransactions]);
 
@@ -2127,8 +2096,10 @@ export default function DashboardPage() {
       calculateFinancialStructureSummary({
         transactions: nonTransferFilteredTransactions,
         categories,
+        forexCashTransactions,
+        dateRange,
       }),
-    [nonTransferFilteredTransactions, categories],
+    [nonTransferFilteredTransactions, categories, forexCashTransactions, dateRange],
   );
 
   const financialStructureAdjusted = useMemo(() => {
@@ -2458,11 +2429,11 @@ export default function DashboardPage() {
       title: "Forex",
       value:
         forexSnapshot.profitLoss === null
-          ? "Chưa có Equity"
+          ? "Chưa có Balance"
           : `${forexSnapshot.profitLoss >= 0 ? "+" : ""}${formatVND(forexSnapshot.profitLoss)}`,
       note:
         forexSnapshot.roi === null
-          ? `${forexSnapshot.accountCount} tài khoản`
+          ? `${forexSnapshot.currentAccountCount} tài khoản hiện tại`
           : `ROI ${forexSnapshot.roi >= 0 ? "+" : ""}${forexSnapshot.roi}%`,
       tone:
         forexSnapshot.profitLoss === null
@@ -2541,6 +2512,11 @@ export default function DashboardPage() {
     const monthFlow = calculateFinanceFlowSnapshot({
       transactions: monthTransactions,
       categories,
+      forexCashTransactions,
+      dateRange: {
+        startDate: `${monthKey}-01`,
+        endDate: `${monthKey}-${String(daysInMonth).padStart(2, "0")}`,
+      },
     });
     const income = monthFlow.income;
     const expense = monthFlow.realExpense;
@@ -2582,6 +2558,7 @@ export default function DashboardPage() {
     budgets,
     categories,
     dashboardMonthKey,
+    forexCashTransactions,
     selectedMonth,
     selectedYear,
     transactions,
@@ -3458,7 +3435,7 @@ export default function DashboardPage() {
       <section className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 *:min-w-0">
         <Panel
           title="Tài khoản Forex"
-          subtitle="Vốn đã nạp, Equity hiện tại và hiệu suất giao dịch"
+          subtitle="Vốn đã nạp, Balance hiện tại và hiệu suất giao dịch"
         >
           <div className="mt-5 flex min-h-0 flex-1 flex-col gap-3">
             <div className="grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
@@ -3468,7 +3445,7 @@ export default function DashboardPage() {
                 color="text-violet-600"
               />
               <MiniStat
-                label="Equity hiện tại"
+                label="Balance hiện tại"
                 value={
                   forexSnapshot.accountsWithEquity > 0
                     ? formatVND(forexSnapshot.currentEquity)
@@ -3510,8 +3487,12 @@ export default function DashboardPage() {
             <div className="flex max-w-full items-start gap-1.5 rounded-xl bg-violet-50/70 px-3 py-2 text-[11px] leading-4 text-violet-700">
               <Info size={12} className="mt-0.5 shrink-0" />
               <p>
-                <span className="font-bold">Lời/lỗ</span> = Equity hiện tại −
-                Vốn ròng. Phí giao dịch đã trừ khỏi vốn ròng.
+                <span className="font-bold">Profit</span> = Balance − Nạp +
+                Rút. Phí nạp/rút là chi phí tiền mặt riêng, không làm thay đổi
+                Trading Profit.
+                {forexSnapshot.accountsUsingFallback > 0
+                  ? ` Net Worth đang dùng vốn ròng làm fallback cho ${forexSnapshot.accountsUsingFallback} tài khoản chưa có Balance.`
+                  : ""}
               </p>
             </div>
           </div>

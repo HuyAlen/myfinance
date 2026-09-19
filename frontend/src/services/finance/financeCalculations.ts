@@ -532,7 +532,7 @@ export function getTotalAssets(wallets: Wallet[]) {
  * Explicitly NOT included (these are current assets, not spendable Wallet
  * cash — see canonical Net Worth): Savings accounts (some Saving types are
  * locked, e.g. `term_deposit`/`certificate`), Investments, and Forex
- * `currentEquity`.
+ * broker Balance stored in `currentEquity`.
  */
 export function getSpendableWalletBalance(wallets: Wallet[]) {
   return wallets
@@ -553,35 +553,236 @@ export function getTotalSavings(savings: SavingAccount[] = []) {
 }
 
 /**
- * Net Forex capital contributed: money moved from a wallet into a Forex
- * cash account, net of withdrawals and fees. This is a COST-BASIS figure
- * (how much was put in), not the account's current value — the broker's
- * own account equity (Balance ± running/open P&L, see `ForexAccount.
- * currentEquity`) is the actual current asset value. Net capital is used
- * to compute trading profit/loss (`currentEquity - netCapital`), and as a
- * fallback asset value (see `getForexAssetValue`) for accounts where the
- * user hasn't entered a current equity yet.
+ * FOREX-PERFORMANCE-SSOT-1
+ *
+ * Canonical Forex semantics shared by Investments, Dashboard, Net Worth and
+ * analytics:
+ * - broker Balance is the manually-entered `currentEquity` compatibility field;
+ * - trading Profit = Balance - deposits + withdrawals;
+ * - transfer fees are cash expenses, never trading profit/cost basis;
+ * - archived accounts are historical only and contribute 0 to current assets;
+ * - a current account without Balance falls back to gross net funding
+ *   (deposits - withdrawals), clamped at 0 so an asset can never be negative.
+ */
+export type ForexPerformanceAccountInput = Pick<
+  ForexAccount,
+  "id" | "currentEquity"
+> &
+  Partial<Pick<ForexAccount, "status">>;
+
+type ForexPerformanceTransactionInput = Pick<
+  ForexCashTransaction,
+  "forexAccountId" | "type" | "amount" | "fee"
+>;
+
+export type ForexAccountPerformanceSnapshot = {
+  accountId: string;
+  status: ForexAccount["status"];
+  isCurrent: boolean;
+  deposits: number;
+  withdrawals: number;
+  fees: number;
+  /** Gross broker funding, deliberately excluding transfer fees. */
+  netFunding: number;
+  /** Net wallet cash consumed by funding + fees. */
+  walletCashImpact: number;
+  balance: number | null;
+  assetValue: number;
+  profitLoss: number | null;
+  roi: number | null;
+  transactionCount: number;
+  usesFundingFallback: boolean;
+};
+
+export type ForexPerformanceSnapshot = {
+  accounts: ForexAccountPerformanceSnapshot[];
+  accountCount: number;
+  currentAccountCount: number;
+  activeAccountCount: number;
+  archivedAccountCount: number;
+  totalDeposited: number;
+  totalWithdrawn: number;
+  totalFees: number;
+  netFunding: number;
+  walletCashImpact: number;
+  totalBalance: number;
+  assetValue: number;
+  profitLoss: number | null;
+  roi: number | null;
+  accountsWithBalance: number;
+  accountsUsingFallback: number;
+  hasBalance: boolean;
+  hasCompleteBalance: boolean;
+};
+
+function normalizeForexMoney(value: number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function normalizeForexBalance(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+}
+
+export function calculateForexPerformanceSnapshot(
+  forexAccounts: ForexPerformanceAccountInput[],
+  forexCashTransactions: ForexPerformanceTransactionInput[],
+): ForexPerformanceSnapshot {
+  const transactionsByAccount = new Map<
+    string,
+    ForexPerformanceTransactionInput[]
+  >();
+
+  for (const transaction of forexCashTransactions) {
+    const list = transactionsByAccount.get(transaction.forexAccountId) ?? [];
+    list.push(transaction);
+    transactionsByAccount.set(transaction.forexAccountId, list);
+  }
+
+  const accountSnapshots = forexAccounts.map((account) => {
+    const related = transactionsByAccount.get(account.id) ?? [];
+    let deposits = 0;
+    let withdrawals = 0;
+    let fees = 0;
+
+    for (const transaction of related) {
+      const amount = normalizeForexMoney(transaction.amount);
+      const fee = normalizeForexMoney(transaction.fee);
+      fees += fee;
+      if (transaction.type === "deposit") deposits += amount;
+      else withdrawals += amount;
+    }
+
+    const status = account.status ?? "active";
+    const isCurrent = status !== "archived";
+    const netFunding = deposits - withdrawals;
+    const walletCashImpact = netFunding + fees;
+    const balance = normalizeForexBalance(account.currentEquity);
+    const profitLoss = balance === null ? null : balance - netFunding;
+    const roi =
+      profitLoss !== null && netFunding > 0
+        ? Math.round((profitLoss / netFunding) * 1000) / 10
+        : null;
+    const usesFundingFallback = isCurrent && balance === null;
+    const assetValue = isCurrent
+      ? balance ?? Math.max(0, netFunding)
+      : 0;
+
+    return {
+      accountId: account.id,
+      status,
+      isCurrent,
+      deposits,
+      withdrawals,
+      fees,
+      netFunding,
+      walletCashImpact,
+      balance,
+      assetValue,
+      profitLoss,
+      roi,
+      transactionCount: related.length,
+      usesFundingFallback,
+    } satisfies ForexAccountPerformanceSnapshot;
+  });
+
+  const currentAccounts = accountSnapshots.filter((account) => account.isCurrent);
+  const accountsWithKnownBalance = currentAccounts.filter(
+    (account) => account.balance !== null,
+  );
+  const totalDeposited = currentAccounts.reduce(
+    (sum, account) => sum + account.deposits,
+    0,
+  );
+  const totalWithdrawn = currentAccounts.reduce(
+    (sum, account) => sum + account.withdrawals,
+    0,
+  );
+  const totalFees = currentAccounts.reduce(
+    (sum, account) => sum + account.fees,
+    0,
+  );
+  const netFunding = currentAccounts.reduce(
+    (sum, account) => sum + account.netFunding,
+    0,
+  );
+  const walletCashImpact = currentAccounts.reduce(
+    (sum, account) => sum + account.walletCashImpact,
+    0,
+  );
+  const totalBalance = accountsWithKnownBalance.reduce(
+    (sum, account) => sum + (account.balance ?? 0),
+    0,
+  );
+  const assetValue = currentAccounts.reduce(
+    (sum, account) => sum + account.assetValue,
+    0,
+  );
+  const profitLoss =
+    accountsWithKnownBalance.length > 0
+      ? accountsWithKnownBalance.reduce(
+          (sum, account) => sum + (account.profitLoss ?? 0),
+          0,
+        )
+      : null;
+  const roiBasis = accountsWithKnownBalance.reduce(
+    (sum, account) => sum + Math.max(0, account.netFunding),
+    0,
+  );
+  const roi =
+    profitLoss !== null && roiBasis > 0
+      ? Math.round((profitLoss / roiBasis) * 1000) / 10
+      : null;
+
+  return {
+    accounts: accountSnapshots,
+    accountCount: accountSnapshots.length,
+    currentAccountCount: currentAccounts.length,
+    activeAccountCount: accountSnapshots.filter(
+      (account) => account.status === "active",
+    ).length,
+    archivedAccountCount: accountSnapshots.filter(
+      (account) => account.status === "archived",
+    ).length,
+    totalDeposited,
+    totalWithdrawn,
+    totalFees,
+    netFunding,
+    walletCashImpact,
+    totalBalance,
+    assetValue,
+    profitLoss,
+    roi,
+    accountsWithBalance: accountsWithKnownBalance.length,
+    accountsUsingFallback: currentAccounts.filter(
+      (account) => account.usesFundingFallback,
+    ).length,
+    hasBalance: accountsWithKnownBalance.length > 0,
+    hasCompleteBalance:
+      currentAccounts.length > 0 &&
+      accountsWithKnownBalance.length === currentAccounts.length,
+  };
+}
+
+/**
+ * Gross Forex funding contributed to broker accounts: deposits - withdrawals.
+ * Transfer fees are intentionally excluded; they are cash expenses rather than
+ * invested capital or trading performance.
  */
 export function getForexNetCapital(
   forexCashTransactions: Array<
     Pick<ForexCashTransaction, "type" | "amount" | "fee">
   >,
 ) {
-  const totalDeposited = forexCashTransactions
-    .filter((transaction) => transaction.type === "deposit")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const totalWithdrawn = forexCashTransactions
-    .filter((transaction) => transaction.type === "withdrawal")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
-  const totalFees = forexCashTransactions.reduce(
-    (sum, transaction) => sum + Math.max(0, transaction.fee ?? 0),
-    0,
-  );
-
-  return totalDeposited - totalWithdrawn - totalFees;
+  return forexCashTransactions.reduce((sum, transaction) => {
+    const amount = normalizeForexMoney(transaction.amount);
+    return sum + (transaction.type === "deposit" ? amount : -amount);
+  }, 0);
 }
 
-/** Net Forex capital contributed (see `getForexNetCapital`), per account. */
+/** Gross Forex funding per account, excluding transfer fees. */
 export function getForexNetCapitalByAccount(
   forexCashTransactions: Array<
     Pick<
@@ -590,56 +791,30 @@ export function getForexNetCapitalByAccount(
     >
   >,
 ): Map<string, number> {
-  const byAccount = new Map<
-    string,
-    Array<
-      Pick<
-        ForexCashTransaction,
-        "forexAccountId" | "type" | "amount" | "fee"
-      >
-    >
-  >();
-  for (const transaction of forexCashTransactions) {
-    const list = byAccount.get(transaction.forexAccountId) ?? [];
-    list.push(transaction);
-    byAccount.set(transaction.forexAccountId, list);
-  }
-
   const result = new Map<string, number>();
-  for (const [accountId, transactions] of byAccount) {
-    result.set(accountId, getForexNetCapital(transactions));
+  for (const transaction of forexCashTransactions) {
+    const current = result.get(transaction.forexAccountId) ?? 0;
+    const amount = normalizeForexMoney(transaction.amount);
+    result.set(
+      transaction.forexAccountId,
+      current + (transaction.type === "deposit" ? amount : -amount),
+    );
   }
   return result;
 }
 
 /**
- * Forex asset value for net worth: each account's current equity (the real
- * broker-reported account value, including running trading P&L) when the
- * user has entered one, falling back to that account's net capital
- * contributed for accounts where equity hasn't been entered yet — so a
- * Forex account never silently drops out of net worth just because its
- * live equity hasn't been recorded.
+ * Canonical Forex current-asset value. Prefer
+ * `calculateForexPerformanceSnapshot` when a caller also needs Profit/ROI.
  */
 export function getForexAssetValue(
-  forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">>,
-  forexCashTransactions: Array<
-    Pick<
-      ForexCashTransaction,
-      "forexAccountId" | "type" | "amount" | "fee"
-    >
-  >,
+  forexAccounts: ForexPerformanceAccountInput[],
+  forexCashTransactions: ForexPerformanceTransactionInput[],
 ): number {
-  const netCapitalByAccount = getForexNetCapitalByAccount(
+  return calculateForexPerformanceSnapshot(
+    forexAccounts,
     forexCashTransactions,
-  );
-
-  return forexAccounts.reduce((sum, account) => {
-    const equity = account.currentEquity;
-    const hasEquity = typeof equity === "number" && Number.isFinite(equity);
-    return (
-      sum + (hasEquity ? equity : (netCapitalByAccount.get(account.id) ?? 0))
-    );
-  }, 0);
+  ).assetValue;
 }
 
 export interface NetWorthBreakdown {
@@ -668,7 +843,7 @@ export interface NetWorthBreakdown {
  *   duplicates an `investments` table entry)
  * - savings account balances
  * - investment portfolio current value
- * - Forex CURRENT ASSET VALUE (see `getForexAssetValue`, not net capital) —
+ * - Forex CURRENT ASSET VALUE (see `getForexAssetValue`, not funding basis) —
  *   optional, defaults to 0 for callers that don't track Forex, since it
  *   isn't part of the core finance domain fetched by every page
  *
@@ -714,7 +889,7 @@ export interface BalanceSheetSnapshot extends NetWorthBreakdown {
  *
  * This is the boundary consumers should use when they have the actual domain
  * rows for Wallets + Savings + Investments + Forex + Debts. It resolves Forex
- * current asset value once (currentEquity with net-capital fallback) and then
+ * current asset value once (Balance with gross-funding fallback) and then
  * delegates the assets-minus-liabilities equation to `calculateNetWorth`.
  *
  * `forexAssetValue` is an escape hatch for pure analytics callers that already
@@ -726,7 +901,7 @@ export function calculateBalanceSheetSnapshot(input: {
   savings?: SavingAccount[];
   investments?: Investment[];
   debts?: Debt[];
-  forexAccounts?: Array<Pick<ForexAccount, "id" | "currentEquity">>;
+  forexAccounts?: ForexPerformanceAccountInput[];
   forexCashTransactions?: ForexCashTransaction[];
   forexAssetValue?: number;
 }): BalanceSheetSnapshot {
@@ -966,7 +1141,9 @@ export type FinanceFlowSnapshot = {
   savingAllocation: number;
   /** Manual/legacy investment allocations recorded in the main transactions ledger. */
   transactionInvestmentAllocation: number;
-  /** Signed wallet-cash movement committed to Forex, including transaction fees. */
+  /** Forex transfer fees are real cash expenses, not invested capital. */
+  forexFees: number;
+  /** Signed gross Forex funding movement (deposits - withdrawals), excluding fees. */
   investmentLedgerNet: number;
   /** Positive net investment capital allocated in the period. */
   investmentAllocation: number;
@@ -1026,10 +1203,10 @@ export function getNetSavingAllocationFromLedger(
 }
 
 /**
- * Forex allocation follows wallet-cash commitment semantics used by the
- * Investments engine: a deposit consumes `amount + fee` from cash, while a
- * withdrawal returns `amount - fee`. This keeps allocation analytics aligned
- * with the actual cash that left/returned to owned Wallets.
+ * Forex investment allocation is gross broker funding only. Transfer fees are
+ * intentionally excluded here and reported as real expenses by
+ * `calculateFinanceFlowSnapshot`, preventing the same fee from becoming both
+ * "investment" and "expense".
  */
 export function getNetInvestmentAllocationFromLedger(
   transactions: ForexCashTransaction[],
@@ -1037,12 +1214,19 @@ export function getNetInvestmentAllocationFromLedger(
 ) {
   return scopeForexCashTransactions(transactions, dateRange).reduce(
     (sum, transaction) => {
-      const amount = Math.max(0, Number(transaction.amount) || 0);
-      const fee = Math.max(0, Number(transaction.fee) || 0);
-
-      if (transaction.type === "deposit") return sum + amount + fee;
-      return sum - Math.max(0, amount - fee);
+      const amount = normalizeForexMoney(transaction.amount);
+      return sum + (transaction.type === "deposit" ? amount : -amount);
     },
+    0,
+  );
+}
+
+export function getForexFeesFromLedger(
+  transactions: ForexCashTransaction[],
+  dateRange?: DateRangeInput,
+) {
+  return scopeForexCashTransactions(transactions, dateRange).reduce(
+    (sum, transaction) => sum + normalizeForexMoney(transaction.fee),
     0,
   );
 }
@@ -1050,12 +1234,12 @@ export function getNetInvestmentAllocationFromLedger(
 /**
  * FINANCE-FLOW-SSOT-1 cross-page flow contract.
  *
- * Main transactions remain authoritative for income/real expense and for
- * legacy/manual saving/investment category allocations. Savings/Forex engine
- * movements are additive because their mirrored main-ledger rows are internal
- * transfers, not saving/investment expenses. Signed withdrawals can reduce
- * same-period allocations; UI-facing allocation values are clamped at zero so
- * a de-allocation never masquerades as negative "saving".
+ * Main transactions remain authoritative for income and ordinary real expense.
+ * Forex transfer fees are additive real expenses because the mirrored
+ * Forex principal movement is an internal transfer, not spending. Savings/Forex
+ * principal movements remain allocation ledgers: signed withdrawals can reduce
+ * same-period allocations, and UI-facing allocation values are clamped at zero
+ * so a de-allocation never masquerades as negative "saving".
  */
 export function calculateFinanceFlowSnapshot(input: {
   transactions: Transaction[];
@@ -1071,7 +1255,16 @@ export function calculateFinanceFlowSnapshot(input: {
   );
   const income = getTotalIncome(transactions);
   const realExpenses = getRealExpenseTransactions(transactions, categories);
-  const realExpense = realExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const scopedForexCashTransactions = scopeForexCashTransactions(
+    input.forexCashTransactions ?? [],
+    input.dateRange,
+  );
+  const forexFees = getForexFeesFromLedger(scopedForexCashTransactions);
+  const forexFeeCount = scopedForexCashTransactions.filter(
+    (transaction) => normalizeForexMoney(transaction.fee) > 0,
+  ).length;
+  const realExpense =
+    realExpenses.reduce((sum, item) => sum + item.amount, 0) + forexFees;
   const transactionSavingAllocation = getTotalSavingAllocation(
     transactions,
     categories,
@@ -1089,8 +1282,7 @@ export function calculateFinanceFlowSnapshot(input: {
     categories,
   );
   const investmentLedgerNet = getNetInvestmentAllocationFromLedger(
-    input.forexCashTransactions ?? [],
-    input.dateRange,
+    scopedForexCashTransactions,
   );
   const investmentAllocation = Math.max(
     0,
@@ -1101,12 +1293,13 @@ export function calculateFinanceFlowSnapshot(input: {
   return {
     income,
     realExpense,
-    realExpenseCount: realExpenses.length,
+    realExpenseCount: realExpenses.length + forexFeeCount,
     netCashFlow: income - realExpense,
     transactionSavingAllocation,
     savingLedgerNet,
     savingAllocation,
     transactionInvestmentAllocation,
+    forexFees,
     investmentLedgerNet,
     investmentAllocation,
     futureAllocation,
@@ -1421,6 +1614,8 @@ export function calculateDashboardSummary(input: {
   goals: Goal[];
   /** Forex current asset value (see `getForexAssetValue`); omit if not tracked. */
   forexAssetValue?: number;
+  forexCashTransactions?: ForexCashTransaction[];
+  dateRange?: DateRangeInput;
 }): DashboardSummary {
   const categories = input.categories ?? [];
 
@@ -1454,13 +1649,16 @@ export function calculateDashboardSummary(input: {
    * Transfer transactions only move money between wallets, so they are never
    * included in income, expense, or net cash flow.
    */
-  const income = getTotalIncome(input.transactions);
-  const expense = getTotalExpense(input.transactions, categories);
-  const netCashFlow = income - expense;
-  const futureAllocation = getTotalFutureAllocation(
-    input.transactions,
+  const financeFlow = calculateFinanceFlowSnapshot({
+    transactions: input.transactions,
     categories,
-  );
+    forexCashTransactions: input.forexCashTransactions,
+    dateRange: input.dateRange,
+  });
+  const income = financeFlow.income;
+  const expense = financeFlow.realExpense;
+  const netCashFlow = financeFlow.netCashFlow;
+  const futureAllocation = financeFlow.futureAllocation;
   const monthlyExpense = getMonthlyExpenseEstimate(
     input.transactions,
     6,
@@ -1813,9 +2011,17 @@ export interface FinancialStructureSummary {
 export function calculateFinancialStructureSummary(input: {
   transactions: Transaction[];
   categories: Category[];
+  forexCashTransactions?: ForexCashTransaction[];
+  dateRange?: DateRangeInput;
 }): FinancialStructureSummary {
-  const income = getTotalIncome(input.transactions);
-  const expense = getTotalExpense(input.transactions, input.categories);
+  const financeFlow = calculateFinanceFlowSnapshot({
+    transactions: input.transactions,
+    categories: input.categories,
+    forexCashTransactions: input.forexCashTransactions,
+    dateRange: input.dateRange,
+  });
+  const income = financeFlow.income;
+  const expense = financeFlow.realExpense;
   const fixedCost = getFixedCostAmount(input);
   const variableCost = getVariableCostAmount(input);
   const savingAmount = getPlanningSavingAmount(input);

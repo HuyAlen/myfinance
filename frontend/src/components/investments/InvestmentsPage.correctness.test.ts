@@ -13,7 +13,7 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
   const source = readFileSync(
     path.resolve(__dirname, "InvestmentsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n?/g, "\n");
   const normalized = source.replace(/\s+/g, " ");
 
   it("builds the default form date from local calendar fields instead of UTC ISO", () => {
@@ -106,11 +106,13 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).not.toContain('rpc("delete_forex_cash_transaction"');
   });
 
-  it("uses the canonical after-fee Forex capital basis for P/L and headline net capital", () => {
-    expect(source).toContain("const netCashFlow = getForexNetCapital(related);");
-    expect(source).toContain("account.currentEquity - netCashFlow");
-    expect(source).toContain("sum + account.netCashFlow");
-    expect(source).toContain("Tổng nạp trừ tổng rút và phí");
+  it("delegates Forex Balance, Profit and current-asset semantics to the canonical performance snapshot", () => {
+    expect(source).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
+    expect(source).toContain("tradingProfitLoss: metric?.profitLoss ?? null");
+    expect(source).toContain("currentExposure: forexPerformance.assetValue");
+    expect(source).not.toContain("account.currentEquity - deposits + withdrawals");
+    expect(source).not.toContain("account.currentEquity - netCashFlow");
+    expect(source).not.toContain('label="Vốn ròng Forex"');
   });
 
   it("deletes a Forex account through one atomic RPC rather than client-side transaction loops", () => {
@@ -123,11 +125,10 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(region).not.toContain('"delete_forex_cash_transaction"');
   });
 
-  it("excludes archived accounts from current Forex performance metrics while retaining inactive accounts", () => {
-    expect(source).toContain('const currentPortfolioAccounts = accountMetrics.filter(');
-    expect(source).toContain('account.status !== "archived"');
-    expect(source).toContain("const totalDeposited = currentPortfolioAccounts.reduce(");
-    expect(source).toContain("const knownEquityAccounts = currentPortfolioAccounts.filter(");
+  it("consumes archived/current and partial-Balance semantics from the canonical Forex snapshot", () => {
+    expect(source).toContain("currentAccountCount: forexPerformance.currentAccountCount");
+    expect(source).toContain("hasCompleteBalance: forexPerformance.hasCompleteBalance");
+    expect(source).toContain("accountsUsingFallback: forexPerformance.accountsUsingFallback");
   });
 
   it("subscribes Portfolio, Forex and wallet dependencies through the shared owner channel", () => {

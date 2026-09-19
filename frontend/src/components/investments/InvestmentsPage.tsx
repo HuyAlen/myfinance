@@ -11,14 +11,12 @@ import {
 } from "react";
 import {
   Activity,
-  ArrowUpRight,
   BriefcaseBusiness,
   Edit3,
   Landmark,
   Plus,
   RefreshCw,
   Trash2,
-  TrendingUp,
   WalletCards,
   X,
 } from "lucide-react";
@@ -29,10 +27,7 @@ import ConfirmDialog, {
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
-import {
-  getForexAssetValue,
-  getForexNetCapital,
-} from "@/src/services/finance/financeCalculations";
+import { calculateForexPerformanceSnapshot } from "@/src/services/finance/financeCalculations";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
   addForexAccount,
@@ -96,10 +91,7 @@ type PortfolioFormState = {
 type AccountCashMetric = ForexAccount & {
   deposits: number;
   withdrawals: number;
-  fees: number;
-  netCashFlow: number;
   tradingProfitLoss: number | null;
-  roi: number | null;
   transactionCount: number;
 };
 
@@ -260,9 +252,9 @@ function validateAccountForm(form: AccountFormState): string | null {
   if (!form.name.trim()) return "Vui lòng nhập tên tài khoản.";
   if (!form.broker.trim()) return "Vui lòng nhập broker hoặc nền tảng.";
   if (form.currentEquity.trim()) {
-    const equity = Number(form.currentEquity);
-    if (!Number.isFinite(equity) || equity < 0) {
-      return "Equity hiện tại phải là số không âm.";
+    const balance = Number(form.currentEquity);
+    if (!Number.isFinite(balance) || balance < 0) {
+      return "Balance hiện tại phải là số không âm.";
     }
   }
   return null;
@@ -535,109 +527,47 @@ export default function InvestmentsPage() {
     };
   }, [investments]);
 
-  const accountMetrics = useMemo<AccountCashMetric[]>(() => {
-    return accounts.map((account) => {
-      const related = transactions.filter(
-        (transaction) => transaction.forexAccountId === account.id,
-      );
-      const deposits = related
-        .filter((transaction) => transaction.type === "deposit")
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
-      const withdrawals = related
-        .filter((transaction) => transaction.type === "withdrawal")
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
-      const fees = related.reduce(
-        (sum, transaction) => sum + (transaction.fee ?? 0),
-        0,
-      );
-      // CROSS-DOMAIN-INTEGRITY-1: use the same cost-basis rule as canonical
-      // Net Worth/Forex fallback value: deposits - withdrawals - fees.
-      const netCashFlow = getForexNetCapital(related);
-      const tradingProfitLoss =
-        account.currentEquity == null
-          ? null
-          : account.currentEquity - netCashFlow;
-      const roi =
-        tradingProfitLoss === null || netCashFlow <= 0
-          ? null
-          : (tradingProfitLoss / netCashFlow) * 100;
+  const forexPerformance = useMemo(
+    () => calculateForexPerformanceSnapshot(accounts, transactions),
+    [accounts, transactions],
+  );
 
+  const accountMetrics = useMemo<AccountCashMetric[]>(() => {
+    const performanceByAccountId = new Map(
+      forexPerformance.accounts.map((metric) => [metric.accountId, metric]),
+    );
+
+    return accounts.map((account) => {
+      const metric = performanceByAccountId.get(account.id);
       return {
         ...account,
-        deposits,
-        withdrawals,
-        fees,
-        netCashFlow,
-        tradingProfitLoss,
-        roi,
-        transactionCount: related.length,
+        deposits: metric?.deposits ?? 0,
+        withdrawals: metric?.withdrawals ?? 0,
+        tradingProfitLoss: metric?.profitLoss ?? null,
+        transactionCount: metric?.transactionCount ?? 0,
       };
     });
-  }, [accounts, transactions]);
+  }, [accounts, forexPerformance.accounts]);
 
-  const summary = useMemo(() => {
-    // Archived accounts remain visible as historical records, but they no
-    // longer represent current portfolio exposure and therefore must not
-    // inflate the headline capital/equity/P&L summary. Inactive accounts are
-    // still owned/current and remain included.
-    const currentPortfolioAccounts = accountMetrics.filter(
-      (account) => account.status !== "archived",
-    );
-    const totalDeposited = currentPortfolioAccounts.reduce(
-      (sum, account) => sum + account.deposits,
-      0,
-    );
-    const totalWithdrawn = currentPortfolioAccounts.reduce(
-      (sum, account) => sum + account.withdrawals,
-      0,
-    );
-    const totalFees = currentPortfolioAccounts.reduce(
-      (sum, account) => sum + account.fees,
-      0,
-    );
-    const knownEquityAccounts = currentPortfolioAccounts.filter(
-      (account) => account.currentEquity != null,
-    );
-    const totalEquity = knownEquityAccounts.reduce(
-      (sum, account) => sum + (account.currentEquity ?? 0),
-      0,
-    );
-    // Use the same Forex asset-value rule as canonical Net Worth: broker
-    // current equity when available, otherwise net contributed capital after
-    // fees. This intentionally includes archived rows too because the balance
-    // sheet still owns any residual value until the row itself is removed.
-    const currentExposure = getForexAssetValue(accounts, transactions);
-    const totalProfitLoss = knownEquityAccounts.reduce(
-      (sum, account) => sum + (account.tradingProfitLoss ?? 0),
-      0,
-    );
-    const capitalBase = knownEquityAccounts.reduce(
-      (sum, account) => sum + Math.max(account.netCashFlow, 0),
-      0,
-    );
-    const roi =
-      knownEquityAccounts.length > 0 && capitalBase > 0
-        ? (totalProfitLoss / capitalBase) * 100
-        : null;
-
-    return {
-      accountCount: accounts.length,
-      activeCount: accounts.filter((account) => account.status === "active")
-        .length,
-      totalDeposited,
-      totalWithdrawn,
-      totalFees,
-      netCashFlow: currentPortfolioAccounts.reduce(
-        (sum, account) => sum + account.netCashFlow,
-        0,
-      ),
-      totalEquity,
-      currentExposure,
-      totalProfitLoss,
-      roi,
-      hasEquity: knownEquityAccounts.length > 0,
-    };
-  }, [accounts, accountMetrics, transactions]);
+  const summary = useMemo(
+    () => ({
+      accountCount: forexPerformance.accountCount,
+      activeCount: forexPerformance.activeAccountCount,
+      currentAccountCount: forexPerformance.currentAccountCount,
+      totalDeposited: forexPerformance.totalDeposited,
+      totalWithdrawn: forexPerformance.totalWithdrawn,
+      totalFees: forexPerformance.totalFees,
+      totalBalance: forexPerformance.totalBalance,
+      currentExposure: forexPerformance.assetValue,
+      totalProfitLoss: forexPerformance.profitLoss ?? 0,
+      roi: forexPerformance.roi,
+      hasBalance: forexPerformance.hasBalance,
+      hasCompleteBalance: forexPerformance.hasCompleteBalance,
+      accountsWithBalance: forexPerformance.accountsWithBalance,
+      accountsUsingFallback: forexPerformance.accountsUsingFallback,
+    }),
+    [forexPerformance],
+  );
 
   function openCreatePortfolioInvestment() {
     setPortfolioForm(createEmptyPortfolioForm());
@@ -948,21 +878,18 @@ export default function InvestmentsPage() {
 
   return (
     <section className="space-y-4 sm:space-y-5">
-      <div className="rounded-3xl border border-[#D7E3EE] bg-white p-4 shadow-[0_8px_24px_rgba(54,83,107,0.08)] sm:rounded-4xl sm:p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-12 sm:rounded-2xl">
-              <BriefcaseBusiness size={21} />
+      <div className="rounded-3xl border border-[#D7E3EE] bg-white p-4 shadow-[0_8px_24px_rgba(54,83,107,0.08)] sm:rounded-4xl sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] sm:size-11 sm:rounded-2xl">
+              <BriefcaseBusiness size={20} />
             </div>
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">
-                Đầu tư
-              </p>
-              <h1 className="mt-0.5 text-[22px] font-bold tracking-tight text-[#36536B] sm:mt-1 sm:text-3xl">
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-bold tracking-tight text-[#36536B] sm:text-[26px]">
                 Đầu tư
               </h1>
-              <p className="mt-1 max-w-2xl text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm sm:leading-6">
-                Quản lý Portfolio và Forex trong cùng một không gian đầu tư.
+              <p className="mt-0.5 text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm">
+                Portfolio & Forex · Theo dõi giá trị và hiệu suất đầu tư.
               </p>
             </div>
           </div>
@@ -1012,64 +939,62 @@ export default function InvestmentsPage() {
           </div>
         ) : null}
 
-        <div className="-mx-4 mt-4 flex snap-x snap-proximity gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-1 scrollbar-none sm:mx-0 sm:mt-5 sm:grid sm:grid-cols-2 sm:gap-3 sm:px-0 xl:grid-cols-6">
+        <div className="-mx-4 mt-4 flex snap-x snap-proximity gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-1 scrollbar-none sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-3 sm:px-0 xl:grid-cols-4">
+          <SummaryCard
+            label="Tổng giá trị đầu tư"
+            value={formatMoney(
+              portfolioSummary.currentValue + summary.currentExposure,
+            )}
+            note="Portfolio + tài sản Forex hiện tại"
+            tone="blue"
+            icon={<WalletCards size={17} />}
+          />
           <SummaryCard
             label="Portfolio"
             value={formatMoney(portfolioSummary.currentValue)}
-            note={`${portfolioSummary.count} tài sản truyền thống`}
+            note={`${portfolioSummary.count} tài sản`}
             tone="sky"
             icon={<BriefcaseBusiness size={17} />}
           />
           <SummaryCard
-            label="Lời / lỗ Portfolio"
-            value={formatMoney(portfolioSummary.profitLoss)}
-            note={`ROI ${formatPercent(portfolioSummary.roi)}`}
-            tone={portfolioSummary.profitLoss >= 0 ? "emerald" : "rose"}
-            icon={<TrendingUp size={17} />}
-          />
-          <SummaryCard
-            label="Forex"
-            value={formatMoney(summary.currentExposure)}
-            note={`${summary.activeCount}/${summary.accountCount} tài khoản hoạt động`}
+            label="Balance Forex"
+            value={
+              summary.hasBalance
+                ? formatMoney(summary.totalBalance)
+                : "Chưa có dữ liệu"
+            }
+            note={
+              summary.currentAccountCount === 0
+                ? "Không có tài khoản hiện tại"
+                : summary.hasCompleteBalance
+                  ? `${summary.currentAccountCount} tài khoản hiện tại`
+                  : `${summary.accountsWithBalance}/${summary.currentAccountCount} có Balance · ${summary.accountsUsingFallback} fallback`
+            }
             tone="blue"
             icon={<Landmark size={17} />}
           />
           <SummaryCard
-            label="Lời / lỗ Forex"
+            label="Profit Forex"
             value={
-              summary.hasEquity
+              summary.hasBalance
                 ? formatMoney(summary.totalProfitLoss)
                 : "Chưa có dữ liệu"
             }
             note={
-              summary.hasEquity
-                ? `ROI ${formatPercent(summary.roi)}`
-                : "Nhập Equity để tính"
+              summary.hasBalance
+                ? summary.hasCompleteBalance
+                  ? "Trading Profit · không gồm phí nạp/rút"
+                  : "Chỉ tính tài khoản đã có Balance"
+                : "Nhập Balance để tính"
             }
             tone={
-              !summary.hasEquity
+              !summary.hasBalance
                 ? "amber"
                 : summary.totalProfitLoss >= 0
                   ? "emerald"
                   : "rose"
             }
             icon={<Activity size={17} />}
-          />
-          <SummaryCard
-            label="Tổng giá trị đầu tư"
-            value={formatMoney(
-              portfolioSummary.currentValue + summary.currentExposure,
-            )}
-            note="Portfolio + Forex"
-            tone="violet"
-            icon={<WalletCards size={17} />}
-          />
-          <SummaryCard
-            label="Vốn ròng Forex"
-            value={formatMoney(summary.netCashFlow)}
-            note="Tổng nạp trừ tổng rút và phí"
-            tone={summary.netCashFlow >= 0 ? "amber" : "rose"}
-            icon={<ArrowUpRight size={17} />}
           />
         </div>
       </div>
@@ -1112,15 +1037,26 @@ export default function InvestmentsPage() {
           <button
             type="button"
             onClick={openCreatePortfolioInvestment}
-            className="mt-4 flex min-h-48 w-full flex-col items-center justify-center rounded-3xl border border-dashed border-sky-200 bg-sky-50/40 p-8 text-center"
+            data-ui="portfolio-empty-compact"
+            className="mt-4 flex w-full flex-col gap-4 rounded-2xl border border-dashed border-sky-200 bg-sky-50/35 p-5 text-center transition hover:border-sky-300 hover:bg-sky-50/70 sm:flex-row sm:items-center sm:justify-between sm:text-left"
           >
-            <BriefcaseBusiness size={24} className="text-sky-600" />
-            <p className="mt-4 text-lg font-black text-sky-800">
-              Chưa có tài sản Portfolio
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              Thêm cổ phiếu, quỹ, crypto hoặc vàng để quản lý cùng Forex.
-            </p>
+            <span className="flex min-w-0 flex-col items-center gap-3 sm:flex-row">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100">
+                <BriefcaseBusiness size={19} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-black text-sky-900">
+                  Chưa có tài sản Portfolio
+                </span>
+                <span className="mt-0.5 block text-xs font-medium text-slate-500 sm:text-sm">
+                  Thêm cổ phiếu, quỹ/ETF, crypto hoặc vàng để bắt đầu theo dõi.
+                </span>
+              </span>
+            </span>
+            <span className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-sky-700 shadow-sm ring-1 ring-sky-100">
+              <Plus size={15} />
+              Thêm tài sản
+            </span>
           </button>
         ) : null}
 
@@ -1221,22 +1157,28 @@ export default function InvestmentsPage() {
         ) : null}
       </div>
 
-      <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
-        <div className="flex items-center justify-between gap-3">
+      <div
+        data-ui="forex-workstation"
+        className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5"
+      >
+        <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
               Forex
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
-              Tài khoản & vốn Forex
+              Tài khoản Forex
             </h2>
+            <p className="mt-1 text-xs font-medium text-[#7C91A6] sm:text-sm">
+              Balance, dòng tiền và lợi nhuận theo từng tài khoản.
+            </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
             {accounts.length} tài khoản
           </span>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4">
           {isLoading && accounts.length === 0 ? (
             <div className="col-span-full rounded-3xl bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
               Đang tải dữ liệu Forex...
@@ -1277,6 +1219,7 @@ export default function InvestmentsPage() {
             <article
               id={`forex-account-${account.id}`}
               key={account.id}
+              data-ui="forex-account-workstation"
               className={`rounded-2xl border bg-white p-4 transition sm:rounded-3xl sm:p-5 ${
                 focusedForexAccountId === account.id
                   ? "border-sky-400 ring-4 ring-sky-100 shadow-md"
@@ -1325,23 +1268,42 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4">
-                <Metric
-                  label="Vốn ròng"
-                  value={formatMoney(account.netCashFlow)}
-                  tone="violet"
-                />
-                <Metric
-                  label="Giá trị tài khoản"
-                  value={
-                    account.currentEquity == null
+              <div
+                data-dark-surface="investment-capital-summary"
+                className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(0,1fr))] sm:gap-3"
+              >
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/65 p-3.5 sm:p-4">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] text-blue-600/75">
+                    Balance
+                  </p>
+                  <p
+                    className="mt-1.5 whitespace-nowrap text-[17px] font-black tabular-nums text-blue-700 sm:text-xl"
+                    title={
+                      account.currentEquity == null
+                        ? "Chưa nhập"
+                        : formatMoney(account.currentEquity)
+                    }
+                  >
+                    {account.currentEquity == null
                       ? "Chưa nhập"
-                      : formatMoney(account.currentEquity)
-                  }
-                  tone="blue"
+                      : formatMoney(account.currentEquity)}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold text-blue-600/60">
+                    Balance hiện tại
+                  </p>
+                </div>
+                <Metric
+                  label="Nạp"
+                  value={formatMoney(account.deposits)}
+                  tone="slate"
                 />
                 <Metric
-                  label="Lời / lỗ"
+                  label="Rút"
+                  value={formatMoney(account.withdrawals)}
+                  tone="slate"
+                />
+                <Metric
+                  label="Profit"
                   value={
                     account.tradingProfitLoss === null
                       ? "—"
@@ -1354,48 +1316,26 @@ export default function InvestmentsPage() {
                       : "rose"
                   }
                 />
-                <Metric
-                  label="ROI"
-                  value={formatPercent(account.roi)}
-                  tone={
-                    account.roi === null || account.roi >= 0
-                      ? "emerald"
-                      : "rose"
-                  }
-                />
               </div>
 
-              <div
-                data-dark-surface="investment-capital-summary"
-                className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-[#F6F9FC] p-3 sm:mt-4 sm:rounded-2xl"
-              >
-                <TinyMetric
-                  label="Đã nạp"
-                  value={formatMoney(account.deposits)}
-                />
-                <TinyMetric
-                  label="Đã rút"
-                  value={formatMoney(account.withdrawals)}
-                />
-                <TinyMetric label="Phí" value={formatMoney(account.fees)} />
-              </div>
-
-              <div className="mt-3">
-                <p className="mb-2 text-[11px] font-semibold text-[#7C91A6]">
+              <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] font-semibold text-[#7C91A6] sm:text-xs">
                   {account.transactionCount} giao dịch
                 </p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
                   <button
                     type="button"
                     onClick={() => openEditAccount(account)}
-                    className="min-h-11 rounded-xl border border-[#D9E7F4] bg-[#F3F8FF] px-2 text-xs font-bold text-[#2F80ED] transition hover:bg-[#EAF3FC]"
+                    className="min-h-10 rounded-xl border border-[#D9E7F4] bg-white px-3 text-xs font-bold text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:px-4"
                   >
-                    {account.currentEquity == null ? "Nhập giá trị" : "Cập nhật"}
+                    {account.currentEquity == null
+                      ? "Nhập Balance"
+                      : "Cập nhật Balance"}
                   </button>
                   <button
                     type="button"
                     onClick={() => openCreateTransaction(account.id, "deposit")}
-                    className="min-h-11 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700"
+                    className="min-h-10 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 sm:px-4"
                   >
                     Nạp
                   </button>
@@ -1404,7 +1344,7 @@ export default function InvestmentsPage() {
                     onClick={() =>
                       openCreateTransaction(account.id, "withdrawal")
                     }
-                    className="min-h-11 rounded-xl bg-blue-50 px-3 text-xs font-bold text-blue-700"
+                    className="min-h-10 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-200 sm:px-4"
                   >
                     Rút
                   </button>
@@ -1415,7 +1355,10 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5">
+      <div
+        data-ui="forex-history-workstation"
+        className="rounded-3xl border border-[#DCE6EF] bg-white p-4 shadow-[0_6px_18px_rgba(54,83,107,0.06)] sm:rounded-4xl sm:p-5"
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
@@ -1435,68 +1378,93 @@ export default function InvestmentsPage() {
             Chưa có giao dịch nạp/rút.
           </div>
         ) : (
-          <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-[#DCE6EF] sm:mt-4 sm:rounded-3xl">
-            {transactions.slice(0, 30).map((transaction) => {
-              const account = accounts.find(
-                (item) => item.id === transaction.forexAccountId,
-              );
-              const wallet = wallets.find(
-                (item) => item.id === transaction.walletId,
-              );
-              const isDeposit = transaction.type === "deposit";
+          <div className="mt-3 overflow-hidden rounded-2xl border border-[#DCE6EF] sm:mt-4 sm:rounded-3xl">
+            <div className="hidden grid-cols-[110px_minmax(0,1fr)_180px_160px_88px] items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400 md:grid">
+              <span>Loại</span>
+              <span>Tài khoản / Ví</span>
+              <span>Thời gian</span>
+              <span className="text-right">Số tiền</span>
+              <span className="text-right">Thao tác</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {transactions.slice(0, 30).map((transaction) => {
+                const account = accounts.find(
+                  (item) => item.id === transaction.forexAccountId,
+                );
+                const wallet = wallets.find(
+                  (item) => item.id === transaction.walletId,
+                );
+                const isDeposit = transaction.type === "deposit";
 
-              return (
-                <div
-                  key={transaction.id}
-                  className="grid grid-cols-[1fr_auto] items-center gap-3 px-3.5 py-3 sm:flex sm:px-4"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">
-                      {isDeposit ? "Nạp vào Forex" : "Rút từ Forex"}
-                    </p>
-                    <p className="mt-0.5 break-words text-[11px] leading-4 text-[#687E93] sm:text-xs">
-                      {account?.name ?? "Tài khoản đã xóa"} ·{" "}
-                      {wallet?.name ?? "Ví đã xóa"} ·{" "}
-                      {formatTransactionDateTime(transaction)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="text-left sm:text-right">
-                      <p
-                        className={`font-black ${
-                          isDeposit ? "text-emerald-600" : "text-blue-700"
-                        }`}
-                      >
-                        {isDeposit ? "+" : "-"}
-                        {formatMoney(transaction.amount)}
-                      </p>
-                      {(transaction.fee ?? 0) > 0 ? (
-                        <p className="text-xs text-slate-400">
-                          Phí {formatMoney(transaction.fee ?? 0)}
+                return (
+                  <div
+                    key={transaction.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-3 md:grid-cols-[110px_minmax(0,1fr)_180px_160px_88px] md:px-4 md:py-3.5"
+                  >
+                    <div className="min-w-0 md:contents">
+                      <div>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ${
+                            isDeposit
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {isDeposit ? "Nạp" : "Rút"}
+                        </span>
+                      </div>
+                      <div className="mt-2 min-w-0 md:mt-0">
+                        <p className="truncate text-sm font-bold text-slate-800">
+                          {account?.name ?? "Tài khoản đã xóa"}
                         </p>
-                      ) : null}
+                        <p className="mt-0.5 truncate text-[11px] font-medium text-[#7C91A6]">
+                          {wallet?.name ?? "Ví đã xóa"}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-[11px] font-medium text-[#687E93] md:mt-0 md:text-xs">
+                        {formatTransactionDateTime(transaction)}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEditTransaction(transaction)}
-                      aria-label="Sửa giao dịch Forex"
-                      className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] sm:size-10"
-                    >
-                      <Edit3 size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestDeleteTransaction(transaction)}
-                      aria-label="Xóa giao dịch Forex"
-                      className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] hover:text-rose-600 sm:size-10"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+
+                    <div className="flex items-center justify-end gap-2 md:contents">
+                      <div className="text-right">
+                        <p
+                          className={`whitespace-nowrap text-sm font-black tabular-nums ${
+                            isDeposit ? "text-emerald-600" : "text-blue-700"
+                          }`}
+                        >
+                          {isDeposit ? "+" : "-"}
+                          {formatMoney(transaction.amount)}
+                        </p>
+                        {(transaction.fee ?? 0) > 0 ? (
+                          <p className="text-[10px] text-slate-400">
+                            Phí {formatMoney(transaction.fee ?? 0)}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openEditTransaction(transaction)}
+                          aria-label="Sửa giao dịch Forex"
+                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-sky-50 hover:text-sky-600 md:size-9"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => requestDeleteTransaction(transaction)}
+                          aria-label="Xóa giao dịch Forex"
+                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-rose-50 hover:text-rose-600 md:size-9"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1618,7 +1586,7 @@ export default function InvestmentsPage() {
           title={
             accountForm.id ? "Cập nhật tài khoản Forex" : "Thêm tài khoản Forex"
           }
-          description="Nhập giá trị Equity đang hiển thị trên MT4/MT5 hoặc ứng dụng broker để tính lời/lỗ và ROI."
+          description="Nhập Balance đang hiển thị trên Exness, MT4/MT5 hoặc ứng dụng broker để theo dõi Profit."
           onClose={() => !isSaving && setAccountModalOpen(false)}
         >
           <form onSubmit={submitAccount} className="space-y-4">
@@ -1656,7 +1624,7 @@ export default function InvestmentsPage() {
                 }
               />
               <CurrencyField
-                label="Giá trị tài khoản hiện tại (Equity) *"
+                label="Balance hiện tại *"
                 value={accountForm.currentEquity}
                 onChange={(value) =>
                   setAccountForm((current) => ({
@@ -1666,18 +1634,13 @@ export default function InvestmentsPage() {
                 }
               />
               <div className="md:col-span-2 -mt-1 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-700">
-                Nhập số Equity đang hiển thị trên MT4/MT5 hoặc ứng dụng broker.
-                Giá trị được định dạng tự động theo VND.
+                Nhập số Balance đang hiển thị trên Exness, MT4/MT5 hoặc ứng
+                dụng broker. Không dùng giá trị có bao gồm lời/lỗ lệnh đang mở.
                 <span className="font-black">
                   {" "}
-                  Lời/lỗ = Giá trị tài khoản hiện tại - Vốn ròng
+                  Profit = Balance - Tổng nạp + Tổng rút
                 </span>
                 .
-              </div>
-              <div className="md:col-span-2 -mt-1 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-700">
-                Equity là giá trị thực của tài khoản hiện tại, gồm Balance cộng
-                hoặc trừ lời/lỗ đang chạy. Hệ thống dùng:
-                <span className="font-black"> Lời/lỗ = Equity - Vốn ròng</span>.
               </div>
               <label>
                 <span className="mb-1.5 block text-[13px] font-black text-slate-700">
@@ -1961,16 +1924,16 @@ function SummaryCard({
   icon: ReactNode;
 }) {
   const tones = {
-    sky: "border-sky-200 bg-sky-50 text-sky-700",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    blue: "border-blue-200 bg-blue-50 text-blue-700",
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
-    violet: "border-violet-200 bg-violet-50 text-violet-700",
-    rose: "border-rose-200 bg-rose-50 text-rose-700",
+    sky: "border-slate-200 bg-slate-50/70 text-slate-700",
+    emerald: "border-emerald-100 bg-emerald-50/70 text-emerald-700",
+    blue: "border-blue-100 bg-blue-50/70 text-blue-700",
+    amber: "border-amber-100 bg-amber-50/70 text-amber-700",
+    violet: "border-violet-100 bg-violet-50/70 text-violet-700",
+    rose: "border-rose-100 bg-rose-50/70 text-rose-700",
   };
 
   return (
-    <div className={`w-[168px] shrink-0 snap-start rounded-2xl border p-3.5 sm:w-auto sm:rounded-3xl sm:p-4 ${tones[tone]}`}>
+    <div className={`w-[178px] shrink-0 snap-start rounded-2xl border p-3.5 sm:w-auto sm:p-4 ${tones[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.15em] opacity-70">
           {label}
@@ -1990,28 +1953,20 @@ function Metric({
 }: {
   label: string;
   value: string;
-  tone: "emerald" | "blue" | "violet" | "rose";
+  tone: "emerald" | "blue" | "violet" | "rose" | "slate";
 }) {
   const tones = {
     emerald: "bg-emerald-50 text-emerald-700",
     blue: "bg-blue-50 text-blue-700",
     violet: "bg-violet-50 text-violet-700",
     rose: "bg-rose-50 text-rose-700",
+    slate: "bg-slate-50 text-slate-700",
   };
 
   return (
     <div className={`rounded-2xl p-3 ${tones[tone]}`}>
       <p className="text-[9px] font-black uppercase opacity-65">{label}</p>
       <p className="mt-1 whitespace-nowrap text-[12px] font-black tabular-nums sm:text-sm" title={value}>{value}</p>
-    </div>
-  );
-}
-
-function TinyMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[9px] font-black uppercase text-slate-400">{label}</p>
-      <p className="mt-1 whitespace-nowrap text-[11px] font-bold tabular-nums text-[#4E6A82] sm:text-xs" title={value}>{value}</p>
     </div>
   );
 }

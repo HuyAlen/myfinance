@@ -186,11 +186,10 @@ export type ForexAccount = {
   openedAt?: string;
   notes?: string;
   /**
-   * User-entered current account equity (Balance ± running/open P&L), as
-   * shown on the broker's own platform (e.g. MT4/MT5). This is the account's
-   * actual current value — distinct from net capital contributed (deposits
-   * − withdrawals − fees), which is a cost-basis figure. `null`/undefined
-   * when the user hasn't entered it yet.
+   * User-entered broker Balance (for example the Balance shown by Exness or
+   * MT4/MT5), excluding floating/open-position P&L. The persisted field keeps
+   * the legacy `currentEquity` name for storage compatibility; UI and Profit
+   * calculations treat it as Balance. `null`/undefined when not entered yet.
    */
   currentEquity?: number | null;
 };

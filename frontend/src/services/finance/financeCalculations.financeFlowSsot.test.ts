@@ -6,6 +6,7 @@ import type {
 } from "@/src/types/finance";
 import {
   calculateFinanceFlowSnapshot,
+  getForexFeesFromLedger,
   getNetInvestmentAllocationFromLedger,
   getNetSavingAllocationFromLedger,
   getRealExpenseTransactions,
@@ -135,19 +136,21 @@ describe("FINANCE-FLOW-SSOT-1 canonical flow snapshot", () => {
     });
 
     expect(flow.income).toBe(10_000_000);
-    expect(flow.realExpense).toBe(2_000_000);
-    expect(flow.netCashFlow).toBe(8_000_000);
+    expect(flow.realExpense).toBe(2_150_000);
+    expect(flow.realExpenseCount).toBe(3);
+    expect(flow.forexFees).toBe(150_000);
+    expect(flow.netCashFlow).toBe(7_850_000);
 
     expect(flow.transactionSavingAllocation).toBe(1_000_000);
     expect(flow.savingLedgerNet).toBe(2_000_000);
     expect(flow.savingAllocation).toBe(3_000_000);
 
     expect(flow.transactionInvestmentAllocation).toBe(1_500_000);
-    // Deposit consumes 2.1M cash; withdrawal returns 0.45M after its fee.
-    expect(flow.investmentLedgerNet).toBe(1_650_000);
-    expect(flow.investmentAllocation).toBe(3_150_000);
-    expect(flow.futureAllocation).toBe(6_150_000);
-    expect(flow.futureAllocationRate).toBe(61.5);
+    // Investment allocation is broker funding only; transfer fees are real expense.
+    expect(flow.investmentLedgerNet).toBe(1_500_000);
+    expect(flow.investmentAllocation).toBe(3_000_000);
+    expect(flow.futureAllocation).toBe(6_000_000);
+    expect(flow.futureAllocationRate).toBe(60);
   });
 
   it("ignores Savings interest and respects exact date boundaries", () => {
@@ -166,13 +169,13 @@ describe("FINANCE-FLOW-SSOT-1 canonical flow snapshot", () => {
     ).toBe(0);
   });
 
-  it("uses wallet-cash commitment semantics for Forex fees", () => {
-    expect(
-      getNetInvestmentAllocationFromLedger(forexTransactions, {
-        startDate: "2026-08-01",
-        endDate: "2026-08-31",
-      }),
-    ).toBe(1_650_000);
+  it("keeps Forex fees out of investment allocation and reports them separately", () => {
+    const range = { startDate: "2026-08-01", endDate: "2026-08-31" };
+
+    expect(getNetInvestmentAllocationFromLedger(forexTransactions, range)).toBe(
+      1_500_000,
+    );
+    expect(getForexFeesFromLedger(forexTransactions, range)).toBe(150_000);
   });
 
   it("clamps a net de-allocation to zero without hiding its signed ledger movement", () => {

@@ -99,8 +99,9 @@ describe("calculateBalanceSheetSnapshot", () => {
       forexCashTransactions: [forexDeposit],
     });
 
-    // deposit 120k - fee 5k
-    expect(snapshot.forex).toBe(115_000);
+    // Transfer fees are real expenses, not Forex invested capital.
+// With no Balance entered, fallback asset = gross net funding = 120k.
+    expect(snapshot.forex).toBe(120_000);
   });
 
   it("keeps liquid assets narrower than the full balance sheet", () => {

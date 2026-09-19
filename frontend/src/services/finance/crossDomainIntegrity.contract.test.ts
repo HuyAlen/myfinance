@@ -55,7 +55,7 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
     ).toBeGreaterThanOrEqual(4);
   });
 
-  it("centralizes Forex reads/mutations and uses canonical after-fee capital for derived state", () => {
+  it("centralizes Forex reads/mutations and delegates performance/current-asset semantics to one canonical snapshot", () => {
     expect(investments).toContain("getForexAccounts()");
     expect(investments).toContain("getForexCashTransactions()");
     expect(investments).toContain("await addForexCashTransaction(transaction)");
@@ -63,9 +63,9 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
     expect(investments).toContain(
       "await deleteForexCashTransaction(transaction.id)",
     );
-    expect(investments).toContain("const netCashFlow = getForexNetCapital(related);");
-    expect(investments).toContain("getForexAssetValue(accounts, transactions)");
-    expect(investments).toContain("Tổng nạp trừ tổng rút và phí");
+    expect(investments).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
+    expect(investments).toContain("currentExposure: forexPerformance.assetValue");
+    expect(investments).not.toContain("account.currentEquity - netCashFlow");
     expect(investments).toContain(
       '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
     );

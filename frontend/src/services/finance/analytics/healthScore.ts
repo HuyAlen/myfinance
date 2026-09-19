@@ -81,7 +81,10 @@ export function computeHealthScoreV2(
   lookbackMonths = 3,
   forexCashTransactions: ForexCashTransaction[] = [],
   savings: SavingAccount[] = [],
-  forexAccounts: Array<Pick<ForexAccount, "id" | "currentEquity">> = [],
+  forexAccounts: Array<
+    Pick<ForexAccount, "id" | "currentEquity"> &
+      Partial<Pick<ForexAccount, "status">>
+  > = [],
   goalFundingTransactions: Transaction[] = transactions,
 ): HealthScoreV2 {
   const months = lastNMonths(lookbackMonths);

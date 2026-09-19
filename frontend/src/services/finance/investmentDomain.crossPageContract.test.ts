@@ -29,13 +29,13 @@ describe("unified investment domain across UI, balance sheet and AI", () => {
 
   it("gives /investments explicit ownership of both persisted investment sources", () => {
     expect(investmentsPage).toContain("getInvestments()");
-    expect(investmentsPage).toContain("getForexAssetValue(accounts, transactions)");
+    expect(investmentsPage).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
     expect(investmentsPage).toContain("getForexAccounts()");
     expect(investmentsPage).toContain("getForexCashTransactions()");
     expect(investmentsPage).not.toContain('from("forex_accounts")');
     expect(investmentsPage).not.toContain('from("forex_cash_transactions")');
     expect(investmentsPage).toContain("Portfolio");
-    expect(investmentsPage).toContain("Tài khoản & vốn Forex");
+    expect(investmentsPage).toContain("Tài khoản Forex");
   });
 
   it("makes both Portfolio and Forex discoverable through one global investment route", () => {
@@ -53,7 +53,7 @@ describe("unified investment domain across UI, balance sheet and AI", () => {
     expect(calculations).toContain(
       "const totalAssets = cashAndWallets + savings + investments + forex;",
     );
-    expect(calculations).toContain(
+    expect(calculations.replace(/\r\n/g, "\n")).toContain(
       "getForexAssetValue(\n      input.forexAccounts ?? [],",
     );
   });

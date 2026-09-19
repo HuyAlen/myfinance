@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateDashboardSummary,
+  calculateForexPerformanceSnapshot,
   calculateNetWorth,
   getForexAssetValue,
   getForexNetCapital,
@@ -202,39 +203,29 @@ describe("calculateNetWorth (canonical)", () => {
   });
 });
 
-describe("getForexNetCapital (cost-basis figure, NOT the net worth asset value)", () => {
-  it("computes deposits minus withdrawals minus fees", () => {
+describe("getForexNetCapital (gross broker funding, excluding transfer fees)", () => {
+  it("computes deposits minus withdrawals and keeps fees separate", () => {
     const capital = getForexNetCapital([
       forexTx("deposit", 1000, 10),
       forexTx("deposit", 500, 5),
       forexTx("withdrawal", 200, 2),
     ]);
 
-    expect(capital).toBe(1000 + 500 - 200 - (10 + 5 + 2));
+    expect(capital).toBe(1000 + 500 - 200);
   });
 
   it("returns 0 for no transactions", () => {
     expect(getForexNetCapital([])).toBe(0);
   });
 
-  it("ignores negative fee values defensively (treated as 0)", () => {
-    const capital = getForexNetCapital([forexTx("deposit", 1000, -50)]);
-    expect(capital).toBe(1000);
-  });
-
-  it("Test D — a fee is subtracted exactly once per transaction, never accumulated across other transactions or repeated reads", () => {
+  it("never lets fees contaminate invested capital", () => {
     const txA = forexTx("deposit", 1000, 10, "acc-A");
     const txB = forexTx("deposit", 2000, 20, "acc-A");
 
-    // Each transaction's own fee is subtracted once; account total reflects
-    // exactly the sum of the two individual fees, not e.g. 2x either one.
-    expect(getForexNetCapital([txA])).toBe(990);
-    expect(getForexNetCapital([txB])).toBe(1980);
-    expect(getForexNetCapital([txA, txB])).toBe(990 + 1980);
-
-    // Calling it again (as a re-render/re-derivation would) is pure and
-    // idempotent — no hidden accumulation across calls.
-    expect(getForexNetCapital([txA, txB])).toBe(990 + 1980);
+    expect(getForexNetCapital([txA])).toBe(1000);
+    expect(getForexNetCapital([txB])).toBe(2000);
+    expect(getForexNetCapital([txA, txB])).toBe(3000);
+    expect(getForexNetCapital([txA, txB])).toBe(3000);
   });
 });
 
@@ -246,7 +237,7 @@ describe("getForexNetCapitalByAccount", () => {
       forexTx("withdrawal", 200, 5, "acc-A"),
     ]);
 
-    expect(result.get("acc-A")).toBe(1000 - 200 - 5);
+    expect(result.get("acc-A")).toBe(1000 - 200);
     expect(result.get("acc-B")).toBe(500);
   });
 
@@ -276,13 +267,16 @@ describe("getForexAssetValue (canonical Forex net worth input)", () => {
     expect(value).toBe(70_000_000);
   });
 
-  it("falls back to net capital for an account with no equity entered yet, instead of dropping it to 0", () => {
+  it("falls back to gross net funding for an account with no Balance entered yet", () => {
     const value = getForexAssetValue(
       [forexAccount("acc-1", null)],
-      [forexTx("deposit", 100_000_000, 0, "acc-1")],
+      [
+        forexTx("deposit", 100_000_000, 5_000_000, "acc-1"),
+        forexTx("withdrawal", 20_000_000, 1_000_000, "acc-1"),
+      ],
     );
 
-    expect(value).toBe(100_000_000);
+    expect(value).toBe(80_000_000);
   });
 
   it("mixes accounts independently: equity where entered, net capital fallback otherwise", () => {
@@ -299,8 +293,63 @@ describe("getForexAssetValue (canonical Forex net worth input)", () => {
     expect(value).toBe(120_000_000 + 50_000_000);
   });
 
+
+  it("excludes archived accounts from current assets while preserving inactive accounts", () => {
+    const archived = { ...forexAccount("archived", 500_000), status: "archived" as const };
+    const inactive = { ...forexAccount("inactive", 300_000), status: "inactive" as const };
+
+    expect(getForexAssetValue([archived, inactive], [])).toBe(300_000);
+  });
+
+  it("clamps a funding fallback at zero so a current asset cannot become negative", () => {
+    expect(
+      getForexAssetValue(
+        [forexAccount("acc-1", null)],
+        [forexTx("withdrawal", 100_000, 0, "acc-1")],
+      ),
+    ).toBe(0);
+  });
   it("returns 0 for no accounts", () => {
     expect(getForexAssetValue([], [])).toBe(0);
+  });
+});
+
+describe("calculateForexPerformanceSnapshot (FOREX-PERFORMANCE-SSOT-1)", () => {
+  it("keeps transfer fees separate from trading Profit and ROI", () => {
+    const snapshot = calculateForexPerformanceSnapshot(
+      [forexAccount("acc-1", 1_200_000)],
+      [
+        forexTx("deposit", 1_000_000, 100_000, "acc-1"),
+        forexTx("withdrawal", 200_000, 50_000, "acc-1"),
+      ],
+    );
+
+    expect(snapshot.netFunding).toBe(800_000);
+    expect(snapshot.totalFees).toBe(150_000);
+    expect(snapshot.walletCashImpact).toBe(950_000);
+    expect(snapshot.profitLoss).toBe(400_000);
+    expect(snapshot.roi).toBe(50);
+  });
+
+  it("calculates aggregate Profit only from current accounts that have Balance", () => {
+    const snapshot = calculateForexPerformanceSnapshot(
+      [
+        forexAccount("known", 1_200_000),
+        forexAccount("fallback", null),
+        { ...forexAccount("archived", 9_000_000), status: "archived" },
+      ],
+      [
+        forexTx("deposit", 1_000_000, 0, "known"),
+        forexTx("deposit", 2_000_000, 0, "fallback"),
+        forexTx("deposit", 3_000_000, 0, "archived"),
+      ],
+    );
+
+    expect(snapshot.assetValue).toBe(1_200_000 + 2_000_000);
+    expect(snapshot.profitLoss).toBe(200_000);
+    expect(snapshot.accountsUsingFallback).toBe(1);
+    expect(snapshot.hasBalance).toBe(true);
+    expect(snapshot.hasCompleteBalance).toBe(false);
   });
 });
 

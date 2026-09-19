@@ -26,13 +26,11 @@ import type {
 
 import {
   calculateBalanceSheetSnapshot,
+  calculateFinanceFlowSnapshot,
   formatVND,
   getDebtRatio,
   getGoalScore,
-  getSavingRate,
   getSpendingByCategory,
-  getTotalExpense,
-  getTotalIncome,
 } from "@/src/services/finance/financeCalculations";
 
 import { computeHealthScoreV2, type HealthScoreV2 } from "./healthScore";
@@ -151,10 +149,16 @@ function computeMetrics(input: AdvisorInput): AdvisorMetrics {
   });
   const totalAssets = balanceSheet.totalAssets;
   const totalDebt = balanceSheet.totalDebt;
-  const income = getTotalIncome(transactions);
-  const expense = getTotalExpense(transactions, categories);
-  const saving = income - expense;
-  const savingRate = getSavingRate(income, expense);
+  const financeFlow = calculateFinanceFlowSnapshot({
+    transactions,
+    categories,
+    forexCashTransactions,
+  });
+  const income = financeFlow.income;
+  const expense = financeFlow.realExpense;
+  const saving = financeFlow.netCashFlow;
+  const savingRate =
+    income > 0 ? Math.round((saving / income) * 1000) / 10 : 0;
   const debtRatio = getDebtRatio(totalDebt, totalAssets);
   const goalScore = getGoalScore(goals, goalFundingTransactions, savings);
   const spendingByCategory = getSpendingByCategory(transactions, categories);

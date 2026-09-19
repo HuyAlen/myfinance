@@ -26,7 +26,7 @@ import type {
  *
  * The Forex cash-transaction ledger is deliberately PRIMARY, not secondary:
  * `getForexAssetValue` (the canonical current-asset-value calculation) falls
- * back to this ledger's net deposits-withdrawals-fees for any Forex account
+ * back to this ledger's gross net funding (deposits-withdrawals, fees separate) for any Forex account
  * without a manually-entered `currentEquity`. If that ledger were deferred,
  * `calculateDashboardSummary`'s `forexAssetValue` input would be
  * incomplete at the moment `isDashboardReady` flips true, and Net Worth
@@ -132,11 +132,11 @@ describe("Forex fallback correctness feeding calculateDashboardSummary (PERF-1)"
 
     const forexAssetValue = getForexAssetValue(accounts, ledger);
 
-    // A: 400M authoritative. B: 100M - 20M - 5M = 75M fallback. Total 475M.
-    expect(forexAssetValue).toBe(475_000_000);
+    // A: 400M authoritative. B: 100M - 20M = 80M fallback; the 5M fee is a separate expense. Total 480M.
+    expect(forexAssetValue).toBe(480_000_000);
   });
 
-  it("fallback-only case (§18 mandatory): deposit 100M, withdrawal 20M, fee 5M -> 75M", () => {
+  it("fallback-only case (§18 mandatory): deposit 100M, withdrawal 20M, fee 5M -> 80M asset", () => {
     const accounts = [forexAccount("A", null)];
     const ledger = [
       forexTx("A", "deposit", 100_000_000),
@@ -144,7 +144,7 @@ describe("Forex fallback correctness feeding calculateDashboardSummary (PERF-1)"
       forexTx("A", "deposit", 0, 5_000_000),
     ];
 
-    expect(getForexAssetValue(accounts, ledger)).toBe(75_000_000);
+    expect(getForexAssetValue(accounts, ledger)).toBe(80_000_000);
   });
 
   it("all-authoritative-equity case: no ledger needed, both accounts sum directly", () => {
@@ -175,7 +175,7 @@ describe("Forex fallback correctness feeding calculateDashboardSummary (PERF-1)"
       forexTx("B", "deposit", 0, 5_000_000),
     ];
     const forexAssetValue = getForexAssetValue(accounts, ledger);
-    expect(forexAssetValue).toBe(475_000_000); // 400M equity + 75M fallback
+    expect(forexAssetValue).toBe(480_000_000); // 400M Balance + 80M funding fallback
 
     const summary = calculateDashboardSummary({
       wallets,
@@ -188,7 +188,7 @@ describe("Forex fallback correctness feeding calculateDashboardSummary (PERF-1)"
       forexAssetValue,
     });
 
-    // 1,000 + 200 + 300 + 475 - 250 = 1,725 (in millions)
-    expect(summary.netWorth).toBe(1_725_000_000);
+    // 1,000 + 200 + 300 + 480 - 250 = 1,730 (in millions)
+    expect(summary.netWorth).toBe(1_730_000_000);
   });
 });

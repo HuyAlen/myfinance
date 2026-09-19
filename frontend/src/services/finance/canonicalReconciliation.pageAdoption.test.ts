@@ -10,7 +10,7 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
     const source = read("components/dashboard/DashboardPage.tsx");
     expect(source).toContain("calculateFinanceFlowSnapshot({");
     expect(source).toContain("calculateGoalFundingSnapshot({");
-    expect(source).toContain("getForexAssetValue(");
+    expect(source).toContain("calculateForexPerformanceSnapshot(");
     expect(source).toContain("periodFinanceFlow.realExpense");
     expect(source).toContain("periodFinanceFlow.futureAllocation");
   });
@@ -50,7 +50,7 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
     expect(debts).toContain("calculateBalanceSheetSnapshot({");
     expect(debts).toContain("setTotalAssets(balanceSheet.totalAssets)");
     expect(debts).toContain("getDebtRatio(summary.remainingAmount, totalAssets)");
-    expect(investments).toContain("getForexAssetValue(accounts, transactions)");
+    expect(investments).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
     expect(investments).toContain("getInvestments()");
     expect(investments).toContain(
       "portfolioSummary.currentValue + summary.currentExposure",

@@ -63,7 +63,9 @@ describe("CROSSPAGE-REGRESSION-1 canonical reconciliation gate", () => {
     categories: reconciliationCategories,
     goals: reconciliationGoals,
     forexAssetValue: balanceSheet.forex,
-  });
+  
+    forexCashTransactions: reconciliationForexCashTransactions,
+    dateRange: reconciliationPeriod,});
 
   const advisor = runAdvisor({
     wallets: reconciliationWallets,
@@ -114,7 +116,7 @@ describe("CROSSPAGE-REGRESSION-1 canonical reconciliation gate", () => {
     const coveredExpense = budgetRows.reduce((sum, row) => sum + row.spent, 0);
 
     expect(coveredExpense).toBe(reconciliationExpected.budgetCoveredExpense);
-    expect(coveredExpense).toBe(flow.realExpense);
+    expect(coveredExpense).toBe(flow.realExpense - flow.forexFees);
     expect(
       budgetRows.find((row) => row.budgetId === "budget-rent")?.spent,
     ).toBe(5_000_000);
