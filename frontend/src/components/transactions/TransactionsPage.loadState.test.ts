@@ -28,7 +28,7 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
     "const reloadData = useCallback(async () => {",
   );
   const reloadEnd = source.indexOf(
-    "}, [effectiveRange, toast]);",
+    "}, [effectiveRange]);",
     reloadStart,
   );
   const reloadSource = source.slice(reloadStart, reloadEnd);
@@ -42,13 +42,7 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
     expect(reloadStart).toBeGreaterThan(-1);
     expect(reloadEnd).toBeGreaterThan(reloadStart);
 
-    for (const varName of [
-      "txnsResult",
-      "forexAccountsResult",
-      "forexTxnsResult",
-      "catsResult",
-      "walletsResult",
-    ]) {
+    for (const varName of ["txnsResult", "catsResult", "walletsResult"]) {
       expect(reloadSource).toContain(`${varName}.status === "fulfilled"`);
     }
   });
@@ -61,7 +55,7 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
 
   it("a rejected branch never resets its array to [] as a fallback", () => {
     expect(reloadSource).not.toContain("setTransactions([])");
-    expect(reloadSource).not.toContain("setForexAccounts([])");
+
     expect(reloadSource).not.toContain("setCategories([])");
     expect(reloadSource).not.toContain("setWallets([])");
   });

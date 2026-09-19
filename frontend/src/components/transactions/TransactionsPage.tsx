@@ -42,8 +42,6 @@ import {
 
 import type {
   Category,
-  ForexAccount,
-  ForexCashTransaction,
   RecurrenceFrequency,
   Transaction,
   TransactionType,
@@ -52,10 +50,7 @@ import type {
 import {
   addTransaction,
   deleteTransaction,
-  deleteForexCashTransaction,
   getCategories,
-  getForexAccounts,
-  getForexCashTransactionsInRange,
   getTransactionsInRange,
   getWallets,
   updateTransaction,
@@ -80,7 +75,7 @@ import ConfirmDialog, {
 type SortKey = "date" | "amount" | "category" | "wallet";
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "timeline";
-type TransactionDisplayFilter = "all" | TransactionType | "forex";
+type TransactionDisplayFilter = "all" | TransactionType;
 
 type ToastPayload = {
   variant?: "success" | "error" | "info" | "warning";
@@ -149,73 +144,6 @@ function formatDrillDownRangeLabel(startDate: string, endDate: string) {
   const toDisplay = (isoDate: string) =>
     isoDate.split("-").reverse().join("/");
   return `${toDisplay(startDate)} - ${toDisplay(endDate)}`;
-}
-
-type ForexUnifiedTransaction = Transaction & {
-  unifiedSource: "forex_cash";
-  sourceId: string;
-  forexAccountId: string;
-  forexAccountName: string;
-  forexType: "deposit" | "withdrawal";
-  forexFee: number;
-  sourceLabel: string;
-  destinationLabel: string;
-};
-
-function isForexUnifiedTransaction(
-  transaction: Transaction,
-): transaction is ForexUnifiedTransaction {
-  return (
-    (transaction as Partial<ForexUnifiedTransaction>).unifiedSource ===
-    "forex_cash"
-  );
-}
-
-function mapForexCashTransactionToUnified(
-  transaction: ForexCashTransaction,
-  account: ForexAccount | undefined,
-  wallet: Wallet | undefined,
-): ForexUnifiedTransaction {
-  const accountName = account?.name ?? "Tài khoản Forex";
-  const walletName = wallet?.name ?? "Ví";
-  const isDeposit = transaction.type === "deposit";
-  const metadata = transaction as ForexCashTransaction & {
-    createdAt?: string;
-    created_at?: string;
-    updatedAt?: string;
-    updated_at?: string;
-  };
-  const sourceTimestamp =
-    metadata.createdAt ??
-    metadata.created_at ??
-    metadata.updatedAt ??
-    metadata.updated_at ??
-    "";
-
-  return {
-    id: `forex:${transaction.id}`,
-    sourceId: transaction.id,
-    unifiedSource: "forex_cash",
-    forexAccountId: transaction.forexAccountId,
-    forexAccountName: accountName,
-    forexType: transaction.type,
-    forexFee: Math.max(0, transaction.fee ?? 0),
-    sourceLabel: isDeposit ? walletName : accountName,
-    destinationLabel: isDeposit ? accountName : walletName,
-    type: "transfer",
-    amount: transaction.amount,
-    categoryId: "",
-    walletId: transaction.walletId,
-    note:
-      transaction.notes?.trim() ||
-      (isDeposit ? "Nạp tiền vào Forex" : "Rút tiền từ Forex"),
-    date: transaction.transactionDate,
-    ...(sourceTimestamp ? { createdAt: sourceTimestamp } : {}),
-    transferReference: `forex_cash:${transaction.id}`,
-    transferReferenceType: "forex",
-    sourceType: isDeposit ? "wallet" : "forex",
-    destinationType: isDeposit ? "forex" : "wallet",
-  } as ForexUnifiedTransaction;
 }
 
 function getTransactionDateValue(transaction: Transaction) {
@@ -291,10 +219,7 @@ function getTransactionSortTime(transaction: Transaction) {
   if (!dateValue) return 0;
 
   const dateOnly = dateValue.slice(0, 10);
-  const fallbackTime = isForexUnifiedTransaction(transaction)
-    ? "23:59:59.999"
-    : "00:00:00.000";
-  const dateTime = new Date(`${dateOnly}T${fallbackTime}`).getTime();
+  const dateTime = new Date(`${dateOnly}T00:00:00.000`).getTime();
   return Number.isFinite(dateTime) ? dateTime : 0;
 }
 
@@ -387,7 +312,6 @@ function getCompactCategoryName(category?: Category) {
 }
 
 function getTransactionDisplayType(transaction: Transaction) {
-  if (isForexUnifiedTransaction(transaction)) return "forex";
   return isInternalTransferTransaction(transaction)
     ? "transfer"
     : transaction.type;
@@ -396,13 +320,13 @@ function getTransactionDisplayType(transaction: Transaction) {
 function getTransactionAccentClass(transaction: Transaction) {
   const displayType = getTransactionDisplayType(transaction);
   if (displayType === "income") return "border-l-emerald-400";
-  if (displayType === "forex") return "border-l-cyan-400";
+
   if (displayType === "transfer") return "border-l-indigo-400";
   return "border-l-rose-400";
 }
 
 function getTransactionAmountPrefix(transaction: Transaction) {
-  if (isForexUnifiedTransaction(transaction)) return "⇄";
+
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") return "+";
@@ -415,7 +339,7 @@ function getTransactionAmountPrefix(transaction: Transaction) {
 }
 
 function getTransactionAmountColorClass(transaction: Transaction) {
-  if (isForexUnifiedTransaction(transaction)) return "text-cyan-600";
+
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") return "text-emerald-600";
@@ -429,8 +353,7 @@ function getTransactionAmountColorClass(transaction: Transaction) {
 }
 
 function getInternalTransferTurnoverAmount(transaction: Transaction) {
-  return isInternalTransferTransaction(transaction) ||
-    isForexUnifiedTransaction(transaction)
+  return isInternalTransferTransaction(transaction)
     ? Math.abs(transaction.amount)
     : 0;
 }
@@ -442,10 +365,6 @@ function getSignedAmountText(amount: number) {
 }
 
 function getTransactionDisplayNote(transaction: Transaction) {
-  if (isForexUnifiedTransaction(transaction)) {
-    return transaction.note;
-  }
-
   const savingKind = getSavingTransferKind(transaction);
   const note = transaction.note.trim();
   const normalizedNote = normalizeTransactionNote(note);
@@ -481,14 +400,6 @@ function getTransferWalletLabel(
   sourceWalletName?: string,
   destinationWalletName?: string,
 ) {
-  if (isForexUnifiedTransaction(transaction)) {
-    return {
-      from: transaction.sourceLabel,
-      to: transaction.destinationLabel,
-      title: `${transaction.sourceLabel} → ${transaction.destinationLabel}`,
-    };
-  }
-
   const savingKind = getSavingTransferKind(transaction);
 
   if (savingKind === "deposit") {
@@ -515,8 +426,7 @@ function getTransferWalletLabel(
   };
 }
 
-// Bursts of realtime events from a single multi-table write (e.g. a Forex
-// deposit touching both forex_cash_transactions and wallets) are coalesced
+// Bursts of realtime events from a single multi-table write are coalesced
 // within this window instead of triggering one reload per event.
 const REALTIME_REFRESH_DEBOUNCE_MS = 100;
 
@@ -571,10 +481,6 @@ export default function TransactionsPage() {
     [urlTransactionsContext, filterLabel],
   );
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [forexAccounts, setForexAccounts] = useState<ForexAccount[]>([]);
-  const [forexCashTransactions, setForexCashTransactions] = useState<
-    ForexCashTransaction[]
-  >([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   // FINANCE-DATA-1B: "Chưa có giao dịch" is a legitimate-empty-ledger
@@ -672,28 +578,13 @@ export default function TransactionsPage() {
     console.info(message);
   }, []);
 
-  // FINANCE-DATA-1: getTransactionsInRange/getCategories/getWallets now
-  // reject on a genuine query failure instead of silently resolving to []
-  // — Promise.allSettled always reaches this point regardless, so each
-  // branch is only applied to state when it actually FULFILLED. Previously
-  // a rejected branch defaulted to [] and was applied unconditionally,
-  // which would have overwritten a previously-loaded good value with an
-  // empty one on failure (already latent for the two Forex calls, which
-  // could already reject before this patch; now also reachable for
-  // transactions/categories/wallets). Fixed uniformly across all five
-  // branches: only set state on fulfillment, always log on rejection.
+  // FINANCE-DATA-1: a rejected read never overwrites last-known-good state
+  // with an empty array. Transactions owns only the ordinary transaction
+  // ledger; investment cash history belongs exclusively to Investments.
   const reloadData = useCallback(async () => {
     const { startDate, endDate } = effectiveRange;
-    const [
-      txnsResult,
-      forexAccountsResult,
-      forexTxnsResult,
-      catsResult,
-      walletsResult,
-    ] = await Promise.allSettled([
+    const [txnsResult, catsResult, walletsResult] = await Promise.allSettled([
       getTransactionsInRange(startDate, endDate),
-      getForexAccounts(),
-      getForexCashTransactionsInRange(startDate, endDate),
       getCategories(),
       getWallets(),
     ]);
@@ -712,28 +603,6 @@ export default function TransactionsPage() {
     }
     setIsLoadingTransactions(false);
 
-    if (forexAccountsResult.status === "fulfilled") {
-      setForexAccounts(forexAccountsResult.value);
-    } else {
-      console.error(
-        "[TransactionsPage] Failed to load Forex accounts",
-        forexAccountsResult.reason,
-      );
-    }
-
-    if (forexTxnsResult.status === "fulfilled") {
-      setForexCashTransactions(forexTxnsResult.value);
-    } else {
-      console.error(
-        "[TransactionsPage] Failed to load Forex cash transactions",
-        forexTxnsResult.reason,
-      );
-      toast({
-        variant: "error",
-        message: "Không thể tải lịch sử Forex Cash. Vui lòng tải lại trang.",
-      });
-    }
-
     if (catsResult.status === "fulfilled") {
       setCategories(catsResult.value);
     } else {
@@ -751,8 +620,7 @@ export default function TransactionsPage() {
         walletsResult.reason,
       );
     }
-  }, [effectiveRange, toast]);
-
+  }, [effectiveRange]);
   // ── Reload coordinator ──────────────────────────────────────────────────
   // `reloadData`'s identity changes with `effectiveRange`. `latestReloadDataRef`
   // always points at the current one so a reload that was already in flight
@@ -822,13 +690,7 @@ export default function TransactionsPage() {
     };
   }, []);
   useRealtimeTable(
-    [
-      "transactions",
-      "wallets",
-      "categories",
-      "forex_accounts",
-      "forex_cash_transactions",
-    ],
+    ["transactions", "wallets", "categories"],
     requestTransactionsRefresh,
   );
 
@@ -840,25 +702,8 @@ export default function TransactionsPage() {
     () => new Map(wallets.map((wallet) => [wallet.id, wallet])),
     [wallets],
   );
-  const forexAccountById = useMemo(
-    () => new Map(forexAccounts.map((account) => [account.id, account])),
-    [forexAccounts],
-  );
-
-  const unifiedTransactions = useMemo(() => {
-    const forexItems = forexCashTransactions.map((transaction) =>
-      mapForexCashTransactionToUnified(
-        transaction,
-        forexAccountById.get(transaction.forexAccountId),
-        walletById.get(transaction.walletId),
-      ),
-    );
-
-    return [...transactions, ...forexItems];
-  }, [transactions, forexCashTransactions, forexAccountById, walletById]);
-
   const filtered = useMemo(() => {
-    return unifiedTransactions.filter((t) => {
+    return transactions.filter((t) => {
       // TXN-CORRECTNESS-1: defensive re-check against the actual effective
       // period (not a hardcoded "month" prefix match) — the fetch is
       // already scoped to this same range, but keeping this guard means a
@@ -885,17 +730,12 @@ export default function TransactionsPage() {
           ? "thu nhập income thu"
           : displayType === "expense"
             ? "chi tiêu expense chi"
-            : displayType === "forex"
-              ? "forex cash nạp rút tài khoản forex"
-              : "chuyển khoản chuyển tiền nội bộ transfer";
+            : "chuyển khoản chuyển tiền nội bộ transfer";
       const searchText = [
         t.note,
         cat?.name,
         wal?.name,
         dstWal?.name,
-        isForexUnifiedTransaction(t) ? t.forexAccountName : "",
-        isForexUnifiedTransaction(t) ? t.sourceLabel : "",
-        isForexUnifiedTransaction(t) ? t.destinationLabel : "",
         t.date,
         typeLabel,
         String(t.amount),
@@ -921,7 +761,7 @@ export default function TransactionsPage() {
       return true;
     });
   }, [
-    unifiedTransactions,
+    transactions,
     effectiveRange,
     categoryById,
     walletById,
@@ -992,11 +832,7 @@ export default function TransactionsPage() {
   const internalTransferTurnover = useMemo(
     () =>
       filtered
-        .filter(
-          (transaction) =>
-            isInternalTransferTransaction(transaction) ||
-            isForexUnifiedTransaction(transaction),
-        )
+        .filter((transaction) => isInternalTransferTransaction(transaction))
         .reduce(
           (sum, transaction) =>
             sum + getInternalTransferTurnoverAmount(transaction),
@@ -1006,11 +842,8 @@ export default function TransactionsPage() {
   );
   const transferCount = useMemo(
     () =>
-      filtered.filter(
-        (transaction) =>
-          isInternalTransferTransaction(transaction) ||
-          isForexUnifiedTransaction(transaction),
-      ).length,
+      filtered.filter((transaction) => isInternalTransferTransaction(transaction))
+        .length,
     [filtered],
   );
 
@@ -1195,24 +1028,6 @@ export default function TransactionsPage() {
         let failureMessage: string | null = null;
 
         for (const id of idsToDelete) {
-          const unifiedTransaction = unifiedTransactions.find(
-            (item) => item.id === id,
-          );
-          if (
-            unifiedTransaction &&
-            isForexUnifiedTransaction(unifiedTransaction)
-          ) {
-            const { error } = await deleteForexCashTransaction(
-              unifiedTransaction.sourceId,
-            );
-            if (error) {
-              failureMessage = "Lỗi xóa giao dịch Forex: " + error;
-              break;
-            }
-            succeededIds.push(id);
-            continue;
-          }
-
           const transaction = transactions.find((item) => item.id === id);
           if (transaction?.type === "transfer") {
             const balanceResult = await applyTransferWalletBalance(
@@ -1282,22 +1097,14 @@ export default function TransactionsPage() {
           : "";
         return [
           t.date,
-          isForexUnifiedTransaction(t)
-            ? t.forexType === "deposit"
-              ? "Nạp Forex"
-              : "Rút Forex"
-            : t.type === "income"
-              ? "Thu"
-              : t.type === "transfer"
-                ? "Chuyển"
-                : "Chi",
+          t.type === "income"
+            ? "Thu"
+            : t.type === "transfer"
+              ? "Chuyển"
+              : "Chi",
           t.note,
           cat,
-          isForexUnifiedTransaction(t)
-            ? `${t.sourceLabel} -> ${t.destinationLabel}`
-            : t.type === "transfer" && dstWal
-              ? wal + " -> " + dstWal
-              : wal,
+          t.type === "transfer" && dstWal ? wal + " -> " + dstWal : wal,
           String(t.amount),
         ];
       }),
@@ -1424,14 +1231,6 @@ export default function TransactionsPage() {
   }, [searchParams]);
 
   function openEditForm(t: Transaction) {
-    if (isForexUnifiedTransaction(t)) {
-      toast({
-        variant: "info",
-        message: "Hãy chỉnh sửa giao dịch Forex tại trang Đầu tư.",
-      });
-      return;
-    }
-
     if (isSavingsManagedTransaction(t)) {
       toast({
         variant: "info",
@@ -1718,28 +1517,6 @@ export default function TransactionsPage() {
         "Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa khỏi tài khoản của bạn.",
       variant: "danger",
       onConfirm: async () => {
-        const unifiedTransaction = unifiedTransactions.find(
-          (item) => item.id === id,
-        );
-        if (
-          unifiedTransaction &&
-          isForexUnifiedTransaction(unifiedTransaction)
-        ) {
-          const { error } = await deleteForexCashTransaction(
-            unifiedTransaction.sourceId,
-          );
-          if (error) {
-            toast({
-              variant: "error",
-              message: "Lỗi xóa giao dịch Forex: " + error,
-            });
-            return;
-          }
-          toast({ variant: "success", message: "Đã xóa giao dịch Forex." });
-          await runReload();
-          return;
-        }
-
         const transaction = transactions.find((item) => item.id === id);
         let balanceResult:
           | { error: string | null; previousWallets: Wallet[] }
@@ -2010,7 +1787,7 @@ export default function TransactionsPage() {
 
             {/* Type filter pills — color-coded */}
             <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 scrollbar-none">
-              {(["all", "income", "expense", "transfer", "forex"] as const).map(
+              {(["all", "income", "expense", "transfer"] as const).map(
                 (t) => (
                   <button
                     key={t}
@@ -2022,9 +1799,7 @@ export default function TransactionsPage() {
                           ? "bg-emerald-500 text-white shadow-sm"
                           : t === "expense"
                             ? "bg-rose-500 text-white shadow-sm"
-                            : t === "forex"
-                              ? "bg-cyan-600 text-white shadow-sm"
-                              : "bg-blue-600 text-white shadow-sm"
+                            : "bg-blue-600 text-white shadow-sm"
                         : "text-slate-500 hover:text-slate-800")
                     }
                   >
@@ -2034,9 +1809,7 @@ export default function TransactionsPage() {
                         ? "Thu"
                         : t === "transfer"
                           ? "Chuyển"
-                          : t === "forex"
-                            ? "Forex"
-                            : "Chi"}
+                          : "Chi"}
                   </button>
                 ),
               )}
@@ -2117,9 +1890,7 @@ export default function TransactionsPage() {
                       ? "Thu nhập"
                       : typeFilter === "transfer"
                         ? "Chuyển tiền"
-                        : typeFilter === "forex"
-                          ? "Forex Cash"
-                          : "Chi tiêu"
+                        : "Chi tiêu"
                   }
                   onRemove={() => setTypeFilter("all")}
                   color={
@@ -2127,9 +1898,7 @@ export default function TransactionsPage() {
                       ? "emerald"
                       : typeFilter === "transfer"
                         ? "slate"
-                        : typeFilter === "forex"
-                          ? "blue"
-                          : "rose"
+                        : "rose"
                   }
                 />
               )}
@@ -2413,8 +2182,7 @@ export default function TransactionsPage() {
                 const dayTransferTurnover = txns
                   .filter(
                     (transaction) =>
-                      isInternalTransferTransaction(transaction) ||
-                      isForexUnifiedTransaction(transaction),
+                      isInternalTransferTransaction(transaction),
                   )
                   .reduce(
                     (sum, transaction) =>
@@ -2498,9 +2266,7 @@ export default function TransactionsPage() {
                         const isSwiped = swipedId === t.id;
                         const displayType = getTransactionDisplayType(t);
                         const isIncome = displayType === "income";
-                        const isForex = displayType === "forex";
-                        const isTransfer =
-                          displayType === "transfer" || isForex;
+                        const isTransfer = displayType === "transfer";
                         const categoryLabel = getCompactCategoryName(cat);
 
                         return (
@@ -2576,11 +2342,9 @@ export default function TransactionsPage() {
                                     "flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm sm:size-11 sm:rounded-2xl " +
                                     (isIncome
                                       ? "bg-emerald-100 text-emerald-600"
-                                      : isForex
-                                        ? "bg-cyan-100 text-cyan-700"
-                                        : isTransfer
-                                          ? "bg-indigo-100 text-indigo-600"
-                                          : "bg-rose-100 text-rose-600")
+                                      : isTransfer
+                                        ? "bg-indigo-100 text-indigo-600"
+                                        : "bg-rose-100 text-rose-600")
                                   }
                                 >
                                   {isIncome ? (
@@ -2621,7 +2385,7 @@ export default function TransactionsPage() {
                               <div className="hidden lg:block">
                                 {isTransfer ? (
                                   <span className="inline-flex max-w-full items-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
-                                    {isForex ? "Forex Cash" : "Chuyển tiền"}
+                                    Chuyển tiền
                                   </span>
                                 ) : (
                                   <span
@@ -2811,9 +2575,7 @@ export default function TransactionsPage() {
                       : undefined;
                     const displayType = getTransactionDisplayType(t);
                     const isIncome = displayType === "income";
-                    const isForexRow = displayType === "forex";
-                    const isTransferRow =
-                      displayType === "transfer" || isForexRow;
+                    const isTransferRow = displayType === "transfer";
                     return (
                       <div
                         key={t.id}
@@ -2824,11 +2586,9 @@ export default function TransactionsPage() {
                             "flex size-10 shrink-0 items-center justify-center rounded-2xl " +
                             (isIncome
                               ? "bg-emerald-100 text-emerald-600"
-                              : isForexRow
-                                ? "bg-cyan-100 text-cyan-700"
-                                : isTransferRow
-                                  ? "bg-blue-100 text-blue-600"
-                                  : "bg-rose-100 text-rose-600")
+                              : isTransferRow
+                                ? "bg-blue-100 text-blue-600"
+                                : "bg-rose-100 text-rose-600")
                           }
                         >
                           {isIncome ? (

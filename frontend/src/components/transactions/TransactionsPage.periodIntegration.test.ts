@@ -119,7 +119,7 @@ describe("TransactionsPage wiring: effective range consumed consistently (source
     const start = source.indexOf(
       "const reloadData = useCallback(async () => {",
     );
-    const end = source.indexOf("}, [effectiveRange, toast]);", start);
+    const end = source.indexOf("}, [effectiveRange]);", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const reloadSource = source.slice(start, end);
@@ -127,13 +127,8 @@ describe("TransactionsPage wiring: effective range consumed consistently (source
     expect(reloadSource).toContain(
       "const { startDate, endDate } = effectiveRange;",
     );
-    // Both the primary transactions read and the Forex cash read must
-    // share the exact same resolved range — no independent/mismatched
-    // period for the merged Forex cash data (see §23 of the brief).
     expect(reloadSource).toContain("getTransactionsInRange(startDate, endDate)");
-    expect(reloadSource).toContain(
-      "getForexCashTransactionsInRange(startDate, endDate)",
-    );
+    expect(reloadSource).not.toContain("getForexCashTransactionsInRange");
   });
 
   it("the main load-trigger effect re-fetches on effectiveRange change, not a stale selectedMonth", () => {
