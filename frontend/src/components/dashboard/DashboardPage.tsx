@@ -2800,8 +2800,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Mobile uses a flatter financial breakdown instead of visually
-              heavy nested cards; desktop keeps a familiar 5-column layout. */}
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-5">
+              heavy nested cards; desktop uses a balanced 4-column layout. */}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-4">
             <HeroMini
               icon={<Wallet size={16} />}
               iconClass="bg-[#EAF3FC] text-[#2F80ED]"
@@ -2819,18 +2819,10 @@ export default function DashboardPage() {
               isLoading={!isDashboardReady}
             />
             <HeroMini
-              icon={<Landmark size={16} />}
-              iconClass="bg-[#EAF3FC] text-[#2F80ED]"
-              label="Vốn Forex"
-              value={formatVND(forexSnapshot.balance)}
-              valueClass="text-[#3F5F79]"
-              isLoading={!isDashboardReady}
-            />
-            <HeroMini
               icon={<Briefcase size={16} />}
               iconClass="bg-[#EAF3FC] text-[#2F80ED]"
-              label="Đầu tư khác"
-              value={formatVND(summary.investmentAssets)}
+              label="Đầu tư"
+              value={formatVND(forexSnapshot.assetValue + summary.investmentAssets)}
               valueClass="text-[#3F5F79]"
               isLoading={!isDashboardReady}
             />
@@ -2840,7 +2832,6 @@ export default function DashboardPage() {
               label="Nợ phải trả"
               value={formatVND(summary.totalDebt)}
               valueClass={summary.totalDebt > 0 ? "text-rose-500" : "text-[#3F5F79]"}
-              className="col-span-2 sm:col-span-1"
               isLoading={!isDashboardReady}
             />
           </div>

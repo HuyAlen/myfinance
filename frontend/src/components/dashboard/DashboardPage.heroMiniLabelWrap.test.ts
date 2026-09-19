@@ -83,7 +83,7 @@ describe("DashboardPage HeroMini mobile label — compact single-line contract",
     expect(heroMiniSource).toContain("p-3");
     expect(heroMiniSource).toContain("size-7 shrink-0");
     expect(source).toContain(
-      "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-5",
+      "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-4",
     );
   });
 
@@ -92,16 +92,33 @@ describe("DashboardPage HeroMini mobile label — compact single-line contract",
     expect(heroMiniSource).toContain('<div className="min-w-0 flex-1">');
   });
 
-  it("keeps all five canonical HeroMini values wired to the same business data", () => {
-    expect(source).toContain('label="Thanh khoản"');
-    expect(source).toContain("value={formatVND(summary.liquidBalance)}");
-    expect(source).toContain('label="Tiết kiệm"');
-    expect(source).toContain("value={formatVND(savingsSnapshot.totalSavings)}");
-    expect(source).toContain('label="Vốn Forex"');
-    expect(source).toContain("value={formatVND(forexSnapshot.balance)}");
-    expect(source).toContain('label="Đầu tư khác"');
-    expect(source).toContain("value={formatVND(summary.investmentAssets)}");
-    expect(source).toContain('label="Nợ phải trả"');
-    expect(source).toContain("value={formatVND(summary.totalDebt)}");
+  it("keeps four canonical HeroMini buckets use unified investment wiring", () => {
+    const heroStart = source.indexOf(
+      "Mobile uses a flatter financial breakdown",
+    );
+    const heroEnd = source.indexOf(
+      'data-dashboard-surface="networth-history"',
+      heroStart,
+    );
+
+    expect(heroStart).toBeGreaterThan(-1);
+    expect(heroEnd).toBeGreaterThan(heroStart);
+
+    const heroSource = source.slice(heroStart, heroEnd);
+    expect(heroSource).toContain('label="Thanh khoản"');
+    expect(heroSource).toContain("value={formatVND(summary.liquidBalance)}");
+    expect(heroSource).toContain('label="Tiết kiệm"');
+    expect(heroSource).toContain("value={formatVND(savingsSnapshot.totalSavings)}");
+    expect(heroSource).toContain(
+      "value={formatVND(forexSnapshot.assetValue + summary.investmentAssets)}",
+    );
+    expect(heroSource).not.toContain(
+      "value={formatVND(forexSnapshot.balance)}",
+    );
+    expect(heroSource).not.toContain(
+      "value={formatVND(summary.investmentAssets)}",
+    );
+    expect(heroSource).toContain('label="Nợ phải trả"');
+    expect(heroSource).toContain("value={formatVND(summary.totalDebt)}");
   });
 });

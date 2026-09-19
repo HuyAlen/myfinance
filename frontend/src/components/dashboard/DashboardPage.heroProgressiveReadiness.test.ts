@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * this project (see AGENTS.md), matching the existing pattern in
  * DashboardPage.actionCenterReadiness.test.ts.
  *
- * The PERF-4 audit found the Net Worth Hero treated its headline, 5 asset-
+ * The PERF-4 audit found the Net Worth Hero treated its headline, 4 asset-
  * category buckets, period comparison, and trend chart as one all-or-
  * nothing unit gated by `heroReady` (isDashboardReady && cashFlowReady) —
  * even though the headline/buckets are computed purely from the Net Worth
@@ -81,11 +81,11 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
     expect(badgeTextIdx).toBeGreaterThan(badgeGateIdx);
   });
 
-  it("all 5 HeroMinis (asset-category buckets) use isLoading={!isDashboardReady} — zero remaining isLoading={!heroReady}", () => {
+  it("all 4 HeroMinis (asset-category buckets) use isLoading={!isDashboardReady} — zero remaining isLoading={!heroReady}", () => {
     const occurrencesNew =
       source.split("isLoading={!isDashboardReady}").length - 1;
     const occurrencesOld = source.split("isLoading={!heroReady}").length - 1;
-    expect(occurrencesNew).toBe(5);
+    expect(occurrencesNew).toBe(4);
     expect(occurrencesOld).toBe(0);
   });
 });

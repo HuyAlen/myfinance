@@ -70,17 +70,19 @@ describe("DashboardPage HeroMini mobile KPI professional density", () => {
     expect(heroMiniSource).toContain("sm:mt-1 sm:h-3.5");
   });
 
-  it("keeps the two-column mobile / three-column tablet / five-column desktop grid", () => {
+  it("keeps the two-column mobile / three-column tablet / four-column desktop grid", () => {
     expect(source).toContain(
-      "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-5",
+      "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-4",
     );
   });
 
-  it("keeps all five HeroMini cards wired to the original financial values", () => {
+  it("keeps all four HeroMini cards wired to the canonical financial values", () => {
     expect(source).toContain("value={formatVND(summary.liquidBalance)}");
     expect(source).toContain("value={formatVND(savingsSnapshot.totalSavings)}");
-    expect(source).toContain("value={formatVND(forexSnapshot.balance)}");
-    expect(source).toContain("value={formatVND(summary.investmentAssets)}");
+    expect(source).toContain(
+      "value={formatVND(forexSnapshot.assetValue + summary.investmentAssets)}",
+    );
+
     expect(source).toContain("value={formatVND(summary.totalDebt)}");
   });
 

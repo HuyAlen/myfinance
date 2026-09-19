@@ -66,7 +66,7 @@ describe("DASH-COLOR-POLISH-1.1 refined light financial palette", () => {
 
   it("uses one restrained blue icon family for HeroMini assets", () => {
     const blueIcons = source.split('iconClass="bg-[#EAF3FC] text-[#2F80ED]"').length - 1;
-    expect(blueIcons).toBe(5);
+    expect(blueIcons).toBe(4);
     expect(source).not.toContain('iconClass="bg-emerald-50 text-emerald-600"');
     expect(source).not.toContain('iconClass="bg-violet-50 text-violet-600"');
     expect(source).not.toContain('iconClass="bg-amber-50 text-amber-600"');
