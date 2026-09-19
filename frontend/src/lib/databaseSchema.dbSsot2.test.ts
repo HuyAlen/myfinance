@@ -11,7 +11,7 @@ const verification = readFileSync(
 const restoreMigration = readFileSync(
   path.join(
     repoRoot,
-    "frontend/supabase/settings-recovery-integrity-1-backup-restore-guard.sql",
+    "frontend/supabase/forex-balance-asof-crosspage-1.sql",
   ),
   "utf8",
 );
@@ -93,6 +93,7 @@ describe("DB-SSOT-2 canonical recovery and cross-domain RPC parity", () => {
     for (const table of [
       "public.saving_transactions",
       "public.forex_cash_transactions",
+      "public.forex_balance_snapshots",
       "public.transactions",
       "public.budgets",
       "public.categories",

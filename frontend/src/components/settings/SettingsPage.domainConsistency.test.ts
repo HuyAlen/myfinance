@@ -21,8 +21,8 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup, stats and domain coverage", () =
     expect(source).not.toContain("backup MyFinance V2");
   });
 
-  it("keeps V2 compatibility copy distinct from the current V3 export contract", () => {
-    expect(source).toContain("Backup V2 hợp lệ vẫn được hỗ trợ");
+  it("keeps V2/V3 compatibility copy distinct from the current V4 export contract", () => {
+    expect(source).toContain("Backup V2/V3 hợp lệ vẫn được hỗ trợ");
     expect(source).toContain("backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn");
   });
 
@@ -72,6 +72,8 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup, stats and domain coverage", () =
     for (const label of ["Ngân sách", "Đầu tư", "Tiết kiệm", "Forex"]) {
       expect(dataSection).toContain(label);
     }
+    expect(dataSection).toContain("lịch sử Balance Forex");
+    expect(dataSection).toContain("lịch sử Balance Forex");
     expect(dataSection).toContain("lịch sử Net Worth");
   });
 });

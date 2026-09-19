@@ -51,7 +51,7 @@ import {
   resetFinanceDemoData,
   restoreFinanceBackup,
   validateFinanceBackup,
-  type FinanceBackupV3,
+  type FinanceBackupV4,
 } from "@/src/services/finance/financeStorage";
 import {
   deleteAIFinanceApiKey,
@@ -661,7 +661,7 @@ export default function SettingsPage() {
     }
   }
 
-  function requestBackupRestore(backup: FinanceBackupV3, fileName: string) {
+  function requestBackupRestore(backup: FinanceBackupV4, fileName: string) {
     setPendingAction({
       title: "Khôi phục backup?",
       description:
@@ -2030,7 +2030,7 @@ export default function SettingsPage() {
                     Export JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Tải snapshot MyFinance V{FINANCE_BACKUP_VERSION} đầy đủ cho Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex và lịch sử Net Worth.
+                    Tải snapshot MyFinance V{FINANCE_BACKUP_VERSION} đầy đủ cho Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex, lịch sử Balance Forex và lịch sử Net Worth.
                   </p>
                   <button
                     onClick={handleExportJson}
@@ -2050,7 +2050,7 @@ export default function SettingsPage() {
                     Import JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Khôi phục atomically từ backup MyFinance V{FINANCE_BACKUP_VERSION}. Backup V2 hợp lệ vẫn được hỗ trợ; backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn.
+                    Khôi phục atomically từ backup MyFinance V{FINANCE_BACKUP_VERSION}. Backup V2/V3 hợp lệ vẫn được hỗ trợ; backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn.
                   </p>
                   <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-[.98]">
                     <Upload size={13} />

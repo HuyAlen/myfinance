@@ -21,7 +21,7 @@ const {
 
 type Backup = {
   format: "myfinance-backup";
-  version: 3;
+  version: 4;
   exported_at: string;
   data: Record<string, Array<Record<string, unknown>>>;
 };
@@ -29,7 +29,7 @@ type Backup = {
 function makeBackup(): Backup {
   return {
     format: "myfinance-backup",
-    version: 3,
+    version: 4,
     exported_at: "2026-08-28T08:00:00.000Z",
     data: Object.fromEntries(
       FINANCE_BACKUP_DOMAINS.map((domain: string, index: number) => [
@@ -69,7 +69,7 @@ function makeReceipt(
   return {
     restored: true,
     ...(verified ? { verified: true } : {}),
-    source_version: 3,
+    source_version: 4,
     counts,
   };
 }

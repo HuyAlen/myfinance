@@ -43,7 +43,7 @@ function makeRestoreReceipt(backup: { data: Record<string, unknown[]> }) {
   return {
     restored: true,
     verified: true,
-    source_version: 3,
+    source_version: 4,
     counts,
   };
 }
@@ -75,7 +75,7 @@ describe("NETWORTH-HISTORY-1 clear/reset integrity", () => {
       expect.objectContaining({
         p_backup: expect.objectContaining({
           format: "myfinance-backup",
-          version: 3,
+          version: 4,
         }),
       }),
     );
@@ -119,6 +119,7 @@ describe("NETWORTH-HISTORY-1 clear/reset integrity", () => {
     expect(backup.data.forex_accounts).toEqual([]);
     expect(backup.data.forex_cash_transactions).toEqual([]);
     expect(backup.data.net_worth_snapshots).toEqual([]);
+    expect(backup.data.forex_balance_snapshots).toEqual([]);
 
     for (const domain of [
       "wallets",

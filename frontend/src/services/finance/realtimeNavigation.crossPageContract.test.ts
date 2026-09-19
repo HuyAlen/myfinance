@@ -26,6 +26,7 @@ describe("REALTIME-NAV-INTEGRITY-1 cross-page contract", () => {
       '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
     );
     expect(source).not.toContain('supabase.channel("investments-domain-page")');
+
   });
 
   it("Wallet and Saving builders remain entity-focus links, not page-local filter contracts", () => {

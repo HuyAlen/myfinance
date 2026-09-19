@@ -61,7 +61,8 @@ const ERR_NO_AUTH = "Không có phiên đăng nhập. Vui lòng đăng nhập l�
 // ─── NETWORTH-HISTORY-1 / FINANCE-DATA-2 backup contract ────────────────────
 
 export const FINANCE_BACKUP_FORMAT = "myfinance-backup" as const;
-export const FINANCE_BACKUP_VERSION = 3 as const;
+export const FINANCE_BACKUP_VERSION = 4 as const;
+export const FINANCE_BACKUP_V3_VERSION = 3 as const;
 export const FINANCE_BACKUP_V2_VERSION = 2 as const;
 export const FINANCE_BACKUP_V2_DOMAINS = [
   "wallets",
@@ -76,15 +77,24 @@ export const FINANCE_BACKUP_V2_DOMAINS = [
   "forex_accounts",
   "forex_cash_transactions",
 ] as const;
-export const FINANCE_BACKUP_DOMAINS = [
+export const FINANCE_BACKUP_V3_DOMAINS = [
   ...FINANCE_BACKUP_V2_DOMAINS,
   "net_worth_snapshots",
 ] as const;
+export const FINANCE_BACKUP_DOMAINS = [
+  ...FINANCE_BACKUP_V3_DOMAINS,
+  "forex_balance_snapshots",
+] as const;
 
 export type FinanceBackupDomain = (typeof FINANCE_BACKUP_DOMAINS)[number];
+export type FinanceBackupV3Domain = (typeof FINANCE_BACKUP_V3_DOMAINS)[number];
 export type FinanceBackupV2Domain = (typeof FINANCE_BACKUP_V2_DOMAINS)[number];
 export type FinanceBackupRow = Record<string, unknown>;
 export type FinanceBackupData = Record<FinanceBackupDomain, FinanceBackupRow[]>;
+export type FinanceBackupV3Data = Record<
+  FinanceBackupV3Domain,
+  FinanceBackupRow[]
+>;
 export type FinanceBackupV2Data = Record<
   FinanceBackupV2Domain,
   FinanceBackupRow[]
@@ -99,13 +109,20 @@ export type FinanceBackupV2 = {
 
 export type FinanceBackupV3 = {
   format: typeof FINANCE_BACKUP_FORMAT;
+  version: typeof FINANCE_BACKUP_V3_VERSION;
+  exported_at: string;
+  data: FinanceBackupV3Data;
+};
+
+export type FinanceBackupV4 = {
+  format: typeof FINANCE_BACKUP_FORMAT;
   version: typeof FINANCE_BACKUP_VERSION;
   exported_at: string;
   data: FinanceBackupData;
 };
 
 export type FinanceBackupValidationResult =
-  | { ok: true; backup: FinanceBackupV3; sourceVersion: 2 | 3 }
+  | { ok: true; backup: FinanceBackupV4; sourceVersion: 2 | 3 | 4 }
   | { ok: false; error: string };
 
 const LEGACY_BACKUP_KEYS = [
@@ -176,10 +193,10 @@ export function validateFinanceBackup(
   }
   const backupData = input.data;
 
-  if (input.version !== 2 && input.version !== 3) {
+  if (input.version !== 2 && input.version !== 3 && input.version !== 4) {
     return {
       ok: false,
-      error: `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (hoặc V2 để nâng cấp an toàn).`,
+      error: `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (V2/V3 vẫn có thể nâng cấp an toàn).`,
     };
   }
 
@@ -187,7 +204,9 @@ export function validateFinanceBackup(
   const requiredDomains =
     sourceVersion === FINANCE_BACKUP_V2_VERSION
       ? FINANCE_BACKUP_V2_DOMAINS
-      : FINANCE_BACKUP_DOMAINS;
+      : sourceVersion === FINANCE_BACKUP_V3_VERSION
+        ? FINANCE_BACKUP_V3_DOMAINS
+        : FINANCE_BACKUP_DOMAINS;
   const domainError = validateBackupDomains(backupData, requiredDomains);
   if (domainError) return { ok: false, error: domainError };
 
@@ -206,6 +225,27 @@ export function validateFinanceBackup(
         data: {
           ...normalizedData,
           net_worth_snapshots: [],
+          forex_balance_snapshots: [],
+        },
+      },
+    };
+  }
+
+  if (sourceVersion === FINANCE_BACKUP_V3_VERSION) {
+    const normalizedData = Object.fromEntries(
+      FINANCE_BACKUP_V3_DOMAINS.map((domain) => [domain, backupData[domain]]),
+    ) as FinanceBackupV3Data;
+
+    return {
+      ok: true,
+      sourceVersion,
+      backup: {
+        format: FINANCE_BACKUP_FORMAT,
+        version: FINANCE_BACKUP_VERSION,
+        exported_at: input.exported_at,
+        data: {
+          ...normalizedData,
+          forex_balance_snapshots: [],
         },
       },
     };
@@ -238,14 +278,14 @@ const NET_WORTH_SOURCE_DOMAINS = [
   "forex_cash_transactions",
 ] as const satisfies readonly FinanceBackupDomain[];
 
-function financeBackupCounts(backup: FinanceBackupV3): FinanceRestoreCounts {
+function financeBackupCounts(backup: FinanceBackupV4): FinanceRestoreCounts {
   return Object.fromEntries(
     FINANCE_BACKUP_DOMAINS.map((domain) => [domain, backup.data[domain].length]),
   ) as FinanceRestoreCounts;
 }
 
 function expectedVerifiedRestoreCounts(
-  backup: FinanceBackupV3,
+  backup: FinanceBackupV4,
 ): FinanceRestoreCounts {
   const counts = financeBackupCounts(backup);
   if (
@@ -259,7 +299,7 @@ function expectedVerifiedRestoreCounts(
 
 function validateFinanceRestoreReceipt(
   input: unknown,
-  backup: FinanceBackupV3,
+  backup: FinanceBackupV4,
 ): string | null {
   const invalidReceipt =
     "Máy chủ không xác nhận khôi phục đầy đủ. Hãy tải lại trang và kiểm tra dữ liệu trước khi thao tác tiếp.";
@@ -310,7 +350,7 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
     case "MFB02":
       return "File backup không hợp lệ hoặc không đầy đủ.";
     case "MFB03":
-      return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (V2 vẫn có thể được nâng cấp khi restore).`;
+      return `Phiên bản backup không được hỗ trợ. Cần version ${FINANCE_BACKUP_VERSION} (V2/V3 vẫn có thể được nâng cấp khi restore).`;
     case "MFB04":
       return "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.";
     case "MFB05":
@@ -320,7 +360,7 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
   }
 }
 
-export async function exportFinanceBackup(): Promise<FinanceBackupV3> {
+export async function exportFinanceBackup(): Promise<FinanceBackupV4> {
   if (LOCAL_UI_MODE) {
     throw new Error(
       "Backup cloud không khả dụng khi NEXT_PUBLIC_LOCAL_UI_MODE=true.",
@@ -343,7 +383,7 @@ export async function exportFinanceBackup(): Promise<FinanceBackupV3> {
   }
 
   if (validation.sourceVersion !== FINANCE_BACKUP_VERSION) {
-    throw new Error("Máy chủ trả về backup cũ. Vui lòng áp dụng migration Net Worth History trước khi export.");
+    throw new Error("Máy chủ trả về backup cũ. Vui lòng áp dụng migration Forex Balance History Backup trước khi export.");
   }
 
   return validation.backup;
@@ -361,9 +401,9 @@ export async function restoreFinanceBackup(
   const validation = validateFinanceBackup(input);
   if (!validation.ok) return { error: validation.error };
 
-  // V2 is normalized client-side to a V3 envelope with an empty snapshot
-  // collection. The server then restores state and captures exactly one
-  // current-month baseline rather than fabricating historical months.
+  // V2/V3 are normalized client-side to a V4 envelope. Missing historical
+  // collections stay empty: Net Worth may capture one truthful current baseline
+  // server-side, while Forex Balance history is never fabricated.
   const { data, error } = await supabase.rpc("restore_finance_backup", {
     p_backup: validation.backup,
   });
@@ -385,9 +425,9 @@ export async function restoreFinanceBackup(
   return { error: null };
 }
 
-function createEmptyFinanceBackupV3(
+function createEmptyFinanceBackupV4(
   exportedAt = new Date().toISOString(),
-): FinanceBackupV3 {
+): FinanceBackupV4 {
   const data: FinanceBackupData = {
     wallets: [],
     categories: [],
@@ -401,6 +441,7 @@ function createEmptyFinanceBackupV3(
     forex_accounts: [],
     forex_cash_transactions: [],
     net_worth_snapshots: [],
+    forex_balance_snapshots: [],
   };
 
   return {
@@ -1482,16 +1523,16 @@ function unblockSeed(userId: string): void {
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
 /**
- * Builds the exact V3 snapshot used by both first-login auto-seed and explicit
+ * Builds the exact V4 snapshot used by both first-login auto-seed and explicit
  * "Reset Demo Data". Keeping one serializer prevents the two flows from
  * drifting on field names, timestamp defaults, or domain coverage.
  */
 function buildDemoFinanceBackup(
   userId: string,
   timestamp = new Date().toISOString(),
-): FinanceBackupV3 {
+): FinanceBackupV4 {
   const demoData = sanitizeDemoFinanceData(buildDemoFinanceData(userId));
-  const backup = createEmptyFinanceBackupV3(timestamp);
+  const backup = createEmptyFinanceBackupV4(timestamp);
 
   backup.data.wallets = demoData.wallets.map((wallet) =>
     withSnapshotTimestamps(toWalletRow(wallet, userId), timestamp),
@@ -1562,7 +1603,7 @@ export async function resetFinanceDemoData(): Promise<{
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // NETWORTH-HISTORY-1: reset remains a complete V3 atomic replacement across all persisted finance domains.
+  // FOREX-BALANCE-ASOF-CROSSPAGE-1: reset remains a complete V4 atomic replacement across all persisted finance domains.
   // FINANCE-SEED-1 reuses the same snapshot serializer as first-login seed so
   // both paths cannot drift on demo rows or persisted field names.
   const backup = buildDemoFinanceBackup(userId);
@@ -1580,13 +1621,13 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
-  // FINANCE-DATA-3: an empty V3 snapshot covers all persisted finance domains, including Net Worth history:
+  // FOREX-BALANCE-ASOF-CROSSPAGE-1: an empty V4 snapshot covers every persisted finance domain:
   // wallets, categories, transactions, debts, goals, budgets, investments,
-  // savings, saving_transactions, forex_accounts, forex_cash_transactions, and
-  // net_worth_snapshots.
+  // savings, saving_transactions, forex_accounts, forex_cash_transactions,
+  // net_worth_snapshots, and forex_balance_snapshots.
   // restore_finance_backup performs the destructive work inside one PostgreSQL
   // transaction, so Clear All can no longer stop halfway through.
-  const result = await restoreFinanceBackup(createEmptyFinanceBackupV3());
+  const result = await restoreFinanceBackup(createEmptyFinanceBackupV4());
   if (result.error) return result;
 
   // Prevent auto-seed from re-populating demo data on next page load. Set this

@@ -12,11 +12,23 @@ vi.mock("@/src/lib/supabase", () => ({
 
 const {
   FINANCE_BACKUP_DOMAINS,
+  FINANCE_BACKUP_V3_DOMAINS,
   FINANCE_BACKUP_V2_DOMAINS,
   exportFinanceBackup,
   restoreFinanceBackup,
   validateFinanceBackup,
 } = await import("./financeStorage");
+
+function makeV4Backup() {
+  return {
+    format: "myfinance-backup",
+    version: 4,
+    exported_at: "2026-08-22T07:00:00.000Z",
+    data: Object.fromEntries(
+      FINANCE_BACKUP_DOMAINS.map((domain: string) => [domain, []]),
+    ),
+  };
+}
 
 function makeV3Backup() {
   return {
@@ -24,7 +36,7 @@ function makeV3Backup() {
     version: 3,
     exported_at: "2026-08-22T07:00:00.000Z",
     data: Object.fromEntries(
-      FINANCE_BACKUP_DOMAINS.map((domain: string) => [domain, []]),
+      FINANCE_BACKUP_V3_DOMAINS.map((domain: string) => [domain, []]),
     ),
   };
 }
@@ -43,7 +55,7 @@ function makeV2Backup() {
 function makeRestoreReceipt(backup: { data: Record<string, unknown[]> }) {
   return {
     restored: true,
-    source_version: 3,
+    source_version: 4,
     counts: Object.fromEntries(
       FINANCE_BACKUP_DOMAINS.map((domain: string) => [
         domain,
@@ -67,28 +79,40 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup domain coverage", () => {
         "saving_transactions",
         "forex_accounts",
         "forex_cash_transactions",
+        "forex_balance_snapshots",
       ]),
     );
   });
 });
 
-describe("NETWORTH-HISTORY-1 backup validation", () => {
-  it("accepts a complete V3 envelope including Net Worth snapshots", () => {
+describe("FOREX-BALANCE-ASOF cross-page backup validation", () => {
+  it("accepts a complete V4 envelope including Net Worth and Forex Balance snapshots", () => {
+    const result = validateFinanceBackup(makeV4Backup());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.sourceVersion).toBe(4);
+    expect(result.backup.data.net_worth_snapshots).toEqual([]);
+    expect(result.backup.data.forex_balance_snapshots).toEqual([]);
+  });
+
+  it("keeps V3 backups restorable by normalizing them to V4 without fabricating Forex Balance history", () => {
     const result = validateFinanceBackup(makeV3Backup());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.sourceVersion).toBe(3);
-    expect(result.backup.data.net_worth_snapshots).toEqual([]);
+    expect(result.backup.version).toBe(4);
+    expect(result.backup.data.forex_balance_snapshots).toEqual([]);
   });
 
-  it("keeps V2 backups restorable by normalizing them to V3 with no fabricated history", () => {
+  it("keeps V2 backups restorable by normalizing them to V4 with no fabricated history", () => {
     const result = validateFinanceBackup(makeV2Backup());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.sourceVersion).toBe(2);
-    expect(result.backup.version).toBe(3);
+    expect(result.backup.version).toBe(4);
     expect(result.backup.data.net_worth_snapshots).toEqual([]);
+    expect(result.backup.data.forex_balance_snapshots).toEqual([]);
   });
 
   it("rejects a generic object instead of interpreting missing domains as empty", () => {
@@ -103,8 +127,8 @@ describe("NETWORTH-HISTORY-1 backup validation", () => {
     });
   });
 
-  it("rejects V3 when net_worth_snapshots is missing", () => {
-    const backup = makeV3Backup();
+  it("rejects V4 when net_worth_snapshots is missing", () => {
+    const backup = makeV4Backup();
     delete (backup.data as Record<string, unknown>).net_worth_snapshots;
 
     expect(validateFinanceBackup(backup)).toEqual({
@@ -113,8 +137,18 @@ describe("NETWORTH-HISTORY-1 backup validation", () => {
     });
   });
 
+  it("rejects V4 when forex_balance_snapshots is missing", () => {
+    const backup = makeV4Backup();
+    delete (backup.data as Record<string, unknown>).forex_balance_snapshots;
+
+    expect(validateFinanceBackup(backup)).toEqual({
+      ok: false,
+      error: "Backup thiếu dữ liệu bắt buộc: forex_balance_snapshots.",
+    });
+  });
+
   it("rejects non-object rows inside snapshot history", () => {
-    const backup = makeV3Backup();
+    const backup = makeV4Backup();
     (backup.data as Record<string, unknown>).net_worth_snapshots = ["bad"];
 
     expect(validateFinanceBackup(backup)).toEqual({
@@ -145,12 +179,13 @@ describe("NETWORTH-HISTORY-1 backup RPC boundary", () => {
     expect(mockRpc).toHaveBeenCalledTimes(1);
 
     const sent = mockRpc.mock.calls[0][1].p_backup;
-    expect(sent.version).toBe(3);
+    expect(sent.version).toBe(4);
     expect(sent.data.net_worth_snapshots).toEqual([]);
+    expect(sent.data.forex_balance_snapshots).toEqual([]);
   });
 
-  it("exports one complete V3 snapshot through a single RPC call", async () => {
-    const backup = makeV3Backup();
+  it("exports one complete V4 snapshot through a single RPC call", async () => {
+    const backup = makeV4Backup();
     mockRpc.mockResolvedValue({ data: backup, error: null });
 
     await expect(exportFinanceBackup()).resolves.toEqual(backup);
@@ -158,8 +193,8 @@ describe("NETWORTH-HISTORY-1 backup RPC boundary", () => {
     expect(mockRpc).toHaveBeenCalledWith("export_finance_backup");
   });
 
-  it("rejects a stale V2 payload returned by the export RPC", async () => {
-    mockRpc.mockResolvedValue({ data: makeV2Backup(), error: null });
+  it("rejects a stale V3 payload returned by the export RPC", async () => {
+    mockRpc.mockResolvedValue({ data: makeV3Backup(), error: null });
 
     await expect(exportFinanceBackup()).rejects.toThrow(
       "Máy chủ trả về backup cũ",
