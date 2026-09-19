@@ -27,11 +27,11 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
   const reloadStart = source.indexOf(
     "const reloadData = useCallback(async () => {",
   );
-  const reloadEnd = source.indexOf(
-    "}, [effectiveRange]);",
+  const reloadCoordinatorStart = source.indexOf(
+    "const latestReloadDataRef = useRef(reloadData);",
     reloadStart,
   );
-  const reloadSource = source.slice(reloadStart, reloadEnd);
+  const reloadSource = source.slice(reloadStart, reloadCoordinatorStart);
 
   it("declares isLoadingTransactions and transactionsLoadError state", () => {
     expect(source).toContain("isLoadingTransactions");
@@ -40,9 +40,13 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
 
   it("reloadData only applies each Promise.allSettled branch on fulfillment (1A regression guard)", () => {
     expect(reloadStart).toBeGreaterThan(-1);
-    expect(reloadEnd).toBeGreaterThan(reloadStart);
+    expect(reloadCoordinatorStart).toBeGreaterThan(reloadStart);
 
-    for (const varName of ["txnsResult", "catsResult", "walletsResult"]) {
+    for (const varName of [
+      "txnsResult",
+      "catsResult",
+      "walletsResult",
+    ]) {
       expect(reloadSource).toContain(`${varName}.status === "fulfilled"`);
     }
   });
@@ -55,7 +59,6 @@ describe("TransactionsPage distinguishes load failure from legitimate empty (FIN
 
   it("a rejected branch never resets its array to [] as a fallback", () => {
     expect(reloadSource).not.toContain("setTransactions([])");
-
     expect(reloadSource).not.toContain("setCategories([])");
     expect(reloadSource).not.toContain("setWallets([])");
   });
