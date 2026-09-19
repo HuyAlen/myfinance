@@ -24,10 +24,10 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     const hero = dashboard.slice(start, end);
 
     expect(hero).toContain("DASH-MOBILE-POLISH-3");
-    expect(dashboard).toContain("border-[#D7E3EE]");
+    expect(dashboard).toContain("border-[#C6D8E6]");
     expect(dashboard).toContain("from-white via-[#F9FCFF] to-[#F1F6FB]");
-    expect(hero).toContain("text-[#36536B]");
-    expect(hero).toContain("text-[#687E93]");
+    expect(hero).toContain("text-[#294A66]");
+    expect(hero).toContain("text-[#5C7388]");
     expect(hero).toContain("text-[#2F80ED]");
     expect(hero).not.toContain("text-black");
     expect(hero).not.toContain("text-slate-950");
@@ -39,9 +39,9 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     const end = dashboard.indexOf("\nfunction KpiCard(", start);
     const heroMini = dashboard.slice(start, end);
 
-    expect(heroMini).toContain("border-[#DCE6EF]");
-    expect(heroMini).toContain("bg-white");
-    expect(heroMini).toContain("text-[#61788F]");
+    expect(heroMini).toContain("border-[#CADAE7]");
+    expect(heroMini).toContain("bg-[#FCFEFF]");
+    expect(heroMini).toContain("text-[#506A82]");
     expect(dashboard).toContain('valueClass="text-[#3F5F79]"');
     expect(dashboard).toContain(
       'iconClass="bg-[#EAF3FC] text-[#2F80ED]"',
@@ -50,13 +50,13 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
 
   it("adds depth to the Net Worth history surface", () => {
     expect(dashboard).toContain(
-      "border border-[#DCE6EF] bg-white p-3.5 shadow-[0_5px_14px_rgba(54,83,107,0.07)]",
+      "border border-[#CADAE7] bg-[#FCFEFF] p-3.5 shadow-[0_8px_20px_rgba(45,76,102,0.10)]",
     );
     expect(dashboard).toContain(
-      '<p className="text-sm font-bold text-[#36536B]">',
+      'className="text-sm font-extrabold text-[#294A66]"',
     );
     expect(dashboard).toContain(
-      'className="mt-1 text-[11px] leading-4 text-[#687E93] sm:text-xs"',
+      'className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs"',
     );
   });
 
@@ -75,15 +75,15 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
 
   it("raises inactive bottom-nav contrast while preserving the active state", () => {
     expect(bottomNav).toContain("border-t border-[#DDE7F0]");
-    expect(bottomNav).toContain('? "font-bold text-[#2F80ED]"');
+    expect(bottomNav).toContain('? "font-bold text-[var(--finance-primary-text)]"');
     expect(bottomNav).toContain(
-      ': "font-medium text-[#7C91A5] active:bg-[#F3F7FB]"',
+      ': "font-semibold text-[var(--finance-muted)] active:bg-[#F3F7FB]"',
     );
     expect(bottomNav).toContain('? "bg-[#EAF3FC]"');
   });
 
   it("keeps secondary action and readiness semantics intact", () => {
-    expect(dashboard).toContain("font-semibold text-[#2F80ED]");
+    expect(dashboard).toContain('data-dashboard-action="reports"');
     expect(dashboard).toContain("{isDashboardReady ? (");
     expect(dashboard).toContain("{cashFlowReady ? (");
   });

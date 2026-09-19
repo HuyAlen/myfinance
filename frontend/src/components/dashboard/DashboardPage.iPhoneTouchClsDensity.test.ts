@@ -27,7 +27,7 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     const buttonSource = source.slice(buttonStart, labelIndex);
 
     expect(buttonSource).toContain("min-h-11");
-    expect(buttonSource).toContain("font-semibold");
+    expect(buttonSource).toContain("font-bold");
     expect(buttonSource).not.toContain(" h-9 ");
   });
 

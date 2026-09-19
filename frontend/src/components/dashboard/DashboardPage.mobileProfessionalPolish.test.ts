@@ -28,7 +28,7 @@ describe("DASH-MOBILE-POLISH-2.1 true soft-blue hierarchy and density", () => {
 
   it("keeps mobile HeroMini surfaces compact while preserving responsive desktop polish", () => {
     expect(source).toContain("min-h-[78px]");
-    expect(source).toContain("sm:hover:shadow-md");
+    expect(source).toContain("sm:hover:shadow-[0_10px_24px_rgba(45,76,102,0.13)]");
     expect(source).not.toContain("min-h-[100px]");
   });
 
@@ -60,7 +60,7 @@ describe("DASH-COLOR-POLISH-1.1 refined light financial palette", () => {
     expect(source).toContain("from-white via-[#F9FCFF] to-[#F1F6FB]");
     expect(source).not.toContain("from-[#2F6FF7] via-[#4A78F2] to-[#675BF5]");
     expect(source).toContain("text-[#2F80ED] sm:text-5xl");
-    expect(source).toContain("border border-[#D9E7F4] bg-white");
+    expect(source).toContain("border border-[#C4D9EA] bg-white");
     expect(source).not.toContain("Xem báo cáo&nbsp;›");
   });
 

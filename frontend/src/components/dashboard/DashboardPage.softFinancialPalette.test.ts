@@ -33,9 +33,9 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     const end = dashboard.indexOf("{/* Operating KPIs */}", start);
     const hero = dashboard.slice(start, end);
 
-    expect(hero).toContain("text-[#36536B]");
+    expect(hero).toContain("text-[#294A66]");
     expect(hero).toContain("text-[#2F80ED]");
-    expect(hero).toContain("text-[#687E93]");
+    expect(hero).toContain("text-[#5C7388]");
     expect(hero).toContain("text-[#3F5F79]");
     expect(hero).not.toContain("text-[#274A6D]");
     expect(hero).not.toContain("text-[#334E68]");
@@ -47,7 +47,7 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
 
   it("demotes Reports and balances the mobile asset grid with a full-width debt row", () => {
     expect(dashboard).toContain("Báo cáo&nbsp;→");
-    expect(dashboard).toContain("border border-[#D9E7F4] bg-white");
+    expect(dashboard).toContain("border border-[#C4D9EA] bg-white");
     expect(dashboard).toContain('className="col-span-2 sm:col-span-1"');
     expect(dashboard).toContain('label="Nợ phải trả"');
   });
@@ -56,8 +56,8 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     expect(header).toContain('text-[#36536B] sm:text-[22px]');
     expect(header).toContain('bg-white text-[#61788F]');
     expect(header).toContain('text-[#2F80ED]');
-    expect(bottomNav).toContain('text-[#7C91A5] active:bg-[#F3F7FB]');
-    expect(bottomNav).toContain('? "font-bold text-[#2F80ED]"');
+    expect(bottomNav).toContain('font-semibold text-[var(--finance-muted)] active:bg-[#F3F7FB]');
+    expect(bottomNav).toContain('? "font-bold text-[var(--finance-primary-text)]"');
     expect(bottomNav).not.toContain("rgba(15,23,42,0.08)");
   });
 

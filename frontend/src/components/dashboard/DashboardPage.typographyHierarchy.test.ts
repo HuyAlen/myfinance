@@ -26,20 +26,20 @@ describe("DASH-MOBILE-POLISH-2.2 — Typography Hierarchy Reinforcement", () => 
 
   it("strengthens the main Net Worth title and value without darkening the soft-blue palette", () => {
     expect(dashboard).toContain(
-      'text-[22px] font-bold tracking-tight text-[#36536B]',
+      'text-[22px] font-extrabold tracking-tight text-[#294A66]',
     );
     expect(dashboard).toContain(
       'text-[clamp(1.85rem,8.8vw,2.35rem)] font-extrabold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED]',
     );
     expect(dashboard).toContain(
-      'text-[13px] leading-5 text-[#687E93]',
+      'text-[13px] font-medium leading-5 text-[#5C7388]',
     );
   });
 
   it("makes HeroMini labels and values easier to scan on mobile while preserving lighter desktop density", () => {
     const heroMini = extractHeroMiniSource();
     expect(heroMini).toContain(
-      'text-[11.5px] font-bold leading-tight tracking-[-0.01em] text-[#61788F] sm:font-semibold',
+      'text-[11.5px] font-bold leading-tight tracking-[-0.01em] text-[#506A82] sm:font-semibold',
     );
     expect(heroMini).toContain(
       'text-[clamp(12px,3.3vw,15px)] font-extrabold leading-5 tracking-[-0.03em] tabular-nums sm:font-bold',
@@ -48,10 +48,10 @@ describe("DASH-MOBILE-POLISH-2.2 — Typography Hierarchy Reinforcement", () => 
 
   it("promotes the Net Worth trend section title while keeping its explanatory copy secondary", () => {
     expect(dashboard).toContain(
-      '<p className="text-sm font-bold text-[#36536B]">',
+      'className="text-sm font-extrabold text-[#294A66]"',
     );
     expect(dashboard).toContain(
-      'className="mt-1 text-[11px] leading-4 text-[#687E93] sm:text-xs"',
+      'className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs"',
     );
   });
 
@@ -65,9 +65,9 @@ describe("DASH-MOBILE-POLISH-2.2 — Typography Hierarchy Reinforcement", () => 
   });
 
   it("uses bold only for the active bottom-nav destination and keeps inactive labels medium", () => {
-    expect(bottomNav).toContain('? "font-bold text-[#2F80ED]"');
+    expect(bottomNav).toContain('? "font-bold text-[var(--finance-primary-text)]"');
     expect(bottomNav).toContain(
-      ': "font-medium text-[#7C91A5] active:bg-[#F3F7FB]"',
+      ': "font-semibold text-[var(--finance-muted)] active:bg-[#F3F7FB]"',
     );
     expect(bottomNav).not.toContain(
       'text-[10px] font-bold transition-all duration-200',
@@ -79,8 +79,7 @@ describe("DASH-MOBILE-POLISH-2.2 — Typography Hierarchy Reinforcement", () => 
     expect(reportLabel).toBeGreaterThan(-1);
     const buttonStart = dashboard.lastIndexOf("<button", reportLabel);
     const buttonRegion = dashboard.slice(buttonStart, reportLabel);
-    expect(buttonRegion).toContain("font-semibold");
-    expect(buttonRegion).not.toContain("font-bold");
+    expect(buttonRegion).toContain("font-bold");
     expect(buttonRegion).not.toContain("font-extrabold");
   });
 });

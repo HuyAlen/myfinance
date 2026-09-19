@@ -23,7 +23,7 @@ describe("PROFILE-NAME-1 cloud profile name and header display", () => {
   it("keeps browser settings but makes cloud profile name authoritative", () => {
     expect(settings).toContain("const authProfileName =");
     expect(settings).toContain("!authProfileName && typeof saved.profileName");
-    expect(settings).toContain("[authProfileName, localSettingsKey, user?.id]");
+    expect(settings).toContain("[authProfileName, localSettingsKey, setTheme, user?.id]");
     expect(settings).toContain("setProfileName(authProfileName)");
   });
 

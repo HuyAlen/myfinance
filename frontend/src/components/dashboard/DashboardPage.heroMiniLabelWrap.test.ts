@@ -26,9 +26,15 @@ describe("DashboardPage HeroMini mobile label — compact single-line contract",
 
   function extractLabelClassName() {
     const heroMiniSource = extractHeroMiniSource();
-    const start = heroMiniSource.indexOf('<p className="whitespace-nowrap');
-    expect(start).toBeGreaterThan(-1);
-    const end = heroMiniSource.indexOf('">', start);
+    const marker = 'data-dashboard-ink="hero-mini-label"';
+    const markerIndex = heroMiniSource.indexOf(marker);
+    expect(markerIndex).toBeGreaterThan(-1);
+    const start = heroMiniSource.indexOf('className="', markerIndex);
+    expect(start).toBeGreaterThan(markerIndex);
+    const end = heroMiniSource.indexOf(
+      '"',
+      start + 'className="'.length,
+    );
     expect(end).toBeGreaterThan(start);
     return heroMiniSource.slice(start, end);
   }

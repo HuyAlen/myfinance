@@ -889,7 +889,7 @@ export default function InvestmentsPage() {
                 Đầu tư
               </h1>
               <p className="mt-0.5 text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm">
-                Portfolio & Forex · Theo dõi giá trị và hiệu suất đầu tư.
+                Quản lý Portfolio và Forex trong cùng một không gian đầu tư.
               </p>
             </div>
           </div>
@@ -1326,7 +1326,7 @@ export default function InvestmentsPage() {
                   <button
                     type="button"
                     onClick={() => openEditAccount(account)}
-                    className="min-h-10 rounded-xl border border-[#D9E7F4] bg-white px-3 text-xs font-bold text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:px-4"
+                    className="min-h-11 rounded-xl border border-[#D9E7F4] bg-white px-3 text-xs font-bold text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:px-4"
                   >
                     {account.currentEquity == null
                       ? "Nhập Balance"
@@ -1335,7 +1335,7 @@ export default function InvestmentsPage() {
                   <button
                     type="button"
                     onClick={() => openCreateTransaction(account.id, "deposit")}
-                    className="min-h-10 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 sm:px-4"
+                    className="min-h-11 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 sm:px-4"
                   >
                     Nạp
                   </button>
@@ -1344,7 +1344,7 @@ export default function InvestmentsPage() {
                     onClick={() =>
                       openCreateTransaction(account.id, "withdrawal")
                     }
-                    className="min-h-10 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-200 sm:px-4"
+                    className="min-h-11 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-200 sm:px-4"
                   >
                     Rút
                   </button>
@@ -1414,10 +1414,10 @@ export default function InvestmentsPage() {
                         </span>
                       </div>
                       <div className="mt-2 min-w-0 md:mt-0">
-                        <p className="truncate text-sm font-bold text-slate-800">
+                        <p className="break-words text-sm font-bold leading-5 text-slate-800">
                           {account?.name ?? "Tài khoản đã xóa"}
                         </p>
-                        <p className="mt-0.5 truncate text-[11px] font-medium text-[#7C91A6]">
+                        <p className="mt-0.5 break-words text-[11px] leading-4 text-[#687E93]">
                           {wallet?.name ?? "Ví đã xóa"}
                         </p>
                       </div>
@@ -1447,7 +1447,7 @@ export default function InvestmentsPage() {
                           type="button"
                           onClick={() => openEditTransaction(transaction)}
                           aria-label="Sửa giao dịch Forex"
-                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-sky-50 hover:text-sky-600 md:size-9"
+                          className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-sky-50 hover:text-sky-600 md:size-9"
                         >
                           <Edit3 size={14} />
                         </button>
@@ -1455,7 +1455,7 @@ export default function InvestmentsPage() {
                           type="button"
                           onClick={() => requestDeleteTransaction(transaction)}
                           aria-label="Xóa giao dịch Forex"
-                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-rose-50 hover:text-rose-600 md:size-9"
+                          className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-rose-50 hover:text-rose-600 md:size-9"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1933,7 +1933,7 @@ function SummaryCard({
   };
 
   return (
-    <div className={`w-[178px] shrink-0 snap-start rounded-2xl border p-3.5 sm:w-auto sm:p-4 ${tones[tone]}`}>
+    <div className={`w-[168px] shrink-0 snap-start rounded-2xl border p-3.5 sm:w-auto sm:p-4 ${tones[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.15em] opacity-70">
           {label}

@@ -36,17 +36,14 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
     expect(source).toContain('w-[168px] shrink-0 snap-start');
   });
 
-  it("does not truncate summary, account KPI, or tiny cash metric values", () => {
+  it("does not truncate summary or account KPI values", () => {
     const summaryCard = regionBetween("function SummaryCard({", "function Metric({");
-    const metric = regionBetween("function Metric({", "function TinyMetric(");
-    const tinyMetric = regionBetween("function TinyMetric(", "function Field(");
+    const metric = regionBetween("function Metric({", "function Field(");
 
     expect(summaryCard).toContain("whitespace-nowrap");
     expect(metric).toContain("whitespace-nowrap");
-    expect(tinyMetric).toContain("whitespace-nowrap");
     expect(summaryCard).not.toContain("truncate");
     expect(metric).not.toContain("truncate");
-    expect(tinyMetric).not.toContain("truncate");
   });
 
   it("keeps long account names readable rather than ellipsizing them", () => {
@@ -73,8 +70,8 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
     const cardFooter = source.slice(start, end);
 
     expect(cardFooter).toContain("grid grid-cols-3 gap-2");
-    expect(cardFooter).toContain("Nhập giá trị");
-    expect(cardFooter).toContain("Cập nhật");
+    expect(cardFooter).toContain("Nhập Balance");
+    expect(cardFooter).toContain("Cập nhật Balance");
     expect(cardFooter).toContain("Nạp");
     expect(cardFooter).toContain("Rút");
     expect(cardFooter).toContain("min-h-11");
@@ -93,9 +90,10 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
   });
 
   it("uses 44px touch targets for transaction edit and delete controls", () => {
-    expect(source).toContain('aria-label="Sửa giao dịch Forex"');
-    expect(source).toContain('aria-label="Xóa giao dịch Forex"');
-    expect(source).toContain("size-11 items-center justify-center rounded-xl");
+    const history = regionBetween('data-ui="forex-history-workstation"', "{portfolioModalOpen ? (");
+    expect(history).toContain('aria-label="Sửa giao dịch Forex"');
+    expect(history).toContain('aria-label="Xóa giao dịch Forex"');
+    expect(history.split("size-11 items-center justify-center rounded-xl").length - 1).toBe(2);
   });
 
   it("uses a full-height mobile modal with safe-area-aware header and actions", () => {
@@ -115,6 +113,7 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
     expect(source).toContain("INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS");
     expect(source).toContain('window.addEventListener("online"');
     expect(source).toContain('document.addEventListener("visibilitychange"');
-    expect(source).toContain('account.status !== "archived"');
+    expect(source).toContain("calculateForexPerformanceSnapshot");
+    expect(source).not.toContain('account.status !== "archived"');
   });
 });

@@ -54,12 +54,15 @@ describe("DashboardPage recoverable initial load contract (DASHBOARD-DATA-READIN
     expect(dashboardSource).toContain("const historyRequest = withDashboardTimeout(");
   });
 
-  it("returns critical readiness from reloadData and keeps the existing no-overlap trailing reload guard", () => {
+  it("returns critical readiness and keeps the single-flight trailing reload guard", () => {
     expect(dashboardSource).toContain(
       "return hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;",
     );
-    expect(dashboardSource).toContain("const isReloadingRef = useRef(false);");
+    expect(dashboardSource).toContain(
+      "const inFlightReloadPromiseRef = useRef<Promise<boolean> | null>(null);",
+    );
     expect(dashboardSource).toContain("hasPendingReloadRef.current = true;");
+    expect(dashboardSource).toContain("return inFlight;");
     expect(dashboardSource).toContain("} while (hasPendingReloadRef.current);");
   });
 
@@ -117,11 +120,11 @@ describe("DashboardPage recoverable initial load contract (DASHBOARD-DATA-READIN
     }
   });
 
-  it("RealtimeProvider actually subscribes savings, saving_transactions, and net_worth_snapshots instead of only typing them", () => {
+  it("RealtimeProvider subscribes secondary finance tables under the authoritative household owner", () => {
     for (const table of ["savings", "saving_transactions", "net_worth_snapshots"]) {
       const occurrences = realtimeSource.split(`\"${table}\"`).length - 1;
       expect(occurrences).toBeGreaterThanOrEqual(2);
     }
-    expect(realtimeSource).toContain('filter: `user_id=eq.${user.id}`');
+    expect(realtimeSource).toContain('filter: `user_id=eq.${financeOwnerUserId}`');
   });
 });
