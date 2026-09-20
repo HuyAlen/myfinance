@@ -2595,6 +2595,15 @@ export default function DashboardPage() {
     [budgetAttentionMonthBudgets, categories, transactions],
   );
 
+  const budgetAttentionTotalOverAmount = useMemo(
+    () =>
+      budgetAttention.overBudgetItems.reduce(
+        (sum, item) => sum + item.overAmount,
+        0,
+      ),
+    [budgetAttention.overBudgetItems],
+  );
+
   // UI-DASH-2 readiness correctness: ready only once the budgets dataset
   // has ever loaded AND the accepted transaction/category snapshot
   // belongs to the current period (cashFlowReady — reused as-is, not
@@ -2838,9 +2847,19 @@ export default function DashboardPage() {
 
           <div
             data-dashboard-surface="networth-history"
-            className="mt-4 rounded-2xl border border-[#CADAE7] bg-[#FCFEFF] p-3.5 shadow-[0_8px_20px_rgba(45,76,102,0.10)] sm:mt-5 sm:rounded-3xl sm:p-4"
+            className="relative mt-4 overflow-hidden rounded-2xl border border-[#CADAE7] bg-[#FCFEFF] p-3.5 shadow-[0_8px_20px_rgba(45,76,102,0.10)] sm:mt-5 sm:rounded-3xl sm:p-4"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div
+              data-dashboard-surface="networth-history-accent"
+              className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-[#2F80ED] via-[#75B7F3] to-[#B9DBF8]"
+            />
+            <div
+              data-dashboard-surface="networth-history-icon"
+              className="pointer-events-none absolute left-3.5 top-4 flex size-7 items-center justify-center rounded-lg bg-[#EAF3FC] text-[#2F80ED] shadow-[inset_0_0_0_1px_rgba(47,128,237,0.10)] sm:left-4 sm:top-4"
+            >
+              <TrendingUp size={15} />
+            </div>
+            <div className="flex flex-wrap items-start justify-between gap-3 pl-10 sm:pl-11">
               <div className="min-w-0">
                 <p
                   data-dashboard-ink="history-title"
@@ -2857,7 +2876,10 @@ export default function DashboardPage() {
               </div>
 
               {netWorthTrendReady && hasNetWorthHistoryComparison ? (
-                <div className="rounded-xl border border-[#D6E2EC] bg-[#F7FAFD] px-3 py-2 text-right shadow-[0_2px_8px_rgba(45,76,102,0.06)]">
+                <div
+                  data-dashboard-surface="networth-history-delta"
+                  className="rounded-xl border border-[#CFE0ED] bg-white/90 px-3 py-2 text-right shadow-[0_6px_16px_rgba(45,76,102,0.08)] backdrop-blur-sm"
+                >
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#60778D]">
                     So với snapshot trước
                   </p>
@@ -2927,7 +2949,20 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <NetWorthTrendChart trend={netWorthTrend} />
+              <>
+                <NetWorthTrendChart trend={netWorthTrend} />
+                {netWorthHistorySummary.snapshotCount < 3 ? (
+                  <div
+                    data-dashboard-ink="history-sparse-note"
+                    className="mt-2 flex items-start gap-1.5 px-1 text-[10px] font-medium leading-4 text-[#6A8094] sm:text-[11px]"
+                  >
+                    <Info size={12} className="mt-0.5 shrink-0 text-[#6FAAE0]" />
+                    <span>
+                      {"D\u1EEF li\u1EC7u snapshot c\u00F2n \u00EDt; m\u1ED7i \u0111i\u1EC3m tr\u00EAn bi\u1EC3u \u0111\u1ED3 l\u00E0 m\u1ED9t snapshot \u0111\u00E3 l\u01B0u, th\u00E1ng ch\u01B0a ghi nh\u1EADn v\u1EABn l\u00E0 d\u1EEF li\u1EC7u ch\u01B0a bi\u1EBFt."}
+                    </span>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         </div>
@@ -2969,26 +3004,26 @@ export default function DashboardPage() {
           non-critical-path. */}
       {/* Budget attention */}
       <section>
-        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+        <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
                 Ngân sách
               </p>
-              <h2 className="mt-2 text-xl font-black text-[#23466F]">
+              <h2 className="mt-1.5 text-xl font-black text-[#23466F]">
                 Tình trạng ngân sách
               </h2>
             </div>
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <Wallet size={18} />
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+              <Wallet size={17} />
             </div>
           </div>
 
           {!budgetAttentionReady ? (
             <div className="mt-4 space-y-3">
-              <div className="h-7 w-40 animate-pulse rounded-full bg-slate-100" />
-              <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
-              <div className="h-11 animate-pulse rounded-xl bg-slate-100" />
+              <div className="h-7 w-44 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
             </div>
           ) : budgetAttention.totalBudgets === 0 ? (
             <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5">
@@ -3004,14 +3039,14 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => router.push(buildBudgetsHref())}
-                className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
+                className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
               >
                 Thiết lập ngân sách
               </button>
             </div>
           ) : (
             <>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 pb-3">
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-black ${
                     budgetAttention.overBudgetCount > 0
@@ -3031,10 +3066,21 @@ export default function DashboardPage() {
                         ? `${budgetAttention.warningCount}/${budgetAttention.totalBudgets} ngân sách sắp chạm giới hạn`
                         : `${budgetAttention.totalBudgets}/${budgetAttention.totalBudgets} ngân sách đang trong hạn mức`}
                 </span>
+
+                {budgetAttentionTotalOverAmount > 0 ? (
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      Tổng vượt
+                    </p>
+                    <p className="mt-0.5 text-sm font-black tabular-nums text-rose-600">
+                      {formatVND(budgetAttentionTotalOverAmount)}
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               {budgetAttention.overBudgetItems.length > 0 ? (
-                <div className="mt-3 space-y-2">
+                <div className="divide-y divide-slate-100">
                   {budgetAttention.overBudgetItems.map((item) => (
                     <button
                       key={item.budgetId}
@@ -3044,69 +3090,85 @@ export default function DashboardPage() {
                           buildBudgetsHref({ budgetId: item.budgetId }),
                         )
                       }
-                      className="w-full rounded-2xl bg-slate-50/80 p-3 text-left transition-all duration-200 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+                      className="group w-full py-3 text-left transition-colors duration-200 focus:outline-none focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:py-3.5"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-bold text-slate-700">
-                          {item.categoryName}
-                        </span>
-                        <span className="shrink-0 text-xs font-black text-rose-500">
-                          Vượt ngân sách
-                        </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-black text-slate-700 transition-colors group-hover:text-[#23466F]">
+                            {item.categoryName}
+                          </span>
+                          <p className="mt-1 text-xs tabular-nums text-slate-500">
+                            {formatVND(item.spent)} / {formatVND(item.limit)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-black tabular-nums text-rose-600">
+                            Vượt {formatVND(item.overAmount)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-500">
+                            {item.usagePercent}% đã dùng
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Đã chi {formatVND(item.spent)} /{" "}
-                        {formatVND(item.limit)} · vượt{" "}
-                        {formatVND(item.overAmount)}
-                      </p>
                     </button>
                   ))}
                 </div>
               ) : (
                 budgetAttention.topWarning && (
-                  <div className="mt-3 rounded-2xl bg-slate-50/80 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm font-bold text-slate-700">
-                        {budgetAttention.topWarning.categoryName}
-                      </span>
-                      <span
-                        className={`shrink-0 text-xs font-black ${
-                          budgetAttention.topWarning.status === "at-limit"
-                            ? "text-orange-600"
-                            : "text-amber-600"
-                        }`}
-                      >
-                        {budgetAttention.topWarning.status === "at-limit"
-                          ? "Đã đạt giới hạn"
-                          : "Sắp đạt giới hạn"}
-                      </span>
+                  <div className="mt-3 border-y border-slate-100 py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-black text-slate-700">
+                          {budgetAttention.topWarning.categoryName}
+                        </span>
+                        <p className="mt-1 text-xs tabular-nums text-slate-500">
+                          {formatVND(budgetAttention.topWarning.spent)} /{" "}
+                          {formatVND(budgetAttention.topWarning.limit)}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p
+                          className={`text-xs font-black ${
+                            budgetAttention.topWarning.status === "at-limit"
+                              ? "text-orange-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          {budgetAttention.topWarning.status === "at-limit"
+                            ? "Đã đạt giới hạn"
+                            : "Sắp đạt giới hạn"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-500">
+                          {budgetAttention.topWarning.usagePercent}% đã dùng
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Đã chi {formatVND(budgetAttention.topWarning.spent)} /{" "}
-                      {formatVND(budgetAttention.topWarning.limit)} ·{" "}
-                      {budgetAttention.topWarning.usagePercent}%
-                    </p>
                   </div>
                 )
               )}
 
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    budgetAttention.overBudgetItems.length > 1
-                      ? buildBudgetsHref()
-                      : budgetAttention.worstOffender
-                        ? buildBudgetsHref({
-                            budgetId: budgetAttention.worstOffender.budgetId,
-                          })
-                        : buildBudgetsHref(),
-                  )
-                }
-                className="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100"
-              >
-                Xem ngân sách
-              </button>
+              <div className="mt-2 flex justify-end border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      budgetAttention.overBudgetItems.length > 1
+                        ? buildBudgetsHref()
+                        : budgetAttention.worstOffender
+                          ? buildBudgetsHref({
+                              budgetId: budgetAttention.worstOffender.budgetId,
+                            })
+                          : buildBudgetsHref(),
+                    )
+                  }
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-black text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+                >
+                  {budgetAttention.overBudgetItems.length > 1
+                    ? "Xem tất cả ngân sách"
+                    : "Xem ngân sách"}
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -3754,12 +3816,12 @@ function HeroMini({
   return (
     <div
       data-dashboard-surface="hero-mini"
-      className={`min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#CADAE7] bg-[#FCFEFF] p-3 shadow-[0_7px_18px_rgba(45,76,102,0.10)] sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-[#B9CDDC] sm:hover:shadow-[0_10px_24px_rgba(45,76,102,0.13)] ${className}`}
+      className={`relative isolate min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#CADAE7] bg-[#FCFEFF] p-3 shadow-[0_7px_18px_rgba(45,76,102,0.10)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-[#8BC4F8]/70 before:to-transparent sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-[#B9CDDC] sm:hover:shadow-[0_10px_24px_rgba(45,76,102,0.13)] ${className}`}
     >
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
         <div
           data-dashboard-surface="hero-mini-icon"
-          className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-7 ${iconClass}`}
+          className={`flex size-7 shrink-0 items-center justify-center rounded-lg shadow-[inset_0_0_0_1px_rgba(47,128,237,0.10)] sm:size-7 ${iconClass}`}
         >
           {icon}
         </div>

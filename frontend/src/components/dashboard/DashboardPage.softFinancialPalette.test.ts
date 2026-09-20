@@ -72,13 +72,13 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     expect(fab).toContain("clampFabPosition(");
   });
 
-  it("uses the same soft financial blue across Net Worth and cash-flow chart chrome", () => {
+  it("keeps Net Worth soft while Cash Flow uses stronger semantic series colors", () => {
     expect(netWorthChart).toContain('stopColor="#60A5FA"');
     expect(netWorthChart).toContain('stroke="#60A5FA"');
     expect(netWorthChart).toContain('tick={{ fill: "#8AA0B5" }}');
-    expect(cashFlowChart).toContain('stroke="#60A5FA"');
-    expect(cashFlowChart).toContain('fill="#6EDFB4"');
-    expect(cashFlowChart).toContain('fill="#F8A1AE"');
+    expect(cashFlowChart).toContain('stroke="#3B82F6"');
+    expect(cashFlowChart).toContain('fill="#34D399"');
+    expect(cashFlowChart).toContain('fill="#FB7185"');
     expect(cashFlowChart).toContain('tick={{ fill: "#8AA0B5" }}');
   });
 });

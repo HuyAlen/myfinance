@@ -43,7 +43,7 @@ describe("DashboardPage recoverable initial load contract (DASHBOARD-DATA-READIN
       '"saving_transactions"',
       '"budgets"',
     ]) {
-      expect(dashboardSource).toContain(`bounded(\n      ${label}`);
+      expect(dashboardSource).toMatch(new RegExp(`bounded\\(\\s*${label}`));
     }
   });
 
