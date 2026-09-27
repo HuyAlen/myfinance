@@ -3,11 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * SAVINGS-MOBILE-POLISH-2 — Compact Financial Hierarchy & Scroll Efficiency.
+ * SAVINGS-POLISH-3 — Compact mobile financial hierarchy & scroll efficiency.
  *
- * Source-inspection contract for the real-iPhone layout: reduce repeated tall
- * cards, keep the most important values legible, preserve horizontal filter
- * affordance, and leave Savings Engine / money-movement semantics untouched.
+ * Source-inspection contract for real iPhone widths: account discovery and
+ * money actions stay ahead of secondary analytics while the Savings Engine,
+ * ledger, settlement, and wallet semantics remain untouched.
  */
 describe("SavingsPage compact mobile financial hierarchy", () => {
   const source = readFileSync(
@@ -15,101 +15,91 @@ describe("SavingsPage compact mobile financial hierarchy", () => {
     "utf8",
   );
 
-  const heroStart = source.indexOf("SAVINGS-MOBILE-POLISH-2");
-  const progressStart = source.indexOf("{/* SAVINGS PROGRESS", heroStart);
-  const analyticsStart = source.indexOf("{/* SAVINGS ANALYTICS", progressStart);
-  const searchStart = source.indexOf("{/* SEARCH + FILTERS */}", analyticsStart);
-  const accountsStart = source.indexOf("{/* SAVING ACCOUNTS */}", searchStart);
+  const heroStart = source.indexOf("SAVINGS-POLISH-3");
+  const accountsStart = source.indexOf("{/* SAVING ACCOUNTS */}", heroStart);
+  const progressStart = source.indexOf("{/* SAVINGS PROGRESS", accountsStart);
+  const analyticsStart = source.indexOf("{/* SAVINGS ANALYTICS */}", progressStart);
   const timelineStart = source.indexOf(
     "{/* RECENT SAVINGS TIMELINE */}",
-    accountsStart,
+    analyticsStart,
   );
   const editFlowStart = source.indexOf(
     "/* SAVINGS-UX-1: create/edit metadata is intentionally separate",
     timelineStart,
   );
 
-  const hero = source.slice(heroStart, progressStart);
+  const hero = source.slice(heroStart, accountsStart);
+  const accounts = source.slice(accountsStart, progressStart);
   const progress = source.slice(progressStart, analyticsStart);
-  const analytics = source.slice(analyticsStart, searchStart);
-  const search = source.slice(searchStart, accountsStart);
-  const accounts = source.slice(accountsStart, timelineStart);
+  const analytics = source.slice(analyticsStart, timelineStart);
   const timeline = source.slice(timelineStart, editFlowStart);
 
-  it("compresses the mobile hero into a 2x2 KPI snapshot", () => {
+  it("keeps the mobile hero compact with a 2x2 KPI snapshot", () => {
     expect(hero).toContain(
-      "mt-4 grid grid-cols-2 gap-2.5 sm:mt-6 sm:gap-3 xl:grid-cols-4",
+      "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-4",
     );
     expect(hero).toContain(
-      "mt-1.5 hidden max-w-2xl text-sm font-medium leading-6",
-    );
-    expect(hero).toContain(
-      "inline-flex min-h-10 items-center justify-center",
+      "inline-flex min-h-10 shrink-0 items-center justify-center",
     );
     expect(source).toContain(
-      "rounded-2xl border p-3 shadow-[0_4px_12px_rgba(54,83,107,0.06)]",
+      "rounded-2xl border border-[#E3EAF1] bg-[#F8FBFE] p-3",
     );
   });
 
-  it("keeps emergency progress readable while showing its three key figures in one mobile row", () => {
-    expect(progress).toContain(
-      "mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3",
-    );
-    expect(progress).toContain("text-3xl font-black");
-    expect(progress).toContain("h-2.5 overflow-hidden rounded-full");
-    expect(source).toContain(
-      "text-[10px] font-black leading-tight tracking-tight sm:text-sm",
-    );
-  });
-
-  it("turns growth projections into one compact mobile list rather than three large cards", () => {
-    expect(progress).toContain(
-      "divide-y divide-[#E5EDF4] overflow-hidden rounded-2xl",
-    );
-    expect(progress).toContain(
-      "px-3 py-2.5 sm:rounded-2xl sm:border sm:border-blue-100",
-    );
-  });
-
-  it("keeps savings analytics dense with three-up mobile metrics", () => {
-    expect(analytics).toContain(
-      "mt-4 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3",
-    );
-    expect(analytics).toContain(
-      "mt-4 rounded-2xl border border-[#E5EDF4] bg-[#F8FBFE] p-3",
-    );
-  });
-
-  it("makes filter pills explicitly horizontally scrollable without clipping labels", () => {
-    expect(search).toContain("snap-x snap-proximity");
-    expect(search).toContain("overflow-x-auto");
-    expect(search).toContain("snap-start");
-    expect(search).toContain("whitespace-nowrap");
-    expect(search).toContain("h-11 w-full rounded-xl");
-  });
-
-  it("reduces account-card chrome while preserving direct money actions", () => {
-    expect(accounts).toContain(
-      "group rounded-2xl border bg-white p-4",
-    );
-    expect(accounts).toContain('id={`saving-card-${item.id}`}');
-    expect(accounts).toContain("highlightedSavingId === item.id");
-    expect(accounts).toContain('"border-[#DCE6EF]"');
-    expect(accounts).toContain("mt-3 grid grid-cols-3 gap-2 sm:mt-4");
-    expect(accounts).toContain("min-h-9");
+  it("puts search, filters, account cards, and money actions before secondary insight sections", () => {
+    expect(accountsStart).toBeGreaterThan(heroStart);
+    expect(progressStart).toBeGreaterThan(accountsStart);
+    expect(accounts).toContain("Tìm khoản tiết kiệm...");
     expect(accounts).toContain('openMoneyMovementModal(item, "deposit")');
     expect(accounts).toContain('openMoneyMovementModal(item, "withdraw")');
     expect(accounts).toContain("openHistoryModal(item)");
   });
 
-  it("makes recent activity denser while preserving amount prominence", () => {
+  it("keeps filter pills explicitly horizontally scrollable without clipping labels", () => {
+    expect(accounts).toContain("snap-x snap-proximity");
+    expect(accounts).toContain("overflow-x-auto");
+    expect(accounts).toContain("snap-start");
+    expect(accounts).toContain("whitespace-nowrap");
+    expect(accounts).toContain("h-11 w-full rounded-xl");
+  });
+
+  it("reduces account-card chrome while preserving balance-first hierarchy", () => {
+    expect(accounts).toContain(
+      "group rounded-2xl border bg-white p-3.5 transition sm:p-4",
+    );
+    expect(accounts).toContain('id={`saving-card-${item.id}`}');
+    expect(accounts).toContain("highlightedSavingId === item.id");
+    expect(accounts).toContain('"border-[#DCE6EF]"');
+    expect(accounts).toContain("Số dư hiện tại");
+    expect(accounts).toContain("border-t border-[#E8EEF4] pt-3");
+    expect(accounts).toContain("mt-3 grid grid-cols-3 gap-2");
+    expect(accounts).toContain("min-h-10");
+  });
+
+  it("keeps emergency progress readable but lower priority than account actions", () => {
+    expect(progress).toContain("mt-3 grid grid-cols-3 gap-2 sm:mt-4 sm:gap-3");
+    expect(progress).toContain("shrink-0 text-2xl font-black");
+    expect(progress).toContain("mt-3 h-2 overflow-hidden rounded-full");
+    expect(progress).toContain("Dự phóng số dư");
+  });
+
+  it("keeps savings analytics dense and low-chrome", () => {
+    expect(analytics).toContain("mt-4 grid grid-cols-3 gap-2 sm:gap-3");
+    expect(analytics).toContain("border-t border-[#E8EEF4] pt-3");
+    expect(analytics).not.toContain(
+      "shadow-[0_6px_18px_rgba(54,83,107,0.06)]",
+    );
+  });
+
+  it("makes recent activity flatter while preserving amount prominence", () => {
+    expect(timeline).toContain("divide-y divide-[#E8EEF4]");
     expect(timeline).toContain(
-      "gap-3 bg-white px-3 py-3 sm:gap-4 sm:px-4 sm:py-3.5",
+      "flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0",
     );
     expect(timeline).toContain(
-      "shrink-0 text-[13px] font-black sm:text-sm",
+      "shrink-0 text-right text-[13px] font-black tabular-nums sm:text-sm",
     );
-    expect(timeline).toContain("truncate text-sm font-black text-[#24384B]");
+    expect(timeline).toContain("truncate text-sm font-black text-[#36536B]");
   });
 
   it("does not change authoritative savings and wallet semantics", () => {
