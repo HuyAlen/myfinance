@@ -25,7 +25,7 @@ describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
 
     const pieDataBlock = sliceBetween(
       "const pieData = useMemo",
-      "// ── NEW: Health score",
+      "// BUDGET-ALLOCATION-COLUMN-MAJOR-1",
     );
 
     expect(pieDataBlock).toContain("[...periodBudgetRollups]");
@@ -34,6 +34,21 @@ describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
     expect(pieDataBlock).toContain('return nameA.localeCompare(nameB, "vi");');
     expect(pieDataBlock).toContain(".map((rollup, index) => ({");
     expect(pieDataBlock).toContain("value: rollup.limit");
+  });
+
+  it("renders desktop allocation in column-major descending order", () => {
+    const columnBlock = sliceBetween(
+      "// BUDGET-ALLOCATION-COLUMN-MAJOR-1",
+      "// ── NEW: Health score",
+    );
+
+    expect(columnBlock).toContain("Math.ceil(pieData.length / 2)");
+    expect(columnBlock).toContain("pieData.slice(0, splitIndex)");
+    expect(columnBlock).toContain("pieData.slice(splitIndex)");
+    expect(source).toContain("{allocationColumns.map((column, columnIndex) => (");
+    expect(source).toContain("{column.map((item) => (");
+    expect(source).toContain('className="space-y-2 md:hidden"');
+    expect(source).toContain('className="hidden gap-x-8 md:grid md:grid-cols-2"');
   });
 
   it("keeps budget-card ranking separate and based on actual spend descending", () => {

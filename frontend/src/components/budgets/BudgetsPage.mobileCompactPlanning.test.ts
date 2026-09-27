@@ -53,11 +53,14 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(planningRender).not.toContain("v7Allocation.buckets.map");
   });
 
-  it("reduces allocation-chart height for the mobile viewport", () => {
+  it("reduces allocation-chart height for mobile and keeps desktop column-major", () => {
     expect(source).toContain("<PieChart width={152} height={152}>");
     expect(source).toContain("innerRadius={44}");
     expect(source).toContain("outerRadius={68}");
-    expect(source).toContain("gap-x-6 gap-y-2 md:grid-cols-2");
+    expect(source).toContain("space-y-2 md:hidden");
+    expect(source).toContain("hidden gap-x-8 md:grid md:grid-cols-2");
+    expect(source).toContain("allocationColumns.map((column, columnIndex)");
+    expect(source).toContain("<BudgetAllocationItem");
   });
 
   it("gives mobile budget cards transaction, edit, and delete actions", () => {

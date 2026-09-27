@@ -732,6 +732,13 @@ export default function BudgetsPage() {
         })),
     [categoryById, periodBudgetRollups],
   );
+  // BUDGET-ALLOCATION-COLUMN-MAJOR-1: on two-column layouts, keep the ranked
+  // sequence vertical: finish the descending left column before continuing
+  // at the top of the right column. Odd counts keep the extra item on the left.
+  const allocationColumns = useMemo(() => {
+    const splitIndex = Math.ceil(pieData.length / 2);
+    return [pieData.slice(0, splitIndex), pieData.slice(splitIndex)];
+  }, [pieData]);
   // ── NEW: Health score ─────────────────────────────────────────────────────
   const healthGrade =
     budgetHealthScore >= 85
@@ -1165,50 +1172,31 @@ export default function BudgetsPage() {
                   </Pie>
                 </PieChart>
               </div>
-              <div className="grid flex-1 gap-x-6 gap-y-2 md:grid-cols-2 md:gap-x-8 md:gap-y-3">
-                {pieData.map((item) => {
-                  const percent =
-                    filteredSummary.totalLimit > 0
-                      ? Math.round(
-                          (item.value / filteredSummary.totalLimit) * 100,
-                        )
-                      : 0;
-                  return (
-                    <div
+              <div className="flex-1">
+                {/* Mobile remains one continuous descending list. */}
+                <div className="space-y-2 md:hidden">
+                  {pieData.map((item) => (
+                    <BudgetAllocationItem
                       key={item.name}
-                      title={`${item.name}: ${formatVND(item.value)} (${percent}%)`}
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="size-2 shrink-0 rounded-full"
-                            style={{ background: item.color }}
-                          />
-                          <span className="truncate font-bold text-slate-700">
-                            {item.name}
-                          </span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="font-black text-slate-900">
-                            {percent}%
-                          </span>
-                          <span className="text-slate-400">
-                            {formatVND(item.value)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full"
-                          style={{
-                            width: percent + "%",
-                            background: item.color,
-                          }}
+                      item={item}
+                      totalLimit={filteredSummary.totalLimit}
+                    />
+                  ))}
+                </div>
+                {/* Desktop reads top-to-bottom on the left, then continues right. */}
+                <div className="hidden gap-x-8 md:grid md:grid-cols-2">
+                  {allocationColumns.map((column, columnIndex) => (
+                    <div key={columnIndex} className="space-y-3">
+                      {column.map((item) => (
+                        <BudgetAllocationItem
+                          key={item.name}
+                          item={item}
+                          totalLimit={filteredSummary.totalLimit}
                         />
-                      </div>
+                      ))}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -1664,6 +1652,47 @@ export default function BudgetsPage() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+function BudgetAllocationItem({
+  item,
+  totalLimit,
+}: {
+  item: { name: string; value: number; color: string };
+  totalLimit: number;
+}) {
+  const percent =
+    totalLimit > 0 ? Math.round((item.value / totalLimit) * 100) : 0;
+
+  return (
+    <div
+      title={`${item.name}: ${formatVND(item.value)} (${percent}%)`}
+    >
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ background: item.color }}
+          />
+          <span className="truncate font-bold text-slate-700">
+            {item.name}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="font-black text-slate-900">{percent}%</span>
+          <span className="text-slate-400">{formatVND(item.value)}</span>
+        </div>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-2 rounded-full"
+          style={{
+            width: percent + "%",
+            background: item.color,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 function MetricTile({
   label,
   value,
