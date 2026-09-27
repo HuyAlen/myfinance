@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync(path.resolve(__dirname, "BudgetsPage.tsx"), "utf8");
 
+function sliceBetween(start: string, end: string) {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  expect(startIndex).toBeGreaterThanOrEqual(0);
+  expect(endIndex).toBeGreaterThan(startIndex);
+  return source.slice(startIndex, endIndex);
+}
+
 describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
   it("builds one canonical period rollup model from filtered monthly rows", () => {
     expect(source).toContain("buildBudgetPeriodRollups");
@@ -12,9 +20,37 @@ describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
     expect(source).toContain("endDate: dateRange.endDate");
   });
 
-  it("uses rollups for KPI summary and allocation chart", () => {
+  it("uses rollups for KPI summary and sorts allocation by limit descending", () => {
     expect(source).toContain("const realExpenseRollups = periodBudgetRollups.filter");
-    expect(source).toContain("periodBudgetRollups.map((rollup, index) => ({");
+
+    const pieDataBlock = sliceBetween(
+      "const pieData = useMemo",
+      "// ── NEW: Health score",
+    );
+
+    expect(pieDataBlock).toContain("[...periodBudgetRollups]");
+    expect(pieDataBlock).toContain("const limitDiff = b.limit - a.limit;");
+    expect(pieDataBlock).toContain("if (limitDiff !== 0) return limitDiff;");
+    expect(pieDataBlock).toContain('return nameA.localeCompare(nameB, "vi");');
+    expect(pieDataBlock).toContain(".map((rollup, index) => ({");
+    expect(pieDataBlock).toContain("value: rollup.limit");
+  });
+
+  it("keeps budget-card ranking separate and based on actual spend descending", () => {
+    const cardSortBlock = sliceBetween(
+      "const sortedDisplayBudgets = useMemo",
+      "// ── Selected-period budget summary",
+    );
+
+    expect(cardSortBlock).toContain(
+      "const spentA = a.periodSpent ?? getSpent(a);",
+    );
+    expect(cardSortBlock).toContain(
+      "const spentB = b.periodSpent ?? getSpent(b);",
+    );
+    expect(cardSortBlock).toContain("return spentB - spentA;");
+    expect(cardSortBlock).not.toContain("limitAmount");
+    expect(source).toContain("{sortedDisplayBudgets.map((budget) => {");
   });
 
   it("uses the same rollups for financial planning instead of duplicating monthly categories", () => {

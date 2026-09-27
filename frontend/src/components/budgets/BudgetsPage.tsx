@@ -712,14 +712,24 @@ export default function BudgetsPage() {
     filterMode === "month" &&
     filteredBudgets.length === 0 &&
     previousMonthBudgets.length > 0;
-  // ── NEW: Pie data for budget allocation ───────────────────────────────────
+  // BUDGET-ALLOCATION-SORT-1: allocation is a ranked view of planned limits.
+  // Sort a copy from highest to lowest before assigning colors so the donut,
+  // legend and progress rows all share the same deterministic order.
   const pieData = useMemo(
     () =>
-      periodBudgetRollups.map((rollup, index) => ({
-        name: categoryById.get(rollup.categoryId)?.name ?? "Khác",
-        value: rollup.limit,
-        color: PIE_COLORS[index % PIE_COLORS.length],
-      })),
+      [...periodBudgetRollups]
+        .sort((a, b) => {
+          const limitDiff = b.limit - a.limit;
+          if (limitDiff !== 0) return limitDiff;
+          const nameA = categoryById.get(a.categoryId)?.name ?? "Khác";
+          const nameB = categoryById.get(b.categoryId)?.name ?? "Khác";
+          return nameA.localeCompare(nameB, "vi");
+        })
+        .map((rollup, index) => ({
+          name: categoryById.get(rollup.categoryId)?.name ?? "Khác",
+          value: rollup.limit,
+          color: PIE_COLORS[index % PIE_COLORS.length],
+        })),
     [categoryById, periodBudgetRollups],
   );
   // ── NEW: Health score ─────────────────────────────────────────────────────
