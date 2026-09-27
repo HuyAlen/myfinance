@@ -30,12 +30,26 @@ describe("SavingsPage mobile action surfaces use one full dynamic viewport", () 
   const editSource = source.slice(editStart, movementStart);
   const movementSource = source.slice(movementStart, historyStart);
 
+  it("tracks the real iPhone visual viewport instead of trusting 100dvh alone", () => {
+    expect(source).toContain("window.visualViewport");
+    expect(source).toContain('"--savings-visual-viewport-height"');
+    expect(source).toContain('viewport?.addEventListener("resize"');
+    expect(source).toContain('viewport?.addEventListener("scroll"');
+    expect(source).toContain('window.addEventListener("orientationchange"');
+    expect(editSource).toContain(
+      "h-[var(--savings-visual-viewport-height,100dvh)]",
+    );
+    expect(movementSource).toContain(
+      "h-[var(--savings-visual-viewport-height,100dvh)]",
+    );
+  });
+
   it("uses the full dynamic viewport for edit/create on mobile and restores modal sizing only at sm+", () => {
     expect(editSource).toContain(
-      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+      "relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white",
     );
     expect(editSource).toContain(
-      "pt-[calc(0.75rem+env(safe-area-inset-top))]",
+      "pt-[calc(0.5rem+env(safe-area-inset-top))]",
     );
     expect(editSource).toContain(
       "sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl",
@@ -44,6 +58,30 @@ describe("SavingsPage mobile action surfaces use one full dynamic viewport", () 
     expect(editSource).toContain(
       "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",
     );
+  });
+
+
+  it("keeps Savings sheets above the app bottom nav and quick-action FAB on real iPhone", () => {
+    expect(editSource).toContain(
+      "fixed inset-x-0 top-0 z-140 h-[var(--savings-visual-viewport-height,100dvh)]",
+    );
+    expect(movementSource).toContain(
+      "fixed inset-x-0 top-0 z-140 h-[var(--savings-visual-viewport-height,100dvh)]",
+    );
+    expect(editSource).toContain(
+      "border-t border-slate-200 bg-white",
+    );
+    expect(editSource).toContain(
+      "shadow-[0_-8px_24px_rgba(15,23,42,0.06)]",
+    );
+  });
+
+  it("avoids truncating type and source-wallet controls on narrow iPhones", () => {
+    expect(editSource).toContain(
+      'className="col-span-2 min-w-0 sm:col-span-1"',
+    );
+    expect(editSource).toContain("Loại tiết kiệm");
+    expect(editSource).toContain('{isEditing ? "Ví liên kết" : "Ví nguồn"}');
   });
 
   it("keeps edit metadata dense on mobile while retaining 16px form text to avoid iOS focus zoom", () => {
@@ -70,16 +108,16 @@ describe("SavingsPage mobile action surfaces use one full dynamic viewport", () 
     expect(editSource).toContain(
       "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
-    expect(editSource).toContain("grid shrink-0 grid-cols-2");
+    expect(editSource).toContain("relative z-20 grid shrink-0 grid-cols-2");
     expect(movementSource).toContain(
       "flex-1 touch-pan-y overflow-y-auto overscroll-contain",
     );
-    expect(movementSource).toContain("grid shrink-0 grid-cols-2");
+    expect(movementSource).toContain("relative z-20 grid shrink-0 grid-cols-2");
   });
 
   it("uses the full dynamic viewport for money movement on mobile and restores modal sizing only at sm+", () => {
     expect(movementSource).toContain(
-      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+      "relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white",
     );
     expect(movementSource).toContain(
       "pt-[calc(0.75rem+env(safe-area-inset-top))]",

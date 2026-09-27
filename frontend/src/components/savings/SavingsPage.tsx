@@ -511,6 +511,39 @@ export default function SavingsPage({
   const focusedSavingIdRef = useRef<string | null>(null);
   const savingsPageMountedRef = useRef(true);
 
+  // SAVINGS-MOBILE-VISUAL-VIEWPORT-1: iOS Safari can report a layout viewport
+  // that is taller than the actually visible area when browser chrome or the
+  // software keyboard is present. Keep Savings action surfaces bound to the
+  // Visual Viewport instead of relying on 100dvh alone.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncSavingsVisualViewportHeight = () => {
+      const nextHeight = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      root.style.setProperty(
+        "--savings-visual-viewport-height",
+        `${nextHeight}px`,
+      );
+    };
+
+    syncSavingsVisualViewportHeight();
+    viewport?.addEventListener("resize", syncSavingsVisualViewportHeight);
+    viewport?.addEventListener("scroll", syncSavingsVisualViewportHeight);
+    window.addEventListener("resize", syncSavingsVisualViewportHeight);
+    window.addEventListener("orientationchange", syncSavingsVisualViewportHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncSavingsVisualViewportHeight);
+      viewport?.removeEventListener("scroll", syncSavingsVisualViewportHeight);
+      window.removeEventListener("resize", syncSavingsVisualViewportHeight);
+      window.removeEventListener("orientationchange", syncSavingsVisualViewportHeight);
+      root.style.removeProperty("--savings-visual-viewport-height");
+    };
+  }, []);
+
   const metrics = useMemo(() => {
     const totalSavings = localSavings.reduce(
       (sum, item) => sum + item.balance,
@@ -2262,7 +2295,7 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: create/edit metadata is intentionally separate from money movement and history. */}
       {isAddOpen ? (
-        <div className="fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
+        <div className="fixed inset-x-0 top-0 z-140 h-[var(--savings-visual-viewport-height,100dvh)] overflow-hidden bg-white sm:inset-0 sm:h-auto sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
           <button
             type="button"
             aria-label="Đóng form khoản tiết kiệm"
@@ -2272,15 +2305,15 @@ export default function SavingsPage({
 
           <form
             onSubmit={handleSubmitSaving}
-            className="relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl sm:rounded-4xl sm:shadow-2xl sm:shadow-slate-950/15"
+            className="relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-xl sm:rounded-4xl sm:shadow-2xl sm:shadow-slate-950/15"
           >
             {/* SAVINGS-UX-1.2: mobile edit/create is a true full-screen surface; desktop keeps the modal treatment. */}
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="min-w-0">
                 <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:block">
                   {isEditing ? "EDIT SAVING" : "NEW SAVING"}
                 </p>
-                <h2 className="truncate text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
+                <h2 className="truncate text-base font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
                   {isEditing
                     ? "Chỉnh sửa khoản tiết kiệm"
                     : "Tạo khoản tiết kiệm mới"}
@@ -2295,14 +2328,14 @@ export default function SavingsPage({
               <button
                 type="button"
                 onClick={closeAddModal}
-                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900 sm:size-9"
                 aria-label="Đóng"
               >
                 <X size={17} />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-3 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 py-2.5 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-5">
               <div className="grid gap-3 sm:gap-4">
                 {isEditing && selectedSaving ? (
                   <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 sm:rounded-3xl sm:p-4">
@@ -2361,7 +2394,7 @@ export default function SavingsPage({
                       </div>
                     </label>
 
-                    <label className="min-w-0">
+                    <label className="col-span-2 min-w-0 sm:col-span-1">
                       <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         Loại tiết kiệm
                       </span>
@@ -2379,7 +2412,7 @@ export default function SavingsPage({
                       </select>
                     </label>
 
-                    <label className="min-w-0">
+                    <label className="col-span-2 min-w-0 sm:col-span-1">
                       <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         {isEditing ? "Ví liên kết" : "Ví nguồn"}
                       </span>
@@ -2485,7 +2518,7 @@ export default function SavingsPage({
                 </div>
 
                 {!isEditing ? (
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3 sm:rounded-3xl sm:p-4">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-2.5 sm:rounded-3xl sm:p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-xs sm:tracking-[0.2em]">
@@ -2500,8 +2533,8 @@ export default function SavingsPage({
                       </span>
                     </div>
 
-                    <div className="mt-2.5 grid grid-cols-2 gap-2 sm:mt-3 sm:grid-cols-4">
-                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-3 sm:grid-cols-4 sm:gap-2">
+                      <div className="rounded-xl bg-white p-2 sm:rounded-2xl sm:p-3">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Số tiền gửi
                         </p>
@@ -2509,7 +2542,7 @@ export default function SavingsPage({
                           {formatCurrency(previewPrincipal)}
                         </p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                      <div className="rounded-xl bg-white p-2 sm:rounded-2xl sm:p-3">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           {formConfig.interestTitle}
                         </p>
@@ -2517,7 +2550,7 @@ export default function SavingsPage({
                           +{formatCurrency(previewInterest)}
                         </p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                      <div className="rounded-xl bg-white p-2 sm:rounded-2xl sm:p-3">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Số dư ví
                         </p>
@@ -2527,7 +2560,7 @@ export default function SavingsPage({
                             : formatCurrency(selectedWalletBalance)}
                         </p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-3">
+                      <div className="rounded-xl bg-white p-2 sm:rounded-2xl sm:p-3">
                         <p className="text-[9px] font-black uppercase tracking-wide text-slate-400 sm:text-[10px]">
                           Ví sau chuyển
                         </p>
@@ -2555,7 +2588,7 @@ export default function SavingsPage({
                 </div>
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:flex sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-3.5">
+            <div className="relative z-20 grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:flex sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-3.5 sm:shadow-none">
               <button
                 type="button"
                 onClick={closeAddModal}
@@ -2583,7 +2616,7 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: focused money-movement sheet. */}
       {transactionSavingId && selectedSaving ? (
-        <div className="fixed inset-0 z-110 bg-white sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
+        <div className="fixed inset-x-0 top-0 z-140 h-[var(--savings-visual-viewport-height,100dvh)] overflow-hidden bg-white sm:inset-0 sm:h-auto sm:flex sm:items-center sm:justify-center sm:bg-slate-950/45 sm:p-4 sm:backdrop-blur-[2px]">
           <button
             type="button"
             aria-label="Đóng giao dịch tiết kiệm"
@@ -2591,7 +2624,7 @@ export default function SavingsPage({
             onClick={closeMoneyMovementModal}
           />
 
-          <div className="relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl sm:shadow-2xl">
+          <div className="relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl sm:shadow-2xl">
             {/* SAVINGS-UX-1.2: mobile money movement is a true full-screen surface; desktop keeps the modal treatment. */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="min-w-0">
@@ -2806,7 +2839,7 @@ export default function SavingsPage({
             </div>
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-6 sm:pb-4 sm:pt-3">
+            <div className="relative z-20 grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-white px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-6 sm:pb-4 sm:pt-3">
               <button
                 type="button"
                 onClick={closeMoneyMovementModal}
@@ -2847,7 +2880,7 @@ export default function SavingsPage({
 
       {/* SAVINGS-UX-1: history is a read-only sheet, not part of edit. */}
       {historySavingId && selectedSaving ? (
-        <div className="fixed inset-0 z-110 flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-x-0 top-0 z-140 flex h-[var(--savings-visual-viewport-height,100dvh)] items-end justify-center overflow-hidden bg-slate-950/45 sm:inset-0 sm:h-auto p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng lịch sử tiết kiệm"
@@ -2965,7 +2998,7 @@ export default function SavingsPage({
       ) : null}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-120 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-x-0 top-0 z-120 flex h-[var(--savings-visual-viewport-height,100dvh)] items-end justify-center overflow-hidden bg-slate-950/55 sm:inset-0 sm:h-auto p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng xác nhận xóa"
