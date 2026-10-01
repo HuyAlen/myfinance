@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { formatCompactVND } from "./dashboardFormat";
+import { usePrefersReducedMotion } from "@/src/lib/ui/usePrefersReducedMotion";
 
 export type NetWorthTrendPoint = {
   label: string;
@@ -142,9 +143,10 @@ export default function NetWorthTrendChart({
     () => getDynamicYAxisDomain(trendWithDeltas),
     [trendWithDeltas],
   );
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <div className="mt-3 h-44">
+    <div data-dashboard-chart-motion="net-worth" className="mt-3 h-44">
       <div
         data-dashboard-chart="full-year-timeline"
         className="flex min-h-6 items-center justify-between gap-2 px-1"
@@ -217,6 +219,10 @@ export default function NetWorthTrendChart({
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="url(#dashboardNetWorth)"
+              isAnimationActive={!prefersReducedMotion}
+              animationBegin={60}
+              animationDuration={620}
+              animationEasing="ease-out"
               dot={{
                 r: 4,
                 strokeWidth: 2.5,

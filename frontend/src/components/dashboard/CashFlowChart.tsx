@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import { formatCompactVND } from "./dashboardFormat";
+import { usePrefersReducedMotion } from "@/src/lib/ui/usePrefersReducedMotion";
 
 export type CashFlowChartPoint = {
   label: string;
@@ -128,9 +129,10 @@ export default function CashFlowChart({
   const activeMonthCount = chartData.filter(hasCashFlowActivity).length;
   const cashFlowDomain = getCashFlowDomain(chartData);
   const cashFlowTicks = getCashFlowTicks(chartData);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <div className="mt-4 flex flex-1 flex-col">
+    <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
         <p className="text-[11px] font-bold text-slate-600">
           {activeMonthCount}/12 tháng có dòng tiền
@@ -224,6 +226,10 @@ export default function CashFlowChart({
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
               maxBarSize={18}
+              isAnimationActive={!prefersReducedMotion}
+              animationBegin={0}
+              animationDuration={520}
+              animationEasing="ease-out"
             />
             <Bar
               dataKey="cashOut"
@@ -233,6 +239,10 @@ export default function CashFlowChart({
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
               maxBarSize={18}
+              isAnimationActive={!prefersReducedMotion}
+              animationBegin={70}
+              animationDuration={520}
+              animationEasing="ease-out"
             />
             <Line
               type="monotone"
@@ -243,6 +253,10 @@ export default function CashFlowChart({
               strokeLinecap="round"
               strokeLinejoin="round"
               connectNulls={false}
+              isAnimationActive={!prefersReducedMotion}
+              animationBegin={120}
+              animationDuration={650}
+              animationEasing="ease-out"
               dot={{
                 r: 4,
                 fill: "#FFFFFF",

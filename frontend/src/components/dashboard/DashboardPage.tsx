@@ -2863,7 +2863,7 @@ export default function DashboardPage() {
   ]);
 
   return (
-    <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
+    <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
       {/* UI-DASH-1: financial position leads the page — Hero communicates
           Net Worth first, before any lower-priority informational content
           (see the audit that motivated this reorder). Content, readiness
@@ -2907,6 +2907,8 @@ export default function DashboardPage() {
       {/* DASHBOARD-VISUAL-CONTRAST-1: stronger soft-blue surface depth. Keep the established airy palette, but separate the executive shell, nested financial cards, and supporting copy more clearly. */}
       <section
         data-dashboard-surface="hero-shell"
+        data-dashboard-depth-card="hero"
+        data-dashboard-reveal="true"
         className="overflow-hidden rounded-3xl border border-[#C6D8E6] bg-white shadow-[0_16px_38px_rgba(45,76,102,0.14)] sm:rounded-4xl"
       >
         <div
@@ -2946,6 +2948,7 @@ export default function DashboardPage() {
             {/* PERF-4B: headline remains gated only on isDashboardReady. */}
             {isDashboardReady ? (
               <p
+                data-dashboard-number="hero-net-worth"
                 className="whitespace-nowrap text-[clamp(1.85rem,8.8vw,2.35rem)] font-extrabold leading-none tracking-[-0.045em] tabular-nums text-[#2F80ED] sm:text-5xl"
                 title={formatVND(summary.netWorth)}
               >
@@ -3183,7 +3186,7 @@ export default function DashboardPage() {
           non-critical-path. */}
       {/* Budget attention */}
       <section>
-        <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5">
+        <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
@@ -3374,7 +3377,7 @@ export default function DashboardPage() {
           Content and calculation (`monthlyPulse`) unchanged. */}
       {/* Monthly progress */}
       <section>
-        <div className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+        <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
@@ -4119,7 +4122,7 @@ export default function DashboardPage() {
           from leading the page to the end. Content/semantics unchanged. */}
       {/* Today's summary */}
       <section>
-        <div className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
+        <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
           <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
 
@@ -4200,6 +4203,7 @@ function DailyMetric({
 
   return (
     <div
+      data-dashboard-depth-surface="daily-metric"
       className={`min-w-0 rounded-2xl border p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${styles.card}`}
     >
       <div className="flex items-center gap-2">
@@ -4209,6 +4213,7 @@ function DailyMetric({
         </p>
       </div>
       <p
+        data-dashboard-number="daily-metric"
         className={`mt-2 whitespace-nowrap text-[clamp(10px,3.15vw,16px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
         title={value}
       >
@@ -4238,6 +4243,7 @@ function HeroMini({
   return (
     <div
       data-dashboard-surface="hero-mini"
+      data-dashboard-depth-surface="hero-mini"
       className={`relative isolate min-h-[78px] min-w-0 overflow-hidden rounded-xl border border-[#CADAE7] bg-[#FCFEFF] p-3 shadow-[0_7px_18px_rgba(45,76,102,0.10)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-[#8BC4F8]/70 before:to-transparent sm:min-h-0 sm:overflow-visible sm:rounded-2xl sm:px-2.5 sm:py-3 sm:transition-all sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-[#B9CDDC] sm:hover:shadow-[0_10px_24px_rgba(45,76,102,0.13)] ${className}`}
     >
       <div className="flex h-full min-w-0 items-center gap-2.5 sm:h-auto sm:gap-2">
@@ -4259,6 +4265,7 @@ function HeroMini({
             <div className="mt-1.5 h-4 w-16 animate-pulse rounded-md bg-slate-200/80 sm:mt-1 sm:h-3.5" />
           ) : (
             <p
+              data-dashboard-number="hero-mini"
               className={`mt-1 whitespace-nowrap text-[clamp(12px,3.3vw,15px)] font-extrabold leading-5 tracking-[-0.03em] tabular-nums sm:font-bold sm:mt-0.5 sm:text-[clamp(8px,2.35vw,13px)] sm:leading-4 sm:tracking-[-0.04em] ${valueClass}`}
               title={value}
             >
@@ -4328,6 +4335,7 @@ function KpiCard({
         ) : (
           <>
             <p
+              data-dashboard-number="kpi"
               className={`mt-2 whitespace-nowrap text-[clamp(15px,4vw,20px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
               title={value}
             >
@@ -4351,6 +4359,7 @@ function KpiCard({
         type="button"
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
+        data-dashboard-depth-card="kpi"
         className={`min-w-52 snap-start cursor-pointer overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
       >
         {content}
@@ -4360,6 +4369,7 @@ function KpiCard({
 
   return (
     <div
+      data-dashboard-depth-card="kpi"
       className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       {content}
@@ -4406,7 +4416,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-6">
+    <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="flex h-full min-w-0 max-w-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-6">
       <div>
         <h3 className="wrap-break-word text-lg font-black leading-tight text-[#23466F]">
           {title}
@@ -4433,10 +4443,12 @@ function MiniStat({
 }) {
   return (
     <div
+      data-dashboard-depth-surface="mini-stat"
       className={`min-w-0 max-w-full overflow-hidden rounded-2xl bg-slate-50/80 px-2.5 py-3 sm:px-3 ${className}`}
     >
       <p className="truncate text-xs text-slate-600">{label}</p>
       <p
+        data-dashboard-number="mini-stat"
         className={`mt-1 whitespace-nowrap text-[clamp(10px,2.9vw,14px)] font-black leading-5 tracking-[-0.04em] tabular-nums ${color}`}
         title={value}
       >
