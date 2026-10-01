@@ -33,6 +33,8 @@ import {
   isSubmittingThisSession,
 } from "@/src/lib/transactions/mutationSession";
 import { matchesSearchQuery } from "@/src/lib/transactions/transactionSearch";
+import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
+import { serializeTransactionsCsv } from "@/src/lib/transactions/transactionCsvImport";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -42,6 +44,7 @@ import {
   ChevronUp,
   Download,
   Edit3,
+  Upload,
   LayoutList,
   List,
   Plus,
@@ -544,6 +547,7 @@ export default function TransactionsPage() {
   const feedSectionRef = useRef<HTMLElement>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [form, setForm] = useState<FormState>(() => createEmptyForm());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
@@ -1164,39 +1168,21 @@ export default function TransactionsPage() {
   function exportCSV() {
     const toExport =
       selectedIds.size > 0
-        ? sorted.filter((t) => selectedIds.has(t.id))
+        ? sorted.filter((transaction) => selectedIds.has(transaction.id))
         : sorted;
-    const rows = [
-      ["Ngày", "Loại", "Ghi chú", "Danh mục", "Ví", "Số tiền"],
-      ...toExport.map((t) => {
-        const cat = categoryById.get(t.categoryId)?.name ?? "";
-        const wal = walletById.get(t.walletId)?.name ?? "";
-        const dstWal = t.transferToWalletId
-          ? (walletById.get(t.transferToWalletId)?.name ?? "")
-          : "";
-        return [
-          t.date,
-          t.type === "income"
-            ? "Thu"
-            : t.type === "transfer"
-              ? "Chuyển"
-              : "Chi",
-          t.note,
-          cat,
-          t.type === "transfer" && dstWal ? wal + " -> " + dstWal : wal,
-          String(t.amount),
-        ];
-      }),
-    ];
-    const csv = rows
-      .map((r) => r.map((v) => '"' + v + '"').join(","))
-      .join("\n");
+    const csv = serializeTransactionsCsv({
+      transactions: toExport,
+      categoryNameById: new Map(
+        categories.map((category) => [category.id, category.name]),
+      ),
+      walletNameById: new Map(wallets.map((wallet) => [wallet.id, wallet.name])),
+    });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "transactions.csv";
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "transactions.csv";
+    anchor.click();
     URL.revokeObjectURL(url);
   }
 
@@ -1240,7 +1226,7 @@ export default function TransactionsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
-  useSuppressGlobalFabsWhileOpen(isFormOpen || !!pendingAction);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || !!pendingAction);
 
   // TXN-UX-1: minimal keyboard/focus support for the Create/Edit dialog —
   // installed only while it's open, cleaned up on close (no permanent
@@ -2193,6 +2179,17 @@ export default function TransactionsPage() {
                 )}
               </button>
 
+              {/* Import */}
+              <button
+                type="button"
+                onClick={() => setIsCsvImportOpen(true)}
+                title="Nhập CSV"
+                aria-label="Nhập CSV"
+                className="flex items-center rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-600 transition-all hover:border-blue-300 hover:bg-blue-100 hover:text-blue-700"
+              >
+                <Upload size={14} />
+              </button>
+
               {/* Export */}
               <button
                 onClick={exportCSV}
@@ -3082,6 +3079,25 @@ export default function TransactionsPage() {
           </div>
         )}
       </section>
+
+      {isCsvImportOpen ? (
+        <TransactionCsvImportModal
+          wallets={wallets}
+          categories={categories}
+          onClose={() => setIsCsvImportOpen(false)}
+          onImported={async (result) => {
+            await runReload();
+            setCurrentPage(0);
+            toast({
+              variant: result.failures.length > 0 ? "warning" : "success",
+              message:
+                result.failures.length > 0
+                  ? `Đã nhập ${result.importedCount} giao dịch; ${result.failures.length} dòng chưa thể ghi.`
+                  : `Đã nhập ${result.importedCount} giao dịch từ CSV.`,
+            });
+          }}
+        />
+      ) : null}
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
