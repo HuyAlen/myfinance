@@ -6,6 +6,8 @@ import type { Transaction } from "@/src/types/finance";
 
 export const TRANSACTION_REVIEW_ACK_STORAGE_KEY =
   "myfinance:transaction-review-ack-v1";
+export const TRANSACTION_REVIEW_ACK_EVENT =
+  "myfinance:transaction-review-ack-changed";
 
 function normalizeReviewText(value: string | undefined) {
   return (value ?? "")
@@ -131,6 +133,7 @@ export function persistTransactionReviewAcknowledgements(
       TRANSACTION_REVIEW_ACK_STORAGE_KEY,
       JSON.stringify([...keys]),
     );
+    window.dispatchEvent(new Event(TRANSACTION_REVIEW_ACK_EVENT));
   } catch {
     // Review acknowledgements are UX state only. Ledger correctness must
     // never depend on localStorage availability.

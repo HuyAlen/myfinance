@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
+  ArrowRight,
   Bell,
   BriefcaseBusiness,
   CalendarDays,
@@ -50,6 +51,22 @@ import {
   buildFinanceNotifications,
   getCurrentLocalMonthKey,
 } from "@/src/lib/notifications/financeNotifications";
+import {
+  buildActionableFinanceAlerts,
+  getActionableAlertPriorityLabel,
+  isActionRequiredPriority,
+  type ActionableFinanceAlertPriority,
+} from "@/src/lib/notifications/actionableFinanceAlerts";
+import {
+  buildFinanceReviewInbox,
+  countInvalidRecurringSchedules,
+} from "@/src/lib/dashboard/dashboardIntelligence";
+import {
+  applyTransactionReviewAcknowledgements,
+  readTransactionReviewAcknowledgements,
+  TRANSACTION_REVIEW_ACK_EVENT,
+  TRANSACTION_REVIEW_ACK_STORAGE_KEY,
+} from "@/src/lib/transactions/transactionReviewWorkflow";
 import {
   advanceNotificationFirstSeen,
   sortNotificationsNewestFirst,
@@ -156,6 +173,8 @@ type NotificationItem = {
   body: string;
   href: string;
   tone: "warning" | "success" | "info";
+  actionLabel?: string;
+  priority?: ActionableFinanceAlertPriority;
   read: boolean;
 };
 
@@ -317,13 +336,39 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
 // this ticket).
 function buildNotifications(data: AppData): NotificationItem[] {
   const currentMonth = getCurrentLocalMonthKey();
-  return buildFinanceNotifications({
+  const baseNotifications = buildFinanceNotifications({
     budgets: data.budgets,
     transactions: data.transactions,
     categories: data.categories,
     goals: data.goals,
     savings: data.savings,
     debts: data.debts,
+    currentMonth,
+  });
+
+  // ACTIONABLE-FINANCE-ALERTS-1: reuse the exact Review detector + device
+  // acknowledgements already owned by Transactions/Dashboard. Number.MAX_SAFE_INTEGER
+  // is deliberate: acknowledgement filtering must see the complete review set,
+  // not only the first five presentation rows.
+  const rawReviewInbox = buildFinanceReviewInbox({
+    transactions: data.transactions,
+    categories: data.categories,
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+  const reviewInbox = applyTransactionReviewAcknowledgements(
+    rawReviewInbox,
+    data.transactions,
+    readTransactionReviewAcknowledgements(),
+  );
+  const invalidRecurringScheduleCount = countInvalidRecurringSchedules({
+    categories: data.categories,
+    transactions: data.transactions,
+  });
+
+  return buildActionableFinanceAlerts({
+    baseNotifications,
+    reviewInbox,
+    invalidRecurringScheduleCount,
     currentMonth,
   }).map((notification) => ({ ...notification, read: false }));
 }
@@ -574,6 +619,8 @@ export default function Header({
         }.`,
         href: "/settings#settings-household",
         tone: "info" as const,
+        actionLabel: "Xem lời mời",
+        priority: "action" as const,
         read: readIds.has(id),
       };
     });
@@ -583,6 +630,9 @@ export default function Header({
     [householdInviteNotifications, notifList],
   );
   const unreadCount = visibleNotifList.filter((n) => !n.read).length;
+  const actionRequiredCount = visibleNotifList.filter(
+    (n) => !n.read && isActionRequiredPriority(n.priority),
+  ).length;
   const searchResults = buildSearchResults(searchQuery, appData);
   const showDrop = searchFocus && searchQuery.trim().length > 0;
 
@@ -724,6 +774,34 @@ export default function Header({
     ["wallets", "investments", "forex_accounts"],
     requestHeaderRefresh,
   );
+
+  // Review acknowledgements are device UX state, not database rows, so a
+  // "Giữ tất cả" / "Khoản bình thường" decision emits no realtime event.
+  // Reuse the existing Header single-flight refresh path for both this tab's
+  // explicit event and another tab's storage event so the global bell clears
+  // resolved review work immediately without inventing a second reload path.
+  useEffect(() => {
+    function handleReviewAcknowledgementChange() {
+      requestHeaderRefresh();
+    }
+    function handleReviewAcknowledgementStorage(event: StorageEvent) {
+      if (event.key !== TRANSACTION_REVIEW_ACK_STORAGE_KEY) return;
+      requestHeaderRefresh();
+    }
+
+    window.addEventListener(
+      TRANSACTION_REVIEW_ACK_EVENT,
+      handleReviewAcknowledgementChange,
+    );
+    window.addEventListener("storage", handleReviewAcknowledgementStorage);
+    return () => {
+      window.removeEventListener(
+        TRANSACTION_REVIEW_ACK_EVENT,
+        handleReviewAcknowledgementChange,
+      );
+      window.removeEventListener("storage", handleReviewAcknowledgementStorage);
+    };
+  }, [requestHeaderRefresh]);
 
   // NOTIF-FRESHNESS-1 month-rollover: no realtime event fires purely from
   // the wall clock crossing into a new local calendar month, so an app
@@ -1520,7 +1598,9 @@ export default function Header({
                       </p>
                       {unreadCount > 0 && (
                         <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-600">
-                          {unreadCount} mới
+                          {actionRequiredCount > 0
+                            ? actionRequiredCount + " cần xử lý"
+                            : unreadCount + " mới"}
                         </span>
                       )}
                     </div>
@@ -1568,17 +1648,43 @@ export default function Header({
                               }
                             />
                             <div className="min-w-0 flex-1">
-                              <p
-                                className={
-                                  "text-sm font-semibold leading-5 " +
-                                  (n.read ? "text-slate-500" : "text-slate-800")
-                                }
-                              >
-                                {n.title}
-                              </p>
+                              <div className="flex items-start justify-between gap-2">
+                                <p
+                                  className={
+                                    "text-sm font-semibold leading-5 " +
+                                    (n.read ? "text-slate-500" : "text-slate-800")
+                                  }
+                                >
+                                  {n.title}
+                                </p>
+                                {n.priority ? (
+                                  <span
+                                    data-notification-priority={n.priority}
+                                    className={
+                                      "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide " +
+                                      (n.priority === "urgent"
+                                        ? "bg-rose-100 text-rose-700"
+                                        : n.priority === "action"
+                                          ? "bg-amber-100 text-amber-700"
+                                          : "bg-blue-100 text-blue-700")
+                                    }
+                                  >
+                                    {getActionableAlertPriorityLabel(n.priority)}
+                                  </span>
+                                ) : null}
+                              </div>
                               <p className="mt-1 text-[13px] leading-5 text-slate-500">
                                 {n.body}
                               </p>
+                              {n.actionLabel ? (
+                                <span
+                                  data-notification-action="true"
+                                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-black text-blue-600"
+                                >
+                                  {n.actionLabel}
+                                  <ArrowRight size={12} aria-hidden="true" />
+                                </span>
+                              ) : null}
                             </div>
                           </button>
                         );
