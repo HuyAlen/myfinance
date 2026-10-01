@@ -62,6 +62,16 @@ describe("buildTransactionsHref", () => {
     expect(buildTransactionsHref({})).toBe("/transactions");
   });
 
+  it("builds an exact transaction review deep link", () => {
+    expect(
+      buildTransactionsHref({
+        month: "2026-10",
+        review: true,
+        transactionId: "tx-1",
+      }),
+    ).toBe("/transactions?month=2026-10&review=1&transactionId=tx-1");
+  });
+
   it("URL-encodes special characters in ids", () => {
     const href = buildTransactionsHref({ categoryId: "ăn uống" });
     const params = new URL(href, "http://localhost").searchParams;
@@ -199,6 +209,14 @@ describe("parseTransactionsContext", () => {
     expect(parseTransactionsContext(params).type).toBeUndefined();
   });
 
+  it("parses transaction review workflow context", () => {
+    const result = parseTransactionsContext(
+      new URLSearchParams("review=1&transactionId=tx-1"),
+    );
+    expect(result.review).toBe(true);
+    expect(result.transactionId).toBe("tx-1");
+  });
+
   it("returns an empty object (normal defaults) for empty params", () => {
     expect(parseTransactionsContext(new URLSearchParams())).toEqual({});
   });
@@ -213,6 +231,10 @@ describe("parseTransactionsContext", () => {
 describe("hasTransactionsContext", () => {
   it("is false for an empty query", () => {
     expect(hasTransactionsContext(new URLSearchParams())).toBe(false);
+  });
+
+  it("is true for review-only context", () => {
+    expect(hasTransactionsContext(new URLSearchParams("review=1"))).toBe(true);
   });
 
   it("is false when only an unrelated param (e.g. action=create) is present", () => {

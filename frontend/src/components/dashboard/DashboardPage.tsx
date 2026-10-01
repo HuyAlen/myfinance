@@ -58,6 +58,10 @@ import {
   toRecurringScheduleInputs,
 } from "@/src/lib/recurring/recurringMoney";
 import {
+  applyTransactionReviewAcknowledgements,
+  readTransactionReviewAcknowledgements,
+} from "@/src/lib/transactions/transactionReviewWorkflow";
+import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -2835,14 +2839,35 @@ export default function DashboardPage() {
       .slice(0, 4);
   }, [transactions, categories, selectedMonth, selectedYear]);
 
-  const financeReviewInbox = useMemo(
+  const [transactionReviewAcknowledgements, setTransactionReviewAcknowledgements] =
+    useState<Set<string>>(new Set());
+  useEffect(() => {
+    setTransactionReviewAcknowledgements(
+      readTransactionReviewAcknowledgements(),
+    );
+  }, []);
+
+  const rawFinanceReviewInbox = useMemo(
     () =>
       buildFinanceReviewInbox({
         transactions: filteredTransactions,
         categories,
-        limit: 4,
+        limit: Number.MAX_SAFE_INTEGER,
       }),
     [categories, filteredTransactions],
+  );
+  const financeReviewInbox = useMemo(
+    () =>
+      applyTransactionReviewAcknowledgements(
+        rawFinanceReviewInbox,
+        filteredTransactions,
+        transactionReviewAcknowledgements,
+      ),
+    [
+      filteredTransactions,
+      rawFinanceReviewInbox,
+      transactionReviewAcknowledgements,
+    ],
   );
 
   const investmentAllocationOverview = useMemo(
@@ -3892,7 +3917,20 @@ export default function DashboardPage() {
               </div>
               <div className="mt-3 divide-y divide-slate-100">
                 {financeReviewInbox.items.slice(0, 3).map((item) => (
-                  <div key={item.transactionId} className="flex items-start justify-between gap-3 py-2.5">
+                  <button
+                    key={item.transactionId}
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        buildTransactionsHref({
+                          month: dashboardMonthKey,
+                          review: true,
+                          transactionId: item.transactionId,
+                        }),
+                      )
+                    }
+                    className="flex w-full items-start justify-between gap-3 py-2.5 text-left transition-colors hover:bg-blue-50/60"
+                  >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-[#294A66]">{item.title}</p>
                       <p className="mt-0.5 truncate text-[11px] text-[#71879A]">
@@ -3900,15 +3938,22 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <p className="shrink-0 text-sm font-black tabular-nums text-[#31536F]">{formatVND(item.amount)}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
               <button
                 type="button"
-                onClick={() => router.push(buildTransactionsHref({ month: dashboardMonthKey }))}
+                onClick={() =>
+                  router.push(
+                    buildTransactionsHref({
+                      month: dashboardMonthKey,
+                      review: true,
+                    }),
+                  )
+                }
                 className="mt-2 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-black text-blue-700 transition-colors hover:bg-blue-50"
               >
-                Xem giao dịch cần kiểm tra <ArrowUpRight size={15} />
+                Xử lý hàng đợi rà soát <ArrowUpRight size={15} />
               </button>
             </div>
           )}

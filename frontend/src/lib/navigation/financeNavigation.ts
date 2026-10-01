@@ -75,6 +75,10 @@ export type TransactionsNavigationContext = {
   dateFrom?: string;
   dateTo?: string;
   type?: TransactionsTypeFilter;
+  /** Opens the actionable transaction review workspace. */
+  review?: boolean;
+  /** Focuses one exact transaction inside the review workspace. */
+  transactionId?: string;
 };
 
 /**
@@ -92,6 +96,8 @@ export function buildTransactionsHref(context: TransactionsNavigationContext) {
     dateFrom: context.dateFrom,
     dateTo: context.dateTo,
     type: context.type,
+    review: context.review ? "1" : undefined,
+    transactionId: context.transactionId,
   });
 }
 
@@ -101,6 +107,8 @@ export type ParsedTransactionsContext = {
   dateFrom?: string;
   dateTo?: string;
   type?: TransactionsTypeFilter;
+  review?: boolean;
+  transactionId?: string;
 };
 
 /**
@@ -130,6 +138,10 @@ export function parseTransactionsContext(
     result.type = type as TransactionsTypeFilter;
   }
 
+  if (searchParams.get("review") === "1") result.review = true;
+  const transactionId = searchParams.get("transactionId");
+  if (transactionId) result.transactionId = transactionId;
+
   const month = searchParams.get("month");
   const dateFromParam = searchParams.get("dateFrom");
   const dateToParam = searchParams.get("dateTo");
@@ -158,7 +170,9 @@ export function hasTransactionsContext(searchParams: URLSearchParams) {
     searchParams.has("month") ||
     searchParams.has("dateFrom") ||
     searchParams.has("dateTo") ||
-    searchParams.has("type")
+    searchParams.has("type") ||
+    searchParams.has("review") ||
+    searchParams.has("transactionId")
   );
 }
 
