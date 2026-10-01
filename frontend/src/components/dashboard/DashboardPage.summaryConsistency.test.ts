@@ -243,8 +243,13 @@ describe("DASH-POLISH-1 preserves zero-new-query and prior UI-DASH contracts", (
     expect(source).toContain("budgetAttention.overBudgetItems.map(");
   });
 
-  it("the intentionally removed KPI period-comparison UI stays absent", () => {
-    expect(source).not.toContain("const periodComparison = useMemo(");
+  it("keeps period comparison standalone instead of restoring KPI comparison badges", () => {
+    // DASHBOARD-PERIOD-COMPARISON-1 intentionally restores comparison as its
+    // own intelligence panel. The old KPI-level comparison labels/props remain
+    // removed so cross-domain KPIs keep one clear primary value.
+    expect(source).toContain("const periodComparison = useMemo(");
+    expect(source).toContain('title="So với kỳ trước"');
+    expect(source).toContain('data-dashboard-intelligence="period-comparison"');
     expect(source).not.toContain("cashFlowComparisonLabel");
     expect(source).not.toContain("savingRateComparisonLabel");
   });

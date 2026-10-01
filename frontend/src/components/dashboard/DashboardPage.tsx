@@ -35,6 +35,19 @@ import {
   summarizeCanonicalNetWorthHistory,
 } from "@/src/lib/dashboard/netWorthHistory";
 import {
+  buildDashboardComparison,
+  isComparisonWindowLoaded,
+  resolveMonthComparisonWindow,
+} from "@/src/lib/dashboard/dashboardPeriodComparison";
+import {
+  buildFinanceReviewInbox,
+  buildInvestmentAllocationOverview,
+  buildMonthlySpendingPace,
+  buildNetWorthAttribution,
+  buildRecurringCashForecast,
+  type FinanceReviewReason,
+} from "@/src/lib/dashboard/dashboardIntelligence";
+import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -432,6 +445,18 @@ function formatOneDecimal(value: number) {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(Math.round(value), 100));
+}
+
+function formatComparisonPercent(current: number, previous: number) {
+  if (previous === 0) return current === 0 ? "0%" : "Mới";
+  const percent = Math.round(((current - previous) / Math.abs(previous)) * 100);
+  return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
+function getReviewReasonLabel(reason: FinanceReviewReason) {
+  if (reason === "possible-duplicate") return "Có thể trùng";
+  if (reason === "uncategorized") return "Chưa phân loại";
+  return "Chi tiêu bất thường";
 }
 
 function toLocalDateKey(value: string | Date) {
@@ -2609,6 +2634,22 @@ export default function DashboardPage() {
     budgetsLoaded,
   );
 
+  const monthlySpendingPace = useMemo(
+    () =>
+      buildMonthlySpendingPace({
+        spent: monthlyPulse.expense,
+        budgetLimit: monthlyPulse.budgetLimit,
+        elapsedDays: monthlyPulse.elapsedDays,
+        daysInMonth: monthlyPulse.daysInMonth,
+      }),
+    [
+      monthlyPulse.budgetLimit,
+      monthlyPulse.daysInMonth,
+      monthlyPulse.elapsedDays,
+      monthlyPulse.expense,
+    ],
+  );
+
   // UI-DASH-2 Budget Attention: the same active-month budgets Tiến độ
   // tháng already uses (`dashboardMonthKey`, matching `monthlyPulse`'s own
   // filtering exactly) — Monthly Progress answers "how fast is total
@@ -2658,7 +2699,7 @@ export default function DashboardPage() {
     cashFlowReady,
   );
 
-  const upcomingMoneyEvents = useMemo(() => {
+  const allUpcomingMoneyEvents = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const limit = new Date(today);
@@ -2702,15 +2743,24 @@ export default function DashboardPage() {
 
     return [...categorySchedules, ...transactionSchedules]
       .filter(
-        (item) =>
+        (item): item is { id: string; title: string; categoryName: string; amount: number; type: "income" | "expense"; date: Date } =>
           !Number.isNaN(item.date.getTime()) &&
           item.date >= today &&
           item.date <= limit &&
           (item.type === "income" || item.type === "expense"),
       )
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 5);
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [categories, transactions]);
+
+  const upcomingMoneyEvents = useMemo(
+    () => allUpcomingMoneyEvents.slice(0, 5),
+    [allUpcomingMoneyEvents],
+  );
+
+  const recurringCashForecast = useMemo(
+    () => buildRecurringCashForecast(allUpcomingMoneyEvents, new Date()),
+    [allUpcomingMoneyEvents],
+  );
 
   const topSpendingCategories = useMemo(() => {
     const monthTransactions = transactions.filter((transaction) => {
@@ -2731,6 +2781,86 @@ export default function DashboardPage() {
       }))
       .slice(0, 4);
   }, [transactions, categories, selectedMonth, selectedYear]);
+
+  const financeReviewInbox = useMemo(
+    () =>
+      buildFinanceReviewInbox({
+        transactions: filteredTransactions,
+        categories,
+        limit: 4,
+      }),
+    [categories, filteredTransactions],
+  );
+
+  const investmentAllocationOverview = useMemo(
+    () =>
+      buildInvestmentAllocationOverview({
+        investments: snapshotInvestments,
+        forexAssetValue: forexSnapshot.assetValue,
+      }),
+    [forexSnapshot.assetValue, snapshotInvestments],
+  );
+
+  const netWorthAttribution = useMemo(
+    () =>
+      buildNetWorthAttribution({
+        snapshots: netWorthSnapshots,
+        selectedYear,
+        selectedMonth,
+      }),
+    [netWorthSnapshots, selectedMonth, selectedYear],
+  );
+
+  const periodComparison = useMemo(() => {
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const fullCurrentRange = {
+      startDate: `${dashboardMonthKey}-01`,
+      endDate: `${dashboardMonthKey}-${String(daysInMonth).padStart(2, "0")}`,
+    };
+    const todayKey = toLocalDateKey(new Date());
+    if (!todayKey || fullCurrentRange.startDate > todayKey) return null;
+
+    const window = resolveMonthComparisonWindow(fullCurrentRange, todayKey);
+    const loadedRange = getDashboardFetchRange(selectedYear);
+    if (!isComparisonWindowLoaded(window.previous, loadedRange.startDate)) return null;
+
+    const currentFlow = calculateFinanceFlowSnapshot({
+      transactions,
+      categories,
+      savingMovements: savingTransactions,
+      forexCashTransactions,
+      dateRange: window.current,
+    });
+    const previousFlow = calculateFinanceFlowSnapshot({
+      transactions,
+      categories,
+      savingMovements: savingTransactions,
+      forexCashTransactions,
+      dateRange: window.previous,
+    });
+
+    return {
+      isComplete: window.isComplete,
+      previousMonth: window.previous.startDate.slice(0, 7),
+      expense: buildDashboardComparison(currentFlow.realExpense, previousFlow.realExpense),
+      cashMovement: buildDashboardComparison(
+        currentFlow.netCashMovement,
+        previousFlow.netCashMovement,
+      ),
+      futureAllocation: buildDashboardComparison(
+        currentFlow.futureAllocation,
+        previousFlow.futureAllocation,
+      ),
+    };
+  }, [
+    categories,
+    dashboardMonthKey,
+    forexCashTransactions,
+    savingTransactions,
+    selectedMonth,
+    selectedYear,
+    transactions,
+  ]);
 
   return (
     <div className="scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
@@ -3273,6 +3403,63 @@ export default function DashboardPage() {
             </span>
           </div>
 
+          {monthlyProgressReady && monthlySpendingPace.available ? (
+            <div
+              data-dashboard-intelligence="monthly-spending-pace"
+              className="mt-4 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] p-3.5"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.1em] text-[#60778D]">
+                    Nhịp chi tiêu
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-[#294A66]">
+                    Đã dùng {monthlySpendingPace.spendingProgress}% ngân sách khi {monthlySpendingPace.timeProgress}% thời gian đã qua
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                    monthlySpendingPace.status === "faster"
+                      ? "bg-amber-50 text-amber-700"
+                      : monthlySpendingPace.status === "slower"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-blue-50 text-blue-700"
+                  }`}
+                >
+                  {monthlySpendingPace.status === "faster"
+                    ? `Nhanh hơn ${Math.abs(monthlySpendingPace.paceDelta)} điểm %`
+                    : monthlySpendingPace.status === "slower"
+                      ? `Chậm hơn ${Math.abs(monthlySpendingPace.paceDelta)} điểm %`
+                      : "Đúng nhịp kế hoạch"}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <div className="flex justify-between text-[10px] font-bold text-[#6B8296]">
+                    <span>Thời gian</span><span>{monthlySpendingPace.timeProgress}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
+                    <div className="h-full rounded-full bg-[#8ABBE8]" style={{ width: `${monthlySpendingPace.timeProgress}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-[10px] font-bold text-[#6B8296]">
+                    <span>Ngân sách</span><span>{monthlySpendingPace.spendingProgress}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
+                    <div
+                      className={`h-full rounded-full ${monthlySpendingPace.status === "faster" ? "bg-amber-500" : "bg-[#2F80ED]"}`}
+                      style={{ width: `${Math.min(monthlySpendingPace.spendingProgress, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-[#60778D]">
+                Mức lý tưởng đến hôm nay {formatVND(monthlySpendingPace.idealSpendToDate)} · còn {formatVND(monthlySpendingPace.remainingBudget)} ngân sách.
+              </p>
+            </div>
+          ) : null}
+
           {/* DASH-POLISH-1: monthlyPulse's expense/budget fields depend on
               transactions + budgets for the selected period — gated on
               monthlyProgressReady so a pre-fetch/mid-year-switch render
@@ -3454,6 +3641,83 @@ export default function DashboardPage() {
         </Panel>
       </section>
 
+      {/* DASHBOARD-INTELLIGENCE-WAVE-1: period comparison + review inbox */}
+      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2">
+        <Panel
+          title="So với kỳ trước"
+          subtitle={periodComparison?.isComplete ? "So sánh toàn tháng với tháng liền trước" : "So sánh cùng số ngày đã trôi qua với tháng trước"}
+        >
+          {!cashMovementReady ? (
+            <div className="mt-4 space-y-2">
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
+            </div>
+          ) : !periodComparison ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
+              Chưa có kỳ trước phù hợp để so sánh.
+            </div>
+          ) : (
+            <div data-dashboard-intelligence="period-comparison" className="mt-4 space-y-2">
+              {periodComparison.expense.available && (
+                <ComparisonMetricRow label="Chi tiêu" current={periodComparison.expense.current} previous={periodComparison.expense.previous} lowerIsBetter />
+              )}
+              {periodComparison.cashMovement.available && (
+                <ComparisonMetricRow label="Dòng tiền ròng" current={periodComparison.cashMovement.current} previous={periodComparison.cashMovement.previous} />
+              )}
+              {periodComparison.futureAllocation.available && (
+                <ComparisonMetricRow label="Tiết kiệm & đầu tư" current={periodComparison.futureAllocation.current} previous={periodComparison.futureAllocation.previous} />
+              )}
+              <p className="pt-1 text-[10px] font-semibold text-[#71879A]">
+                Kỳ tham chiếu: {periodComparison.previousMonth.slice(5, 7)}/{periodComparison.previousMonth.slice(0, 4)}
+              </p>
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Cần rà soát"
+          subtitle="Giao dịch cần bạn kiểm tra trước khi dùng cho quyết định tài chính"
+        >
+          {!cashFlowReady ? (
+            <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ) : financeReviewInbox.total === 0 ? (
+            <div data-dashboard-intelligence="review-inbox" className="mt-4 rounded-2xl border border-emerald-100 bg-[#F6FCF9] p-4">
+              <p className="text-sm font-black text-emerald-700">Không có giao dịch cần rà soát</p>
+              <p className="mt-1 text-xs text-[#60778D]">Phân loại, trùng lặp và mức chi bất thường đều đang ổn trong kỳ.</p>
+            </div>
+          ) : (
+            <div data-dashboard-intelligence="review-inbox" className="mt-4">
+              <div className="grid grid-cols-3 gap-2">
+                <MiniStat label="Chưa phân loại" value={String(financeReviewInbox.uncategorizedCount)} color={financeReviewInbox.uncategorizedCount > 0 ? "text-amber-600" : "text-[#60778D]"} />
+                <MiniStat label="Có thể trùng" value={String(financeReviewInbox.duplicateCount)} color={financeReviewInbox.duplicateCount > 0 ? "text-amber-600" : "text-[#60778D]"} />
+                <MiniStat label="Bất thường" value={String(financeReviewInbox.unusualExpenseCount)} color={financeReviewInbox.unusualExpenseCount > 0 ? "text-rose-500" : "text-[#60778D]"} />
+              </div>
+              <div className="mt-3 divide-y divide-slate-100">
+                {financeReviewInbox.items.slice(0, 3).map((item) => (
+                  <div key={item.transactionId} className="flex items-start justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-[#294A66]">{item.title}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-[#71879A]">
+                        {item.reasons.map(getReviewReasonLabel).join(" · ")}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-black tabular-nums text-[#31536F]">{formatVND(item.amount)}</p>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(buildTransactionsHref({ month: dashboardMonthKey }))}
+                className="mt-2 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-black text-blue-700 transition-colors hover:bg-blue-50"
+              >
+                Xem giao dịch cần kiểm tra <ArrowUpRight size={15} />
+              </button>
+            </div>
+          )}
+        </Panel>
+      </section>
+
       {/* UI-DASH-1: moved down from leading the page — upcoming recurring
           items and top spending categories are useful context (MEDIUM
           priority) but not the primary Dashboard job. Content, readiness
@@ -3464,6 +3728,13 @@ export default function DashboardPage() {
           title="Sắp đến hạn trong 30 ngày"
           subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
         >
+          {recurringCashForecast.eventCount30 > 0 ? (
+            <div data-dashboard-intelligence="recurring-cash-forecast" className="mt-4 grid grid-cols-3 gap-2">
+              <MiniStat label="7 ngày ròng" value={`${recurringCashForecast.net7 >= 0 ? "+" : ""}${formatVND(recurringCashForecast.net7)}`} color={recurringCashForecast.net7 >= 0 ? "text-emerald-600" : "text-rose-500"} />
+              <MiniStat label="30 ngày thu" value={formatVND(recurringCashForecast.income30)} color="text-emerald-600" />
+              <MiniStat label="30 ngày chi" value={formatVND(recurringCashForecast.expense30)} color="text-[#3977C3]" />
+            </div>
+          ) : null}
           <div className="mt-4 space-y-2">
             {upcomingMoneyEvents.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
@@ -3546,6 +3817,78 @@ export default function DashboardPage() {
               })
             )}
           </div>
+        </Panel>
+      </section>
+
+      {/* DASHBOARD-INTELLIGENCE-WAVE-1: wealth intelligence */}
+      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2">
+        <Panel
+          title="Vì sao tài sản ròng thay đổi"
+          subtitle="Đóng góp giữa hai snapshot Net Worth gần nhất đã được lưu"
+        >
+          {!netWorthHistoryReady ? (
+            <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
+          ) : !netWorthAttribution.available ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
+              <p className="text-sm font-black text-[#294A66]">Chưa đủ snapshot để phân rã biến động</p>
+              <p className="mt-1 text-xs text-[#71879A]">Cần ít nhất 2 snapshot Net Worth để giải thích thay đổi theo từng nhóm tài sản và nợ.</p>
+            </div>
+          ) : (
+            <div data-dashboard-intelligence="net-worth-attribution" className="mt-4">
+              <div className="flex items-end justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] p-3.5">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">Tổng thay đổi</p>
+                  <p className={`mt-1 text-xl font-black tabular-nums ${netWorthAttribution.netWorthDelta >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                    {netWorthAttribution.netWorthDelta >= 0 ? "+" : ""}{formatVND(netWorthAttribution.netWorthDelta)}
+                  </p>
+                </div>
+                <p className="text-right text-[11px] font-semibold text-[#71879A]">
+                  {netWorthAttribution.fromMonth.slice(5, 7)}/{netWorthAttribution.fromMonth.slice(0, 4)} → {netWorthAttribution.toMonth.slice(5, 7)}/{netWorthAttribution.toMonth.slice(0, 4)}
+                </p>
+              </div>
+              <div className="mt-3 divide-y divide-slate-100">
+                {netWorthAttribution.items.map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="text-sm font-bold text-[#3F5F79]">{item.label}</span>
+                    <span className={`text-sm font-black tabular-nums ${item.delta >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                      {item.delta >= 0 ? "+" : ""}{formatVND(item.delta)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Phân bổ đầu tư"
+          subtitle="Tỷ trọng tài sản đầu tư hiện tại, gồm Portfolio và Forex"
+        >
+          {!isDashboardReady ? (
+            <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
+          ) : investmentAllocationOverview.total <= 0 ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#71879A]">
+              Chưa có tài sản đầu tư để phân bổ.
+            </div>
+          ) : (
+            <div data-dashboard-intelligence="investment-allocation" className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] p-3.5">
+                <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">Tổng tài sản đầu tư</p>
+                <p className="mt-1 text-xl font-black tabular-nums text-[#2F80ED]">{formatVND(investmentAllocationOverview.total)}</p>
+              </div>
+              {investmentAllocationOverview.buckets.map((bucket) => (
+                <div key={bucket.key}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-bold text-[#3F5F79]">{bucket.label}</span>
+                    <span className="font-black tabular-nums text-[#31536F]">{bucket.percent}% · {formatVND(bucket.value)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-linear-to-r from-[#2F80ED] to-[#17B6D4]" style={{ width: `${Math.max(3, bucket.percent)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Panel>
       </section>
 
@@ -4020,6 +4363,35 @@ function KpiCard({
       className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       {content}
+    </div>
+  );
+}
+
+function ComparisonMetricRow({
+  label,
+  current,
+  previous,
+  lowerIsBetter = false,
+}: {
+  label: string;
+  current: number;
+  previous: number;
+  lowerIsBetter?: boolean;
+}) {
+  const delta = current - previous;
+  const favorable = delta === 0 ? null : lowerIsBetter ? delta < 0 : delta > 0;
+  const toneClass = favorable === null ? "text-[#60778D] bg-slate-100" : favorable ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50";
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#FCFEFF] px-3.5 py-3">
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-[#60778D]">{label}</p>
+        <p className="mt-1 text-sm font-black tabular-nums text-[#31536F]">{formatVND(current)}</p>
+        <p className="mt-0.5 text-[10px] font-semibold text-[#8297A9]">Trước {formatVND(previous)}</p>
+      </div>
+      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black tabular-nums ${toneClass}`}>
+        {formatComparisonPercent(current, previous)}
+      </span>
     </div>
   );
 }
