@@ -19,10 +19,15 @@ describe("DashboardPage contextual navigation after Action Center removal", () =
     expect(source).toContain("buildBudgetsHref");
   });
 
-  it("Net Cash Flow KPI carries the selected Dashboard month to Transactions", () => {
-    expect(source).toContain(
-      "href: buildTransactionsHref({ month: dashboardMonthKey })",
-    );
+  it("Net Cash Flow KPI is deliberately non-clickable because it spans Transactions, Savings and Forex", () => {
+    const start = source.indexOf('title: "Dòng tiền ròng"');
+    const end = source.indexOf('title: "Tiết kiệm & Đầu tư"', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const kpi = source.slice(start, end);
+
+    expect(kpi).toContain("href: undefined as string | undefined");
+    expect(kpi).not.toContain("buildTransactionsHref");
   });
 
   it("Emergency Fund KPI links to the collection-level Savings page", () => {

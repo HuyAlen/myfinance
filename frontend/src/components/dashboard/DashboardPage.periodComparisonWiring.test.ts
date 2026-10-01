@@ -65,10 +65,14 @@ describe("DashboardPage KPI period comparison removal", () => {
     expect(source).not.toContain("So với kỳ trước");
   });
 
-  it("KPI contextual navigation remains intact", () => {
-    expect(source).toContain(
-      "href: buildTransactionsHref({ month: dashboardMonthKey }),",
-    );
+  it("KPI interactivity remains destination-driven while cross-domain cash movement stays non-clickable", () => {
+    const start = source.indexOf('title: "Dòng tiền ròng"');
+    const end = source.indexOf('title: "Tiết kiệm & Đầu tư"', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const cashMovementKpi = source.slice(start, end);
+
+    expect(cashMovementKpi).toContain("href: undefined as string | undefined");
     expect(source).toContain(
       "onClick={item.href ? () => router.push(item.href!) : undefined}",
     );

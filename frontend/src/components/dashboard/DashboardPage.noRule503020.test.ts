@@ -32,9 +32,9 @@ describe("Dashboard does not expose the 50/30/20 rule (DASH-NO-503020-1)", () =>
     expect(end).toBeGreaterThan(start);
     const panel = source.slice(start, end);
 
-    expect(panel).toContain('label="Thu nhập"');
-    expect(panel).toContain('label="Chi tiêu"');
-    expect(panel).toContain('label="Còn lại"');
+    expect(panel).toContain('label="Thu vào"');
+    expect(panel).toContain('label="Chi ra"');
+    expect(panel).toContain('label="Dòng tiền ròng"');
     expect(panel).toContain("<CashFlowChart data={cashFlowData} />");
   });
 

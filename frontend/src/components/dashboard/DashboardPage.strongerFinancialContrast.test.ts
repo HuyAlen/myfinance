@@ -85,6 +85,6 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
   it("keeps secondary action and readiness semantics intact", () => {
     expect(dashboard).toContain('data-dashboard-action="reports"');
     expect(dashboard).toContain("{isDashboardReady ? (");
-    expect(dashboard).toContain("{cashFlowReady ? (");
+    expect(dashboard).toContain("{cashMovementReady ? (");
   });
 });

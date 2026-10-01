@@ -16,9 +16,9 @@ import { formatCompactVND } from "./dashboardFormat";
 
 export type CashFlowChartPoint = {
   label: string;
-  thu: number | null;
-  chi: number | null;
-  dongTienRong: number | null;
+  cashIn: number | null;
+  cashOut: number | null;
+  netCashMovement: number | null;
 };
 
 function isNonZeroNumber(value: number | null) {
@@ -26,7 +26,7 @@ function isNonZeroNumber(value: number | null) {
 }
 
 export function hasCashFlowActivity(point: CashFlowChartPoint) {
-  return isNonZeroNumber(point.thu) || isNonZeroNumber(point.chi);
+  return isNonZeroNumber(point.cashIn) || isNonZeroNumber(point.cashOut);
 }
 
 export function normalizeCashFlowPointForChart(
@@ -36,15 +36,15 @@ export function normalizeCashFlowPointForChart(
 
   return {
     ...point,
-    thu: null,
-    chi: null,
-    dongTienRong: null,
+    cashIn: null,
+    cashOut: null,
+    netCashMovement: null,
   };
 }
 
 function getCashFlowValues(data: CashFlowChartPoint[]) {
   return data.flatMap((point) =>
-    [point.thu, point.chi, point.dongTienRong].filter(
+    [point.cashIn, point.cashOut, point.netCashMovement].filter(
       (value): value is number =>
         typeof value === "number" && Number.isFinite(value),
     ),
@@ -142,15 +142,15 @@ export default function CashFlowChart({
         >
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-[3px] bg-[#34D399]" />
-            Thu nhập
+            Thu vào
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-[3px] bg-[#FB7185]" />
-            Chi tiêu
+            Chi ra
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-[3px] w-3.5 rounded-full bg-[#3B82F6]" />
-            Còn lại
+            Dòng tiền ròng
           </span>
         </div>
       </div>
@@ -217,8 +217,8 @@ export default function CashFlowChart({
               ]}
             />
             <Bar
-              dataKey="thu"
-              name="Thu nhập"
+              dataKey="cashIn"
+              name="Thu vào"
               fill="#34D399"
               stroke="#10B981"
               strokeWidth={0.9}
@@ -226,8 +226,8 @@ export default function CashFlowChart({
               maxBarSize={18}
             />
             <Bar
-              dataKey="chi"
-              name="Chi tiêu"
+              dataKey="cashOut"
+              name="Chi ra"
               fill="#FB7185"
               stroke="#F43F5E"
               strokeWidth={0.9}
@@ -236,8 +236,8 @@ export default function CashFlowChart({
             />
             <Line
               type="monotone"
-              dataKey="dongTienRong"
-              name="Còn lại"
+              dataKey="netCashMovement"
+              name="Dòng tiền ròng"
               stroke="#3B82F6"
               strokeWidth={3.75}
               strokeLinecap="round"

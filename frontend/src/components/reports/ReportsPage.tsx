@@ -407,8 +407,8 @@ function buildMonthlyReportRow(
 ) {
   const rowYear = monthKey.slice(0, 4);
   const rowMonth = monthKey.slice(5, 7);
-  const monthStart = `${monthKey}-01`;
-  const monthEnd = `${monthKey}-31`;
+  const monthStart = monthKey + "-01";
+  const monthEnd = monthKey + "-31";
   const flow = calculateFinanceFlowSnapshot({
     transactions,
     categories,
@@ -421,6 +421,7 @@ function buildMonthlyReportRow(
     key: monthKey,
     month: "T" + Number(rowMonth),
     periodLabel: "T" + Number(rowMonth) + "/" + rowYear,
+    // Existing financial semantics, retained for Income/Expense reports.
     thu: flow.income / 1e6,
     chi: flow.realExpense / 1e6,
     tietKiem: flow.savingAllocation / 1e6,
@@ -433,6 +434,13 @@ function buildMonthlyReportRow(
     investmentAllocation: flow.investmentAllocation,
     futureAllocation: flow.futureAllocation,
     cashFlow: flow.netCashFlow,
+    // CASH-MOVEMENT-SSOT-1 liquidity semantics.
+    cashIn: flow.cashIn / 1e6,
+    cashOut: flow.cashOut / 1e6,
+    netCashMovement: flow.netCashMovement / 1e6,
+    cashInRaw: flow.cashIn,
+    cashOutRaw: flow.cashOut,
+    netCashMovementRaw: flow.netCashMovement,
   };
 }
 
@@ -716,6 +724,9 @@ export default function ReportsPage() {
     const investmentAllocation = flow.investmentAllocation;
     const futureAllocation = flow.futureAllocation;
     const cashFlowAfterExpense = flow.netCashFlow;
+    const cashIn = flow.cashIn;
+    const cashOut = flow.cashOut;
+    const netCashMovement = flow.netCashMovement;
     const availableAfterFutureAllocation =
       cashFlowAfterExpense - futureAllocation;
     const cashFlowRate =
@@ -735,6 +746,9 @@ export default function ReportsPage() {
       income,
       expense,
       cashFlowAfterExpense,
+      cashIn,
+      cashOut,
+      netCashMovement,
       savingAllocation,
       investmentAllocation,
       futureAllocation,
@@ -936,9 +950,50 @@ export default function ReportsPage() {
       if (prev === 0) return null;
       return Math.round(((cur - prev) / prev) * 1000) / 10;
     }
-    function cashFlow(txns: Transaction[]) {
-      return getTotalIncome(txns) - getRealExpenseTotal(txns, categories);
+
+    function monthRange(targetYear: number, targetMonth: number) {
+      const mm = String(targetMonth).padStart(2, "0");
+      const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+      return {
+        startDate: String(targetYear) + "-" + mm + "-01",
+        endDate: String(targetYear) + "-" + mm + "-" + String(lastDay).padStart(2, "0"),
+      };
     }
+
+    function quarterRange(targetYear: number, targetQuarter: number) {
+      const startMonth = (targetQuarter - 1) * 3 + 1;
+      const endMonth = startMonth + 2;
+      const startMm = String(startMonth).padStart(2, "0");
+      const endMm = String(endMonth).padStart(2, "0");
+      const lastDay = new Date(targetYear, endMonth, 0).getDate();
+      return {
+        startDate: String(targetYear) + "-" + startMm + "-01",
+        endDate: String(targetYear) + "-" + endMm + "-" + String(lastDay).padStart(2, "0"),
+      };
+    }
+
+    function flowForRange(range: { startDate: string; endDate: string }) {
+      return calculateFinanceFlowSnapshot({
+        transactions,
+        categories,
+        savingMovements,
+        forexCashTransactions,
+        dateRange: range,
+      });
+    }
+
+    const curMonthFlow = flowForRange(monthRange(anchor.year, anchor.month));
+    const prevMonthFlow = flowForRange(
+      monthRange(previousMonthYear, previousMonthNumber),
+    );
+    const curQuarterFlow = flowForRange(quarterRange(anchor.year, curQ));
+    const prevQuarterFlow = flowForRange(quarterRange(prevQYear, prevQ));
+    const currentPeriodFlow = flowForRange(dateRange);
+    const previousEquivalentFlow = flowForRange({
+      startDate: shiftIsoDateByYears(dateRange.startDate, -1),
+      endDate: shiftIsoDateByYears(dateRange.endDate, -1),
+    });
+
     return {
       mom: {
         income: delta(
@@ -949,7 +1004,10 @@ export default function ReportsPage() {
           getRealExpenseTotal(curMonthTxns, categories),
           getRealExpenseTotal(prevMonthTxns, categories),
         ),
-        cashFlow: delta(cashFlow(curMonthTxns), cashFlow(prevMonthTxns)),
+        cashFlow: delta(
+          curMonthFlow.netCashMovement,
+          prevMonthFlow.netCashMovement,
+        ),
       },
       qoq: {
         income: delta(getTotalIncome(curQTxns), getTotalIncome(prevQTxns)),
@@ -957,7 +1015,10 @@ export default function ReportsPage() {
           getRealExpenseTotal(curQTxns, categories),
           getRealExpenseTotal(prevQTxns, categories),
         ),
-        cashFlow: delta(cashFlow(curQTxns), cashFlow(prevQTxns)),
+        cashFlow: delta(
+          curQuarterFlow.netCashMovement,
+          prevQuarterFlow.netCashMovement,
+        ),
       },
       yoy: {
         income: delta(
@@ -969,8 +1030,8 @@ export default function ReportsPage() {
           getRealExpenseTotal(previousEquivalentPeriodTxns, categories),
         ),
         cashFlow: delta(
-          cashFlow(filtered),
-          cashFlow(previousEquivalentPeriodTxns),
+          currentPeriodFlow.netCashMovement,
+          previousEquivalentFlow.netCashMovement,
         ),
       },
     };
@@ -978,6 +1039,9 @@ export default function ReportsPage() {
     transactions,
     categories,
     filtered,
+    savingMovements,
+    forexCashTransactions,
+    dateRange,
     periodMode,
     year,
     month,
@@ -1079,7 +1143,12 @@ export default function ReportsPage() {
   // ── Professional report center data ───────────────────────────────────────
   const monthlyAverages = useMemo(() => {
     const monthsWithData = periodMonthly.filter(
-      (m) => m.income > 0 || m.expense > 0 || m.futureAllocation > 0,
+      (m) =>
+        m.income > 0 ||
+        m.expense > 0 ||
+        m.futureAllocation > 0 ||
+        m.cashInRaw > 0 ||
+        m.cashOutRaw > 0,
     );
     const divisor = Math.max(monthsWithData.length, 1);
     return {
@@ -1087,6 +1156,9 @@ export default function ReportsPage() {
       expense: monthsWithData.reduce((sum, m) => sum + m.expense, 0) / divisor,
       cashFlow:
         monthsWithData.reduce((sum, m) => sum + m.cashFlow, 0) / divisor,
+      cashMovement:
+        monthsWithData.reduce((sum, m) => sum + m.netCashMovementRaw, 0) /
+        divisor,
       allocation:
         monthsWithData.reduce((sum, m) => sum + m.futureAllocation, 0) /
         divisor,
@@ -1210,6 +1282,9 @@ export default function ReportsPage() {
         "Chi phí thật (đ)",
         "Tiết kiệm + Đầu tư (đ)",
         "Dòng tiền sau chi phí (đ)",
+        "Thu vào (đ)",
+        "Chi ra (đ)",
+        "Dòng tiền ròng thanh khoản (đ)",
       ],
       ...periodMonthly.map((row) => [
         row.periodLabel,
@@ -1217,6 +1292,9 @@ export default function ReportsPage() {
         Math.round(row.chi * 1e6),
         Math.round((row.tichLuy ?? 0) * 1e6),
         Math.round(row.dongTienRong * 1e6),
+        Math.round(row.cashInRaw),
+        Math.round(row.cashOutRaw),
+        Math.round(row.netCashMovementRaw),
       ]),
     ];
     const csv =
@@ -1892,7 +1970,7 @@ export default function ReportsPage() {
               />
               <div className="mt-5 grid gap-3">
                 <ReportSignal
-                  label="Dòng tiền"
+                  label="Thu nhập sau chi phí"
                   value={formatVND(incomeExpenseGap)}
                   note={
                     incomeExpenseGap >= 0
@@ -2382,34 +2460,30 @@ export default function ReportsPage() {
         <>
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatMini
-              label="Tiền vào"
-              value={formatVND(summary.income)}
+              label="Thu vào"
+              value={formatVND(summary.cashIn)}
               color="text-emerald-600"
               bg="bg-emerald-50"
               border="border-emerald-100"
             />
             <StatMini
-              label="Chi phí thật"
-              value={formatVND(summary.expense)}
+              label="Chi ra"
+              value={formatVND(summary.cashOut)}
               color="text-rose-600"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
               label="Dòng tiền ròng"
-              value={formatVND(summary.cashFlowAfterExpense)}
-              color={summary.cashFlowAfterExpense >= 0 ? "text-blue-600" : "text-rose-600"}
+              value={formatVND(summary.netCashMovement)}
+              color={summary.netCashMovement >= 0 ? "text-blue-600" : "text-rose-600"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Sau phân bổ tương lai"
-              value={formatVND(summary.availableAfterFutureAllocation)}
-              color={
-                summary.availableAfterFutureAllocation >= 0
-                  ? "text-indigo-600"
-                  : "text-rose-600"
-              }
+              label="Phân bổ tài sản"
+              value={formatVND(summary.futureAllocation)}
+              color="text-indigo-600"
               bg="bg-indigo-50"
               border="border-indigo-100"
             />
@@ -2449,111 +2523,98 @@ export default function ReportsPage() {
               <div className="mt-4 sm:mt-5">
                 <div className="h-[220px] sm:h-[280px]">
                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                  <BarChart
-                    data={monthly}
-                    barGap={3}
-                    barCategoryGap={10}
-                    margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                    minTickGap={12}
-                    fontSize={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      fontSize={11}
-                      tickFormatter={(value) => String(value) + "M"}
-                    />
-                    <Tooltip
-                      formatter={(value) => formatMillionTooltip(value)}
-                      labelFormatter={(label) => String(label)}
-                    />
-                    <Bar
-                      dataKey="thu"
-                      name="Thu nhập"
-                      fill="#10b981"
-                      radius={[6, 6, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="chi"
-                      name="Chi tiêu"
-                      fill="#f43f5e"
-                      radius={[6, 6, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="tietKiem"
-                      name="Tiết kiệm"
-                      fill="#2563eb"
-                      radius={[6, 6, 0, 0]}
-                    />
-                  </BarChart>
+                    <BarChart
+                      data={monthly}
+                      barGap={3}
+                      barCategoryGap={10}
+                      margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="month"
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={12}
+                        fontSize={10}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        fontSize={11}
+                        tickFormatter={(value) => String(value) + "M"}
+                      />
+                      <Tooltip
+                        formatter={(value) => formatMillionTooltip(value)}
+                        labelFormatter={(label) => String(label)}
+                      />
+                      <Bar
+                        dataKey="cashIn"
+                        name="Thu vào"
+                        fill="#10b981"
+                        radius={[6, 6, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="cashOut"
+                        name="Chi ra"
+                        fill="#f43f5e"
+                        radius={[6, 6, 0, 0]}
+                      />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500 sm:mt-4 sm:gap-4">
                   <span className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-emerald-500" />
-                    Thu nhập
+                    Thu vào
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="size-2 rounded-full bg-rose-500" />
-                    Chi tiêu
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-blue-600" />
-                    Tiết kiệm
+                    Chi ra
                   </span>
                 </div>
                 <div className="mt-6 overflow-x-auto">
                   <table className="min-w-[460px] w-full text-xs sm:min-w-0">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        {[
-                          "Tháng",
-                          "Thu (M)",
-                          "Chi thật (M)",
-                          "Dòng tiền (M)",
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            className="pb-2 text-right font-bold text-slate-500 first:text-left"
-                          >
-                            {h}
-                          </th>
-                        ))}
+                        {["Tháng", "Thu vào (M)", "Chi ra (M)", "Dòng tiền ròng (M)"].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              className="pb-2 text-right font-bold text-slate-500 first:text-left"
+                            >
+                              {h}
+                            </th>
+                          ),
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {monthly
-                        .filter((m) => m.thu > 0 || m.chi > 0)
+                        .filter((m) => m.cashIn > 0 || m.cashOut > 0)
                         .map((m) => (
                           <tr key={m.month}>
                             <td className="py-1.5 font-bold text-slate-700">
                               {m.month}
                             </td>
                             <td className="py-1.5 text-right text-emerald-600">
-                              {m.thu.toFixed(1)}
+                              {m.cashIn.toFixed(1)}
                             </td>
                             <td className="py-1.5 text-right text-rose-500">
-                              {m.chi.toFixed(1)}
+                              {m.cashOut.toFixed(1)}
                             </td>
                             <td
                               className={
                                 "py-1.5 text-right font-bold " +
-                                (m.dongTienRong >= 0
+                                (m.netCashMovement >= 0
                                   ? "text-blue-600"
                                   : "text-rose-500")
                               }
                             >
-                              {m.dongTienRong.toFixed(1)}
+                              {m.netCashMovement.toFixed(1)}
                             </td>
                           </tr>
                         ))}
@@ -3538,7 +3599,7 @@ function CompareSection({
         <DeltaChip label="Thu nhập" delta={data.income} positive />
         <DeltaChip label="Chi phí thật" delta={data.expense} positive={false} />
         <DeltaChip
-          label="Dòng tiền sau chi phí"
+          label="Dòng tiền thanh khoản"
           delta={data.cashFlow}
           positive
         />

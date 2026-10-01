@@ -26,9 +26,16 @@ describe("DashboardPage period context after Action Center removal", () => {
     );
   });
 
-  it("Net Cash Flow KPI still carries the selected month to Transactions", () => {
-    expect(source).toContain(
-      "href: buildTransactionsHref({ month: dashboardMonthKey }),",
+  it("Net Cash Flow KPI stays non-clickable because liquidity spans multiple domains", () => {
+    const start = source.indexOf('title: "Dòng tiền ròng"');
+    const end = source.indexOf('title: "Tiết kiệm & Đầu tư"', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const kpi = source.slice(start, end);
+
+    expect(kpi).toContain("href: undefined as string | undefined");
+    expect(kpi).toContain(
+      "Cash movement spans Transactions + Savings + Investments/Forex",
     );
   });
 

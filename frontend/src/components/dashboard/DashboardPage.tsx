@@ -736,6 +736,19 @@ export default function DashboardPage() {
     [periodFinanceFlow.income, periodFinanceFlow.realExpense],
   );
 
+  const periodCashMovement = useMemo(
+    () => ({
+      cashIn: periodFinanceFlow.cashIn,
+      cashOut: periodFinanceFlow.cashOut,
+      net: periodFinanceFlow.netCashMovement,
+    }),
+    [
+      periodFinanceFlow.cashIn,
+      periodFinanceFlow.cashOut,
+      periodFinanceFlow.netCashMovement,
+    ],
+  );
+
   const periodFutureAllocation = useMemo(
     () => ({
       savingAmount: periodFinanceFlow.savingAllocation,
@@ -1997,22 +2010,30 @@ export default function DashboardPage() {
 
   const cashFlowTrend = useMemo(
     () =>
-      buildMonthlyCashFlowData(
-        selectedYearTransactions,
+      buildMonthlyCashFlowData({
+        transactions: selectedYearTransactions,
         categories,
-        12,
+        savingMovements: savingTransactions,
+        forexCashTransactions,
+        months: 12,
         selectedYear,
-      ),
-    [selectedYearTransactions, categories, selectedYear],
+      }),
+    [
+      selectedYearTransactions,
+      categories,
+      savingTransactions,
+      forexCashTransactions,
+      selectedYear,
+    ],
   );
 
   // ── Asset pie ─────────────────────────────────────────────────────────────
 
   // ── Spending ──────────────────────────────────────────────────────────────
 
-  // RULE-503020-RETIRE-1.3: these are factual Dashboard derivations that are
-  // independent of the retired percentage-allocation rule. The earlier patch
-  // removed them accidentally because they sat next to the old allocation memo.
+  // CASH-MOVEMENT-SSOT-1: the chart is now a liquidity view. Income/expense
+  // remain available separately through periodFlowSummary and continue to feed
+  // Budget, spending and Financial Structure unchanged.
   const cashFlowData = useMemo(() => {
     const now = new Date();
     const latestActualMonth =
@@ -2028,51 +2049,25 @@ export default function DashboardPage() {
 
       if (isFutureMonth) {
         return {
-          ...item,
-          thu: null,
-          chi: null,
-          tietKiem: null,
-          dauTu: null,
-          dongTienRong: null,
+          label: item.label,
+          cashIn: null,
+          cashOut: null,
+          netCashMovement: null,
           hasData: false,
         };
       }
 
-      const monthStart = `${selectedYear}-${String(month).padStart(2, "0")}-01`;
-      const monthEndDate = new Date(selectedYear, month, 0);
-      const monthEnd = toLocalDateKey(monthEndDate);
-      const monthFlow = calculateFinanceFlowSnapshot({
-        transactions: selectedYearTransactions,
-        categories,
-        savingMovements: savingTransactions,
-        forexCashTransactions,
-        dateRange: { startDate: monthStart, endDate: monthEnd },
-      });
-      const tietKiem = monthFlow.savingAllocation;
-      const dauTu = monthFlow.investmentAllocation;
-      const thu = monthFlow.income;
-      const chi = monthFlow.realExpense;
-
       return {
-        ...item,
-        thu,
-        chi,
-        tietKiem,
-        dauTu,
-        dongTienRong: thu - chi,
-        hasData: thu > 0 || chi > 0 || tietKiem > 0 || dauTu > 0,
+        label: item.label,
+        cashIn: item.cashIn,
+        cashOut: item.cashOut,
+        netCashMovement: item.netCashMovement,
+        hasData: item.cashIn > 0 || item.cashOut > 0,
       };
     });
-  }, [
-    cashFlowTrend,
-    categories,
-    forexCashTransactions,
-    savingTransactions,
-    selectedYear,
-    selectedYearTransactions,
-  ]);
+  }, [cashFlowTrend, selectedYear]);
 
-  const netCashFlow = summary.income - summary.expense;
+  const netCashMovement = periodCashMovement.net;
 
   // DASH-EMERGENCY-FUND-BASELINE-1: use completed-month expense evidence
   // rather than the in-progress selected month, which can wildly inflate coverage.
@@ -2219,6 +2214,10 @@ export default function DashboardPage() {
   // before cashFlowReady's own dependencies resolve, so this is a safe,
   // no-premature-render superset, not a new independent readiness state.
   const financialStructureReady = cashFlowReady && savingInvestmentReady;
+  // Reuse the existing fully validated allocation dependencies instead of
+  // introducing duplicate fetches. This gate is a correctness superset for
+  // cash movement: transactions/categories + saving_transactions + Forex ledger.
+  const cashMovementReady = cashFlowReady && savingInvestmentReady;
 
   // ── Goal rows: use the same source-of-truth logic as GoalsPage ───────────
   const goalRows = useMemo(() => goalMeta, [goalMeta]);
@@ -2358,7 +2357,7 @@ export default function DashboardPage() {
   //     skeleton for no data reason whenever the transactions/categories
   //     fetch happened to be slower than the Net Worth bundle.
   //   - the "Dòng tiền dương/âm" badge — `cashFlowReady` alone (unchanged
-  //     dependency: `netCashFlow` is periodFlowSummary's income/expense).
+  //     dependency: `netCashMovement` is periodFlowSummary's income/expense).
   //   - the comparison delta + NetWorthTrendChart — `netWorthHistoryReady`
   //     alone. The chart now reads the year-scoped persisted snapshot table and
   //     no longer waits on cash-flow or saving-transaction ledgers.
@@ -2378,14 +2377,14 @@ export default function DashboardPage() {
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
-      value: formatVND(netCashFlow),
-      note: `Thu ${formatCompactVND(summary.income)} · Chi ${formatCompactVND(summary.expense)}`,
-      tone: netCashFlow >= 0 ? "good" : "danger",
+      value: formatVND(netCashMovement),
+      note: `Thu vào ${formatCompactVND(periodCashMovement.cashIn)} · Chi ra ${formatCompactVND(periodCashMovement.cashOut)}`,
+      tone: netCashMovement >= 0 ? "good" : "danger",
       icon: TrendingUp,
-      ready: cashFlowReady,
-      // Period metric (periodFlowSummary) — carries the selected Dashboard
-      // period, not today's date, to Transactions.
-      href: buildTransactionsHref({ month: dashboardMonthKey }),
+      ready: cashMovementReady,
+      // Cash movement spans Transactions + Savings + Investments/Forex, so a
+      // Transactions-only deep link would hide part of the metric.
+      href: undefined as string | undefined,
     },
     {
       title: "Tiết kiệm & Đầu tư",
@@ -2477,8 +2476,10 @@ export default function DashboardPage() {
     return {
       income: flow.income,
       expense: flow.realExpense,
-      saving: flow.savingAllocation,
-      net: flow.netCashFlow,
+      allocation: flow.futureAllocation,
+      cashIn: flow.cashIn,
+      cashOut: flow.cashOut,
+      net: flow.netCashMovement,
     };
   }, [categories, forexCashTransactions, savingTransactions, transactions]);
 
@@ -2790,17 +2791,17 @@ export default function DashboardPage() {
 
             {/* PERF-4B: badge still depends on cashFlowReady alone. */}
             <div className="mt-3">
-              {cashFlowReady ? (
+              {cashMovementReady ? (
                 <span
                   className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:text-xs ${
-                    netCashFlow >= 0
+                    netCashMovement >= 0
                       ? "border-emerald-300 bg-[#E5F7EF] text-[#076B4D] shadow-[0_2px_7px_rgba(8,122,87,0.10)]"
                       : "border-rose-200 bg-rose-50/95 text-rose-700 shadow-[0_2px_7px_rgba(225,29,72,0.08)]"
                   }`}
                 >
-                  {netCashFlow >= 0 ? "↑" : "↓"}{" "}
-                  {netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-                  {formatVND(netCashFlow)}
+                  {netCashMovement >= 0 ? "↑" : "↓"}{" "}
+                  {netCashMovement >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
+                  {formatVND(netCashMovement)}
                 </span>
               ) : (
                 <div className="h-6 w-36 animate-pulse rounded-full bg-slate-100" />
@@ -3277,31 +3278,25 @@ export default function DashboardPage() {
       <section className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <Panel
           title="Dòng tiền trong kỳ"
-          subtitle="Thu nhập, chi tiêu và phần tiền còn lại theo bộ lọc thời gian"
+          subtitle="Tiền thực sự vào/ra ví, gồm Savings và Forex nhưng không làm thay đổi chi tiêu thật"
         >
-          {/* summary.income/expense and cashFlowData are both
-              derived from `transactions`, a period (year-scoped) dataset —
-              gate on cashFlowReady (the existing "transactions belong to the
-              currently selected year" signal) so a still-held prior year's
-              transactions cannot render as this year's cash flow while a
-              year switch's period fetch is still pending. */}
-          {cashFlowReady ? (
+          {cashMovementReady ? (
             <>
               <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
                 <MiniStat
-                  label="Thu nhập"
-                  value={formatVND(summary.income)}
+                  label="Thu vào"
+                  value={formatVND(periodCashMovement.cashIn)}
                   color="text-emerald-600"
                 />
                 <MiniStat
-                  label="Chi tiêu"
-                  value={formatVND(summary.expense)}
+                  label="Chi ra"
+                  value={formatVND(periodCashMovement.cashOut)}
                   color="text-rose-500"
                 />
                 <MiniStat
-                  label="Còn lại"
-                  value={formatVND(netCashFlow)}
-                  color={netCashFlow >= 0 ? "text-blue-600" : "text-rose-500"}
+                  label="Dòng tiền ròng"
+                  value={formatVND(netCashMovement)}
+                  color={netCashMovement >= 0 ? "text-blue-600" : "text-rose-500"}
                   className="col-span-2 sm:col-span-1"
                 />
               </div>
@@ -3717,18 +3712,18 @@ export default function DashboardPage() {
 
           <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <DailyMetric
-              label="Thu hôm nay"
-              value={formatVND(todaySnapshot.income)}
+              label="Thu vào hôm nay"
+              value={formatVND(todaySnapshot.cashIn)}
               tone="good"
             />
             <DailyMetric
-              label="Chi hôm nay"
-              value={formatVND(todaySnapshot.expense)}
+              label="Chi ra hôm nay"
+              value={formatVND(todaySnapshot.cashOut)}
               tone="danger"
             />
             <DailyMetric
-              label="Đã tiết kiệm"
-              value={formatVND(todaySnapshot.saving)}
+              label="Đã phân bổ"
+              value={formatVND(todaySnapshot.allocation)}
               tone="saving"
             />
             <DailyMetric

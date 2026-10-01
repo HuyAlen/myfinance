@@ -1382,10 +1382,23 @@ export type SavingAllocationMovement = {
 };
 
 export type FinanceFlowSnapshot = {
+  /** Personal-finance semantics. Never includes Savings/Forex principal movement. */
   income: number;
   realExpense: number;
   realExpenseCount: number;
   netCashFlow: number;
+
+  /** Liquidity semantics: actual money entering/leaving spendable wallets. */
+  cashIn: number;
+  cashOut: number;
+  netCashMovement: number;
+  ordinaryCashIn: number;
+  ordinaryCashOut: number;
+  savingCashIn: number;
+  savingCashOut: number;
+  forexCashIn: number;
+  forexCashOut: number;
+
   /** Manual/legacy saving allocations recorded in the main transactions ledger. */
   transactionSavingAllocation: number;
   /** Signed net movement from saving_transactions (deposit - withdraw - settlement). */
@@ -1484,6 +1497,81 @@ export function getForexFeesFromLedger(
   );
 }
 
+export type SavingCashMovementSnapshot = {
+  deposits: number;
+  withdrawals: number;
+  settlements: number;
+  cashIn: number;
+  cashOut: number;
+};
+
+/**
+ * Actual spendable-wallet movement caused by the Savings ledger.
+ * Interest stays inside Savings until a withdraw/settlement moves it back to cash.
+ */
+export function getSavingCashMovementFromLedger(
+  movements: SavingAllocationMovement[],
+  dateRange?: DateRangeInput,
+): SavingCashMovementSnapshot {
+  let deposits = 0;
+  let withdrawals = 0;
+  let settlements = 0;
+
+  for (const movement of scopeSavingMovements(movements, dateRange)) {
+    const amount = Math.max(0, Number(movement.amount) || 0);
+    if (movement.type === "deposit") deposits += amount;
+    else if (movement.type === "withdraw") withdrawals += amount;
+    else if (movement.type === "settlement") settlements += amount;
+  }
+
+  return {
+    deposits,
+    withdrawals,
+    settlements,
+    cashIn: withdrawals + settlements,
+    cashOut: deposits,
+  };
+}
+
+export type ForexCashMovementSnapshot = {
+  deposits: number;
+  withdrawals: number;
+  fees: number;
+  cashIn: number;
+  cashOut: number;
+};
+
+/**
+ * Actual wallet movement caused by Forex funding.
+ * Principal remains an asset transfer, while fees remain realExpense. For
+ * liquidity reporting, fees are still cash leaving the wallet, so cashOut is
+ * gross deposits + fees and withdrawals remain gross cashIn.
+ */
+export function getForexCashMovementFromLedger(
+  transactions: ForexCashTransaction[],
+  dateRange?: DateRangeInput,
+): ForexCashMovementSnapshot {
+  let deposits = 0;
+  let withdrawals = 0;
+  let fees = 0;
+
+  for (const transaction of scopeForexCashTransactions(transactions, dateRange)) {
+    const amount = normalizeForexMoney(transaction.amount);
+    const fee = normalizeForexMoney(transaction.fee);
+    fees += fee;
+    if (transaction.type === "deposit") deposits += amount;
+    else withdrawals += amount;
+  }
+
+  return {
+    deposits,
+    withdrawals,
+    fees,
+    cashIn: withdrawals,
+    cashOut: deposits + fees,
+  };
+}
+
 /**
  * FINANCE-FLOW-SSOT-1 cross-page flow contract.
  *
@@ -1508,11 +1596,29 @@ export function calculateFinanceFlowSnapshot(input: {
   );
   const income = getTotalIncome(transactions);
   const realExpenses = getRealExpenseTransactions(transactions, categories);
+  const ordinaryRealExpense = realExpenses.reduce(
+    (sum, item) => sum + item.amount,
+    0,
+  );
+  const scopedSavingMovements = scopeSavingMovements(
+    input.savingMovements ?? [],
+    input.dateRange,
+  );
   const scopedForexCashTransactions = scopeForexCashTransactions(
     input.forexCashTransactions ?? [],
     input.dateRange,
   );
-  const forexFees = getForexFeesFromLedger(scopedForexCashTransactions);
+  const savingCashMovement = getSavingCashMovementFromLedger(
+    scopedSavingMovements,
+  );
+  const forexCashMovement = getForexCashMovementFromLedger(
+    scopedForexCashTransactions,
+  );
+  // Keep the established FOREX-PERFORMANCE-SSOT-1 fee contract explicit:
+  // fees are real expenses, while principal stays outside income/expense.
+  const forexFees = getForexFeesFromLedger(
+    scopedForexCashTransactions,
+  );
   const forexFeeCount = scopedForexCashTransactions.filter(
     (transaction) => normalizeForexMoney(transaction.fee) > 0,
   ).length;
@@ -1523,8 +1629,7 @@ export function calculateFinanceFlowSnapshot(input: {
     categories,
   );
   const savingLedgerNet = getNetSavingAllocationFromLedger(
-    input.savingMovements ?? [],
-    input.dateRange,
+    scopedSavingMovements,
   );
   const savingAllocation = Math.max(
     0,
@@ -1543,11 +1648,37 @@ export function calculateFinanceFlowSnapshot(input: {
   );
   const futureAllocation = savingAllocation + investmentAllocation;
 
+  // CASH-MOVEMENT-SSOT-1: liquidity is deliberately parallel to personal-
+  // finance semantics. Savings/Forex principal movement changes spendable
+  // cash, but never becomes income/realExpense. Legacy/manual allocation
+  // transactions are wallet outflows and therefore participate in cashOut.
+  const ordinaryCashIn = income;
+  const ordinaryCashOut =
+    ordinaryRealExpense +
+    transactionSavingAllocation +
+    transactionInvestmentAllocation;
+  const savingCashIn = savingCashMovement.cashIn;
+  const savingCashOut = savingCashMovement.cashOut;
+  const forexCashIn = forexCashMovement.cashIn;
+  const forexCashOut = forexCashMovement.cashOut;
+  const cashIn = ordinaryCashIn + savingCashIn + forexCashIn;
+  const cashOut = ordinaryCashOut + savingCashOut + forexCashOut;
+  const netCashMovement = cashIn - cashOut;
+
   return {
     income,
     realExpense,
     realExpenseCount: realExpenses.length + forexFeeCount,
     netCashFlow: income - realExpense,
+    cashIn,
+    cashOut,
+    netCashMovement,
+    ordinaryCashIn,
+    ordinaryCashOut,
+    savingCashIn,
+    savingCashOut,
+    forexCashIn,
+    forexCashOut,
     transactionSavingAllocation,
     savingLedgerNet,
     savingAllocation,
@@ -2784,51 +2915,89 @@ function monthLabel(key: string): string {
 export interface MonthlyCashFlow {
   month: string; // YYYY-MM
   label: string; // "T1" … "T12"
+  /** Existing personal-finance semantics. */
   thu: number; // income in VND (transfers excluded)
-  chi: number; // real expense in VND (saving/investment/transfer excluded)
-  tietKiem: number; // income − real expense
+  chi: number; // real expense in VND (saving/investment principal excluded)
+  tietKiem: number; // income - real expense
   tichLuy: number; // saving + investment allocations
+  /** CASH-MOVEMENT-SSOT-1 liquidity semantics. */
+  cashIn: number;
+  cashOut: number;
+  netCashMovement: number;
 }
 
-/**
- * Builds real monthly cash-flow rows from actual transactions.
- * Transfer transactions are excluded from both income and expense.
- */
+export type MonthlyCashFlowBuildOptions = {
+  transactions: Transaction[];
+  categories?: Category[];
+  savingMovements?: SavingAllocationMovement[];
+  forexCashTransactions?: ForexCashTransaction[];
+  months?: number;
+  selectedYear?: number;
+};
+
+export function buildMonthlyCashFlowData(
+  input: MonthlyCashFlowBuildOptions,
+): MonthlyCashFlow[];
 export function buildMonthlyCashFlowData(
   transactions: Transaction[],
+  categoriesOrMonths?: Category[] | number,
+  maybeMonths?: number,
+  selectedYear?: number,
+): MonthlyCashFlow[];
+/**
+ * Builds monthly personal-finance AND liquidity rows from the same canonical
+ * finance-flow snapshot. The legacy positional signature stays supported so
+ * non-Dashboard callers do not silently change behavior.
+ */
+export function buildMonthlyCashFlowData(
+  transactionsOrOptions: Transaction[] | MonthlyCashFlowBuildOptions,
   categoriesOrMonths: Category[] | number = 6,
   maybeMonths = 6,
   selectedYear?: number,
 ): MonthlyCashFlow[] {
-  const categories = Array.isArray(categoriesOrMonths)
-    ? categoriesOrMonths
-    : [];
-  const months = Array.isArray(categoriesOrMonths)
-    ? maybeMonths
-    : categoriesOrMonths;
-  const categoryById = buildCategoryMap(categories);
-  const monthKeys = Number.isFinite(selectedYear)
-    ? getYearMonthKeys(Number(selectedYear))
+  const options: MonthlyCashFlowBuildOptions = Array.isArray(transactionsOrOptions)
+    ? {
+        transactions: transactionsOrOptions,
+        categories: Array.isArray(categoriesOrMonths) ? categoriesOrMonths : [],
+        months: Array.isArray(categoriesOrMonths)
+          ? maybeMonths
+          : categoriesOrMonths,
+        selectedYear,
+      }
+    : transactionsOrOptions;
+
+  const transactions = options.transactions;
+  const categories = options.categories ?? [];
+  const savingMovements = options.savingMovements ?? [];
+  const forexCashTransactions = options.forexCashTransactions ?? [];
+  const months = options.months ?? 6;
+  const targetYear = options.selectedYear;
+  const monthKeys = Number.isFinite(targetYear)
+    ? getYearMonthKeys(Number(targetYear))
     : getLastMonthKeys(months);
 
   return monthKeys.map((key) => {
-    const txns = transactions.filter((t) => t.date.startsWith(key));
-    const thu = txns
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const chi = txns
-      .filter((t) => isRealExpenseTransaction(t, categoryById))
-      .reduce((sum, t) => sum + t.amount, 0);
-    const tichLuy = txns
-      .filter((t) => isFutureAllocationTransaction(t, categoryById))
-      .reduce((sum, t) => sum + t.amount, 0);
+    const flow = calculateFinanceFlowSnapshot({
+      transactions,
+      categories,
+      savingMovements,
+      forexCashTransactions,
+      dateRange: {
+        startDate: key + "-01",
+        endDate: key + "-31",
+      },
+    });
+
     return {
       month: key,
       label: monthLabel(key),
-      thu,
-      chi,
-      tietKiem: thu - chi,
-      tichLuy,
+      thu: flow.income,
+      chi: flow.realExpense,
+      tietKiem: flow.netCashFlow,
+      tichLuy: flow.futureAllocation,
+      cashIn: flow.cashIn,
+      cashOut: flow.cashOut,
+      netCashMovement: flow.netCashMovement,
     };
   });
 }

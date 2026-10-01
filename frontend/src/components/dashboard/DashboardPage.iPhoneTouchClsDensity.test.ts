@@ -148,9 +148,10 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     expect(source).not.toContain("Top danh mục trong tháng hiện tại");
   });
 
-  it("does not alter the Dashboard readiness gates or chart data bindings", () => {
+  it("keeps Net Worth readiness intact and uses the dedicated cross-domain cash-movement gate", () => {
     expect(source).toContain("{isDashboardReady ? (");
-    expect(source).toContain("{cashFlowReady ? (");
+    expect(source).toContain("const cashMovementReady = cashFlowReady && savingInvestmentReady;");
+    expect(source).toContain("{cashMovementReady ? (");
     expect(source).toContain("<NetWorthTrendChart trend={netWorthTrend} />");
     expect(source).toContain("<CashFlowChart data={cashFlowData} />");
   });

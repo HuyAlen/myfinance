@@ -63,7 +63,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
     expect(headlineTextIdx).toBeGreaterThan(readyIdx);
   });
 
-  it("the cash-flow badge is gated on cashFlowReady alone, independent of the headline's own gate", () => {
+  it("the cash-flow badge is gated on cashMovementReady, independent of the headline's own gate", () => {
     const start = source.indexOf(
       "DASH-MOBILE-POLISH-2.1: True Soft Blue hierarchy.",
     );
@@ -73,10 +73,10 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
     );
     const headlineRegion = source.slice(start, end);
 
-    expect(headlineRegion).toContain("{cashFlowReady ? (");
-    const badgeGateIdx = headlineRegion.indexOf("{cashFlowReady ? (");
+    expect(headlineRegion).toContain("{cashMovementReady ? (");
+    const badgeGateIdx = headlineRegion.indexOf("{cashMovementReady ? (");
     const badgeTextIdx = headlineRegion.indexOf(
-      '{netCashFlow >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"}',
+      '{netCashMovement >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"}',
     );
     expect(badgeTextIdx).toBeGreaterThan(badgeGateIdx);
   });

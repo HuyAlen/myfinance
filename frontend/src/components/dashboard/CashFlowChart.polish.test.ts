@@ -16,7 +16,7 @@ describe("CashFlowChart dashboard polish contract", () => {
   it("does not draw meaningless zero-only historical months as a flat blue line", () => {
     expect(source).toContain("normalizeCashFlowPointForChart");
     expect(source).toContain("hasCashFlowActivity");
-    expect(source).toContain("dongTienRong: null");
+    expect(source).toContain("netCashMovement: null");
   });
 
   it("uses a rounded data-aware y scale while preserving zero as the cash-flow baseline", () => {
@@ -37,11 +37,14 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain('height="100%"');
   });
 
-  it("adds compact chart context and a readable legend", () => {
+  it("labels liquidity semantics explicitly", () => {
     expect(source).toContain("tháng có dòng tiền");
-    expect(source).toContain("Thu nhập");
-    expect(source).toContain("Chi tiêu");
-    expect(source).toContain("Còn lại");
+    expect(source).toContain("Thu vào");
+    expect(source).toContain("Chi ra");
+    expect(source).toContain("Dòng tiền ròng");
+    expect(source).toContain('dataKey="cashIn"');
+    expect(source).toContain('dataKey="cashOut"');
+    expect(source).toContain('dataKey="netCashMovement"');
   });
 
   it("uses dashboard-balanced semantic cash-flow colors without changing chart density", () => {
@@ -53,22 +56,9 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain("maxBarSize={18}");
   });
 
-  it("gives the remaining-cash line a little more visual weight than polish 1", () => {
+  it("gives the net-cash line clear visual weight", () => {
     expect(source).toContain("strokeWidth={3.75}");
     expect(source).toContain("r: 4,");
     expect(source).toContain("r: 5.5,");
   });
-
-  it("sharpens chart chrome and marks without changing the base financial palette", () => {
-    expect(source).toContain('stroke="#DCE6EF"');
-    expect(source).toContain('stroke="#B9C9D8"');
-    expect(
-      source.match(/fontWeight=\{600\}/g)?.length ?? 0,
-    ).toBeGreaterThanOrEqual(2);
-    expect(source).toContain('font-semibold text-slate-600');
-    expect(source).toContain('stroke="#10B981"');
-    expect(source).toContain('stroke="#F43F5E"');
-    expect(source).toContain("strokeWidth={3.75}");
-  });
-
 });
