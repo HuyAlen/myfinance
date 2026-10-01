@@ -13,7 +13,7 @@ describe("SavingsPage uses a natural mobile transaction rhythm", () => {
   const source = readFileSync(
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n?/g, "\n");
 
   const movementStart = source.indexOf(
     "/* SAVINGS-UX-1: focused money-movement sheet.",
@@ -55,7 +55,7 @@ describe("SavingsPage uses a natural mobile transaction rhythm", () => {
     const formStart = movementSource.indexOf("Chi tiết giao dịch");
     const impactStart = movementSource.indexOf('"Sau khi nạp"', formStart);
     const footerStart = movementSource.indexOf(
-      'className="grid shrink-0 grid-cols-2 gap-2 border-t',
+      'className="relative z-20 grid shrink-0 grid-cols-2 gap-2 border-t',
       impactStart,
     );
 
@@ -64,9 +64,12 @@ describe("SavingsPage uses a natural mobile transaction rhythm", () => {
     expect(footerStart).toBeGreaterThan(impactStart);
   });
 
-  it("preserves full-screen mobile architecture, safe areas, and 1.3 color semantics", () => {
+  it("preserves visual-viewport full-screen architecture, safe areas, and 1.3 color semantics", () => {
     expect(movementSource).toContain(
-      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+      "h-[var(--savings-visual-viewport-height,100dvh)] overflow-hidden bg-white",
+    );
+    expect(movementSource).toContain(
+      "relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white",
     );
     expect(movementSource).toContain(
       "pb-[calc(0.5rem+env(safe-area-inset-bottom))]",

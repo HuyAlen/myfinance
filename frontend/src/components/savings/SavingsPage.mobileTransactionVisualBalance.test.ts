@@ -12,7 +12,7 @@ describe("SavingsPage balances the mobile money-movement screen", () => {
   const source = readFileSync(
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
-  );
+  ).replace(/\r\n?/g, "\n");
 
   const movementStart = source.indexOf(
     "/* SAVINGS-UX-1: focused money-movement sheet.",
@@ -22,9 +22,12 @@ describe("SavingsPage balances the mobile money-movement screen", () => {
   );
   const movementSource = source.slice(movementStart, historyStart);
 
-  it("keeps the 1.2 full-screen mobile architecture", () => {
+  it("keeps the full-screen mobile architecture with real visual-viewport sizing", () => {
     expect(movementSource).toContain(
-      "relative z-10 flex h-dvh w-full flex-col overflow-hidden bg-white",
+      "h-[var(--savings-visual-viewport-height,100dvh)] overflow-hidden bg-white",
+    );
+    expect(movementSource).toContain(
+      "relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white",
     );
     expect(movementSource).toContain(
       "min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain",

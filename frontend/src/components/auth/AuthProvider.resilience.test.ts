@@ -2,10 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = fs.readFileSync(
-  path.join(process.cwd(), "src/components/auth/AuthProvider.tsx"),
-  "utf8",
-);
+const source = fs
+  .readFileSync(
+    path.join(process.cwd(), "src/components/auth/AuthProvider.tsx"),
+    "utf8",
+  )
+  .replace(/\r\n?/g, "\n");
 
 describe("AUTH-RESILIENCE-1 — auth bootstrap recovery contract", () => {
   it("bounds initial session bootstrap so AppShell cannot remain loading forever", () => {

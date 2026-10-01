@@ -6,7 +6,7 @@ const repoRoot = path.resolve(__dirname, "../../..");
 const activityPage = readFileSync(
   path.join(repoRoot, "frontend/src/components/activity/ActivityPage.tsx"),
   "utf8",
-);
+).replace(/\r\n?/g, "\n");
 
 describe("AUDIT-UI-1.3 iPhone filter sheet, readability and touch targets", () => {
   it("replaces the tall sticky mobile filter form with one compact trigger", () => {
