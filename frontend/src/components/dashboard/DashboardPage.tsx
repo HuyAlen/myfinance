@@ -62,6 +62,15 @@ import {
   readTransactionReviewAcknowledgements,
 } from "@/src/lib/transactions/transactionReviewWorkflow";
 import {
+  MONTH_END_REVIEW_HISTORY_STORAGE_KEY,
+  createMonthEndReviewHistoryRecord,
+  getMonthEndReviewAttentionCount,
+  persistMonthEndReviewHistory,
+  readMonthEndReviewHistory,
+  upsertMonthEndReviewHistory,
+  type MonthEndReviewHistoryRecord,
+} from "@/src/lib/month-end/monthEndReviewHistory";
+import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -2995,6 +3004,67 @@ export default function DashboardPage() {
     ],
   );
 
+  // MONTH-END-REVIEW-HISTORY-1: closeout itself remains a derived view. Only
+  // an explicit user action persists a compact point-in-time review snapshot;
+  // it never freezes transactions, wallet balances, budgets or Net Worth.
+  const [monthEndReviewHistory, setMonthEndReviewHistory] = useState<
+    MonthEndReviewHistoryRecord[]
+  >([]);
+  const [monthEndReviewHistoryError, setMonthEndReviewHistoryError] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    setMonthEndReviewHistory(readMonthEndReviewHistory());
+  }, []);
+
+  useEffect(() => {
+    function handleMonthEndReviewHistoryStorage(event: StorageEvent) {
+      if (event.key !== MONTH_END_REVIEW_HISTORY_STORAGE_KEY) return;
+      setMonthEndReviewHistory(readMonthEndReviewHistory());
+    }
+
+    window.addEventListener("storage", handleMonthEndReviewHistoryStorage);
+    return () =>
+      window.removeEventListener("storage", handleMonthEndReviewHistoryStorage);
+  }, []);
+
+  const savedMonthEndReview = useMemo(
+    () =>
+      monthEndReviewHistory.find(
+        (record) => record.monthKey === dashboardMonthKey,
+      ),
+    [dashboardMonthKey, monthEndReviewHistory],
+  );
+
+  function handleSaveMonthEndReviewHistory() {
+    if (!monthEndCloseout.visible) return;
+
+    const record = createMonthEndReviewHistoryRecord({
+      monthKey: monthEndCloseout.monthKey,
+      budgetConfigured: monthEndCloseout.budgetConfigured,
+      budgetUsage: monthEndCloseout.budgetUsage,
+      reviewPending: monthEndCloseout.reviewPending,
+      overBudgetCount: monthEndCloseout.overBudgetCount,
+      netCashMovement: monthEndCloseout.netCashMovement,
+      netWorthDelta: monthEndCloseout.netWorthDelta,
+    });
+    const nextHistory = upsertMonthEndReviewHistory(
+      monthEndReviewHistory,
+      record,
+    );
+
+    if (!persistMonthEndReviewHistory(nextHistory)) {
+      setMonthEndReviewHistoryError(
+        "Không thể lưu lịch sử trên trình duyệt này. Dữ liệu tài chính hiện tại không bị thay đổi.",
+      );
+      return;
+    }
+
+    setMonthEndReviewHistory(nextHistory);
+    setMonthEndReviewHistoryError(null);
+  }
+
   return (
     <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
       {/* UI-DASH-1: financial position leads the page — Hero communicates
@@ -4029,10 +4099,132 @@ export default function DashboardPage() {
               {monthEndCloseout.netWorthDelta !== null ? (
                 <p className="mt-3 text-[11px] font-semibold text-[#60778D]">Net Worth trong snapshot gần nhất của kỳ thay đổi <span className={monthEndCloseout.netWorthDelta >= 0 ? "font-black text-emerald-600" : "font-black text-rose-500"}>{monthEndCloseout.netWorthDelta >= 0 ? "+" : ""}{formatVND(monthEndCloseout.netWorthDelta)}</span>.</p>
               ) : null}
+
+              <div
+                data-dashboard-decision="save-month-end-review"
+                className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3.5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-[#294A66]">
+                    {savedMonthEndReview
+                      ? "Đã có bản lưu cho tháng này"
+                      : "Lưu kết quả rà soát tháng"}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
+                    Snapshot chỉ lưu các chỉ số review trên thiết bị này; không tạo giao dịch, không đổi số dư và không khóa sổ cái.
+                  </p>
+                  {savedMonthEndReview ? (
+                    <p className="mt-1 text-[10px] font-semibold text-[#71879A]">
+                      Lần lưu gần nhất {new Date(savedMonthEndReview.savedAt).toLocaleString("vi-VN", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  ) : null}
+                  {monthEndReviewHistoryError ? (
+                    <p className="mt-1 text-[11px] font-bold text-rose-600">
+                      {monthEndReviewHistoryError}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveMonthEndReviewHistory}
+                  className="min-h-10 shrink-0 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-black text-white transition hover:bg-blue-700"
+                >
+                  {savedMonthEndReview ? "Cập nhật bản lưu" : "Lưu kết quả tháng"}
+                </button>
+              </div>
             </div>
           </Panel>
         ) : null}
       </section>
+
+      {monthEndReviewHistory.length > 0 ? (
+        <Panel
+          title="Lịch sử chốt tháng"
+          subtitle="Bản lưu review gần đây trên thiết bị này; lưu lại cùng tháng sẽ cập nhật snapshot mới nhất"
+        >
+          <div
+            data-dashboard-decision="month-end-review-history"
+            className="mt-4 space-y-2"
+          >
+            {monthEndReviewHistory.slice(0, 6).map((record) => {
+              const attentionCount = getMonthEndReviewAttentionCount(record);
+              return (
+                <div
+                  key={record.monthKey}
+                  className={[
+                    "rounded-2xl border px-3.5 py-3",
+                    record.monthKey === dashboardMonthKey
+                      ? "border-blue-200 bg-blue-50/60"
+                      : "border-[#DCE8F1] bg-[#F8FBFE]",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-[#294A66]">
+                        Tháng {record.monthKey.slice(5, 7)}/{record.monthKey.slice(0, 4)}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold text-[#71879A]">
+                        Lưu {new Date(record.savedAt).toLocaleString("vi-VN", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <span
+                      className={[
+                        "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black",
+                        attentionCount === 0
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-700",
+                      ].join(" ")}
+                    >
+                      {attentionCount === 0
+                        ? "Hoàn tất"
+                        : attentionCount + " điểm cần chú ý"}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                    <div>
+                      <p className="font-semibold text-[#71879A]">Ngân sách</p>
+                      <p className="mt-0.5 font-black text-[#31536F]">
+                        {record.budgetConfigured ? record.budgetUsage + "%" : "Chưa lập"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[#71879A]">Cần review</p>
+                      <p className="mt-0.5 font-black text-[#31536F]">
+                        {record.reviewPending}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[#71879A]">Cash ròng</p>
+                      <p
+                        className={[
+                          "mt-0.5 font-black tabular-nums",
+                          record.netCashMovement >= 0
+                            ? "text-[#2F80ED]"
+                            : "text-rose-500",
+                        ].join(" ")}
+                      >
+                        {formatVND(record.netCashMovement)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      ) : null}
 
       {/* UI-DASH-1: moved down from leading the page — upcoming recurring
           items and top spending categories are useful context (MEDIUM

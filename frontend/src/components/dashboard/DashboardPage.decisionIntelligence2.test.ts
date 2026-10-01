@@ -33,10 +33,13 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
     expect(source).toContain("budgetedCategoryIds");
   });
 
-  it("adds no new storage read or Supabase query", () => {
+  it("still adds no Supabase query; later month-end history is explicit browser UX persistence", () => {
     expect(source.split("getTransactionsInRange(").length - 1).toBe(2);
     expect(source.split("getBudgets(").length - 1).toBe(1);
     expect(source).not.toContain("getRecurringForecast");
     expect(source).not.toContain("saveMonthEndCloseout");
+    expect(source).toContain("readMonthEndReviewHistory()");
+    expect(source).toContain("persistMonthEndReviewHistory(nextHistory)");
+    expect(source).not.toContain("getMonthEndReviewHistory(");
   });
 });
