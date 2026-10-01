@@ -445,7 +445,7 @@ function RealtimeStatusChip() {
 
   return (
     <div
-      className="flex h-10 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/80 px-3 text-xs font-semibold text-slate-500 shadow-sm"
+      className="hidden h-10 items-center gap-1.5 px-1.5 text-[11px] font-bold text-[#60778D] lg:flex"
       title={
         connected
           ? timeStr

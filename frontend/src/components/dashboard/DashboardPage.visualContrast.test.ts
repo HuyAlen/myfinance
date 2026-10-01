@@ -43,9 +43,18 @@ describe("Dashboard visual contrast hierarchy", () => {
     expect(source).toContain("Biến động tài sản ròng");
   });
 
-  it("keeps cash-flow semantics but makes warning and positive chips easier to scan", () => {
-    expect(source).toContain("border-emerald-300 bg-[#E5F7EF] text-[#076B4D]");
-    expect(source).toContain("border-rose-200 bg-rose-50/95 text-rose-700");
+  it("keeps Hero status tied to canonical Net Worth history instead of period cash-flow chips", () => {
+    const heroStart = source.indexOf("DASH-MOBILE-POLISH-2.1: True Soft Blue hierarchy.");
+    expect(heroStart).toBeGreaterThan(-1);
+    const heroEnd = source.indexOf("Mobile uses a flatter financial breakdown", heroStart);
+    expect(heroEnd).toBeGreaterThan(heroStart);
+    const hero = source.slice(heroStart, heroEnd);
+
+    expect(source).toContain("So với snapshot trước");
+    expect(source).toContain("netWorthHistorySummary.changeFromPrevious");
+    expect(hero).not.toContain("Dòng tiền dương");
+    expect(hero).not.toContain("Dòng tiền âm");
+    expect(hero).not.toContain("cashMovementReady ? (");
   });
 
   it("exposes semantic Dashboard hooks so Dark mode never depends on generic white-card translation", () => {

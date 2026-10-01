@@ -43,6 +43,7 @@ import {
 import { isInternalTransferTransaction } from "@/src/lib/transactions/transactionClassification";
 
 import {
+  ArrowDownLeft,
   ArrowDownRight,
   ArrowUpRight,
   Briefcase,
@@ -273,7 +274,8 @@ type RecentActivityKind =
   | "expense"
   | "saving"
   | "investment"
-  | "forex"
+  | "forex-in"
+  | "forex-out"
   | "transfer";
 
 type RecentActivityItem = {
@@ -396,8 +398,8 @@ function getSavingActivityTitle(type: DashboardSavingTransaction["type"]) {
 }
 
 function getRecentAmountPrefix(kind: RecentActivityKind) {
-  if (kind === "income") return "+";
-  if (kind === "expense") return "−";
+  if (kind === "income" || kind === "forex-in") return "+";
+  if (kind === "expense" || kind === "forex-out") return "−";
   return "";
 }
 
@@ -405,8 +407,9 @@ function getRecentIconClass(kind: RecentActivityKind) {
   if (kind === "income") return "bg-emerald-50 text-emerald-600";
   if (kind === "expense") return "bg-rose-50 text-rose-500";
   if (kind === "saving") return "bg-blue-50 text-blue-600";
-  if (kind === "investment") return "bg-violet-50 text-violet-600";
-  if (kind === "forex") return "bg-cyan-50 text-cyan-600";
+  if (kind === "investment") return "bg-sky-50 text-sky-700";
+  if (kind === "forex-in") return "bg-cyan-50 text-cyan-700";
+  if (kind === "forex-out") return "bg-blue-50 text-[#3977C3]";
   return "bg-slate-100 text-slate-600";
 }
 
@@ -414,8 +417,9 @@ function getRecentAmountClass(kind: RecentActivityKind) {
   if (kind === "income") return "text-emerald-600";
   if (kind === "expense") return "text-rose-500";
   if (kind === "saving") return "text-blue-600";
-  if (kind === "investment") return "text-violet-600";
-  if (kind === "forex") return "text-cyan-600";
+  if (kind === "investment") return "text-sky-700";
+  if (kind === "forex-in") return "text-cyan-700";
+  if (kind === "forex-out") return "text-[#3977C3]";
   return "text-slate-600";
 }
 
@@ -2134,69 +2138,98 @@ export default function DashboardPage() {
         value: `${financialStructureAdjusted.fixedCostRatio}%`,
         amount: `${formatVND(financialStructureAdjusted.fixedCost)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructureAdjusted.fixedCostRatio < 40
-            ? "Tốt · dưới 40% thu nhập"
-            : financialStructureAdjusted.fixedCostRatio <= 60
-              ? "Cần theo dõi · 40–60% thu nhập"
-              : "Rủi ro · trên 60% thu nhập",
+          financialStructureAdjusted.income <= 0
+            ? "Chưa đủ dữ liệu thu nhập"
+            : financialStructureAdjusted.fixedCostRatio < 40
+              ? "Tốt · dưới 40% thu nhập"
+              : financialStructureAdjusted.fixedCostRatio <= 60
+                ? "Cần theo dõi · 40–60% thu nhập"
+                : "Rủi ro · trên 60% thu nhập",
         tone:
-          financialStructureAdjusted.fixedCostRatio < 40
-            ? "good"
-            : financialStructureAdjusted.fixedCostRatio <= 60
-              ? "warning"
-              : "danger",
-        bar: Math.min(financialStructureAdjusted.fixedCostRatio, 100),
+          financialStructureAdjusted.income <= 0
+            ? "neutral"
+            : financialStructureAdjusted.fixedCostRatio < 40
+              ? "good"
+              : financialStructureAdjusted.fixedCostRatio <= 60
+                ? "warning"
+                : "danger",
+        bar:
+          financialStructureAdjusted.income <= 0
+            ? 0
+            : Math.min(financialStructureAdjusted.fixedCostRatio, 100),
       },
       {
         title: "Chi phí biến đổi",
         value: `${financialStructureAdjusted.variableCostRatio}%`,
         amount: `${formatVND(financialStructureAdjusted.variableCost)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructureAdjusted.variableCostRatio <= 30
-            ? "Gọn nhẹ · dễ kiểm soát"
-            : financialStructureAdjusted.variableCostRatio <= 50
-              ? "Trung bình · nên theo dõi"
-              : "Cao · cần tối ưu",
+          financialStructureAdjusted.income <= 0
+            ? "Chưa đủ dữ liệu thu nhập"
+            : financialStructureAdjusted.variableCostRatio <= 30
+              ? "Gọn nhẹ · dễ kiểm soát"
+              : financialStructureAdjusted.variableCostRatio <= 50
+                ? "Trung bình · nên theo dõi"
+                : "Cao · cần tối ưu",
         tone:
-          financialStructureAdjusted.variableCostRatio <= 30
-            ? "good"
-            : financialStructureAdjusted.variableCostRatio <= 50
-              ? "warning"
-              : "danger",
-        bar: Math.min(financialStructureAdjusted.variableCostRatio, 100),
+          financialStructureAdjusted.income <= 0
+            ? "neutral"
+            : financialStructureAdjusted.variableCostRatio <= 30
+              ? "good"
+              : financialStructureAdjusted.variableCostRatio <= 50
+                ? "warning"
+                : "danger",
+        bar:
+          financialStructureAdjusted.income <= 0
+            ? 0
+            : Math.min(financialStructureAdjusted.variableCostRatio, 100),
       },
       {
         title: "Tiết kiệm & Đầu tư",
         value: `${financialStructureAdjusted.futureAllocationRate}%`,
         amount: `${formatVND(financialStructureAdjusted.futureAllocationAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
-        note: `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
+        note:
+          financialStructureAdjusted.income <= 0
+            ? "Chưa đủ dữ liệu thu nhập"
+            : `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
         tone:
-          financialStructureAdjusted.futureAllocationRate >= 20
-            ? "good"
-            : financialStructureAdjusted.futureAllocationRate >= 10
-              ? "warning"
-              : "danger",
-        bar: Math.min(financialStructureAdjusted.futureAllocationRate, 100),
+          financialStructureAdjusted.income <= 0
+            ? "neutral"
+            : financialStructureAdjusted.futureAllocationRate >= 20
+              ? "good"
+              : financialStructureAdjusted.futureAllocationRate >= 10
+                ? "warning"
+                : "danger",
+        bar:
+          financialStructureAdjusted.income <= 0
+            ? 0
+            : Math.min(financialStructureAdjusted.futureAllocationRate, 100),
       },
       {
         title: "Tỷ trọng đầu tư",
         value: `${financialStructureAdjusted.investmentRate}%`,
         amount: `${formatVND(financialStructureAdjusted.investmentAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
-          financialStructureAdjusted.investmentRate >= 15
-            ? "Tích cực xây tài sản"
-            : financialStructureAdjusted.investmentRate >= 5
-              ? "Đang bắt đầu"
-              : financialStructureAdjusted.futureAllocationRate >= 20
-                ? "20% hiện đang phân bổ vào tiết kiệm"
-                : "Chưa ghi nhận phân bổ đầu tư",
+          financialStructureAdjusted.income <= 0
+            ? "Chưa đủ dữ liệu thu nhập"
+            : financialStructureAdjusted.investmentRate >= 15
+              ? "Tích cực xây tài sản"
+              : financialStructureAdjusted.investmentRate >= 5
+                ? "Đang bắt đầu"
+                : financialStructureAdjusted.futureAllocationRate >= 20
+                  ? "Phân bổ kỳ này đang tập trung vào tiết kiệm"
+                  : "Chưa ghi nhận phân bổ đầu tư",
         tone:
-          financialStructureAdjusted.investmentRate >= 15
-            ? "good"
-            : financialStructureAdjusted.investmentRate >= 5
-              ? "warning"
-              : "danger",
-        bar: Math.min(financialStructureAdjusted.investmentRate, 100),
+          financialStructureAdjusted.income <= 0
+            ? "neutral"
+            : financialStructureAdjusted.investmentRate >= 15
+              ? "good"
+              : financialStructureAdjusted.investmentRate >= 5
+                ? "warning"
+                : "danger",
+        bar:
+          financialStructureAdjusted.income <= 0
+            ? 0
+            : Math.min(financialStructureAdjusted.investmentRate, 100),
       },
     ],
     [financialStructureAdjusted],
@@ -2305,7 +2338,7 @@ export default function DashboardPage() {
         date: displayDateTime,
         dayLabel: getRecentDayLabel(displayDateTime),
         timeLabel: getRecentTimeLabel(displayDateTime),
-        kind: "forex" as const,
+        kind: isDeposit ? ("forex-out" as const) : ("forex-in" as const),
       };
     });
 
@@ -2356,8 +2389,9 @@ export default function DashboardPage() {
   //     anyway held the page's single largest, first-seen element in
   //     skeleton for no data reason whenever the transactions/categories
   //     fetch happened to be slower than the Net Worth bundle.
-  //   - the "Dòng tiền dương/âm" badge — `cashFlowReady` alone (unchanged
-  //     dependency: `netCashMovement` is periodFlowSummary's income/expense).
+  //   - the Net Worth change badge + comparison delta + NetWorthTrendChart —
+  //     `netWorthHistoryReady` only. Cash movement belongs to the KPI/panel below
+  //     and must never be presented as a change in Net Worth.
   //   - the comparison delta + NetWorthTrendChart — `netWorthHistoryReady`
   //     alone. The chart now reads the year-scoped persisted snapshot table and
   //     no longer waits on cash-flow or saving-transaction ledgers.
@@ -2604,6 +2638,15 @@ export default function DashboardPage() {
       ),
     [budgetAttention.overBudgetItems],
   );
+  const budgetAttentionHealthyCount = Math.max(
+    0,
+    budgetAttention.totalBudgets -
+      budgetAttention.overBudgetCount -
+      budgetAttention.atLimitCount -
+      budgetAttention.warningCount,
+  );
+  const budgetAttentionNeedsReviewCount =
+    budgetAttention.atLimitCount + budgetAttention.warningCount;
 
   // UI-DASH-2 readiness correctness: ready only once the budgets dataset
   // has ever loaded AND the accepted transaction/category snapshot
@@ -2789,23 +2832,28 @@ export default function DashboardPage() {
               Tổng tài sản sau khi trừ nợ phải trả.
             </p>
 
-            {/* PERF-4B: badge still depends on cashFlowReady alone. */}
-            <div className="mt-3">
-              {cashMovementReady ? (
+            {/* DASHBOARD-PROFESSIONAL-POLISH-1: Net Worth change uses Net Worth history,
+                never cash movement. This keeps the hero semantically single-purpose. */}
+            <div className="mt-3 min-h-6">
+              {!netWorthTrendReady ? (
+                <div className="h-6 w-36 animate-pulse rounded-full bg-slate-100" />
+              ) : hasNetWorthHistoryComparison ? (
                 <span
                   className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold sm:px-3 sm:text-xs ${
-                    netCashMovement >= 0
-                      ? "border-emerald-300 bg-[#E5F7EF] text-[#076B4D] shadow-[0_2px_7px_rgba(8,122,87,0.10)]"
-                      : "border-rose-200 bg-rose-50/95 text-rose-700 shadow-[0_2px_7px_rgba(225,29,72,0.08)]"
+                    netWorthHistorySummary.changeFromPrevious! >= 0
+                      ? "border-emerald-200 bg-[#EDF9F4] text-[#0B7555]"
+                      : "border-rose-200 bg-rose-50/80 text-rose-700"
                   }`}
                 >
-                  {netCashMovement >= 0 ? "↑" : "↓"}{" "}
-                  {netCashMovement >= 0 ? "Dòng tiền dương" : "Dòng tiền âm"} ·{" "}
-                  {formatVND(netCashMovement)}
+                  {netWorthHistorySummary.changeFromPrevious! >= 0 ? "↑" : "↓"}{" "}
+                  {netWorthHistorySummary.changeFromPrevious! >= 0 ? "+" : ""}
+                  {formatVND(netWorthHistorySummary.changeFromPrevious!)} · so với snapshot trước
                 </span>
-              ) : (
-                <div className="h-6 w-36 animate-pulse rounded-full bg-slate-100" />
-              )}
+              ) : hasNetWorthHistoryData ? (
+                <span className="inline-flex items-center rounded-full border border-[#D6E3ED] bg-[#F7FAFD] px-2.5 py-1 text-[11px] font-bold text-[#60778D] sm:px-3 sm:text-xs">
+                  Snapshot Net Worth đã ghi nhận
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -3047,7 +3095,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
-              <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 pb-2.5">
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-black ${
                     budgetAttention.overBudgetCount > 0
@@ -3078,6 +3126,21 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 ) : null}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6B8296]">Trong hạn</p>
+                  <p className="mt-1 text-base font-black tabular-nums text-emerald-600">{budgetAttentionHealthyCount}</p>
+                </div>
+                <div className="rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6B8296]">Cần chú ý</p>
+                  <p className={`mt-1 text-base font-black tabular-nums ${budgetAttentionNeedsReviewCount > 0 ? "text-amber-600" : "text-[#60778D]"}`}>{budgetAttentionNeedsReviewCount}</p>
+                </div>
+                <div className="rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6B8296]">Vượt</p>
+                  <p className={`mt-1 text-base font-black tabular-nums ${budgetAttention.overBudgetCount > 0 ? "text-rose-500" : "text-[#60778D]"}`}>{budgetAttention.overBudgetCount}</p>
+                </div>
               </div>
 
               {budgetAttention.overBudgetItems.length > 0 ? (
@@ -3347,7 +3410,9 @@ export default function DashboardPage() {
                           ? "text-emerald-600"
                           : item.tone === "warning"
                             ? "text-amber-500"
-                            : "text-rose-500"
+                            : item.tone === "danger"
+                              ? "text-rose-500"
+                              : "text-[#60778D]"
                       }`}
                     >
                       {item.value}
@@ -3360,10 +3425,15 @@ export default function DashboardPage() {
                           ? "bg-emerald-500"
                           : item.tone === "warning"
                             ? "bg-amber-400"
-                            : "bg-rose-500"
+                            : item.tone === "danger"
+                              ? "bg-rose-500"
+                              : "bg-[#B8C9D7]"
                       }`}
                       style={{
-                        width: `${Math.max(4, Math.min(item.bar, 100))}%`,
+                        width:
+                          item.tone === "neutral"
+                            ? "0%"
+                            : `${Math.max(4, Math.min(item.bar, 100))}%`,
                       }}
                     />
                   </div>
@@ -3467,7 +3537,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
                       <div
-                        className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500"
+                        className="h-full rounded-full bg-linear-to-r from-[#2F80ED] to-[#17B6D4]"
                         style={{ width: `${width}%` }}
                       />
                     </div>
@@ -3490,7 +3560,7 @@ export default function DashboardPage() {
               <MiniStat
                 label="Vốn ròng"
                 value={formatVND(forexSnapshot.balance)}
-                color="text-violet-600"
+                color="text-[#2F80ED]"
               />
               <MiniStat
                 label="Balance hiện tại"
@@ -3532,7 +3602,17 @@ export default function DashboardPage() {
                 }
               />
             </div>
-            <div className="flex max-w-full items-start gap-1.5 rounded-xl bg-violet-50/70 px-3 py-2 text-[11px] leading-4 text-violet-700">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6B8296]">Rút về ví · trong kỳ</p>
+                <p className="mt-1 text-sm font-black tabular-nums text-cyan-700">+{formatVND(periodFinanceFlow.forexCashIn)}</p>
+              </div>
+              <div className="rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#6B8296]">Nạp + phí · trong kỳ</p>
+                <p className="mt-1 text-sm font-black tabular-nums text-[#3977C3]">−{formatVND(periodFinanceFlow.forexCashOut)}</p>
+              </div>
+            </div>
+            <div className="flex max-w-full items-start gap-1.5 rounded-xl border border-[#D8E9F3] bg-[#F1F8FC] px-3 py-2 text-[11px] leading-4 text-[#39718A]">
               <Info size={12} className="mt-0.5 shrink-0" />
               <p>
                 <span className="font-bold">Profit</span> = Balance − Nạp +
@@ -3547,7 +3627,7 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() => router.push("/investments")}
-            className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-violet-600 to-blue-600 px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-lg shadow-violet-100 transition-all duration-200 hover:from-violet-700 hover:to-blue-700 sm:px-4"
+            className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-[#2F80ED] to-[#17A9D4] px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-[0_8px_20px_rgba(47,128,237,0.18)] transition-all duration-200 hover:from-[#246FD0] hover:to-[#138EBD] sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
               Quản lý tài khoản Forex
@@ -3645,6 +3725,10 @@ export default function DashboardPage() {
                             <ArrowUpRight size={16} />
                           ) : transaction.kind === "expense" ? (
                             <ArrowDownRight size={16} />
+                          ) : transaction.kind === "forex-in" ? (
+                            <ArrowDownLeft size={16} />
+                          ) : transaction.kind === "forex-out" ? (
+                            <ArrowUpRight size={16} />
                           ) : (
                             <Wallet size={16} />
                           )}
@@ -3752,22 +3836,22 @@ function DailyMetric({
   const styles =
     tone === "good"
       ? {
-          card: "border-emerald-100 bg-emerald-50/70",
-          label: "text-emerald-700",
+          card: "border-[#DCE8F1] bg-[#FCFEFF]",
+          label: "text-[#47715F]",
           value: "text-emerald-600",
           dot: "bg-emerald-500",
         }
       : tone === "danger"
         ? {
-            card: "border-rose-100 bg-rose-50/70",
-            label: "text-rose-700",
+            card: "border-[#DCE8F1] bg-[#FCFEFF]",
+            label: "text-[#8A5B64]",
             value: "text-rose-500",
             dot: "bg-rose-500",
           }
         : {
-            card: "border-cyan-100 bg-cyan-50/70",
-            label: "text-cyan-700",
-            value: "text-cyan-600",
+            card: "border-[#DCE8F1] bg-[#FCFEFF]",
+            label: "text-[#4C718A]",
+            value: "text-cyan-700",
             dot: "bg-cyan-500",
           };
 
@@ -3868,23 +3952,23 @@ function KpiCard({
   const toneStyles = {
     good: {
       value: "text-emerald-600",
-      icon: "bg-emerald-50 text-emerald-600",
-      border: "border-emerald-100",
+      icon: "bg-[#EDF9F4] text-emerald-600",
+      border: "border-[#DCE8F1]",
     },
     warning: {
       value: "text-amber-600",
-      icon: "bg-amber-50 text-amber-600",
-      border: "border-amber-100",
+      icon: "bg-[#FFF8E8] text-amber-600",
+      border: "border-[#DCE8F1]",
     },
     danger: {
       value: "text-rose-500",
-      icon: "bg-rose-50 text-rose-500",
-      border: "border-rose-100",
+      icon: "bg-[#FFF1F3] text-rose-500",
+      border: "border-[#DCE8F1]",
     },
     neutral: {
-      value: "text-slate-700",
-      icon: "bg-slate-100 text-slate-600",
-      border: "border-slate-200",
+      value: "text-[#31536F]",
+      icon: "bg-[#EEF5FA] text-[#60778D]",
+      border: "border-[#DCE8F1]",
     },
   } as const;
   const styles = toneStyles[tone];
@@ -3924,7 +4008,7 @@ function KpiCard({
         type="button"
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
-        className={`min-w-52 snap-start cursor-pointer overflow-hidden rounded-2xl border bg-white/95 p-3.5 text-left shadow-sm transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
+        className={`min-w-52 snap-start cursor-pointer overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
       >
         {content}
       </button>
@@ -3933,7 +4017,7 @@ function KpiCard({
 
   return (
     <div
-      className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-white/95 p-3.5 shadow-sm transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
+      className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       {content}
     </div>
