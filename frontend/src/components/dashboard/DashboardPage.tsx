@@ -54,6 +54,10 @@ import {
   type FinanceReviewReason,
 } from "@/src/lib/dashboard/dashboardIntelligence";
 import {
+  buildRecurringMoneySchedules,
+  toRecurringScheduleInputs,
+} from "@/src/lib/recurring/recurringMoney";
+import {
   buildBudgetsHref,
   buildGoalsHref,
   buildSavingsHref,
@@ -2731,64 +2735,15 @@ export default function DashboardPage() {
     cashFlowReady,
   );
 
-  // DASHBOARD-DECISION-INTELLIGENCE-2: one normalized recurring schedule
-  // collection feeds 30-day upcoming UI, Safe-to-Spend and the 90-day runway.
+  // RECURRING-MONEY-MANAGER-1: Dashboard no longer assembles category and
+  // legacy transaction schedules independently. One canonical read model
+  // deduplicates exact mirrors and excludes invalid/paused schedules before
+  // Safe-to-Spend, Runway and upcoming cash projections consume them.
   const recurringSchedules = useMemo(() => {
-    const categorySchedules = categories
-      .filter(
-        (category) =>
-          category.isRecurring &&
-          category.nextRunDate &&
-          Number(category.defaultAmount ?? 0) > 0,
-      )
-      .map((category) => ({
-        id: `category-${category.id}`,
-        title: category.name,
-        categoryId: category.id,
-        categoryName: category.name,
-        amount: Math.abs(Number(category.defaultAmount ?? 0)),
-        type: category.type,
-        nextRunDate: category.nextRunDate as string,
-        recurrence: category.recurrence,
-      }));
-
-    const transactionSchedules = transactions
-      .filter(
-        (transaction) =>
-          transaction.isRecurring &&
-          transaction.nextRunDate &&
-          Number(transaction.amount) > 0 &&
-          (transaction.type === "income" || transaction.type === "expense"),
-      )
-      .map((transaction) => {
-        const categoryName =
-          categories.find((category) => category.id === transaction.categoryId)
-            ?.name ?? "Chưa phân loại";
-        return {
-          id: `transaction-${transaction.id}`,
-          title: transaction.note?.trim() || categoryName,
-          categoryId: transaction.categoryId,
-          categoryName,
-          amount: Math.abs(Number(transaction.amount) || 0),
-          type: transaction.type as "income" | "expense",
-          nextRunDate: transaction.nextRunDate as string,
-          recurrence: transaction.recurrence,
-        };
-      });
-
-    return [...categorySchedules, ...transactionSchedules].filter(
-      (schedule): schedule is {
-        id: string;
-        title: string;
-        categoryId: string;
-        categoryName: string;
-        amount: number;
-        type: "income" | "expense";
-        nextRunDate: string;
-        recurrence: "daily" | "weekly" | "monthly" | "yearly" | undefined;
-      } => schedule.type === "income" || schedule.type === "expense",
+    return toRecurringScheduleInputs(
+      buildRecurringMoneySchedules({ categories, transactions, wallets }),
     );
-  }, [categories, transactions]);
+  }, [categories, transactions, wallets]);
 
   const recurringOccurrences = useMemo(
     () => expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90),
@@ -4088,6 +4043,13 @@ export default function DashboardPage() {
               ))
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => router.push("/recurring")}
+            className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+          >
+            Quản lý dòng tiền định kỳ <ArrowUpRight size={15} />
+          </button>
         </Panel>
 
         <Panel

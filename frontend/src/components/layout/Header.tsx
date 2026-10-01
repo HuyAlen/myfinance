@@ -98,6 +98,10 @@ const HEADER_REALTIME_REFRESH_DEBOUNCE_MS = 100;
 const PAGE_META: Record<string, { title: string; desc: string }> = {
   "/": { title: "Tổng quan", desc: "Tổng quan & phân tích tài chính" },
   "/transactions": { title: "Giao Dịch", desc: "Thu chi & lịch sử giao dịch" },
+  "/recurring": {
+    title: "Định Kỳ",
+    desc: "Lương, hóa đơn & dòng tiền lặp lại",
+  },
   "/wallets": { title: "Ví Tiền", desc: "Quản lý tài khoản & nguồn tiền" },
   "/budgets": { title: "Ngân Sách", desc: "Kế hoạch & kiểm soát chi tiêu" },
   "/goals": { title: "Mục Tiêu", desc: "Theo dõi tiến độ mục tiêu tài chính" },

@@ -23,6 +23,7 @@ function isActivePath(pathname: string, href: string) {
   if (href === "/categories") {
     return [
       "/categories",
+      "/recurring",
       "/reports",
       "/wallets",
       "/investments",

@@ -96,6 +96,7 @@ type FormState = {
   date: string;
   isRecurring: boolean;
   recurrence: RecurrenceFrequency;
+  nextRunDate: string;
 };
 
 /**
@@ -131,6 +132,7 @@ function createEmptyForm(): FormState {
     date: getLocalDateInputValue(),
     isRecurring: false,
     recurrence: "monthly",
+    nextRunDate: "",
   };
 }
 
@@ -1254,6 +1256,7 @@ export default function TransactionsPage() {
       date: t.date,
       isRecurring: t.isRecurring ?? false,
       recurrence: t.recurrence ?? "monthly",
+      nextRunDate: t.nextRunDate ?? "",
     });
     setSaveError(null);
     beginNewFormSession();
@@ -1373,6 +1376,11 @@ export default function TransactionsPage() {
       }
     }
 
+    if (form.isRecurring && !form.nextRunDate) {
+      setSaveError("Vui lòng chọn ngày chạy tiếp theo");
+      return;
+    }
+
     const transferReferenceType = isWalletTransferForm ? "wallet" : "";
     const sourceType = isWalletTransferForm ? "wallet" : "";
     const destinationType = isWalletTransferForm ? "wallet" : "";
@@ -1390,7 +1398,12 @@ export default function TransactionsPage() {
         form.note || (isWalletTransferForm ? "Chuyển tiền" : "Giao dịch mới"),
       date: form.date,
       isRecurring: form.isRecurring || undefined,
-      recurrence: form.isRecurring ? form.recurrence : undefined,
+      // Paused legacy schedules keep recurrence/date metadata. Clearing the
+      // schedule is an explicit action in /recurring, never a side effect of
+      // editing the historical transaction.
+      recurrence:
+        form.isRecurring || form.nextRunDate ? form.recurrence : undefined,
+      nextRunDate: form.nextRunDate || undefined,
       ...(transferReferenceType
         ? {
             transferReferenceType,
@@ -3026,7 +3039,7 @@ export default function TransactionsPage() {
                   <div>
                     <p className="text-sm font-black text-slate-700">Định kỳ</p>
                     <p className="text-xs font-medium text-slate-400">
-                      Lặp lại tự động
+                      Dùng cho dự báo dòng tiền
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -3050,7 +3063,14 @@ export default function TransactionsPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setForm((p) => ({ ...p, isRecurring: !p.isRecurring }))
+                        setForm((p) => ({
+                          ...p,
+                          isRecurring: !p.isRecurring,
+                          nextRunDate:
+                            !p.isRecurring && !p.nextRunDate
+                              ? p.date
+                              : p.nextRunDate,
+                        }))
                       }
                       className={
                         "relative inline-flex h-8 w-13 shrink-0 cursor-pointer items-center rounded-full transition-colors " +
@@ -3066,6 +3086,24 @@ export default function TransactionsPage() {
                     </button>
                   </div>
                 </div>
+                {form.isRecurring && (
+                  <label className="mt-2 block rounded-2xl border border-blue-100 bg-blue-50/60 px-3.5 py-3">
+                    <span className="text-xs font-black text-slate-600">
+                      Ngày chạy tiếp
+                    </span>
+                    <input
+                      type="date"
+                      value={form.nextRunDate}
+                      onChange={(event) =>
+                        setForm((p) => ({
+                          ...p,
+                          nextRunDate: event.target.value,
+                        }))
+                      }
+                      className="mt-1.5 min-h-10 w-full rounded-xl border border-blue-100 bg-white px-3 text-sm font-bold text-slate-700 outline-none"
+                    />
+                  </label>
+                )}
               </div>
 
               <SaveError

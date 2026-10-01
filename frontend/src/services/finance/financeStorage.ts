@@ -570,16 +570,14 @@ function toCategoryRow(category: Category): Omit<CategoryDbRow, "user_id"> {
     planning_group:
       category.planningGroup ?? inferDefaultPlanningGroup(category),
     financial_group: category.financialGroup ?? null,
+    // RECURRING-MONEY-MANAGER-1: is_recurring is the active/paused flag;
+    // schedule metadata is orthogonal and must survive a pause. New ordinary
+    // categories still serialize nulls because their optional fields are absent.
     is_recurring: category.isRecurring ?? false,
-    recurrence: category.isRecurring ? (category.recurrence ?? null) : null,
-    default_amount:
-      category.isRecurring && category.defaultAmount !== undefined
-        ? category.defaultAmount
-        : null,
-    default_wallet_id: category.isRecurring
-      ? (category.defaultWalletId ?? null)
-      : null,
-    next_run_date: category.isRecurring ? (category.nextRunDate ?? null) : null,
+    recurrence: category.recurrence ?? null,
+    default_amount: category.defaultAmount ?? null,
+    default_wallet_id: category.defaultWalletId ?? null,
+    next_run_date: category.nextRunDate ?? null,
   };
 }
 
@@ -1982,6 +1980,46 @@ export async function updateTransaction(
   return { error: null };
 }
 
+
+/**
+ * RECURRING-MONEY-MANAGER-1: legacy schedule-metadata-only mutation.
+ * Do NOT route this through update_finance_transaction: changing recurrence
+ * metadata must never reverse/reapply an already-recorded Wallet effect.
+ */
+export async function updateTransactionRecurringSchedule(input: {
+  transactionId: string;
+  enabled: boolean;
+  recurrence: Transaction["recurrence"] | null;
+  nextRunDate: string | null;
+}): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({
+      isRecurring: input.enabled,
+      recurrence: input.recurrence,
+      nextRunDate: input.nextRunDate,
+    } as never)
+    .eq("id", input.transactionId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[financeStorage] updateTransactionRecurringSchedule:",
+      error.message,
+    );
+    return { error: error.message };
+  }
+  if (!data) {
+    return { error: "Không tìm thấy giao dịch cần cập nhật lịch định kỳ." };
+  }
+  return { error: null };
+}
+
 export async function deleteTransaction(
   transactionId: string,
 ): Promise<{ error: string | null }> {
@@ -2534,6 +2572,51 @@ export async function updateCategory(
   if (error) {
     console.error("[financeStorage] updateCategory:", error.message);
     return { error: error.message };
+  }
+  return { error: null };
+}
+
+
+/**
+ * RECURRING-MONEY-MANAGER-1: schedule-metadata-only mutation.
+ * This intentionally does not touch transactions or Wallet balances. Pausing
+ * preserves the schedule fields so the manager can resume without asking the
+ * user to rebuild the plan; removing a schedule passes null metadata instead.
+ */
+export async function updateCategoryRecurringSchedule(input: {
+  categoryId: string;
+  enabled: boolean;
+  recurrence: Category["recurrence"] | null;
+  amount: number | null;
+  walletId: string | null;
+  nextRunDate: string | null;
+}): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase
+    .from("categories")
+    .update({
+      is_recurring: input.enabled,
+      recurrence: input.recurrence,
+      default_amount: input.amount,
+      default_wallet_id: input.walletId,
+      next_run_date: input.nextRunDate,
+    } as never)
+    .eq("id", input.categoryId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[financeStorage] updateCategoryRecurringSchedule:",
+      error.message,
+    );
+    return { error: error.message };
+  }
+  if (!data) {
+    return { error: "Không tìm thấy danh mục cần cập nhật lịch định kỳ." };
   }
   return { error: null };
 }

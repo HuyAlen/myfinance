@@ -478,6 +478,14 @@ export default function CategoriesPage() {
       }
     }
 
+    // RECURRING-MONEY-MANAGER-1: switching an existing schedule off is a
+    // pause, not destructive removal. Preserve its plan metadata so Manager
+    // can resume it losslessly; explicit "Xóa lịch" in /recurring owns
+    // clearing these fields. New non-recurring categories still store none.
+    const existingCategory = form.id
+      ? categories.find((item) => item.id === form.id)
+      : undefined;
+
     const category: Category = {
       id: form.id ?? crypto.randomUUID(),
       name,
@@ -485,10 +493,18 @@ export default function CategoriesPage() {
       planningGroup: form.group,
       financialGroup: form.legacyFinancialGroup,
       isRecurring: form.isRecurring,
-      recurrence: form.isRecurring ? form.recurrence : undefined,
-      defaultAmount: form.isRecurring ? recurringAmount : undefined,
-      defaultWalletId: form.isRecurring ? form.defaultWalletId : undefined,
-      nextRunDate: form.isRecurring ? form.nextRunDate : undefined,
+      recurrence: form.isRecurring
+        ? form.recurrence
+        : existingCategory?.recurrence,
+      defaultAmount: form.isRecurring
+        ? recurringAmount
+        : existingCategory?.defaultAmount,
+      defaultWalletId: form.isRecurring
+        ? form.defaultWalletId
+        : existingCategory?.defaultWalletId,
+      nextRunDate: form.isRecurring
+        ? form.nextRunDate
+        : existingCategory?.nextRunDate,
     };
 
     submitInFlightRef.current = true;
@@ -1234,8 +1250,8 @@ export default function CategoriesPage() {
                         Khoản định kỳ
                       </p>
                       <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                        Bật để khoản này xuất hiện trong “Sắp đến hạn trong 30
-                        ngày” trên Dashboard.
+                        Bật để khoản này xuất hiện trong dự báo Dashboard. Tắt là
+                        tạm dừng và vẫn giữ cấu hình; xóa lịch tại trang Định Kỳ.
                       </p>
                     </div>
                   </div>

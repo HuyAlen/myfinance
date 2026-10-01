@@ -17,6 +17,7 @@ import {
   Landmark,
   PiggyBank,
   ReceiptText,
+  Repeat2,
   Settings,
   Target,
   Wallet,
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Tổng quan", icon: Home, href: "/" },
       { label: "Giao Dịch", icon: ReceiptText, href: "/transactions" },
+      { label: "Định Kỳ", icon: Repeat2, href: "/recurring" },
       { label: "Ví Tiền", icon: Wallet, href: "/wallets" },
       { label: "Ngân Sách", icon: ChartPie, href: "/budgets" },
       { label: "Mục Tiêu", icon: Target, href: "/goals" },
