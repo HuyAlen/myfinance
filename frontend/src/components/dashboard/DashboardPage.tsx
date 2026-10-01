@@ -40,7 +40,13 @@ import {
   resolveMonthComparisonWindow,
 } from "@/src/lib/dashboard/dashboardPeriodComparison";
 import {
+  buildCashRunwayForecast,
+  buildFinanceDataHealth,
   buildFinanceReviewInbox,
+  buildMonthEndCloseout,
+  buildSafeToSpend,
+  countInvalidRecurringSchedules,
+  expandRecurringScheduleOccurrences,
   buildInvestmentAllocationOverview,
   buildMonthlySpendingPace,
   buildNetWorthAttribution,
@@ -89,6 +95,7 @@ import {
 import {
   buildCategorySpendingData,
   buildMonthlyCashFlowData,
+  calculateBudgetSpendingCollection,
   calculateDashboardSummary,
   calculateFinanceFlowSnapshot,
   calculateFinancialStructureSummary,
@@ -2670,6 +2677,31 @@ export default function DashboardPage() {
       }),
     [budgetAttentionMonthBudgets, categories, transactions],
   );
+  // DASHBOARD-DECISION-INTELLIGENCE-2: Safe-to-Spend reuses the canonical
+  // per-budget spending engine. No duplicate spending formula lives in the
+  // decision layer.
+  const budgetSpendingSnapshot = useMemo(
+    () =>
+      calculateBudgetSpendingCollection({
+        budgets: budgetAttentionMonthBudgets,
+        categories,
+        transactions,
+      }),
+    [budgetAttentionMonthBudgets, categories, transactions],
+  );
+  const budgetRemaining = useMemo(
+    () =>
+      budgetSpendingSnapshot.reduce(
+        (sum, item) => sum + Math.max(0, item.remaining),
+        0,
+      ),
+    [budgetSpendingSnapshot],
+  );
+  const budgetedCategoryIds = useMemo(
+    () => budgetSpendingSnapshot.map((item) => item.categoryId),
+    [budgetSpendingSnapshot],
+  );
+
 
   const budgetAttentionTotalOverAmount = useMemo(
     () =>
@@ -2699,12 +2731,9 @@ export default function DashboardPage() {
     cashFlowReady,
   );
 
-  const allUpcomingMoneyEvents = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const limit = new Date(today);
-    limit.setDate(limit.getDate() + 30);
-
+  // DASHBOARD-DECISION-INTELLIGENCE-2: one normalized recurring schedule
+  // collection feeds 30-day upcoming UI, Safe-to-Spend and the 90-day runway.
+  const recurringSchedules = useMemo(() => {
     const categorySchedules = categories
       .filter(
         (category) =>
@@ -2715,42 +2744,75 @@ export default function DashboardPage() {
       .map((category) => ({
         id: `category-${category.id}`,
         title: category.name,
+        categoryId: category.id,
         categoryName: category.name,
         amount: Math.abs(Number(category.defaultAmount ?? 0)),
         type: category.type,
-        date: new Date(category.nextRunDate as string),
+        nextRunDate: category.nextRunDate as string,
+        recurrence: category.recurrence,
       }));
 
-    // Keep backward compatibility with older transaction-level schedules.
     const transactionSchedules = transactions
       .filter(
-        (transaction) => transaction.isRecurring && transaction.nextRunDate,
+        (transaction) =>
+          transaction.isRecurring &&
+          transaction.nextRunDate &&
+          Number(transaction.amount) > 0 &&
+          (transaction.type === "income" || transaction.type === "expense"),
       )
       .map((transaction) => {
-        const date = new Date(transaction.nextRunDate as string);
         const categoryName =
           categories.find((category) => category.id === transaction.categoryId)
             ?.name ?? "Chưa phân loại";
         return {
           id: `transaction-${transaction.id}`,
           title: transaction.note?.trim() || categoryName,
+          categoryId: transaction.categoryId,
           categoryName,
-          amount: Math.abs(transaction.amount),
-          type: transaction.type,
-          date,
+          amount: Math.abs(Number(transaction.amount) || 0),
+          type: transaction.type as "income" | "expense",
+          nextRunDate: transaction.nextRunDate as string,
+          recurrence: transaction.recurrence,
         };
       });
 
-    return [...categorySchedules, ...transactionSchedules]
-      .filter(
-        (item): item is { id: string; title: string; categoryName: string; amount: number; type: "income" | "expense"; date: Date } =>
-          !Number.isNaN(item.date.getTime()) &&
-          item.date >= today &&
-          item.date <= limit &&
-          (item.type === "income" || item.type === "expense"),
-      )
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    return [...categorySchedules, ...transactionSchedules].filter(
+      (schedule): schedule is {
+        id: string;
+        title: string;
+        categoryId: string;
+        categoryName: string;
+        amount: number;
+        type: "income" | "expense";
+        nextRunDate: string;
+        recurrence: "daily" | "weekly" | "monthly" | "yearly" | undefined;
+      } => schedule.type === "income" || schedule.type === "expense",
+    );
   }, [categories, transactions]);
+
+  const recurringOccurrences = useMemo(
+    () => expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90),
+    [recurringSchedules],
+  );
+
+  const allUpcomingMoneyEvents = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const limit = new Date(today);
+    limit.setDate(limit.getDate() + 30);
+
+    return recurringOccurrences
+      .filter((item) => item.date >= today && item.date <= limit)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        categoryName: item.categoryName ?? "Chưa phân loại",
+        amount: item.amount,
+        type: item.type,
+        date: item.date,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [recurringOccurrences]);
 
   const upcomingMoneyEvents = useMemo(
     () => allUpcomingMoneyEvents.slice(0, 5),
@@ -2760,6 +2822,42 @@ export default function DashboardPage() {
   const recurringCashForecast = useMemo(
     () => buildRecurringCashForecast(allUpcomingMoneyEvents, new Date()),
     [allUpcomingMoneyEvents],
+  );
+
+  const safeToSpend = useMemo(
+    () =>
+      buildSafeToSpend({
+        selectedMonthKey: dashboardMonthKey,
+        today: new Date(),
+        spendableCash: summary.liquidBalance,
+        budgetConfigured: budgetSpendingSnapshot.some((item) => item.limit > 0),
+        budgetRemaining,
+        budgetedCategoryIds,
+        occurrences: recurringOccurrences,
+      }),
+    [
+      budgetRemaining,
+      budgetSpendingSnapshot,
+      budgetedCategoryIds,
+      dashboardMonthKey,
+      recurringOccurrences,
+      summary.liquidBalance,
+    ],
+  );
+
+  const cashRunwayForecast = useMemo(
+    () =>
+      buildCashRunwayForecast({
+        startingBalance: summary.liquidBalance,
+        occurrences: recurringOccurrences,
+        today: new Date(),
+      }),
+    [recurringOccurrences, summary.liquidBalance],
+  );
+
+  const invalidRecurringScheduleCount = useMemo(
+    () => countInvalidRecurringSchedules({ categories, transactions }),
+    [categories, transactions],
   );
 
   const topSpendingCategories = useMemo(() => {
@@ -2861,6 +2959,61 @@ export default function DashboardPage() {
     selectedYear,
     transactions,
   ]);
+
+  const financeDataHealth = useMemo(
+    () =>
+      buildFinanceDataHealth({
+        selectedMonthKey: dashboardMonthKey,
+        today: new Date(),
+        reviewInbox: financeReviewInbox,
+        netWorthSnapshots,
+        invalidRecurringScheduleCount,
+        hasFinancialData:
+          wallets.length > 0 ||
+          transactions.length > 0 ||
+          savings.length > 0 ||
+          snapshotInvestments.length > 0 ||
+          forexAccounts.length > 0,
+      }),
+    [
+      dashboardMonthKey,
+      financeReviewInbox,
+      forexAccounts.length,
+      invalidRecurringScheduleCount,
+      netWorthSnapshots,
+      savings.length,
+      snapshotInvestments.length,
+      transactions.length,
+      wallets.length,
+    ],
+  );
+
+  const monthEndCloseout = useMemo(
+    () =>
+      buildMonthEndCloseout({
+        selectedMonthKey: dashboardMonthKey,
+        today: new Date(),
+        budgetConfigured: monthlyPulse.budgetLimit > 0,
+        budgetUsage: monthlyPulse.budgetUsage,
+        reviewPending: financeReviewInbox.total,
+        overBudgetCount: budgetAttention.overBudgetCount,
+        netCashMovement: periodFinanceFlow.netCashMovement,
+        netWorthDelta:
+          netWorthAttribution.available &&
+          netWorthAttribution.toMonth === dashboardMonthKey
+            ? netWorthAttribution.netWorthDelta
+            : null,
+      }),
+    [
+      budgetAttention.overBudgetCount,
+      dashboardMonthKey,
+      financeReviewInbox.total,
+      monthlyPulse.budgetLimit,
+      monthlyPulse.budgetUsage,
+      netWorthAttribution,
+      periodFinanceFlow.netCashMovement,
+    ],
+  );
 
   return (
     <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
@@ -3162,6 +3315,92 @@ export default function DashboardPage() {
             />
           ))}
         </div>
+      </section>
+
+      {/* DASHBOARD-DECISION-INTELLIGENCE-2: spend decision + liquidity runway */}
+      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <Panel
+          title="Có thể chi an toàn"
+          subtitle="Giới hạn chi thêm trong tháng hiện tại, không tính trước thu nhập chưa nhận"
+        >
+          {!isDashboardReady || !budgetAttentionReady ? (
+            <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
+          ) : !safeToSpend.available ? (
+            <div data-dashboard-decision="safe-to-spend" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
+              <p className="text-sm font-black text-[#294A66]">
+                {safeToSpend.reason === "not-current-month"
+                  ? "Chuyển về tháng hiện tại để tính Safe to Spend"
+                  : "Chưa có ngân sách để xác định mức chi an toàn"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[#71879A]">
+                Safe to Spend chỉ dùng tiền đang khả dụng trong ví và ngân sách còn lại; Savings, Investment và thu nhập tương lai không được coi là tiền có thể chi ngay.
+              </p>
+            </div>
+          ) : (
+            <div data-dashboard-decision="safe-to-spend" className="mt-4">
+              <div className="relative overflow-hidden rounded-2xl border border-[#CFE0ED] bg-linear-to-br from-[#F7FBFF] to-[#EDF7FC] p-4">
+                <div className="pointer-events-none absolute -right-8 -top-10 size-28 rounded-full bg-cyan-100/50 blur-2xl" />
+                <p className="relative text-[10px] font-black uppercase tracking-[0.12em] text-[#60778D]">Safe to Spend</p>
+                <p className="relative mt-1 text-[clamp(1.55rem,6vw,2.15rem)] font-black tracking-[-0.045em] tabular-nums text-[#2F80ED]">
+                  {formatVND(safeToSpend.amount)}
+                </p>
+                <p className="relative mt-1 text-xs font-semibold text-[#60778D]">Từ hôm nay đến cuối tháng {selectedMonth}</p>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <MiniStat label="Ngân sách còn" value={formatVND(safeToSpend.budgetRemaining)} color="text-[#31536F]" />
+                <MiniStat label="Giữ cho recurring" value={formatVND(safeToSpend.budgetReservedForRecurring)} color="text-[#3977C3]" />
+                <MiniStat label="Tiền ví hiện có" value={formatVND(safeToSpend.spendableCash)} color="text-[#31536F]" />
+                <MiniStat label="Recurring còn phải chi" value={formatVND(safeToSpend.recurringExpense)} color="text-rose-500" />
+              </div>
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5 text-[11px] leading-4 text-[#60778D]">
+                <ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#2F80ED]" />
+                <span>
+                  Bị giới hạn bởi {safeToSpend.limitingConstraint === "budget" ? "ngân sách còn sau recurring" : "thanh khoản hiện có sau recurring"}. Thu nhập recurring dự kiến {formatVND(safeToSpend.expectedRecurringIncome)} không được chi trước.
+                </span>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Dự báo thanh khoản 90 ngày"
+          subtitle="Runway từ tiền trong ví + recurring đã cấu hình; không giả định chi tiêu tự do"
+        >
+          {!isDashboardReady ? (
+            <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
+          ) : (
+            <div data-dashboard-decision="cash-runway" className="mt-4">
+              <div className="grid grid-cols-3 gap-2">
+                {cashRunwayForecast.points.map((point) => (
+                  <MiniStat
+                    key={point.days}
+                    label={`${point.days} ngày`}
+                    value={formatVND(point.projectedBalance)}
+                    color={point.projectedBalance >= 0 ? "text-[#2F80ED]" : "text-rose-500"}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">Điểm thấp nhất</p>
+                    <p className={`mt-1 text-lg font-black tabular-nums ${cashRunwayForecast.lowPointBalance >= 0 ? "text-[#31536F]" : "text-rose-500"}`}>
+                      {formatVND(cashRunwayForecast.lowPointBalance)}
+                    </p>
+                  </div>
+                  <p className="text-right text-[11px] font-semibold text-[#71879A]">
+                    {new Date(cashRunwayForecast.lowPointDate).toLocaleDateString("vi-VN")}
+                  </p>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-[#60778D]">
+                  {cashRunwayForecast.eventCount90 > 0
+                    ? `${cashRunwayForecast.eventCount90} lần recurring được chiếu tới trong 90 ngày.`
+                    : "Chưa có recurring nào để chiếu tới; số dư giữ nguyên theo dữ liệu hiện có."}
+                </p>
+              </div>
+            </div>
+          )}
+        </Panel>
       </section>
 
       {/* UI-DASH-2: Budget Attention — closes the Dashboard's only P0
@@ -3719,6 +3958,80 @@ export default function DashboardPage() {
             </div>
           )}
         </Panel>
+      </section>
+
+      {/* DASHBOARD-DECISION-INTELLIGENCE-2: data confidence + month-end lifecycle */}
+      <section className={`grid items-start gap-4 sm:gap-5 ${monthEndCloseout.visible ? "xl:grid-cols-2" : ""}`}>
+        <Panel
+          title="Sức khỏe dữ liệu"
+          subtitle="Chỉ cảnh báo những vấn đề có bằng chứng từ dữ liệu hiện tại"
+        >
+          {!cashFlowReady || !netWorthHistoryReady ? (
+            <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ) : !financeDataHealth.available ? (
+            <div data-dashboard-decision="data-health" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
+              Data Health được đánh giá trên tháng hiện tại. Chuyển về tháng hiện tại để kiểm tra.
+            </div>
+          ) : financeDataHealth.issues.length === 0 ? (
+            <div data-dashboard-decision="data-health" className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-[#F6FCF9] p-4">
+              <ShieldCheck size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+              <div>
+                <p className="text-sm font-black text-emerald-700">Dữ liệu cốt lõi đang ổn</p>
+                <p className="mt-1 text-xs leading-5 text-[#60778D]">Không phát hiện category bị thiếu, giao dịch nghi trùng, recurring lỗi cấu hình hoặc snapshot Net Worth bị thiếu theo quy tắc hiện tại.</p>
+              </div>
+            </div>
+          ) : (
+            <div data-dashboard-decision="data-health" className="mt-4 space-y-2">
+              {financeDataHealth.issues.map((issue) => (
+                <div key={issue.key} className="flex items-start justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-[#294A66]">{issue.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-[#71879A]">{issue.detail}</p>
+                  </div>
+                  {issue.count > 0 ? (
+                    <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">{issue.count}</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        {monthEndCloseout.visible ? (
+          <Panel
+            title={monthEndCloseout.mode === "closing" ? "Chốt tháng" : "Rà soát tháng trước"}
+            subtitle={monthEndCloseout.mode === "closing" ? "Checklist cuối tháng trước khi bước sang kỳ mới" : "Cửa sổ 3 ngày đầu tháng để xử lý nốt kỳ vừa qua"}
+          >
+            <div data-dashboard-decision="month-end-closeout" className="mt-4">
+              <div className="grid grid-cols-3 gap-2">
+                <MiniStat
+                  label="Ngân sách"
+                  value={monthEndCloseout.budgetConfigured ? `${monthEndCloseout.budgetUsage}%` : "Chưa lập"}
+                  color={monthEndCloseout.budgetConfigured && monthEndCloseout.budgetUsage > 100 ? "text-rose-500" : "text-[#31536F]"}
+                />
+                <MiniStat label="Cần review" value={String(monthEndCloseout.reviewPending)} color={monthEndCloseout.reviewPending > 0 ? "text-amber-600" : "text-emerald-600"} />
+                <MiniStat label="Cash ròng" value={formatVND(monthEndCloseout.netCashMovement)} color={monthEndCloseout.netCashMovement >= 0 ? "text-[#2F80ED]" : "text-rose-500"} />
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                  <span className="text-xs font-bold text-[#3F5F79]">Rà soát giao dịch</span>
+                  <span className={`text-xs font-black ${monthEndCloseout.reviewPending === 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                    {monthEndCloseout.reviewPending === 0 ? "Xong" : `${monthEndCloseout.reviewPending} việc`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
+                  <span className="text-xs font-bold text-[#3F5F79]">Kiểm tra ngân sách</span>
+                  <span className={`text-xs font-black ${monthEndCloseout.overBudgetCount > 0 ? "text-rose-500" : monthEndCloseout.budgetConfigured ? "text-emerald-600" : "text-[#60778D]"}`}>
+                    {monthEndCloseout.overBudgetCount > 0 ? `${monthEndCloseout.overBudgetCount} vượt` : monthEndCloseout.budgetConfigured ? "Xong" : "Chưa lập"}
+                  </span>
+                </div>
+              </div>
+              {monthEndCloseout.netWorthDelta !== null ? (
+                <p className="mt-3 text-[11px] font-semibold text-[#60778D]">Net Worth trong snapshot gần nhất của kỳ thay đổi <span className={monthEndCloseout.netWorthDelta >= 0 ? "font-black text-emerald-600" : "font-black text-rose-500"}>{monthEndCloseout.netWorthDelta >= 0 ? "+" : ""}{formatVND(monthEndCloseout.netWorthDelta)}</span>.</p>
+              ) : null}
+            </div>
+          </Panel>
+        ) : null}
       </section>
 
       {/* UI-DASH-1: moved down from leading the page — upcoming recurring

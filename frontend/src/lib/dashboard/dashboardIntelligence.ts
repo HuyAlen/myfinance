@@ -380,3 +380,436 @@ export function buildNetWorthAttribution(input: {
     items: items.filter((item) => Math.abs(item.delta) >= 1).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
   };
 }
+
+// DASHBOARD-DECISION-INTELLIGENCE-2
+// Pure decision helpers. They consume already-loaded SSOT data and never query,
+// mutate or persist finance state.
+
+export type RecurringScheduleInput = {
+  id: string;
+  title: string;
+  amount: number;
+  type: "income" | "expense";
+  nextRunDate: string | Date;
+  recurrence?: "daily" | "weekly" | "monthly" | "yearly";
+  categoryId?: string;
+  categoryName?: string;
+};
+
+export type RecurringOccurrence = {
+  id: string;
+  scheduleId: string;
+  title: string;
+  amount: number;
+  type: "income" | "expense";
+  date: Date;
+  categoryId?: string;
+  categoryName?: string;
+};
+
+function localDayKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localMonthKey(date: Date) {
+  return localDayKey(date).slice(0, 7);
+}
+
+function addMonthsClamped(date: Date, months: number, anchorDay: number) {
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(anchorDay, lastDay));
+  target.setHours(0, 0, 0, 0);
+  return target;
+}
+
+function addYearsClamped(date: Date, years: number, anchorMonth: number, anchorDay: number) {
+  const target = new Date(date.getFullYear() + years, anchorMonth, 1);
+  const lastDay = new Date(target.getFullYear(), anchorMonth + 1, 0).getDate();
+  target.setDate(Math.min(anchorDay, lastDay));
+  target.setHours(0, 0, 0, 0);
+  return target;
+}
+
+function nextRecurringDate(
+  date: Date,
+  recurrence: NonNullable<RecurringScheduleInput["recurrence"]>,
+  anchorDay: number,
+  anchorMonth: number,
+) {
+  if (recurrence === "daily") {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
+  if (recurrence === "weekly") {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 7);
+    return next;
+  }
+  if (recurrence === "monthly") return addMonthsClamped(date, 1, anchorDay);
+  return addYearsClamped(date, 1, anchorMonth, anchorDay);
+}
+
+export function expandRecurringScheduleOccurrences(
+  schedules: RecurringScheduleInput[],
+  todayInput: string | Date,
+  horizonDays = 90,
+): RecurringOccurrence[] {
+  const today = atStartOfDay(todayInput);
+  if (!today || horizonDays < 0) return [];
+  const end = new Date(today);
+  end.setDate(end.getDate() + horizonDays);
+  const occurrences: RecurringOccurrence[] = [];
+
+  for (const schedule of schedules) {
+    const amount = Math.abs(Number(schedule.amount) || 0);
+    let occurrence = atStartOfDay(schedule.nextRunDate);
+    if (!occurrence || amount <= 0) continue;
+    const anchorDay = occurrence.getDate();
+    const anchorMonth = occurrence.getMonth();
+
+    if (!schedule.recurrence) {
+      if (occurrence >= today && occurrence <= end) {
+        occurrences.push({
+          id: `${schedule.id}:${localDayKey(occurrence)}`,
+          scheduleId: schedule.id,
+          title: schedule.title,
+          amount,
+          type: schedule.type,
+          date: occurrence,
+          categoryId: schedule.categoryId,
+          categoryName: schedule.categoryName,
+        });
+      }
+      continue;
+    }
+
+    let guard = 0;
+    while (occurrence < today && guard < 500) {
+      occurrence = nextRecurringDate(
+        occurrence,
+        schedule.recurrence,
+        anchorDay,
+        anchorMonth,
+      );
+      guard += 1;
+    }
+    while (occurrence <= end && guard < 1000) {
+      occurrences.push({
+        id: `${schedule.id}:${localDayKey(occurrence)}`,
+        scheduleId: schedule.id,
+        title: schedule.title,
+        amount,
+        type: schedule.type,
+        date: new Date(occurrence),
+        categoryId: schedule.categoryId,
+        categoryName: schedule.categoryName,
+      });
+      occurrence = nextRecurringDate(
+        occurrence,
+        schedule.recurrence,
+        anchorDay,
+        anchorMonth,
+      );
+      guard += 1;
+    }
+  }
+
+  const deduped = new Map<string, RecurringOccurrence>();
+  for (const occurrence of occurrences) {
+    const identity =
+      occurrence.categoryId || normalizeReviewText(occurrence.categoryName);
+    const key = [
+      localDayKey(occurrence.date),
+      occurrence.type,
+      Math.round(occurrence.amount),
+      identity,
+    ].join("|");
+    if (!deduped.has(key)) deduped.set(key, occurrence);
+  }
+
+  return [...deduped.values()].sort(
+    (a, b) => a.date.getTime() - b.date.getTime(),
+  );
+}
+
+export type SafeToSpend =
+  | { available: false; reason: "not-current-month" | "no-budget" }
+  | {
+      available: true;
+      amount: number;
+      spendableCash: number;
+      budgetRemaining: number;
+      budgetReservedForRecurring: number;
+      recurringExpense: number;
+      expectedRecurringIncome: number;
+      budgetCapacity: number;
+      liquidityCapacity: number;
+      limitingConstraint: "budget" | "liquidity";
+    };
+
+export function buildSafeToSpend(input: {
+  selectedMonthKey: string;
+  today: string | Date;
+  spendableCash: number;
+  budgetConfigured: boolean;
+  budgetRemaining: number;
+  budgetedCategoryIds: string[];
+  occurrences: RecurringOccurrence[];
+}): SafeToSpend {
+  const today = atStartOfDay(input.today);
+  if (!today || input.selectedMonthKey !== localMonthKey(today)) {
+    return { available: false, reason: "not-current-month" };
+  }
+  if (!input.budgetConfigured) {
+    return { available: false, reason: "no-budget" };
+  }
+
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  monthEnd.setHours(0, 0, 0, 0);
+  const budgeted = new Set(input.budgetedCategoryIds);
+  let recurringExpense = 0;
+  let expectedRecurringIncome = 0;
+  let budgetReservedForRecurring = 0;
+
+  for (const occurrence of input.occurrences) {
+    const date = atStartOfDay(occurrence.date);
+    if (!date || date < today || date > monthEnd) continue;
+    if (occurrence.type === "income") {
+      expectedRecurringIncome += occurrence.amount;
+      continue;
+    }
+    recurringExpense += occurrence.amount;
+    if (occurrence.categoryId && budgeted.has(occurrence.categoryId)) {
+      budgetReservedForRecurring += occurrence.amount;
+    }
+  }
+
+  const spendableCash = Number(input.spendableCash) || 0;
+  const budgetRemaining = Math.max(0, Number(input.budgetRemaining) || 0);
+  const budgetCapacity = Math.max(
+    0,
+    budgetRemaining - budgetReservedForRecurring,
+  );
+  // Conservative by design: future recurring income is shown as context but
+  // is never counted as spendable before it actually reaches a Wallet.
+  const liquidityCapacity = Math.max(0, spendableCash - recurringExpense);
+  const amount = Math.max(0, Math.min(budgetCapacity, liquidityCapacity));
+
+  return {
+    available: true,
+    amount,
+    spendableCash,
+    budgetRemaining,
+    budgetReservedForRecurring,
+    recurringExpense,
+    expectedRecurringIncome,
+    budgetCapacity,
+    liquidityCapacity,
+    limitingConstraint:
+      budgetCapacity <= liquidityCapacity ? "budget" : "liquidity",
+  };
+}
+
+export type CashRunwayPoint = {
+  days: 30 | 60 | 90;
+  date: string;
+  projectedBalance: number;
+};
+
+export type CashRunwayForecast = {
+  startingBalance: number;
+  eventCount90: number;
+  points: CashRunwayPoint[];
+  lowPointBalance: number;
+  lowPointDate: string;
+};
+
+export function buildCashRunwayForecast(input: {
+  startingBalance: number;
+  occurrences: RecurringOccurrence[];
+  today: string | Date;
+}): CashRunwayForecast {
+  const today = atStartOfDay(input.today) ?? new Date(0);
+  const startingBalance = Number(input.startingBalance) || 0;
+  const end90 = new Date(today);
+  end90.setDate(end90.getDate() + 90);
+  const eligible = input.occurrences
+    .filter((occurrence) => occurrence.date >= today && occurrence.date <= end90)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let running = startingBalance;
+  let lowPointBalance = startingBalance;
+  let lowPointDate = localDayKey(today);
+  for (const occurrence of eligible) {
+    running += occurrence.type === "income" ? occurrence.amount : -occurrence.amount;
+    if (running < lowPointBalance) {
+      lowPointBalance = running;
+      lowPointDate = localDayKey(occurrence.date);
+    }
+  }
+
+  const points = ([30, 60, 90] as const).map((days) => {
+    const checkpoint = new Date(today);
+    checkpoint.setDate(checkpoint.getDate() + days);
+    const projectedBalance = eligible
+      .filter((occurrence) => occurrence.date <= checkpoint)
+      .reduce(
+        (balance, occurrence) =>
+          balance +
+          (occurrence.type === "income" ? occurrence.amount : -occurrence.amount),
+        startingBalance,
+      );
+    return { days, date: localDayKey(checkpoint), projectedBalance };
+  });
+
+  return {
+    startingBalance,
+    eventCount90: eligible.length,
+    points,
+    lowPointBalance,
+    lowPointDate,
+  };
+}
+
+export function countInvalidRecurringSchedules(input: {
+  categories: Category[];
+  transactions: Transaction[];
+}) {
+  const invalidCategories = input.categories.filter((category) => {
+    if (!category.isRecurring) return false;
+    const date = category.nextRunDate ? atStartOfDay(category.nextRunDate) : null;
+    return !date || Number(category.defaultAmount ?? 0) <= 0;
+  }).length;
+  const invalidTransactions = input.transactions.filter((transaction) => {
+    if (
+      !transaction.isRecurring ||
+      (transaction.type !== "income" && transaction.type !== "expense")
+    ) {
+      return false;
+    }
+    const date = transaction.nextRunDate
+      ? atStartOfDay(transaction.nextRunDate)
+      : null;
+    return !date || Number(transaction.amount) <= 0;
+  }).length;
+  return invalidCategories + invalidTransactions;
+}
+
+export type FinanceDataHealthIssue = {
+  key: "missing-category" | "possible-duplicate" | "recurring-config" | "net-worth-snapshot";
+  title: string;
+  detail: string;
+  count: number;
+};
+
+export type FinanceDataHealth =
+  | { available: false }
+  | { available: true; issues: FinanceDataHealthIssue[] };
+
+export function buildFinanceDataHealth(input: {
+  selectedMonthKey: string;
+  today: string | Date;
+  reviewInbox: FinanceReviewInbox;
+  netWorthSnapshots: NetWorthSnapshot[];
+  invalidRecurringScheduleCount: number;
+  hasFinancialData: boolean;
+}): FinanceDataHealth {
+  const today = atStartOfDay(input.today);
+  if (!today || input.selectedMonthKey !== localMonthKey(today)) {
+    return { available: false };
+  }
+
+  const issues: FinanceDataHealthIssue[] = [];
+  if (input.reviewInbox.uncategorizedCount > 0) {
+    issues.push({
+      key: "missing-category",
+      title: "Giao dịch thiếu category",
+      detail: "Cần phân loại để Budget và báo cáo không bị thiếu ngữ cảnh.",
+      count: input.reviewInbox.uncategorizedCount,
+    });
+  }
+  if (input.reviewInbox.duplicateCount > 0) {
+    issues.push({
+      key: "possible-duplicate",
+      title: "Giao dịch có thể bị trùng",
+      detail: "Kiểm tra trước khi dùng số liệu cho forecast và closeout.",
+      count: input.reviewInbox.duplicateCount,
+    });
+  }
+  if (input.invalidRecurringScheduleCount > 0) {
+    issues.push({
+      key: "recurring-config",
+      title: "Recurring chưa đủ cấu hình",
+      detail: "Thiếu ngày chạy tiếp theo hoặc số tiền hợp lệ.",
+      count: input.invalidRecurringScheduleCount,
+    });
+  }
+
+  const hasCurrentSnapshot = input.netWorthSnapshots.some(
+    (snapshot) => snapshot.snapshotMonth === input.selectedMonthKey,
+  );
+  if (input.hasFinancialData && today.getDate() >= 3 && !hasCurrentSnapshot) {
+    issues.push({
+      key: "net-worth-snapshot",
+      title: "Chưa có snapshot Net Worth tháng này",
+      detail: "Attribution sẽ chưa phản ánh tháng hiện tại cho tới khi có snapshot được lưu.",
+      count: 0,
+    });
+  }
+
+  return { available: true, issues };
+}
+
+export type MonthEndCloseout =
+  | { visible: false }
+  | {
+      visible: true;
+      mode: "closing" | "review";
+      monthKey: string;
+      budgetConfigured: boolean;
+      budgetUsage: number;
+      reviewPending: number;
+      overBudgetCount: number;
+      netCashMovement: number;
+      netWorthDelta: number | null;
+    };
+
+function previousMonthKey(today: Date) {
+  return localMonthKey(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+}
+
+export function buildMonthEndCloseout(input: {
+  selectedMonthKey: string;
+  today: string | Date;
+  budgetConfigured: boolean;
+  budgetUsage: number;
+  reviewPending: number;
+  overBudgetCount: number;
+  netCashMovement: number;
+  netWorthDelta: number | null;
+}): MonthEndCloseout {
+  const today = atStartOfDay(input.today);
+  if (!today) return { visible: false };
+  const currentKey = localMonthKey(today);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const isClosingWindow =
+    input.selectedMonthKey === currentKey && lastDay - today.getDate() <= 4;
+  const isReviewWindow =
+    input.selectedMonthKey === previousMonthKey(today) && today.getDate() <= 3;
+  if (!isClosingWindow && !isReviewWindow) return { visible: false };
+
+  return {
+    visible: true,
+    mode: isClosingWindow ? "closing" : "review",
+    monthKey: input.selectedMonthKey,
+    budgetConfigured: input.budgetConfigured,
+    budgetUsage: Math.max(0, Math.round(Number(input.budgetUsage) || 0)),
+    reviewPending: Math.max(0, Math.round(Number(input.reviewPending) || 0)),
+    overBudgetCount: Math.max(0, Math.round(Number(input.overBudgetCount) || 0)),
+    netCashMovement: Number(input.netCashMovement) || 0,
+    netWorthDelta:
+      input.netWorthDelta === null ? null : Number(input.netWorthDelta) || 0,
+  };
+}
