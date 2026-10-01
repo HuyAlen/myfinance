@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Plus,
   ReceiptText,
+  RefreshCcw,
   Trash2,
   Wallet,
   X,
@@ -42,6 +43,7 @@ import {
   getTransactionsInRange,
   getWallets,
   hasWalletReferences,
+  reconcileWalletBalance,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
 
@@ -277,6 +279,11 @@ export default function WalletsPage() {
   const [walletLinkCountsReady, setWalletLinkCountsReady] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [reconcileTarget, setReconcileTarget] = useState<SpendableWallet | null>(
+    null,
+  );
+  const [reconcileBalance, setReconcileBalance] = useState("");
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [transferForm, setTransferForm] = useState<TransferFormState>(
     createEmptyTransferForm,
@@ -287,6 +294,7 @@ export default function WalletsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingWallet, setIsSavingWallet] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [highlightedWalletId, setHighlightedWalletId] = useState<string | null>(
     null,
   );
@@ -600,7 +608,9 @@ export default function WalletsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
-  useSuppressGlobalFabsWhileOpen(isFormOpen || isTransferOpen || !!deleteTarget);
+  useSuppressGlobalFabsWhileOpen(
+    isFormOpen || isTransferOpen || !!reconcileTarget || !!deleteTarget,
+  );
 
   function openEditForm(wallet: SpendableWallet) {
     setForm({
@@ -611,6 +621,12 @@ export default function WalletsPage() {
     });
     setSaveError(null);
     setIsFormOpen(true);
+  }
+
+  function openReconcileForm(wallet: SpendableWallet) {
+    setReconcileTarget(wallet);
+    setReconcileBalance(String(wallet.balance));
+    setReconcileError(null);
   }
 
   function openTransferForm(defaultFromWalletId?: string) {
@@ -728,6 +744,61 @@ export default function WalletsPage() {
     }
   }
 
+  async function handleReconcileSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!reconcileTarget || isReconciling) return;
+
+    const actualBalance = Number(reconcileBalance);
+    if (!Number.isFinite(actualBalance) || actualBalance < 0) {
+      setReconcileError("Vui lòng nhập số dư thực tế hợp lệ");
+      return;
+    }
+    if (actualBalance === reconcileTarget.balance) {
+      setReconcileError("Số dư thực tế đang trùng với MyFinance, không cần điều chỉnh.");
+      return;
+    }
+
+    setReconcileError(null);
+    setIsReconciling(true);
+    try {
+      const result = await reconcileWalletBalance({
+        walletId: reconcileTarget.id,
+        expectedBalance: reconcileTarget.balance,
+        actualBalance,
+      });
+
+      if (result.error !== null) {
+        if (result.code === "conflict") {
+          await runReload();
+          setReconcileTarget(null);
+          setReconcileBalance("");
+          toast({
+            variant: "warning",
+            message:
+              "Số dư ví vừa thay đổi ở nơi khác. Dữ liệu đã được tải lại; hãy mở Đối soát và thử lại.",
+          });
+          return;
+        }
+        setReconcileError(result.error);
+        return;
+      }
+
+      await runReload();
+      const deltaText =
+        result.difference > 0
+          ? "+" + formatVND(result.difference)
+          : "−" + formatVND(Math.abs(result.difference));
+      toast({
+        variant: "success",
+        message: "Đã đối soát " + reconcileTarget.name + ": " + deltaText + ".",
+      });
+      setReconcileTarget(null);
+      setReconcileBalance("");
+    } finally {
+      setIsReconciling(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (isSavingWallet) return;
@@ -749,24 +820,13 @@ export default function WalletsPage() {
       return;
     }
 
-    // WALLET-BALANCE-EDIT-1: wallet.balance is a persisted field, atomically
-    // incremented/decremented by addTransaction()/updateTransaction()/
-    // deleteTransaction() (never recomputed from a transaction sum — see
-    // financeStorage.ts) — proven Model A, not a derived value. A manual
-    // edit here is therefore a direct correction to that same persisted
-    // field via updateWallet(), exactly like editing name/type already is —
-    // not a fake transaction, so it can never pollute income/expense/cash-
-    // flow reports or duplicate a transfer's effect. Same validation for a
-    // brand-new wallet's opening balance and an existing wallet's
-    // correction, since both are just "the balance this wallet starts
-    // reflecting from now on."
-    //
-    // NETWORTH-HISTORY-1: this direct correction still does not create a
-    // fake finance transaction. The database snapshot trigger captures the
-    // corrected CURRENT month atomically with the wallet write, while every
-    // previously recorded monthly Net Worth snapshot remains unchanged.
-    const balance = Number(form.balance);
-    if (Number.isNaN(balance) || balance < 0) {
+    // WALLET-RECONCILIATION-1: an existing wallet's balance is NOT a generic
+    // editable profile field anymore. Name/type edits preserve the accepted
+    // snapshot balance; corrections go through the dedicated reconciliation
+    // compare-and-set path below so a concurrent transaction can never be
+    // silently overwritten. A new wallet still owns its opening balance.
+    const balance = form.id ? existingWallet!.balance : Number(form.balance);
+    if (!form.id && (Number.isNaN(balance) || balance < 0)) {
       setSaveError("Vui lòng nhập số dư hợp lệ");
       return;
     }
@@ -1313,20 +1373,29 @@ export default function WalletsPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-4">
                   <button
                     type="button"
                     onClick={() => openTransferForm(wallet.id)}
                     disabled={spendableWallets.length < 2}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-indigo-100 bg-indigo-50 px-2 py-2.5 text-[11px] font-black text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-xs"
                   >
                     <ArrowLeftRight size={13} />
                     <span className="sm:hidden">Chuyển</span>
                     <span className="hidden sm:inline">Chuyển tiền</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => openReconcileForm(wallet)}
+                    aria-label={`Đối soát số dư ${wallet.name}`}
+                    className="flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-blue-100 bg-blue-50 px-2 py-2.5 text-[11px] font-black text-blue-700 transition hover:bg-blue-100 sm:text-xs"
+                  >
+                    <RefreshCcw size={13} />
+                    Đối soát
+                  </button>
                   <Link
                     href={buildTransactionsHref({ walletId: wallet.id })}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-black text-slate-600 transition hover:bg-slate-100"
+                    className="flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2.5 text-[11px] font-black text-slate-600 transition hover:bg-slate-100 sm:text-xs"
                   >
                     <ReceiptText size={13} />
                     Giao dịch
@@ -1533,6 +1602,149 @@ export default function WalletsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
+          Wallet reconciliation modal
+          ══════════════════════════════════════════════════════════════════ */}
+      {reconcileTarget ? (
+        <div className="fixed inset-0 z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
+              <div className="min-w-0">
+                <span className="flex size-9 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                  <RefreshCcw size={18} />
+                </span>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
+                  Balance reconciliation
+                </p>
+                <h2 className="mt-1 truncate text-xl font-black text-slate-900">
+                  Đối soát {reconcileTarget.name}
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Nhập số dư thực tế đang thấy ở ngân hàng, tiền mặt hoặc ví điện tử.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isReconciling) {
+                    setReconcileTarget(null);
+                    setReconcileError(null);
+                  }
+                }}
+                disabled={isReconciling}
+                className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"
+                aria-label="Đóng đối soát số dư"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleReconcileSubmit}
+              className="min-h-0 flex flex-1 flex-col"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
+                      Số dư MyFinance
+                    </p>
+                    <p className="mt-1 text-base font-black tabular-nums text-slate-800">
+                      {formatVND(reconcileTarget.balance)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-3.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-blue-500">
+                      Chênh lệch
+                    </p>
+                    {(() => {
+                      const actual = Number(reconcileBalance);
+                      const delta = Number.isFinite(actual)
+                        ? actual - reconcileTarget.balance
+                        : 0;
+                      return (
+                        <p
+                          className={
+                            "mt-1 text-base font-black tabular-nums " +
+                            (delta > 0
+                              ? "text-emerald-600"
+                              : delta < 0
+                                ? "text-rose-600"
+                                : "text-slate-600")
+                          }
+                        >
+                          {delta > 0 ? "+" : delta < 0 ? "−" : ""}
+                          {formatVND(Math.abs(delta))}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="mb-1.5 text-sm font-black text-slate-700">
+                    Số dư thực tế
+                  </p>
+                  <CurrencyInput
+                    value={reconcileBalance}
+                    onChange={setReconcileBalance}
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                  <p className="text-xs font-black text-blue-800">
+                    Điều chỉnh số dư, không tạo dòng tiền giả
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                    Đối soát không tạo giao dịch Thu/Chi/Chuyển tiền, nên không làm sai báo cáo Cash Flow. Thay đổi số dư được audit tự động với số dư trước/sau và người thực hiện.
+                  </p>
+                  <Link
+                    href="/activity"
+                    className="mt-2 inline-flex text-[11px] font-black text-blue-700 hover:text-blue-800"
+                  >
+                    Xem lịch sử hoạt động →
+                  </Link>
+                </div>
+
+                <SaveError
+                  message={reconcileError}
+                  onDismiss={() => setReconcileError(null)}
+                />
+              </div>
+
+              <div className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:py-4">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReconcileTarget(null);
+                      setReconcileError(null);
+                    }}
+                    disabled={isReconciling}
+                    className="min-h-11 flex-1 rounded-2xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      isReconciling ||
+                      !Number.isFinite(Number(reconcileBalance)) ||
+                      Number(reconcileBalance) < 0 ||
+                      Number(reconcileBalance) === reconcileTarget.balance
+                    }
+                    className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isReconciling ? "Đang đối soát..." : "Xác nhận đối soát"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ══════════════════════════════════════════════════════════════════
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
@@ -1569,25 +1781,35 @@ export default function WalletsPage() {
                     onChange={(v) => setForm((p) => ({ ...p, name: v }))}
                     placeholder="VD: Vietcombank, Tiền mặt..."
                   />
-                  {/* Balance with ₫ prefix */}
-                  <div>
-                    <p className="mb-1.5 text-sm font-black text-slate-700">
-                      {form.id ? "Số dư hiện tại" : "Số dư ban đầu"}
-                    </p>
-                    <CurrencyInput
-                      value={form.balance}
-                      onChange={(raw: string) =>
-                        setForm((p) => ({ ...p, balance: raw }))
-                      }
-                      placeholder="0"
-                    />
-                    {form.id && (
-                      <p className="mt-1.5 text-[11px] font-medium leading-4 text-slate-400">
-                        Bạn có thể cập nhật số dư hiện tại của ví. Thay đổi sẽ
-                        không tạo giao dịch mới.
+                  {form.id ? (
+                    <div>
+                      <p className="mb-1.5 text-sm font-black text-slate-700">
+                        Số dư hiện tại
                       </p>
-                    )}
-                  </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right text-base font-black tabular-nums text-blue-700">
+                        {formatVND(
+                          spendableWallets.find((wallet) => wallet.id === form.id)
+                            ?.balance ?? (Number(form.balance) || 0),
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-[11px] font-medium leading-4 text-slate-400">
+                        Số dư chỉ thay đổi qua Đối soát để tránh ghi đè im lặng lên dữ liệu giao dịch.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="mb-1.5 text-sm font-black text-slate-700">
+                        Số dư ban đầu
+                      </p>
+                      <CurrencyInput
+                        value={form.balance}
+                        onChange={(raw: string) =>
+                          setForm((p) => ({ ...p, balance: raw }))
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Wallet type */}

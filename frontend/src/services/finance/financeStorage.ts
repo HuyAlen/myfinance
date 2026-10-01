@@ -2105,7 +2105,13 @@ export async function updateWallet(
   if (!userId) return { error: ERR_NO_AUTH };
   const { error } = await supabase
     .from("wallets")
-    .update(toWalletRow(updatedWallet, userId))
+    // WALLET-RECONCILIATION-1: generic wallet edits own identity fields only.
+    // Balance changes must use reconcileWalletBalance(), whose expected-balance
+    // compare-and-set prevents stale UI from overwriting a concurrent mutation.
+    .update({
+      name: updatedWallet.name,
+      type: updatedWallet.type,
+    })
     .eq("id", updatedWallet.id)
     .eq("user_id", userId);
   if (error) {
@@ -2113,6 +2119,83 @@ export async function updateWallet(
     return { error: error.message };
   }
   return { error: null };
+}
+
+export type WalletReconciliationErrorCode =
+  | "conflict"
+  | "invalid";
+
+export type WalletReconciliationResult =
+  | {
+      error: null;
+      previousBalance: number;
+      actualBalance: number;
+      difference: number;
+    }
+  | {
+      error: string;
+      code: WalletReconciliationErrorCode;
+    };
+
+export async function reconcileWalletBalance(input: {
+  walletId: string;
+  expectedBalance: number;
+  actualBalance: number;
+}): Promise<WalletReconciliationResult> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH, code: "invalid" };
+
+  const expectedBalance = Number(input.expectedBalance);
+  const actualBalance = Number(input.actualBalance);
+  if (
+    !input.walletId ||
+    !Number.isFinite(expectedBalance) ||
+    !Number.isFinite(actualBalance) ||
+    actualBalance < 0
+  ) {
+    return { error: "Số dư đối soát không hợp lệ.", code: "invalid" };
+  }
+  if (actualBalance === expectedBalance) {
+    return {
+      error: "Số dư thực tế đang trùng với MyFinance, không cần điều chỉnh.",
+      code: "invalid",
+    };
+  }
+
+  // Optimistic compare-and-set: a transaction, transfer, Savings or Forex
+  // mutation that changes this wallet after the modal opens makes the expected
+  // balance predicate miss, so reconciliation fails closed rather than
+  // overwriting newer money movement. The existing finance audit trigger runs
+  // in the SAME database statement/transaction and records OLD/NEW balance,
+  // actor and timestamp; no synthetic income/expense transaction is created.
+  const { data, error } = await supabase
+    .from("wallets")
+    .update({ balance: actualBalance })
+    .eq("id", input.walletId)
+    .eq("user_id", userId)
+    .eq("balance", expectedBalance)
+    .neq("type", "investment")
+    .select("id,balance");
+
+  if (error) {
+    console.error("[financeStorage] reconcileWalletBalance:", error.message);
+    return { error: error.message, code: "invalid" };
+  }
+
+  if (!data || data.length !== 1) {
+    return {
+      error:
+        "Số dư ví đã thay đổi kể từ khi bạn mở đối soát. Hãy tải dữ liệu mới và thử lại.",
+      code: "conflict",
+    };
+  }
+
+  return {
+    error: null,
+    previousBalance: expectedBalance,
+    actualBalance,
+    difference: actualBalance - expectedBalance,
+  };
 }
 
 export type WalletDeleteErrorCode = "referenced" | "not_found";
