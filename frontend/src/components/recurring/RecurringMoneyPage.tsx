@@ -495,7 +495,7 @@ export default function RecurringMoneyPage() {
       )}
 
       {editor && (
-        <div className="fixed inset-0 z-80 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-80 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
           <div className="flex max-h-[calc(var(--app-height)-0.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
               <div>
@@ -505,7 +505,7 @@ export default function RecurringMoneyPage() {
               <button type="button" onClick={() => setEditor(null)} className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500"><X size={18} /></button>
             </div>
 
-            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-28 sm:px-6 sm:pb-6">
+            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 pb-28 sm:px-6 sm:pb-6">
               {editor.source === "category" ? (
                 <label className="block">
                   <span className="text-xs font-black text-[#506A82]">Danh mục</span>

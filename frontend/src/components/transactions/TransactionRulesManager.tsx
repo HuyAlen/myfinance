@@ -167,7 +167,7 @@ export default function TransactionRulesManager({
   const walletName = new Map(wallets.map((item) => [item.id, item.name]));
 
   return (
-    <div className="fixed inset-0 z-140 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+    <div className="fixed inset-0 overflow-x-hidden z-140 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -197,7 +197,7 @@ export default function TransactionRulesManager({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
             <section className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="flex items-center justify-between gap-3">

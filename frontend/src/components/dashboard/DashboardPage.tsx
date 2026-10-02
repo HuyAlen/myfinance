@@ -3498,7 +3498,7 @@ export default function DashboardPage() {
       </div>
 
       {isDashboardCustomizationOpen && (
-        <div className="fixed inset-0 z-100 flex items-end justify-center p-0 sm:items-center sm:p-5">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-end justify-center p-0 sm:items-center sm:p-5">
           <button
             type="button"
             className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
@@ -3533,7 +3533,7 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
               <div className="space-y-2">
                 {dashboardCustomization.order.map((sectionId, index) => {
                   const section = DASHBOARD_CUSTOMIZATION_SECTIONS.find(

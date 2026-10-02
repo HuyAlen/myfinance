@@ -22,7 +22,7 @@ describe("AUDIT-UI-1.3 iPhone filter sheet, readability and touch targets", () =
   it("uses an iPhone bottom sheet with safe-area padding and explicit dismiss affordances", () => {
     expect(activityPage).toContain('role="dialog"');
     expect(activityPage).toContain('aria-modal="true"');
-    expect(activityPage).toContain("fixed inset-0 z-[80]");
+    expect(activityPage).toMatch(/fixed\s+inset-0[^"]*z-\[80\]/);
     expect(activityPage).toContain("safe-area-inset-bottom");
     expect(activityPage).toContain("Đóng bộ lọc");
     expect(activityPage).toContain("Xem kết quả");

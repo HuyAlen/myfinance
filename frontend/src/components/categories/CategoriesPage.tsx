@@ -872,7 +872,7 @@ export default function CategoriesPage() {
 
       {isFilterOpen && (
         <div
-          className="fixed inset-0 z-90 flex items-end bg-slate-900/35 sm:hidden"
+          className="fixed inset-0 overflow-x-hidden z-90 flex items-end bg-slate-900/35 sm:hidden"
           role="presentation"
           onClick={() => setIsFilterOpen(false)}
         >
@@ -1147,7 +1147,7 @@ export default function CategoriesPage() {
       </section>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex min-h-0 items-stretch justify-center overflow-hidden bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex min-h-0 items-stretch justify-center overflow-hidden bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex h-dvh min-h-0 w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
               <div>
@@ -1172,7 +1172,7 @@ export default function CategoriesPage() {
             <form
               onSubmit={handleSubmit}
               aria-busy={isSubmitting}
-              className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto overscroll-contain px-4 py-3 scroll-pb-[calc(6rem+env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] sm:max-h-[calc(100dvh-8rem)] sm:p-6"
+              className="flex min-h-0 flex-1 touch-pan-y flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 scroll-pb-[calc(6rem+env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] sm:max-h-[calc(100dvh-8rem)] sm:p-6"
             >
               <label className="block">
                 <span className="mb-1.5 block text-sm font-black text-slate-700">

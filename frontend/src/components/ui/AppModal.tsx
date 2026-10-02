@@ -51,7 +51,7 @@ export default function AppModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="app-modal-title"
-      className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/20 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 overflow-x-hidden z-100 flex items-end justify-center bg-slate-900/20 p-4 backdrop-blur-sm sm:items-center"
     >
       {/* Click-outside overlay */}
       <div className="absolute inset-0" aria-hidden="true" onClick={onClose} />
@@ -59,7 +59,7 @@ export default function AppModal({
       {/* Panel */}
       <div
         className={[
-          "relative max-h-[92dvh] w-full overflow-y-auto rounded-4xl border border-slate-200 bg-white shadow-2xl",
+          "relative max-h-[92dvh] w-full overflow-x-hidden overflow-y-auto rounded-4xl border border-slate-200 bg-white shadow-2xl",
           SIZE_CLASS[size],
         ].join(" ")}
       >

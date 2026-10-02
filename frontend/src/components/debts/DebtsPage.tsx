@@ -1593,7 +1593,7 @@ export default function DebtsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex h-[100dvh] w-full max-w-xl flex-col overflow-hidden rounded-none bg-white shadow-2xl sm:h-auto sm:max-h-[min(42rem,calc(var(--app-height,100dvh)-2rem))] sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-6 sm:py-5">
@@ -1615,7 +1615,7 @@ export default function DebtsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-0 sm:px-6 sm:py-5 sm:pb-6"
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 pb-0 sm:px-6 sm:py-5 sm:pb-6"
             >
               <div className="space-y-4">
                 <FormInput

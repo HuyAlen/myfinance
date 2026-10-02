@@ -77,7 +77,7 @@ export default function ConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/40 p-4">
+    <div className="fixed inset-0 overflow-x-hidden z-100 flex items-center justify-center bg-slate-950/40 p-4">
       <div
         ref={panelRef}
         role="dialog"

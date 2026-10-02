@@ -3548,7 +3548,7 @@ export default function TransactionsPage() {
 
       {/* ── CRUD Form Modal ─────────────────────────────────────────────── */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <div
             ref={modalPanelRef}
             role="dialog"
@@ -3589,7 +3589,7 @@ export default function TransactionsPage() {
             <form
               id="transaction-form"
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto px-4 py-2.5 sm:px-6 sm:py-4 sm:pb-5"
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-2.5 sm:px-6 sm:py-4 sm:pb-5"
             >
               {/* Type selector — premium segmented control */}
               <div className="mb-2">

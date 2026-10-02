@@ -524,7 +524,7 @@ export default function ActivityPage() {
 
       {mobileFiltersOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-end bg-slate-950/35 p-0 sm:hidden"
+          className="fixed inset-0 overflow-x-hidden z-[80] flex items-end bg-slate-950/35 p-0 sm:hidden"
           role="dialog"
           aria-modal="true"
           aria-labelledby="activity-filter-sheet-title"
@@ -532,7 +532,7 @@ export default function ActivityPage() {
             if (event.target === event.currentTarget) setMobileFiltersOpen(false);
           }}
         >
-          <section className="max-h-[82dvh] w-full overflow-y-auto rounded-t-[28px] bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-2xl">
+          <section className="max-h-[82dvh] w-full overflow-x-hidden overflow-y-auto rounded-t-[28px] bg-white px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-2xl">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
             <div className="flex items-start justify-between gap-3">
               <div>

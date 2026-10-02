@@ -153,7 +153,7 @@ export default function TransactionCsvImportModal({
   }
 
   return (
-    <div className="fixed inset-0 z-130 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+    <div className="fixed inset-0 overflow-x-hidden z-130 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -190,7 +190,7 @@ export default function TransactionCsvImportModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <input
             ref={inputRef}
             type="file"

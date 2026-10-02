@@ -73,8 +73,11 @@ describe("CategoriesPage mobile first-viewport contract (CATEGORIES-MOBILE-POLIS
     expect(source).toContain("const [isFilterOpen, setIsFilterOpen] = useState(false)");
     expect(source).toContain("<SlidersHorizontal size={16} />");
     expect(source).toContain('aria-label="Mở bộ lọc danh mục"');
+    expect(normalized).toMatch(
+      /\{isFilterOpen && \( <div className="fixed inset-0[^"]*\bz-90\b[^"]*sm:hidden"/,
+    );
     expect(normalized).toContain(
-      '{isFilterOpen && ( <div className="fixed inset-0 z-90 flex items-end bg-slate-900/35 sm:hidden"',
+      'fixed inset-0 overflow-x-hidden z-90',
     );
     expect(source).toContain('aria-label="Bộ lọc danh mục"');
     expect(source).toContain("mt-4 hidden gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-4");

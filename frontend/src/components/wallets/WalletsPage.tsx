@@ -1504,7 +1504,7 @@ export default function WalletsPage() {
           Transfer Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
@@ -1531,7 +1531,7 @@ export default function WalletsPage() {
               onSubmit={handleTransferSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5 sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-2.5 sm:px-6 sm:py-5">
                 {spendableWallets.length < 2 ? (
                   <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-700">
                     Bạn cần ít nhất 2 ví để dùng tính năng chuyển tiền.
@@ -1643,7 +1643,7 @@ export default function WalletsPage() {
           Wallet reconciliation modal
           ══════════════════════════════════════════════════════════════════ */}
       {reconcileTarget ? (
-        <div className="fixed inset-0 z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div className="min-w-0">
@@ -1681,7 +1681,7 @@ export default function WalletsPage() {
               onSubmit={handleReconcileSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
                     <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
@@ -1807,7 +1807,7 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
@@ -1832,7 +1832,7 @@ export default function WalletsPage() {
               onSubmit={handleSubmit}
               className="min-h-0 flex flex-1 flex-col"
             >
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-5">
+              <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-5">
                 <div className="grid gap-2.5 md:grid-cols-2">
                   <FormInput
                     label="Tên ví"
@@ -1948,7 +1948,7 @@ export default function WalletsPage() {
       )}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
           <button
             type="button"
             aria-label="Đóng xác nhận xóa ví"

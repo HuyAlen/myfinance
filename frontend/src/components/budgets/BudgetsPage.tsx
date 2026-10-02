@@ -1556,7 +1556,7 @@ export default function BudgetsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-start justify-center bg-slate-900/40 px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-start justify-center bg-slate-900/40 px-0 pb-0 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex max-h-[calc(var(--app-height,100dvh)-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-4xl bg-white shadow-2xl sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-5">
@@ -1577,7 +1577,7 @@ export default function BudgetsPage() {
             </div>
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6"
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6"
             >
               <div className="space-y-4">
                 {/* Category select */}

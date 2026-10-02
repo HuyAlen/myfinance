@@ -841,7 +841,7 @@ export default function GoalsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-100 flex items-stretch justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="flex h-dvh w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-4xl">
             {/* Header */}
             <div className="shrink-0 flex items-start justify-between gap-4 border-b border-slate-100 p-4 pb-4 sm:p-6 sm:pb-5">
@@ -863,7 +863,7 @@ export default function GoalsPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-[calc(8rem+env(safe-area-inset-bottom))]"
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 pt-6 pb-[calc(8rem+env(safe-area-inset-bottom))]"
             >
               <div className="space-y-4">
                 <FormInput

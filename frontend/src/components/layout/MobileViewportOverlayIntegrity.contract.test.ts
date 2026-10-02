@@ -45,13 +45,13 @@ describe("cross-page viewport overlay integrity", () => {
   it("keeps the Transactions editor above the shared header and bottom navigation", () => {
     expect(header).toContain("sticky top-0 z-30");
     expect(bottomNav).toContain("fixed inset-x-0 bottom-0 z-50");
-    expect(transactions).toContain("fixed inset-0 z-100");
+    expect(transactions).toMatch(/fixed\s+inset-0[^"]*\bz-100\b/);
   });
 
   it("standardizes reusable and Dashboard dialogs above global mobile chrome", () => {
-    expect(appModal).toContain("fixed inset-0 z-100");
-    expect(confirmDialog).toContain("fixed inset-0 z-100");
-    expect(dashboard).toContain("fixed inset-0 z-100");
+    expect(appModal).toMatch(/fixed\s+inset-0[^"]*\bz-100\b/);
+    expect(confirmDialog).toMatch(/fixed\s+inset-0[^"]*\bz-100\b/);
+    expect(dashboard).toMatch(/fixed\s+inset-0[^"]*\bz-100\b/);
   });
 
   it("keeps the transaction type segment fully tappable on mobile", () => {
