@@ -8,6 +8,10 @@ export const TRANSACTION_REVIEW_ACK_STORAGE_KEY =
   "myfinance:transaction-review-ack-v1";
 export const TRANSACTION_REVIEW_ACK_EVENT =
   "myfinance:transaction-review-ack-changed";
+export type TransactionReviewAcknowledgementInput = {
+  transaction: Transaction;
+  reason: FinanceReviewReason;
+};
 
 function normalizeReviewText(value: string | undefined) {
   return (value ?? "")

@@ -41,6 +41,18 @@ import {
 } from "@/src/lib/transactions/transactionRules";
 import { getTransactionRules } from "@/src/services/finance/transactionRulesStorage";
 import { serializeTransactionsCsv } from "@/src/lib/transactions/transactionCsvImport";
+import {
+  DEFAULT_FINANCE_REVIEW_FILTERS,
+  countActiveFinanceReviewFilters,
+  filterFinanceReviewItems,
+  getFinanceReviewSeverity,
+  getFinanceReviewSeverityLabel,
+  type FinanceReviewFilters,
+} from "@/src/lib/transactions/financeReviewInbox2";
+import {
+  acknowledgeTransactionReviewReasons,
+  getTransactionReviewAcknowledgementKeys,
+} from "@/src/services/finance/transactionReviewStorage";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
   ArrowDownRight,
@@ -110,6 +122,7 @@ type TransactionFormMode = "income" | "expense" | "transfer";
 function getTransactionReviewReasonLabel(reason: FinanceReviewReason) {
   if (reason === "uncategorized") return "Chưa phân loại";
   if (reason === "possible-duplicate") return "Có thể trùng";
+  if (reason === "category-type-mismatch") return "Sai loại danh mục";
   return "Chi tiêu bất thường";
 }
 
@@ -527,11 +540,28 @@ export default function TransactionsPage() {
   >(null);
   const [transactionReviewAcknowledgements, setTransactionReviewAcknowledgements] =
     useState<Set<string>>(new Set());
-  useEffect(() => {
-    setTransactionReviewAcknowledgements(
-      readTransactionReviewAcknowledgements(),
-    );
+
+  // FINANCE-REVIEW-INBOX-2: Supabase is the durable/cross-device source.
+  // Existing local keys are merged for backwards compatibility with v1.
+  const reloadTransactionReviewAcknowledgements = useCallback(async () => {
+    const localKeys = readTransactionReviewAcknowledgements();
+    try {
+      const remoteKeys = await getTransactionReviewAcknowledgementKeys();
+      setTransactionReviewAcknowledgements(
+        new Set([...localKeys, ...remoteKeys]),
+      );
+    } catch (error) {
+      console.error(
+        "[TransactionsPage] Failed to load durable review acknowledgements",
+        error,
+      );
+      setTransactionReviewAcknowledgements(localKeys);
+    }
   }, []);
+
+  useEffect(() => {
+    void reloadTransactionReviewAcknowledgements();
+  }, [reloadTransactionReviewAcknowledgements]);
 
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>("all");
@@ -543,6 +573,9 @@ export default function TransactionsPage() {
   const [amountMax, setAmountMax] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const [reviewFilters, setReviewFilters] = useState<FinanceReviewFilters>(
+    DEFAULT_FINANCE_REVIEW_FILTERS,
+  );
 
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -750,6 +783,10 @@ export default function TransactionsPage() {
     requestTransactionsRefresh,
   );
   useRealtimeTable(["transaction_rules"], reloadTransactionRules);
+  useRealtimeTable(
+    ["transaction_review_acknowledgements"],
+    reloadTransactionReviewAcknowledgements,
+  );
 
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -814,11 +851,24 @@ export default function TransactionsPage() {
   );
   const reviewMode = urlTransactionsContext?.review === true;
   const requestedReviewTargetId = urlTransactionsContext?.transactionId;
+  const filteredReviewItems = useMemo(
+    () =>
+      filterFinanceReviewItems({
+        items: transactionReviewInbox.items,
+        transactions,
+        filters: reviewFilters,
+      }),
+    [reviewFilters, transactionReviewInbox.items, transactions],
+  );
+  const reviewActiveFilterCount = countActiveFinanceReviewFilters(reviewFilters);
   const activeReviewItem =
+    filteredReviewItems.find(
+      (item) => item.transactionId === requestedReviewTargetId,
+    ) ??
+    filteredReviewItems[0] ??
     transactionReviewInbox.items.find(
       (item) => item.transactionId === requestedReviewTargetId,
     ) ??
-    transactionReviewInbox.items[0] ??
     rawTransactionReviewInbox.items.find(
       (item) => item.transactionId === requestedReviewTargetId,
     );
@@ -840,6 +890,22 @@ export default function TransactionsPage() {
   const activeDuplicatePeers = activeReviewTransaction
     ? findPossibleDuplicatePeers(activeReviewTransaction, transactions)
     : [];
+  const activeReviewRuleSuggestion = useMemo(() => {
+    if (
+      !activeReviewTransaction ||
+      (activeReviewTransaction.type !== "income" &&
+        activeReviewTransaction.type !== "expense")
+    ) {
+      return null;
+    }
+    return evaluateTransactionRules(transactionRules, {
+      type: activeReviewTransaction.type,
+      amount: Number(activeReviewTransaction.amount),
+      note: activeReviewTransaction.note,
+      walletId: activeReviewTransaction.walletId,
+      categoryId: activeReviewTransaction.categoryId,
+    });
+  }, [activeReviewTransaction, transactionRules]);
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
@@ -1367,18 +1433,28 @@ export default function TransactionsPage() {
     router.replace(query ? pathname + "?" + query : pathname, { scroll: false });
   }
 
-  function acknowledgeReviewReason(
+  async function acknowledgeReviewReason(
     targetTransactions: Transaction[],
     reason: FinanceReviewReason,
   ) {
+    const result = await acknowledgeTransactionReviewReasons(
+      targetTransactions.map((transaction) => ({ transaction, reason })),
+    );
+    if (result.error) {
+      toast({ variant: "error", message: result.error });
+      return false;
+    }
+
     setTransactionReviewAcknowledgements((current) => {
       const next = new Set(current);
       for (const transaction of targetTransactions) {
         next.add(buildTransactionReviewAcknowledgementKey(transaction, reason));
       }
+      // Keep the v1 local cache as an offline/backwards-compatible mirror.
       persistTransactionReviewAcknowledgements(next);
       return next;
     });
+    return true;
   }
 
   // TRANSACTION-REVIEW-WORKFLOW-1: keep one canonical updateTransaction
@@ -1413,20 +1489,55 @@ export default function TransactionsPage() {
     toast({ variant: "success", message: "Đã phân loại giao dịch." });
   }
 
-  function handleKeepDuplicateGroup(transaction: Transaction) {
+  async function handleKeepDuplicateGroup(transaction: Transaction) {
     const peers = findPossibleDuplicatePeers(transaction, transactions);
-    acknowledgeReviewReason([transaction, ...peers], "possible-duplicate");
+    if (
+      !(await acknowledgeReviewReason(
+        [transaction, ...peers],
+        "possible-duplicate",
+      ))
+    ) {
+      return;
+    }
     toast({
       variant: "success",
       message: "Đã xác nhận giữ các giao dịch này.",
     });
   }
 
-  function handleMarkUnusualNormal(transaction: Transaction) {
-    acknowledgeReviewReason([transaction], "unusual-expense");
+  async function handleMarkUnusualNormal(transaction: Transaction) {
+    if (
+      !(await acknowledgeReviewReason([transaction], "unusual-expense"))
+    ) {
+      return;
+    }
     toast({
       variant: "success",
       message: "Đã xác nhận khoản chi này là bình thường.",
+    });
+  }
+
+  async function handleApplyReviewRuleSuggestion() {
+    if (!activeReviewTransaction || !activeReviewRuleSuggestion) return;
+    if (isSavingsManagedTransaction(activeReviewTransaction)) return;
+
+    const { error } = await persistTransactionUpdate({
+      ...activeReviewTransaction,
+      ...(activeReviewRuleSuggestion.patch.categoryId
+        ? { categoryId: activeReviewRuleSuggestion.patch.categoryId }
+        : {}),
+      ...(activeReviewRuleSuggestion.patch.walletId
+        ? { walletId: activeReviewRuleSuggestion.patch.walletId }
+        : {}),
+    });
+    if (error) {
+      toast({ variant: "error", message: error });
+      return;
+    }
+    await runReload();
+    toast({
+      variant: "success",
+      message: `Đã áp dụng quy tắc ${activeReviewRuleSuggestion.rule.name}.`,
     });
   }
 
@@ -1985,10 +2096,134 @@ export default function TransactionsPage() {
             </button>
           </div>
 
+          {/* FINANCE-REVIEW-INBOX-2: durable-review-workspace */}
+          {transactionReviewInbox.total > 0 ? (
+            <div className="border-b border-slate-100 bg-white px-4 py-3 sm:px-6">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    Mức độ
+                  </span>
+                  <select
+                    value={reviewFilters.severity}
+                    onChange={(event) =>
+                      setReviewFilters((current) => ({
+                        ...current,
+                        severity: event.target.value as FinanceReviewFilters["severity"],
+                      }))
+                    }
+                    className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+                  >
+                    <option value="all">Tất cả</option>
+                    <option value="high">Ưu tiên cao</option>
+                    <option value="action">Cần xử lý</option>
+                    <option value="info">Theo dõi</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    Lý do
+                  </span>
+                  <select
+                    value={reviewFilters.reason}
+                    onChange={(event) =>
+                      setReviewFilters((current) => ({
+                        ...current,
+                        reason: event.target.value as FinanceReviewFilters["reason"],
+                      }))
+                    }
+                    className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+                  >
+                    <option value="all">Tất cả</option>
+                    <option value="category-type-mismatch">Sai loại danh mục</option>
+                    <option value="uncategorized">Chưa phân loại</option>
+                    <option value="possible-duplicate">Có thể trùng</option>
+                    <option value="unusual-expense">Chi tiêu bất thường</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    Ví
+                  </span>
+                  <select
+                    value={reviewFilters.walletId}
+                    onChange={(event) =>
+                      setReviewFilters((current) => ({
+                        ...current,
+                        walletId: event.target.value,
+                      }))
+                    }
+                    className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+                  >
+                    <option value="">Tất cả ví</option>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>
+                        {wallet.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    Danh mục
+                  </span>
+                  <select
+                    value={reviewFilters.categoryId}
+                    onChange={(event) =>
+                      setReviewFilters((current) => ({
+                        ...current,
+                        categoryId: event.target.value,
+                      }))
+                    }
+                    className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none"
+                  >
+                    <option value="">Tất cả danh mục</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-[11px] font-bold text-slate-500">
+                  Hiển thị {filteredReviewItems.length}/{transactionReviewInbox.total} giao dịch
+                  {reviewActiveFilterCount > 0
+                    ? ` · ${reviewActiveFilterCount} bộ lọc`
+                    : ""}
+                </p>
+                {reviewActiveFilterCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReviewFilters(DEFAULT_FINANCE_REVIEW_FILTERS)
+                    }
+                    className="rounded-lg px-2.5 py-1.5 text-[11px] font-black text-blue-600 hover:bg-blue-50"
+                  >
+                    Xóa lọc
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {transactionReviewInbox.total === 0 ? (
             <div className="p-5 text-center sm:p-6">
               <p className="text-base font-black text-emerald-700">Hàng đợi đã xử lý xong</p>
               <p className="mt-1 text-sm text-slate-500">Không còn giao dịch cần rà soát theo các quy tắc hiện tại.</p>
+            </div>
+          ) : filteredReviewItems.length === 0 ? (
+            <div className="p-5 text-center sm:p-6">
+              <p className="text-base font-black text-slate-700">
+                Không có giao dịch khớp bộ lọc
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Xóa hoặc đổi bộ lọc để xem các việc rà soát còn lại.
+              </p>
             </div>
           ) : activeReviewTransaction && activeReviewItem ? (
             <div className="grid gap-4 p-4 sm:p-6 xl:grid-cols-[minmax(0,1fr)_17rem]">
@@ -2003,6 +2238,13 @@ export default function TransactionsPage() {
                     </span>
                   ))}
                 </div>
+                <div className="mt-2">
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
+                    {getFinanceReviewSeverityLabel(
+                      getFinanceReviewSeverity(activeReviewReasons),
+                    )}
+                  </span>
+                </div>
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -2015,9 +2257,47 @@ export default function TransactionsPage() {
                   </div>
                 </div>
 
-                {activeReviewReasons.includes("uncategorized") && (
+                {activeReviewRuleSuggestion ? (
+                  <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
+                          Suggested by rule
+                        </p>
+                        <p className="mt-1 truncate text-sm font-black text-slate-800">
+                          {activeReviewRuleSuggestion.rule.name}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {activeReviewRuleSuggestion.patch.categoryId
+                            ? `Danh mục → ${categoryById.get(activeReviewRuleSuggestion.patch.categoryId)?.name ?? "Danh mục"}`
+                            : ""}
+                          {activeReviewRuleSuggestion.patch.categoryId &&
+                          activeReviewRuleSuggestion.patch.walletId
+                            ? " · "
+                            : ""}
+                          {activeReviewRuleSuggestion.patch.walletId
+                            ? `Ví → ${walletById.get(activeReviewRuleSuggestion.patch.walletId)?.name ?? "Ví"}`
+                            : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleApplyReviewRuleSuggestion()}
+                        className="min-h-10 shrink-0 rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white transition hover:bg-violet-700"
+                      >
+                        Áp dụng gợi ý
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {(activeReviewReasons.includes("uncategorized") ||
+                  activeReviewReasons.includes("category-type-mismatch")) && (
                   <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
-                    <p className="text-sm font-black text-slate-800">Chọn danh mục đúng</p>
+                    <p className="text-sm font-black text-slate-800">
+                      {activeReviewReasons.includes("category-type-mismatch")
+                        ? "Danh mục hiện tại không phù hợp loại giao dịch"
+                        : "Chọn danh mục đúng"}
+                    </p>
                     <select
                       defaultValue=""
                       onChange={(event) => {
@@ -2052,7 +2332,7 @@ export default function TransactionsPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          handleKeepDuplicateGroup(activeReviewTransaction)
+                          void handleKeepDuplicateGroup(activeReviewTransaction)
                         }
                         className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white transition hover:bg-blue-700"
                       >
@@ -2093,7 +2373,7 @@ export default function TransactionsPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleMarkUnusualNormal(activeReviewTransaction)
+                        void handleMarkUnusualNormal(activeReviewTransaction)
                       }
                       className="min-h-10 shrink-0 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-50"
                     >
@@ -2123,7 +2403,7 @@ export default function TransactionsPage() {
               <aside className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
                 <p className="px-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Hàng đợi</p>
                 <div className="mt-2 space-y-1.5">
-                  {transactionReviewInbox.items.slice(0, 6).map((item, index) => (
+                  {filteredReviewItems.slice(0, 8).map((item, index) => (
                     <button
                       key={item.transactionId}
                       type="button"
@@ -2137,6 +2417,13 @@ export default function TransactionsPage() {
                     >
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[10px] font-black text-blue-700">{index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-xs font-bold">{item.title}</span>
+                      <span className="shrink-0 text-[9px] font-black opacity-70">
+                        {getFinanceReviewSeverity(item.reasons) === "high"
+                          ? "CAO"
+                          : getFinanceReviewSeverity(item.reasons) === "action"
+                            ? "XỬ LÝ"
+                            : "THEO DÕI"}
+                      </span>
                     </button>
                   ))}
                 </div>

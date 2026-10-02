@@ -59,6 +59,7 @@ export function buildMonthlySpendingPace(input: {
 export type FinanceReviewReason =
   | "uncategorized"
   | "possible-duplicate"
+  | "category-type-mismatch"
   | "unusual-expense";
 
 export type FinanceReviewItem = {
@@ -118,8 +119,13 @@ export function buildFinanceReviewInbox(input: {
   };
 
   for (const transaction of ordinary) {
-    if (!transaction.categoryId || !categoriesById.has(transaction.categoryId)) {
+    const category = transaction.categoryId
+      ? categoriesById.get(transaction.categoryId)
+      : undefined;
+    if (!category) {
       addReason(transaction.id, "uncategorized");
+    } else if (category.type !== transaction.type) {
+      addReason(transaction.id, "category-type-mismatch");
     }
   }
 
@@ -154,6 +160,7 @@ export function buildFinanceReviewInbox(input: {
   }
 
   const priority: Record<FinanceReviewReason, number> = {
+    "category-type-mismatch": 4,
     "possible-duplicate": 3,
     uncategorized: 2,
     "unusual-expense": 1,

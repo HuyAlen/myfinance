@@ -62,6 +62,7 @@ import {
   applyTransactionReviewAcknowledgements,
   readTransactionReviewAcknowledgements,
 } from "@/src/lib/transactions/transactionReviewWorkflow";
+import { getTransactionReviewAcknowledgementKeys } from "@/src/services/finance/transactionReviewStorage";
 import {
   MONTH_END_REVIEW_HISTORY_STORAGE_KEY,
   createMonthEndReviewHistoryRecord,
@@ -501,6 +502,7 @@ function formatComparisonPercent(current: number, previous: number) {
 function getReviewReasonLabel(reason: FinanceReviewReason) {
   if (reason === "possible-duplicate") return "Có thể trùng";
   if (reason === "uncategorized") return "Chưa phân loại";
+  if (reason === "category-type-mismatch") return "Sai loại danh mục";
   return "Chi tiêu bất thường";
 }
 
@@ -1884,7 +1886,6 @@ export default function DashboardPage() {
     ],
     requestDashboardRefresh,
   );
-
   const savingsSnapshot = useMemo(() => {
     const totalSavings = savings.reduce((sum, item) => sum + item.balance, 0);
     const emergencyFund = savings
@@ -2871,11 +2872,29 @@ export default function DashboardPage() {
 
   const [transactionReviewAcknowledgements, setTransactionReviewAcknowledgements] =
     useState<Set<string>>(new Set());
-  useEffect(() => {
-    setTransactionReviewAcknowledgements(
-      readTransactionReviewAcknowledgements(),
-    );
+  const reloadTransactionReviewAcknowledgements = useCallback(async () => {
+    const localKeys = readTransactionReviewAcknowledgements();
+    try {
+      const remoteKeys = await getTransactionReviewAcknowledgementKeys();
+      setTransactionReviewAcknowledgements(
+        new Set([...localKeys, ...remoteKeys]),
+      );
+    } catch (error) {
+      console.error(
+        "[DashboardPage] Failed to load durable review acknowledgements",
+        error,
+      );
+      setTransactionReviewAcknowledgements(localKeys);
+    }
   }, []);
+  useEffect(() => {
+    void reloadTransactionReviewAcknowledgements();
+  }, [reloadTransactionReviewAcknowledgements]);
+
+  useRealtimeTable(
+    ["transaction_review_acknowledgements"],
+    reloadTransactionReviewAcknowledgements,
+  );
 
   const rawFinanceReviewInbox = useMemo(
     () =>

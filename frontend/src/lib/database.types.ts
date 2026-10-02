@@ -301,6 +301,30 @@ type TransactionRuleInsert = {
 };
 type TransactionRuleUpdate = Partial<TransactionRuleInsert>;
 
+type TransactionReviewAcknowledgementRow = {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+  reason:
+    | "uncategorized"
+    | "possible-duplicate"
+    | "unusual-expense"
+    | "category-type-mismatch";
+  fingerprint: string;
+  actor_user_id: string;
+  created_at: string;
+};
+type TransactionReviewAcknowledgementInsert = {
+  id?: string;
+  user_id: string;
+  transaction_id: string;
+  reason: TransactionReviewAcknowledgementRow["reason"];
+  fingerprint: string;
+  actor_user_id?: string;
+  created_at?: string;
+};
+type TransactionReviewAcknowledgementUpdate = never;
+
 type DebtRow = {
   id: string;
   user_id: string;
@@ -812,6 +836,14 @@ export type Database = {
           { foreignKeyName: "transaction_rules_wallet_id_fkey"; columns: ["wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] },
           { foreignKeyName: "transaction_rules_action_category_id_fkey"; columns: ["action_category_id"]; isOneToOne: false; referencedRelation: "categories"; referencedColumns: ["id"] },
           { foreignKeyName: "transaction_rules_action_wallet_id_fkey"; columns: ["action_wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }
+        ];
+      };
+      transaction_review_acknowledgements: {
+        Row: TransactionReviewAcknowledgementRow;
+        Insert: TransactionReviewAcknowledgementInsert;
+        Update: TransactionReviewAcknowledgementUpdate;
+        Relationships: [
+          { foreignKeyName: "transaction_review_acknowledgements_transaction_id_fkey"; columns: ["transaction_id"]; isOneToOne: false; referencedRelation: "transactions"; referencedColumns: ["id"] }
         ];
       };
       debts: { Row: DebtRow; Insert: DebtInsert; Update: DebtUpdate; Relationships: [] };

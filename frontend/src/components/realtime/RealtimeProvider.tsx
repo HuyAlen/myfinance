@@ -23,6 +23,7 @@ type RealtimeTable =
   | "categories"
   | "transactions"
   | "transaction_rules"
+  | "transaction_review_acknowledgements"
   | "budgets"
   | "goals"
   | "debts"
@@ -98,6 +99,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       "categories",
       "transactions",
       "transaction_rules",
+      "transaction_review_acknowledgements",
       "budgets",
       "goals",
       "debts",
