@@ -3479,7 +3479,7 @@ export default function DashboardPage() {
       </div>
 
       {isDashboardCustomizationOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5">
+        <div className="fixed inset-0 z-100 flex items-end justify-center p-0 sm:items-center sm:p-5">
           <button
             type="button"
             className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"

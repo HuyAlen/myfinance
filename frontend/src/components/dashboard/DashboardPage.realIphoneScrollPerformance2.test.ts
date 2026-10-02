@@ -13,7 +13,8 @@ describe("REAL-IPHONE-DASHBOARD-SCROLL-2", () => {
     expect(shellSource).toContain("dashboard-native-scroll");
     expect(shellSource).toContain("overflow-y-visible");
     expect(shellSource).toContain("lg:overflow-y-auto");
-    expect(shellSource).toContain('min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]');
+    expect(shellSource).toContain('min-h-0 overflow-y-auto');
+    expect(shellSource).not.toContain('min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]');
   });
 
   it("disables scroll-linked reveal animation on coarse-pointer Dashboard devices", () => {

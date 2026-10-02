@@ -3177,7 +3177,7 @@ export default function TransactionsPage() {
                         type="button"
                         onClick={() => handleTypeChange(item.mode)}
                         className={
-                          "flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[11px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
+                          "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[11px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
                           (active
                             ? item.active + " text-white shadow-lg"
                             : "text-slate-500 hover:bg-white hover:text-slate-800")

@@ -31,9 +31,10 @@ describe("APP-VISUAL-CONTRAST-1 unified financial surface contract", () => {
     );
     expect(appShell).toContain("finance-main flex-1 overflow-x-hidden");
     expect(appShell).toContain(
-      "overflow-y-visible [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:overflow-y-auto",
+      "overflow-y-visible lg:min-h-0 lg:overflow-y-auto",
     );
-    expect(appShell).toContain(
+    expect(appShell).toContain("min-h-0 overflow-y-auto");
+    expect(appShell).not.toContain(
       "min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]",
     );
     expect(appShell).toContain("bg-[var(--finance-page)]");

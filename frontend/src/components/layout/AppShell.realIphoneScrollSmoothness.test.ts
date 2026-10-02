@@ -10,8 +10,14 @@ describe("REAL-IPHONE-DASHBOARD-SCROLL-1/2", () => {
     expect(source).toContain('const isDashboardRoute = pathname === "/";');
     expect(source).toContain("dashboard-native-scroll min-h-(--app-height) overflow-x-hidden lg:h-(--app-height) lg:overflow-hidden");
     expect(source).toContain('isDashboardRoute ? "min-h-(--app-height) lg:h-full" : "h-full"');
-    expect(source).toContain("overflow-y-visible [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:overflow-y-auto");
-    expect(source).toContain("min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]");
+    expect(source).toContain("overflow-y-visible lg:min-h-0 lg:overflow-y-auto");
+    expect(source).toContain("min-h-0 overflow-y-auto");
+    expect(source).not.toContain(
+      'finance-main flex-1 overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6 [-webkit-overflow-scrolling:touch]',
+    );
+    expect(source).not.toContain(
+      'min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]',
+    );
   });
 
   it("never rewrites app height from visualViewport scroll events", () => {

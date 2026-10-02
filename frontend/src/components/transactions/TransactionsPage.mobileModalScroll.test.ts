@@ -66,6 +66,15 @@ describe("TransactionsPage Create/Edit modal body scrolls on mobile (TXN-MOBILE-
     expect(footerStart).toBeGreaterThan(formTagEnd);
   });
 
+  it("keeps all three transaction-type buttons at a 44px mobile touch target", () => {
+    const selectorStart = source.indexOf("{/* Type selector — premium segmented control */}");
+    const selectorEnd = source.indexOf("{/* Amount — hero input */}", selectorStart);
+    const selectorRegion = source.slice(selectorStart, selectorEnd);
+    expect(selectorStart).toBeGreaterThan(-1);
+    expect(selectorRegion).toContain("min-h-11");
+    expect(selectorRegion).not.toContain("min-h-10 flex-col");
+  });
+
   it("SaveError renders inside the scrollable form, not in the pinned footer — a failed save's message can be scrolled to", () => {
     const formEnd = source.indexOf("</form>", formStart);
     const saveErrorIdx = source.indexOf("<SaveError", formStart);

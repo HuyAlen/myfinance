@@ -104,6 +104,12 @@ export default function AppShell({ children }: AppShellProps) {
   // layout on every browser-toolbar scroll event. A debounced resize sync still
   // follows orientation changes and the software keyboard, but normal finger
   // scrolling is left entirely to the native momentum scroller.
+  //
+  // Important: do not put the legacy `-webkit-overflow-scrolling: touch` on
+  // finance-main. On iOS it creates a stacking context that can trap page-owned
+  // fixed dialogs underneath the sibling sticky Header / BottomNav, making the
+  // top of full-screen forms visually clipped and untappable. Modern iOS Safari
+  // already provides momentum scrolling for overflow scrollers natively.
   useEffect(() => {
     let settleTimerId: number | null = null;
     let animationFrameId: number | null = null;
@@ -246,8 +252,8 @@ export default function AppShell({ children }: AppShellProps) {
             className={[
               "finance-main flex-1 overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6",
               isDashboardRoute
-                ? "overflow-y-visible [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:overflow-y-auto"
-                : "min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]",
+                ? "overflow-y-visible lg:min-h-0 lg:overflow-y-auto"
+                : "min-h-0 overflow-y-auto",
             ].join(" ")}
           >
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>

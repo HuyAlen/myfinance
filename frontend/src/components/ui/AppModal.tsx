@@ -51,7 +51,7 @@ export default function AppModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="app-modal-title"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/20 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-100 flex items-end justify-center bg-slate-900/20 p-4 backdrop-blur-sm sm:items-center"
     >
       {/* Click-outside overlay */}
       <div className="absolute inset-0" aria-hidden="true" onClick={onClose} />
