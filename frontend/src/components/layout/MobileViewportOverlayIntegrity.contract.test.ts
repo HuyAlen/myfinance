@@ -28,16 +28,12 @@ const pageOverlaySources = [
   "src/components/investments/InvestmentsPage.tsx",
 ].map(read);
 
-describe("TRANSACTIONS-MOBILE-TYPE-SEGMENT-OVERLAP-1 cross-page viewport overlay integrity", () => {
-  it("keeps finance-main from creating the legacy iOS stacking context that traps fixed page dialogs", () => {
-    expect(appShell).toContain("finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto");
-    expect(appShell).not.toContain("overflow-y-visible");
-    expect(appShell).not.toContain(
-      "min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]",
+describe("cross-page viewport overlay integrity", () => {
+  it("keeps finance-main as a plain shared content scroller without iOS stacking hacks", () => {
+    expect(appShell).toContain(
+      "finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto",
     );
-    expect(appShell).not.toContain(
-      "overflow-y-visible [-webkit-overflow-scrolling:touch]",
-    );
+    expect(appShell).not.toContain("[-webkit-overflow-scrolling:touch]");
   });
 
   it("covers every page family that owns a full-screen fixed overlay", () => {

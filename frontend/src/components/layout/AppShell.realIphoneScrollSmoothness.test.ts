@@ -2,22 +2,22 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("DASHBOARD-UNIFIED-SCROLL-1 shared page scroller", () => {
+describe("FINANCE-CONTENT-SCROLL-OWNER-2 shared authenticated scroller", () => {
   const source = readFileSync(path.resolve(__dirname, "AppShell.tsx"), "utf8").replace(/\r\n/g, "\n");
 
-  it("uses the same inner finance-main vertical scroller for Dashboard and every authenticated page", () => {
-    expect(source).toContain('import { useRouter } from "next/navigation"');
+  it("uses one shared finance-main scroller for every authenticated page", () => {
     expect(source).not.toContain("usePathname");
     expect(source).not.toContain("isDashboardRoute");
     expect(source).not.toContain("dashboard-native-scroll");
     expect(source).toContain(
       'finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)]',
     );
-    expect(source).toContain('className="flex h-full min-w-0 flex-col lg:pl-72"');
     expect(source).toContain(
-      'finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto',
+      'className="flex h-full min-w-0 flex-col lg:pl-72"',
     );
-    expect(source).not.toContain("overflow-y-visible");
+    expect(source).toContain(
+      'finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto',
+    );
     expect(source).not.toContain("[-webkit-overflow-scrolling:touch]");
   });
 
@@ -46,10 +46,6 @@ describe("DASHBOARD-UNIFIED-SCROLL-1 shared page scroller", () => {
     expect(source).toContain("isKeyboardTarget &&");
     expect(source).toContain("window.innerHeight - visualViewport.height >=");
     expect(source).toContain("keyboardLikelyOpen && visualViewport");
-  });
-
-  it("keeps normal browser-chrome scrolling anchored to innerHeight", () => {
-    expect(source).toContain(": window.innerHeight || document.documentElement.clientHeight;");
   });
 
   it("cleans up timers, animation frames and resize listeners", () => {

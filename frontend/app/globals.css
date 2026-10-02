@@ -16,14 +16,15 @@ body,
 
 html {
   scroll-behavior: smooth;
-  -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
+-webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 body {
   min-height: var(--app-height);
-  overflow-x: hidden;
-  background: var(--background);
+  overflow-x: clip;
+background: var(--background);
   color: var(--foreground);
 
   font-family: var(--font-be-vietnam), system-ui, sans-serif;
@@ -49,6 +50,17 @@ button {
   }
 }
 
+/* FINANCE-CONTENT-SCROLL-OWNER-2:
+ * While the authenticated shell is mounted, the document itself does not
+ * scroll. The global Header stays outside the scroll region and .finance-main
+ * is the one vertical content scroller for every authenticated page. */
+html.finance-app-shell-active,
+body.finance-app-shell-active {
+  height: var(--app-height);
+  min-height: var(--app-height);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 /* Shared iPhone-safe modal helpers */
 .mobile-modal-panel {
   max-height: calc(var(--app-height) - env(safe-area-inset-top) - 0.75rem);

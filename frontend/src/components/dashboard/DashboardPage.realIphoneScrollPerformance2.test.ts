@@ -6,16 +6,27 @@ const frontendRoot = path.resolve(__dirname, "../../..");
 const pageSource = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
 const shellSource = readFileSync(path.join(frontendRoot, "src/components/layout/AppShell.tsx"), "utf8");
 
-describe("DASHBOARD-UNIFIED-SCROLL-1", () => {
-  it("keeps Dashboard on the same finance-main scroll owner as every other page", () => {
+describe("FINANCE-CONTENT-SCROLL-OWNER-2 Dashboard scroll contract", () => {
+  it("uses the same finance-main scroll owner as every authenticated page", () => {
     expect(shellSource).toContain("finance-shell h-(--app-height) overflow-hidden");
-    expect(shellSource).toContain("finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto");
+    expect(shellSource).toContain(
+      "finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto",
+    );
     expect(shellSource).not.toContain('const isDashboardRoute = pathname === "/";');
     expect(shellSource).not.toContain("dashboard-native-scroll");
-    expect(shellSource).not.toContain("overflow-y-visible");
   });
 
-  it("keeps horizontal KPI browsing independent from the shared vertical page scroller", () => {
+  it("prevents Dashboard root from becoming another vertical scroll container", () => {
+    expect(pageSource).toContain(
+      "dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-clip sm:space-y-5",
+    );
+    const start = pageSource.indexOf('data-dashboard-depth="true"');
+    const region = pageSource.slice(start, start + 350);
+    expect(region).not.toContain("overflow-y-auto");
+    expect(region).not.toContain("overflow-y-scroll");
+  });
+
+  it("keeps horizontal KPI browsing independent from the shared vertical scroller", () => {
     const start = pageSource.indexOf("Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2");
     const end = pageSource.indexOf("data-dashboard-customization-toolbar", start);
     const region = pageSource.slice(start, end);

@@ -3153,7 +3153,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
+    <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-clip sm:space-y-5">
       {/* UI-DASH-1: financial position leads the page — Hero communicates
           Net Worth first, before any lower-priority informational content
           (see the audit that motivated this reorder). Content, readiness

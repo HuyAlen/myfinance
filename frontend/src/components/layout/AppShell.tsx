@@ -178,6 +178,22 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
+  // FINANCE-CONTENT-SCROLL-OWNER-2:
+  // Authenticated pages have exactly one vertical scroll owner: finance-main.
+  // Lock the document while AppShell is mounted so the scrollbar begins below
+  // the topbar instead of running through the browser/document viewport.
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    root.classList.add("finance-app-shell-active");
+    body.classList.add("finance-app-shell-active");
+
+    return () => {
+      root.classList.remove("finance-app-shell-active");
+      body.classList.remove("finance-app-shell-active");
+    };
+  }, []);
   // Close sidebar on Escape key.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -234,7 +250,7 @@ export default function AppShell({ children }: AppShellProps) {
             sidebarOpen={sidebarOpen}
           />
 
-          <main className="finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+          <main className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
               {children}
             </FabSuppressionProvider>

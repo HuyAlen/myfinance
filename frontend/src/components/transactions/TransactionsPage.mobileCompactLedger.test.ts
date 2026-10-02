@@ -3,13 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * TRANSACTIONS-MOBILE-POLISH-1 — Compact Ledger Hierarchy & Single-Line
- * Mobile Integrity.
+ * TRANSACTIONS-MOBILE-POLISH-1 + TRANSACTIONS-RESPONSIVE-POLISH-2
  *
- * Source-inspection, matching the Transactions page's existing no-RTL test
- * convention. This ticket is visual-only: it compresses the mobile ledger
- * hierarchy without changing transaction classification, period resolution,
- * mutation, delete, pagination, or desktop-table behavior.
+ * The compact ledger contract remains valid, but RESPONIVE-POLISH-2 deliberately
+ * removed the sticky day-group header so the desktop table owns the only sticky
+ * ledger header. The group header content/spacing remains unchanged.
  */
 describe("mobile day-group header stays compact and single-row", () => {
   const source = readFileSync(
@@ -18,7 +16,7 @@ describe("mobile day-group header stays compact and single-row", () => {
   ).replace(/\r\n/g, "\n");
 
   const headerStart = source.indexOf(
-    'className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 backdrop-blur sm:px-6 sm:py-2.5"',
+    'className="relative z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 sm:px-6 sm:py-2.5"',
   );
   const rowsStart = source.indexOf(
     '<div className="divide-y divide-slate-100/80">',
@@ -28,8 +26,10 @@ describe("mobile day-group header stays compact and single-row", () => {
 
   it("uses a denser base header while restoring the previous spacing at sm+", () => {
     expect(headerStart).toBeGreaterThan(-1);
+    expect(rowsStart).toBeGreaterThan(headerStart);
     expect(headerSource).toContain("px-3 py-1.5");
     expect(headerSource).toContain("sm:px-6 sm:py-2.5");
+    expect(headerSource).not.toContain("sticky top-0");
   });
 
   it("keeps date, count and mobile day totals inside one horizontal header row", () => {
@@ -40,7 +40,6 @@ describe("mobile day-group header stays compact and single-row", () => {
       'className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto text-[9px] font-black scrollbar-none sm:hidden"',
     );
 
-    // Pre-polish mobile totals lived in a second visual row below the date.
     expect(headerSource).not.toContain(
       'className="mt-2 flex max-w-full gap-1.5 overflow-x-auto',
     );

@@ -47,6 +47,7 @@ import {
   Upload,
   LayoutList,
   List,
+  MoreHorizontal,
   Plus,
   Search,
   SlidersHorizontal,
@@ -534,6 +535,7 @@ export default function TransactionsPage() {
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -1829,7 +1831,7 @@ export default function TransactionsPage() {
         </div>
       )}
       {/* SECTION 1 · Transaction Summary */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-6">
+      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-5">
         <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
           <div className="min-w-0">
             <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">
@@ -1854,7 +1856,7 @@ export default function TransactionsPage() {
           </button>
         </div>
 
-        <div className="mt-3 sm:mt-5">
+        <div className="mt-3 sm:mt-4">
           <LiquidityHeroCard
             value={formatVND(totalLiquidity)}
             walletCount={wallets.length}
@@ -1862,7 +1864,7 @@ export default function TransactionsPage() {
           />
         </div>
 
-        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none sm:mx-0 sm:mt-4 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3 xl:grid-cols-4">
           <SummaryCard
             label="Thu nhập"
             value={formatVND(totalIncome)}
@@ -2096,9 +2098,9 @@ export default function TransactionsPage() {
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
-          SECTION 2 · Smart Filter Command Bar (sticky)
+          SECTION 2 · Smart Filter Command Bar
           ════════════════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-20">
+      <div className="relative z-20">
         <div className="rounded-3xl border border-slate-200 bg-white/95 shadow-md shadow-slate-200/80 backdrop-blur-md sm:rounded-4xl">
           {/* Main bar */}
           <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5 sm:py-3.5">
@@ -2129,14 +2131,14 @@ export default function TransactionsPage() {
             </div>
 
             {/* Type filter pills — color-coded */}
-            <div className="-mx-1 flex max-w-full gap-0.5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-1 scrollbar-none">
+            <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:w-auto sm:flex sm:max-w-full sm:gap-0.5 sm:overflow-x-auto sm:scrollbar-none">
               {(["all", "income", "expense", "transfer"] as const).map(
                 (t) => (
                   <button
                     key={t}
                     onClick={() => setTypeFilter(t)}
                     className={
-                      "shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-bold transition-all duration-150 " +
+                      "min-h-11 shrink-0 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-bold transition-all duration-150 sm:min-h-0 sm:px-3 sm:py-1.5 " +
                       (typeFilter === t
                         ? t === "income"
                           ? "bg-emerald-500 text-white shadow-sm"
@@ -2159,15 +2161,15 @@ export default function TransactionsPage() {
             </div>
 
             {/* Right controls */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2 sm:gap-1.5">
               {/* Filter toggle with badge */}
               <button
                 onClick={() => setShowFilters((v) => !v)}
                 className={
-                  "relative flex items-center gap-1.5 rounded-2xl px-3.5 py-2 text-xs font-bold transition-all " +
+                  "relative flex min-h-11 items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold transition-all sm:min-h-0 " +
                   (showFilters || hasActiveFilters
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50")
+                    ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50")
                 }
               >
                 <SlidersHorizontal size={13} />
@@ -2179,57 +2181,130 @@ export default function TransactionsPage() {
                 )}
               </button>
 
-              {/* Import */}
-              <button
-                type="button"
-                onClick={() => setIsCsvImportOpen(true)}
-                title="Nhập CSV"
-                aria-label="Nhập CSV"
-                className="flex items-center rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-600 transition-all hover:border-blue-300 hover:bg-blue-100 hover:text-blue-700"
-              >
-                <Upload size={14} />
-              </button>
-
-              {/* Export */}
-              <button
-                onClick={exportCSV}
-                title="Xuất CSV"
-                aria-label="Xuất CSV"
-                className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
-              >
-                <Download size={14} />
-              </button>
-
-              {/* View mode toggle */}
-              <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+              {/* Mobile secondary actions: keep the primary filter row calm. */}
+              <div className="relative ml-auto sm:hidden">
                 <button
-                  onClick={() => setViewMode("table")}
-                  title="Dạng bảng"
-                  aria-label="Xem dạng bảng"
-                  aria-pressed={viewMode === "table"}
-                  className={
-                    "rounded-xl p-1.5 transition-all " +
-                    (viewMode === "table"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-600")
-                  }
+                  type="button"
+                  onClick={() => setShowMobileActions((value) => !value)}
+                  aria-label="Mở tác vụ giao dịch"
+                  aria-expanded={showMobileActions}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
                 >
-                  <List size={14} />
+                  <MoreHorizontal size={18} />
                 </button>
+                {showMobileActions && (
+                  <div className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-200/70">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCsvImportOpen(true);
+                        setShowMobileActions(false);
+                      }}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <Upload size={15} className="text-blue-600" />
+                      Nhập CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportCSV();
+                        setShowMobileActions(false);
+                      }}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <Download size={15} className="text-slate-500" />
+                      Xuất CSV
+                    </button>
+                    <div className="mt-1 grid grid-cols-2 gap-1 border-t border-slate-100 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewMode("table");
+                          setShowMobileActions(false);
+                        }}
+                        className={
+                          "flex min-h-10 items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition " +
+                          (viewMode === "table"
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-slate-500 hover:bg-slate-50")
+                        }
+                      >
+                        <List size={14} />
+                        Bảng
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewMode("timeline");
+                          setShowMobileActions(false);
+                        }}
+                        className={
+                          "flex min-h-10 items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition " +
+                          (viewMode === "timeline"
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-slate-500 hover:bg-slate-50")
+                        }
+                      >
+                        <LayoutList size={14} />
+                        Timeline
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop utility actions */}
+              <div className="hidden items-center gap-1.5 sm:flex">
                 <button
-                  onClick={() => setViewMode("timeline")}
-                  title="Dạng dòng thời gian"
-                  aria-label="Xem dạng dòng thời gian"
-                  aria-pressed={viewMode === "timeline"}
-                  className={
-                    "rounded-xl p-1.5 transition-all " +
-                    (viewMode === "timeline"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-600")
-                  }
+                  type="button"
+                  onClick={() => setIsCsvImportOpen(true)}
+                  title="Nhập CSV"
+                  aria-label="Nhập CSV"
+                  className="flex items-center rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-600 transition-all hover:border-blue-300 hover:bg-blue-100 hover:text-blue-700"
                 >
-                  <LayoutList size={14} />
+                  <Upload size={14} />
                 </button>
+
+                <button
+                  onClick={exportCSV}
+                  title="Xuất CSV"
+                  aria-label="Xuất CSV"
+                  className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
+                >
+                  <Download size={14} />
+                </button>
+
+                <div className="flex gap-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    onClick={() => setViewMode("table")}
+                    title="Dạng bảng"
+                    aria-label="Xem dạng bảng"
+                    aria-pressed={viewMode === "table"}
+                    className={
+                      "rounded-xl p-1.5 transition-all " +
+                      (viewMode === "table"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-slate-600")
+                    }
+                  >
+                    <List size={14} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("timeline")}
+                    title="Dạng dòng thời gian"
+                    aria-label="Xem dạng dòng thời gian"
+                    aria-pressed={viewMode === "timeline"}
+                    className={
+                      "rounded-xl p-1.5 transition-all " +
+                      (viewMode === "timeline"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-slate-600")
+                    }
+                  >
+                    <LayoutList size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2440,7 +2515,7 @@ export default function TransactionsPage() {
           ════════════════════════════════════════════════════════════════════ */}
       <section
         ref={feedSectionRef}
-        className="overflow-hidden rounded-4xl border border-slate-200 bg-white shadow-sm"
+        className="overflow-clip rounded-4xl border border-slate-200 bg-white shadow-sm"
       >
         {/* Feed header */}
         <div
@@ -2498,7 +2573,7 @@ export default function TransactionsPage() {
         {viewMode === "table" ? (
           <>
             {/* Desktop column header */}
-            <div className="hidden grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] items-center border-b border-blue-100 bg-white px-6 py-3 text-xs font-black uppercase tracking-wide text-blue-400 lg:grid">
+            <div className="sticky top-0 z-10 hidden grid-cols-[36px_1.25fr_128px_170px_96px_142px_72px] items-center border-b border-blue-100 bg-white/98 px-6 py-2.5 text-xs font-black uppercase tracking-wide text-blue-400 shadow-[0_1px_0_rgba(148,163,184,0.12)] backdrop-blur lg:grid">
               <div>
                 <input
                   type="checkbox"
@@ -2547,7 +2622,7 @@ export default function TransactionsPage() {
                   <div key={date}>
                     <div
                       data-dark-surface="transaction-day-header"
-                      className="sticky top-0 z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 backdrop-blur sm:px-6 sm:py-2.5"
+                      className="relative z-1 border-b border-slate-100 bg-slate-50/95 px-3 py-1.5 sm:px-6 sm:py-2.5"
                     >
                       <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                         <div className="flex shrink-0 items-center gap-1.5">
@@ -3564,14 +3639,14 @@ function LiquidityHeroCard({
   const positiveFlow = netCashFlow >= 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-blue-300 bg-linear-to-r from-blue-600 via-blue-600 to-indigo-600 px-4 py-3.5 text-white shadow-lg shadow-blue-200/50 sm:rounded-[26px] sm:from-sky-500 sm:px-6 sm:py-6 sm:shadow-xl sm:shadow-blue-200/60">
+    <div className="relative overflow-hidden rounded-2xl border border-blue-300 bg-linear-to-r from-blue-600 via-blue-600 to-indigo-600 px-3.5 py-3 text-white shadow-md shadow-blue-200/45 sm:rounded-[24px] sm:from-sky-500 sm:px-5 sm:py-4 sm:shadow-lg sm:shadow-blue-200/55">
       <div className="absolute -right-16 -top-20 hidden size-52 rounded-full bg-white/10 sm:block" />
       <div className="absolute -bottom-24 right-8 hidden size-56 rounded-full bg-indigo-400/25 sm:block" />
       <div className="absolute left-[42%] top-0 hidden h-full w-px bg-white/10 lg:block" />
 
-      <div className="relative grid gap-2.5 sm:gap-5 lg:grid-cols-[1.55fr_1fr] lg:items-center">
+      <div className="relative grid gap-2 sm:gap-4 lg:grid-cols-[1.55fr_1fr] lg:items-center">
         <div className="flex min-w-0 items-center gap-3 sm:items-start sm:gap-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-md shadow-blue-950/10 sm:mt-1 sm:size-12 sm:rounded-2xl sm:shadow-lg">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-md shadow-blue-950/10 sm:size-11 sm:rounded-2xl sm:shadow-lg">
             <WalletCards size={19} strokeWidth={2.4} className="sm:hidden" />
             <WalletCards size={22} strokeWidth={2.4} className="hidden sm:block" />
           </div>
@@ -3594,7 +3669,7 @@ function LiquidityHeroCard({
               </span>
             </div>
 
-            <p className="mt-1.5 whitespace-nowrap text-[1.75rem] font-black leading-none tracking-[-0.04em] tabular-nums sm:mt-3 sm:text-[2.7rem] sm:tracking-[-0.045em]">
+            <p className="mt-1.5 whitespace-nowrap text-[1.6rem] font-black leading-none tracking-[-0.04em] tabular-nums sm:mt-2.5 sm:text-[2.35rem] sm:tracking-[-0.045em]">
               {value}
             </p>
 
@@ -3605,7 +3680,7 @@ function LiquidityHeroCard({
           </div>
         </div>
 
-        <div className="min-w-0 border-t border-white/15 pt-2.5 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/10 sm:px-4 sm:py-4 sm:backdrop-blur-sm lg:ml-2">
+        <div className="min-w-0 border-t border-white/15 pt-2 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/10 sm:px-3.5 sm:py-3 sm:backdrop-blur-sm lg:ml-2">
           <div className="flex items-center justify-between gap-3 sm:block">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.14em] text-blue-100 sm:text-[10px] sm:tracking-[0.18em]">
@@ -3731,7 +3806,7 @@ function SummaryCard({
   return (
     <div
       className={
-        "flex min-w-[9.25rem] flex-col rounded-2xl border p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:min-w-0 sm:rounded-3xl sm:p-4 " +
+        "flex min-w-0 flex-col rounded-2xl border p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-3.5 " +
         style.shell
       }
     >
@@ -3749,18 +3824,18 @@ function SummaryCard({
         </p>
       </div>
 
-      <p className="mt-2 whitespace-nowrap text-[0.95rem] font-black leading-none tracking-tight tabular-nums sm:mt-4 sm:text-[clamp(0.85rem,4vw,1.38rem)]">
+      <p className="mt-2 whitespace-nowrap text-[clamp(0.82rem,3.55vw,0.95rem)] font-black leading-none tracking-tight tabular-nums sm:mt-3.5 sm:text-[clamp(0.85rem,4vw,1.3rem)]">
         {value}
       </p>
       <p className="mt-1 truncate text-[10px] font-bold opacity-75 sm:text-xs">{note}</p>
 
       <div
         className={
-          "mt-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-[8px] font-black sm:mt-auto sm:justify-between sm:gap-3 sm:rounded-xl sm:px-3 sm:py-2 sm:text-[10px] " +
+          "mt-2 flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap rounded-lg px-2 py-1 text-[8px] font-black sm:mt-auto sm:justify-between sm:gap-3 sm:rounded-xl sm:px-3 sm:py-1.5 sm:text-[10px] " +
           style.footer
         }
       >
-        <span className="sm:hidden">{mobileFooterText}</span>
+        <span className="truncate sm:hidden">{mobileFooterText}</span>
         <span className="hidden truncate sm:inline">{footerLabel}</span>
         <span className="hidden shrink-0 sm:inline">{footerValue}</span>
       </div>
