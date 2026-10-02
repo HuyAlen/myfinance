@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
@@ -73,8 +73,6 @@ export default function AppShell({ children }: AppShellProps) {
   const [isGlobalFabSuppressed, setGlobalFabSuppressed] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
-  const isDashboardRoute = pathname === "/";
   const { wizardDone, tourDone } = useOnboarding();
 
   useEffect(() => {
@@ -214,14 +212,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <DateFilterProvider>
-      <div
-        className={[
-          "finance-shell bg-[var(--finance-page)] text-[var(--finance-text)] [--mobile-bottom-nav-height:4.75rem]",
-          isDashboardRoute
-            ? "dashboard-native-scroll min-h-(--app-height) overflow-x-hidden lg:h-(--app-height) lg:overflow-hidden"
-            : "h-(--app-height) overflow-hidden",
-        ].join(" ")}
-      >
+      <div className="finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)] text-[var(--finance-text)] [--mobile-bottom-nav-height:4.75rem]">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <div
@@ -237,25 +228,13 @@ export default function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         />
 
-        <div
-          className={[
-            "flex min-w-0 flex-col lg:pl-72",
-            isDashboardRoute ? "min-h-(--app-height) lg:h-full" : "h-full",
-          ].join(" ")}
-        >
+        <div className="flex h-full min-w-0 flex-col lg:pl-72">
           <Header
             onMenuOpen={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
           />
 
-          <main
-            className={[
-              "finance-main flex-1 overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6",
-              isDashboardRoute
-                ? "overflow-y-visible lg:min-h-0 lg:overflow-y-auto"
-                : "min-h-0 overflow-y-auto",
-            ].join(" ")}
-          >
+          <main className="finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
               {children}
             </FabSuppressionProvider>

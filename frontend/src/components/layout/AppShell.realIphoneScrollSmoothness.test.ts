@@ -2,22 +2,23 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("REAL-IPHONE-DASHBOARD-SCROLL-1/2", () => {
+describe("DASHBOARD-UNIFIED-SCROLL-1 shared page scroller", () => {
   const source = readFileSync(path.resolve(__dirname, "AppShell.tsx"), "utf8").replace(/\r\n/g, "\n");
 
-  it("uses native document scrolling for Dashboard on mobile and preserves nested main scrolling elsewhere", () => {
-    expect(source).toContain('import { usePathname, useRouter } from "next/navigation"');
-    expect(source).toContain('const isDashboardRoute = pathname === "/";');
-    expect(source).toContain("dashboard-native-scroll min-h-(--app-height) overflow-x-hidden lg:h-(--app-height) lg:overflow-hidden");
-    expect(source).toContain('isDashboardRoute ? "min-h-(--app-height) lg:h-full" : "h-full"');
-    expect(source).toContain("overflow-y-visible lg:min-h-0 lg:overflow-y-auto");
-    expect(source).toContain("min-h-0 overflow-y-auto");
-    expect(source).not.toContain(
-      'finance-main flex-1 overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6 [-webkit-overflow-scrolling:touch]',
+  it("uses the same inner finance-main vertical scroller for Dashboard and every authenticated page", () => {
+    expect(source).toContain('import { useRouter } from "next/navigation"');
+    expect(source).not.toContain("usePathname");
+    expect(source).not.toContain("isDashboardRoute");
+    expect(source).not.toContain("dashboard-native-scroll");
+    expect(source).toContain(
+      'finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)]',
     );
-    expect(source).not.toContain(
-      'min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]',
+    expect(source).toContain('className="flex h-full min-w-0 flex-col lg:pl-72"');
+    expect(source).toContain(
+      'finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto',
     );
+    expect(source).not.toContain("overflow-y-visible");
+    expect(source).not.toContain("[-webkit-overflow-scrolling:touch]");
   });
 
   it("never rewrites app height from visualViewport scroll events", () => {

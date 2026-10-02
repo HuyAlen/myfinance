@@ -5,34 +5,17 @@ import { describe, expect, it } from "vitest";
 const frontendRoot = path.resolve(__dirname, "../../..");
 const pageSource = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
 const shellSource = readFileSync(path.join(frontendRoot, "src/components/layout/AppShell.tsx"), "utf8");
-const cssSource = readFileSync(path.join(frontendRoot, "app/globals.css"), "utf8");
 
-describe("REAL-IPHONE-DASHBOARD-SCROLL-2", () => {
-  it("moves only the mobile Dashboard to native document scrolling", () => {
-    expect(shellSource).toContain('const isDashboardRoute = pathname === "/";');
-    expect(shellSource).toContain("dashboard-native-scroll");
-    expect(shellSource).toContain("overflow-y-visible");
-    expect(shellSource).toContain("lg:overflow-y-auto");
-    expect(shellSource).toContain('min-h-0 overflow-y-auto');
-    expect(shellSource).not.toContain('min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]');
+describe("DASHBOARD-UNIFIED-SCROLL-1", () => {
+  it("keeps Dashboard on the same finance-main scroll owner as every other page", () => {
+    expect(shellSource).toContain("finance-shell h-(--app-height) overflow-hidden");
+    expect(shellSource).toContain("finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto");
+    expect(shellSource).not.toContain('const isDashboardRoute = pathname === "/";');
+    expect(shellSource).not.toContain("dashboard-native-scroll");
+    expect(shellSource).not.toContain("overflow-y-visible");
   });
 
-  it("disables scroll-linked reveal animation on coarse-pointer Dashboard devices", () => {
-    expect(cssSource).toContain("REAL-IPHONE-DASHBOARD-SCROLL-2: native mobile Dashboard scroll performance");
-    expect(cssSource).toContain("@media (max-width: 1023px) and (pointer: coarse)");
-    expect(cssSource).toContain('.dashboard-native-scroll [data-dashboard-reveal="true"]');
-    expect(cssSource).toContain("animation: none !important");
-    expect(cssSource).toContain("animation-timeline: auto !important");
-  });
-
-  it("removes fixed/sticky backdrop filtering while the mobile Dashboard scrolls", () => {
-    expect(cssSource).toContain(".dashboard-native-scroll .finance-header");
-    expect(cssSource).toContain(".dashboard-native-scroll .finance-bottom-nav");
-    expect(cssSource).toContain("-webkit-backdrop-filter: none !important");
-    expect(cssSource).toContain("backdrop-filter: none !important");
-  });
-
-  it("keeps horizontal KPI browsing but removes snap arbitration", () => {
+  it("keeps horizontal KPI browsing independent from the shared vertical page scroller", () => {
     const start = pageSource.indexOf("Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2");
     const end = pageSource.indexOf("data-dashboard-customization-toolbar", start);
     const region = pageSource.slice(start, end);

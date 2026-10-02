@@ -30,9 +30,8 @@ const pageOverlaySources = [
 
 describe("TRANSACTIONS-MOBILE-TYPE-SEGMENT-OVERLAP-1 cross-page viewport overlay integrity", () => {
   it("keeps finance-main from creating the legacy iOS stacking context that traps fixed page dialogs", () => {
-    expect(appShell).toContain("finance-main flex-1 overflow-x-hidden");
-    expect(appShell).toContain("overflow-y-visible lg:min-h-0 lg:overflow-y-auto");
-    expect(appShell).toContain("min-h-0 overflow-y-auto");
+    expect(appShell).toContain("finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto");
+    expect(appShell).not.toContain("overflow-y-visible");
     expect(appShell).not.toContain(
       "min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]",
     );

@@ -24,16 +24,12 @@ describe("APP-VISUAL-CONTRAST-1 unified financial surface contract", () => {
   });
 
   it("binds every authenticated page to the shared shell and page background", () => {
-    expect(appShell).toContain("finance-shell");
-    expect(appShell).toContain("h-(--app-height) overflow-hidden");
+    expect(appShell).toContain("finance-shell h-(--app-height) overflow-hidden");
     expect(appShell).toContain(
-      "dashboard-native-scroll min-h-(--app-height) overflow-x-hidden lg:h-(--app-height) lg:overflow-hidden",
+      "finance-main min-h-0 flex-1 overflow-x-hidden overflow-y-auto",
     );
-    expect(appShell).toContain("finance-main flex-1 overflow-x-hidden");
-    expect(appShell).toContain(
-      "overflow-y-visible lg:min-h-0 lg:overflow-y-auto",
-    );
-    expect(appShell).toContain("min-h-0 overflow-y-auto");
+    expect(appShell).not.toContain("dashboard-native-scroll");
+    expect(appShell).not.toContain("overflow-y-visible");
     expect(appShell).not.toContain(
       "min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]",
     );
