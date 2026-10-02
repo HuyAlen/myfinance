@@ -1,5 +1,10 @@
 import type { Category, Transaction, TransactionType, Wallet } from "@/src/types/finance";
 import { getCategoryPlanningGroup } from "@/src/services/finance/financeCalculations";
+import {
+  applyTransactionRuleMatch,
+  evaluateTransactionRules,
+  type TransactionRule,
+} from "@/src/lib/transactions/transactionRules";
 
 export const TRANSACTION_CSV_IMPORT_MAX_ROWS = 500;
 
@@ -16,6 +21,8 @@ export type TransactionCsvImportPreviewRow = {
   errors: string[];
   draft: TransactionCsvImportDraft | null;
   fingerprint: string | null;
+  appliedRuleId?: string;
+  appliedRuleName?: string;
 };
 
 export type TransactionCsvImportPreview = {
@@ -24,6 +31,7 @@ export type TransactionCsvImportPreview = {
   duplicateCount: number;
   errorCount: number;
   fatalError: string | null;
+  ruleAppliedCount?: number;
 };
 
 type HeaderKey =
@@ -556,6 +564,83 @@ export function buildTransactionCsvImportPreview(input: {
   };
 }
 
+export function buildTransactionCsvImportPreviewWithRules(input: {
+  csvText: string;
+  wallets: Wallet[];
+  categories: Category[];
+  existingTransactions: Transaction[];
+  rules: readonly TransactionRule[];
+  maxRows?: number;
+}): TransactionCsvImportPreview {
+  const base = buildTransactionCsvImportPreview(input);
+  if (base.fatalError || input.rules.length === 0) {
+    return { ...base, ruleAppliedCount: 0 };
+  }
+
+  const existingFingerprints = new Set(
+    input.existingTransactions.map(buildTransactionCsvFingerprint),
+  );
+  const fileFingerprints = new Set<string>();
+  let ruleAppliedCount = 0;
+
+  const rows = base.rows.map<TransactionCsvImportPreviewRow>((row) => {
+    if (!row.draft) return row;
+
+    const match = evaluateTransactionRules(input.rules, {
+      type: row.draft.type,
+      amount: row.draft.amount,
+      note: row.draft.note,
+      walletId: row.draft.walletId,
+      categoryId: row.draft.categoryId,
+    });
+
+    const nextDraft = match
+      ? ({
+          ...row.draft,
+          ...applyTransactionRuleMatch(
+            {
+              type: row.draft.type,
+              amount: row.draft.amount,
+              note: row.draft.note,
+              walletId: row.draft.walletId,
+              categoryId: row.draft.categoryId,
+            },
+            match,
+          ),
+        } as TransactionCsvImportDraft)
+      : row.draft;
+
+    const changed = Boolean(
+      match &&
+        (nextDraft.categoryId !== row.draft.categoryId ||
+          nextDraft.walletId !== row.draft.walletId),
+    );
+    if (changed) ruleAppliedCount += 1;
+
+    const fingerprint = buildTransactionCsvFingerprint(nextDraft);
+    const duplicate =
+      existingFingerprints.has(fingerprint) || fileFingerprints.has(fingerprint);
+    fileFingerprints.add(fingerprint);
+
+    return {
+      ...row,
+      draft: nextDraft,
+      fingerprint,
+      status: duplicate ? "duplicate" : "ready",
+      appliedRuleId: changed ? match?.rule.id : undefined,
+      appliedRuleName: changed ? match?.rule.name : undefined,
+    };
+  });
+
+  return {
+    rows,
+    readyCount: rows.filter((row) => row.status === "ready").length,
+    duplicateCount: rows.filter((row) => row.status === "duplicate").length,
+    errorCount: rows.filter((row) => row.status === "error").length,
+    fatalError: null,
+    ruleAppliedCount,
+  };
+}
 function csvEscape(value: unknown) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }

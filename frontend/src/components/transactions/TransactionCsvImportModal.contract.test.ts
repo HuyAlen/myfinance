@@ -10,10 +10,16 @@ describe("TRANSACTION-CSV-IMPORT-1 — import modal contract", () => {
 
   it("preflights duplicates against the all-time ordinary transaction ledger before previewing", () => {
     expect(source).toContain("getTransactions()");
-    expect(source).toContain("buildTransactionCsvImportPreview({");
+    expect(source).toContain("buildTransactionCsvImportPreviewWithRules({");
     expect(source).toContain("existingTransactions,");
     expect(source.indexOf("getTransactions()"))
-      .toBeLessThan(source.indexOf("buildTransactionCsvImportPreview({"));
+      .toBeLessThan(source.indexOf("buildTransactionCsvImportPreviewWithRules({"));
+  });
+
+  it("passes the current transaction-rule set into preview instead of bypassing rule evaluation", () => {
+    expect(source).toContain("rules: TransactionRule[];");
+    expect(source).toContain("rules,");
+    expect(source).toContain("buildTransactionCsvImportPreviewWithRules({");
   });
 
   it("writes every accepted row through the canonical addTransaction Finance Engine boundary", () => {

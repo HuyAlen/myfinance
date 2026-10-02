@@ -10,8 +10,9 @@ import {
   X,
 } from "lucide-react";
 import type { Category, Wallet } from "@/src/types/finance";
+import type { TransactionRule } from "@/src/lib/transactions/transactionRules";
 import {
-  buildTransactionCsvImportPreview,
+  buildTransactionCsvImportPreviewWithRules,
   materializeTransactionCsvImportRows,
   TRANSACTION_CSV_IMPORT_MAX_ROWS,
   type TransactionCsvImportPreview,
@@ -33,11 +34,13 @@ type ImportRunResult = {
 export default function TransactionCsvImportModal({
   wallets,
   categories,
+  rules,
   onClose,
   onImported,
 }: {
   wallets: Wallet[];
   categories: Category[];
+  rules: TransactionRule[];
   onClose: () => void;
   onImported: (result: ImportRunResult) => Promise<void> | void;
 }) {
@@ -88,10 +91,11 @@ export default function TransactionCsvImportModal({
         file.text(),
         getTransactions(),
       ]);
-      const nextPreview = buildTransactionCsvImportPreview({
+      const nextPreview = buildTransactionCsvImportPreviewWithRules({
         csvText,
         wallets,
         categories,
+        rules,
         existingTransactions,
       });
       setPreview(nextPreview);
@@ -235,8 +239,9 @@ export default function TransactionCsvImportModal({
 
           {preview && !preview.fatalError ? (
             <>
-              <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <StatusCard label="Sẵn sàng" value={preview.readyCount} tone="ready" />
+                <StatusCard label="Theo rule" value={preview.ruleAppliedCount ?? 0} tone="rule" />
                 <StatusCard label="Trùng" value={preview.duplicateCount} tone="duplicate" />
                 <StatusCard label="Lỗi" value={preview.errorCount} tone="error" />
               </div>
@@ -297,7 +302,9 @@ export default function TransactionCsvImportModal({
                               ? row.errors.join(" · ")
                               : row.status === "duplicate"
                                 ? "Đã có trong lịch sử hoặc trùng trong file"
-                                : row.draft?.note || "Sẵn sàng nhập"}
+                                : row.appliedRuleName
+                                  ? `Quy tắc: ${row.appliedRuleName}${row.draft?.note ? ` · ${row.draft.note}` : ""}`
+                                  : row.draft?.note || "Sẵn sàng nhập"}
                           </td>
                         </tr>
                       ))}
@@ -405,10 +412,11 @@ function StatusCard({
 }: {
   label: string;
   value: number;
-  tone: "ready" | "duplicate" | "error";
+  tone: "ready" | "rule" | "duplicate" | "error";
 }) {
   const styles = {
     ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    rule: "border-violet-200 bg-violet-50 text-violet-700",
     duplicate: "border-slate-200 bg-slate-50 text-slate-600",
     error: "border-rose-200 bg-rose-50 text-rose-700",
   };

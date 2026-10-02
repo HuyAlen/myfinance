@@ -15,10 +15,11 @@ describe("TRANSACTION-CSV-IMPORT-1 — TransactionsPage adoption", () => {
     expect(source).toContain("<TransactionCsvImportModal");
   });
 
-  it("suppresses global FABs while the import workstation is open", () => {
+  it("suppresses global FABs while any transaction workstation is open", () => {
     expect(source).toContain("const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);");
+    expect(source).toContain("const [isRulesOpen, setIsRulesOpen] = useState(false);");
     expect(source).toContain(
-      "useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || !!pendingAction);",
+      "useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || isRulesOpen || !!pendingAction);",
     );
   });
 
@@ -29,6 +30,13 @@ describe("TRANSACTION-CSV-IMPORT-1 — TransactionsPage adoption", () => {
     const modalSource = source.slice(modalStart, modalEnd + 2);
     expect(modalSource).toContain("await runReload();");
     expect(modalSource).toContain("setCurrentPage(0);");
+  });
+
+  it("passes rule state into CSV preview without creating a second mutation path", () => {
+    const modalStart = source.indexOf("<TransactionCsvImportModal");
+    const modalEnd = source.indexOf("/>", modalStart);
+    const modalSource = source.slice(modalStart, modalEnd + 2);
+    expect(modalSource).toContain("rules={transactionRules}");
   });
 
   it("reuses the shared CSV serializer for quote-safe export/import round trips", () => {

@@ -267,6 +267,40 @@ type TransactionInsert = {
 };
 type TransactionUpdate = Partial<TransactionInsert>;
 
+type TransactionRuleRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  transaction_type: "income" | "expense";
+  note_contains: string | null;
+  wallet_id: string | null;
+  amount_min: number | null;
+  amount_max: number | null;
+  action_category_id: string | null;
+  action_wallet_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type TransactionRuleInsert = {
+  id?: string;
+  user_id: string;
+  name: string;
+  enabled?: boolean;
+  priority?: number;
+  transaction_type: "income" | "expense";
+  note_contains?: string | null;
+  wallet_id?: string | null;
+  amount_min?: number | null;
+  amount_max?: number | null;
+  action_category_id?: string | null;
+  action_wallet_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+type TransactionRuleUpdate = Partial<TransactionRuleInsert>;
+
 type DebtRow = {
   id: string;
   user_id: string;
@@ -768,6 +802,16 @@ export type Database = {
         Relationships: [
           { foreignKeyName: "transactions_wallet_id_fkey"; columns: ["user_id", "walletId"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["user_id", "id"] },
           { foreignKeyName: "transactions_transfer_to_wallet_id_fkey"; columns: ["user_id", "transferToWalletId"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["user_id", "id"] }
+        ];
+      };
+      transaction_rules: {
+        Row: TransactionRuleRow;
+        Insert: TransactionRuleInsert;
+        Update: TransactionRuleUpdate;
+        Relationships: [
+          { foreignKeyName: "transaction_rules_wallet_id_fkey"; columns: ["wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] },
+          { foreignKeyName: "transaction_rules_action_category_id_fkey"; columns: ["action_category_id"]; isOneToOne: false; referencedRelation: "categories"; referencedColumns: ["id"] },
+          { foreignKeyName: "transaction_rules_action_wallet_id_fkey"; columns: ["action_wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }
         ];
       };
       debts: { Row: DebtRow; Insert: DebtInsert; Update: DebtUpdate; Relationships: [] };

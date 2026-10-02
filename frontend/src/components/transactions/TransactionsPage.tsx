@@ -34,6 +34,12 @@ import {
 } from "@/src/lib/transactions/mutationSession";
 import { matchesSearchQuery } from "@/src/lib/transactions/transactionSearch";
 import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
+import TransactionRulesManager from "@/src/components/transactions/TransactionRulesManager";
+import {
+  evaluateTransactionRules,
+  type TransactionRule,
+} from "@/src/lib/transactions/transactionRules";
+import { getTransactionRules } from "@/src/services/finance/transactionRulesStorage";
 import { serializeTransactionsCsv } from "@/src/lib/transactions/transactionCsvImport";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import {
@@ -50,6 +56,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Sparkles,
   SlidersHorizontal,
   Trash2,
   WalletCards,
@@ -550,6 +557,8 @@ export default function TransactionsPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [transactionRules, setTransactionRules] = useState<TransactionRule[]>([]);
   const [form, setForm] = useState<FormState>(() => createEmptyForm());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
@@ -611,6 +620,20 @@ export default function TransactionsPage() {
     console.info(message);
   }, []);
 
+  const reloadTransactionRules = useCallback(async () => {
+    try {
+      const rules = await getTransactionRules();
+      setTransactionRules(rules);
+    } catch (error) {
+      console.error("[TransactionsPage] Failed to load transaction rules", error);
+      // Rules are advisory. A rules read failure must never hide or invalidate
+      // the canonical transaction ledger.
+    }
+  }, []);
+
+  useEffect(() => {
+    void reloadTransactionRules();
+  }, [reloadTransactionRules]);
   // FINANCE-DATA-1: a rejected read never overwrites last-known-good state
   // with an empty array. Transactions owns only the ordinary transaction
   // ledger; investment cash history belongs exclusively to Investments.
@@ -726,6 +749,7 @@ export default function TransactionsPage() {
     ["transactions", "wallets", "categories"],
     requestTransactionsRefresh,
   );
+  useRealtimeTable(["transaction_rules"], reloadTransactionRules);
 
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -736,6 +760,36 @@ export default function TransactionsPage() {
     [wallets],
   );
 
+  const activeRuleSuggestion = useMemo(() => {
+    if (form.formMode === "transfer") return null;
+    return evaluateTransactionRules(transactionRules, {
+      type: getTransactionTypeFromFormMode(form.formMode),
+      amount: Number(form.amount),
+      note: form.note,
+      walletId: form.walletId,
+      categoryId: form.categoryId,
+    });
+  }, [
+    form.amount,
+    form.categoryId,
+    form.formMode,
+    form.note,
+    form.walletId,
+    transactionRules,
+  ]);
+
+  function applyActiveRuleSuggestion() {
+    if (!activeRuleSuggestion) return;
+    setForm((current) => ({
+      ...current,
+      ...(activeRuleSuggestion.patch.categoryId
+        ? { categoryId: activeRuleSuggestion.patch.categoryId }
+        : {}),
+      ...(activeRuleSuggestion.patch.walletId
+        ? { walletId: activeRuleSuggestion.patch.walletId }
+        : {}),
+    }));
+  }
   const rawTransactionReviewInbox = useMemo(
     () =>
       buildFinanceReviewInbox({
@@ -1228,7 +1282,7 @@ export default function TransactionsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
-  useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || !!pendingAction);
+  useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || isRulesOpen || !!pendingAction);
 
   // TXN-UX-1: minimal keyboard/focus support for the Create/Edit dialog —
   // installed only while it's open, cleaned up on close (no permanent
@@ -2197,6 +2251,17 @@ export default function TransactionsPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        setIsRulesOpen(true);
+                        setShowMobileActions(false);
+                      }}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <Sparkles size={15} className="text-violet-600" />
+                      Quy tắc
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                         setIsCsvImportOpen(true);
                         setShowMobileActions(false);
                       }}
@@ -2256,6 +2321,16 @@ export default function TransactionsPage() {
 
               {/* Desktop utility actions */}
               <div className="hidden items-center gap-1.5 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => setIsRulesOpen(true)}
+                  title="Quy tắc giao dịch"
+                  aria-label="Quy tắc giao dịch"
+                  className="flex items-center rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-violet-600 transition-all hover:border-violet-300 hover:bg-violet-100 hover:text-violet-700"
+                >
+                  <Sparkles size={14} />
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setIsCsvImportOpen(true)}
@@ -3155,10 +3230,20 @@ export default function TransactionsPage() {
         )}
       </section>
 
+      {isRulesOpen ? (
+        <TransactionRulesManager
+          rules={transactionRules}
+          categories={categories}
+          wallets={wallets}
+          onClose={() => setIsRulesOpen(false)}
+          onChanged={reloadTransactionRules}
+        />
+      ) : null}
       {isCsvImportOpen ? (
         <TransactionCsvImportModal
           wallets={wallets}
           categories={categories}
+          rules={transactionRules}
           onClose={() => setIsCsvImportOpen(false)}
           onImported={async (result) => {
             await runReload();
@@ -3322,6 +3407,7 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              {/* TRANSACTION-RULES-1-UX-POLISH: suggestion-before-category */}
               <div className="grid gap-2 md:grid-cols-2">
                 <FormInput
                   label="Ngày"
@@ -3342,12 +3428,12 @@ export default function TransactionsPage() {
                   />
                 ) : (
                   <FormSelect
-                    label="Danh mục"
-                    value={form.categoryId}
-                    onChange={(v) => setForm((p) => ({ ...p, categoryId: v }))}
-                    options={filteredCategories.map((c) => ({
-                      label: c.name,
-                      value: c.id,
+                    label="Ví tiền"
+                    value={form.walletId}
+                    onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                    options={wallets.map((w) => ({
+                      label: w.name,
+                      value: w.id,
                     }))}
                   />
                 )}
@@ -3364,33 +3450,79 @@ export default function TransactionsPage() {
                       .map((w) => ({ label: w.name, value: w.id }))}
                   />
                 ) : (
-                  <FormSelect
-                    label="Ví tiền"
-                    value={form.walletId}
-                    onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
-                    options={wallets.map((w) => ({
-                      label: w.name,
-                      value: w.id,
-                    }))}
-                  />
+                  <div className="md:col-span-2">
+                    <FormInput
+                      label="Ghi chú"
+                      value={form.note}
+                      onChange={(v) => setForm((p) => ({ ...p, note: v }))}
+                      placeholder="Ví dụ: Grab Bike, Highlands, lương tháng..."
+                    />
+                  </div>
                 )}
 
-                <div
-                  className={form.type === "transfer" ? "" : "md:col-span-1"}
-                >
+                {form.type === "transfer" ? (
                   <FormInput
                     label="Ghi chú"
                     value={form.note}
                     onChange={(v) => setForm((p) => ({ ...p, note: v }))}
-                    placeholder={
-                      form.type === "transfer"
-                        ? "Ví dụ: Chuyển qua ví chính"
-                        : "Ví dụ: Ăn trưa, lương tháng..."
-                    }
+                    placeholder="Ví dụ: Chuyển qua ví chính"
                   />
-                </div>
+                ) : null}
               </div>
 
+              {activeRuleSuggestion ? (
+                <div
+                  data-transaction-rule-suggestion="true"
+                  className="mt-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                      <Sparkles size={15} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
+                        Gợi ý từ quy tắc
+                      </p>
+                      <p className="mt-0.5 truncate text-sm font-black text-slate-800">
+                        {activeRuleSuggestion.rule.name}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                        {activeRuleSuggestion.patch.categoryId
+                          ? `Danh mục → ${categoryById.get(activeRuleSuggestion.patch.categoryId)?.name ?? "Danh mục"}`
+                          : ""}
+                        {activeRuleSuggestion.patch.categoryId &&
+                        activeRuleSuggestion.patch.walletId
+                          ? " · "
+                          : ""}
+                        {activeRuleSuggestion.patch.walletId
+                          ? `Ví → ${walletById.get(activeRuleSuggestion.patch.walletId)?.name ?? "Ví"}`
+                          : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyActiveRuleSuggestion}
+                      className="min-h-10 shrink-0 rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white transition hover:bg-violet-700"
+                    >
+                      Áp dụng gợi ý
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {form.type !== "transfer" ? (
+                <div className="mt-2">
+                  <FormSelect
+                    label="Danh mục"
+                    value={form.categoryId}
+                    onChange={(v) => setForm((p) => ({ ...p, categoryId: v }))}
+                    options={filteredCategories.map((c) => ({
+                      label: c.name,
+                      value: c.id,
+                    }))}
+                  />
+                </div>
+              ) : null}
               {/* Wallet preview */}
               {canShowWalletPreview && (
                 <div
