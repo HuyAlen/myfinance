@@ -1082,3 +1082,18 @@ button {
   background: linear-gradient(90deg, transparent, rgba(125, 180, 255, 0.34), rgba(76, 201, 220, 0.22), transparent);
   opacity: 0.5;
 }
+
+/* REAL-IPHONE-DASHBOARD-SCROLL-2: native mobile Dashboard scroll performance */
+@media (max-width: 1023px) and (pointer: coarse) {
+  .dashboard-native-scroll .finance-header,
+  .dashboard-native-scroll .finance-bottom-nav {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .dashboard-native-scroll [data-dashboard-reveal="true"] {
+    animation: none !important;
+    animation-timeline: auto !important;
+    transform: none !important;
+  }
+}

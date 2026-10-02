@@ -2,11 +2,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("REAL-IPHONE-DASHBOARD-SCROLL-1", () => {
+describe("REAL-IPHONE-DASHBOARD-SCROLL-1/2", () => {
   const source = readFileSync(path.resolve(__dirname, "AppShell.tsx"), "utf8").replace(/\r\n/g, "\n");
 
-  it("keeps main as the single native vertical scroll owner with iOS momentum enabled", () => {
-    expect(source).toContain("overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch]");
+  it("uses native document scrolling for Dashboard on mobile and preserves nested main scrolling elsewhere", () => {
+    expect(source).toContain('import { usePathname, useRouter } from "next/navigation"');
+    expect(source).toContain('const isDashboardRoute = pathname === "/";');
+    expect(source).toContain("dashboard-native-scroll min-h-(--app-height) overflow-x-hidden lg:h-(--app-height) lg:overflow-hidden");
+    expect(source).toContain('isDashboardRoute ? "min-h-(--app-height) lg:h-full" : "h-full"');
+    expect(source).toContain("overflow-y-visible [-webkit-overflow-scrolling:touch] lg:min-h-0 lg:overflow-y-auto");
+    expect(source).toContain("min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]");
   });
 
   it("never rewrites app height from visualViewport scroll events", () => {

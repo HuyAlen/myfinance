@@ -33,7 +33,7 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
 
   it("reserves the final Net Worth chart height before history readiness resolves, preventing the 96/128px -> 176px jump", () => {
     const historyStart = source.indexOf("Biến động tài sản ròng");
-    const historyEnd = source.indexOf("{/* Operating KPIs */}", historyStart);
+    const historyEnd = source.indexOf("{kpiCards.map((item) => (", historyStart);
     expect(historyStart).toBeGreaterThan(-1);
     expect(historyEnd).toBeGreaterThan(historyStart);
     const historySource = source.slice(historyStart, historyEnd);
@@ -80,30 +80,32 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     );
   });
 
-  it("adds proximity snap behavior to the mobile KPI rail without replacing its desktop grid", () => {
-    const kpiStart = source.indexOf("{/* Operating KPIs */}");
-    const kpiEnd = source.indexOf("{/* Budget attention */}", kpiStart);
+  it("keeps the mobile KPI rail horizontally scrollable without scroll-snap gesture contention", () => {
+    const kpiStart = source.indexOf("{/* Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2");
+    const kpiEnd = source.indexOf("data-dashboard-customization-toolbar", kpiStart);
     expect(kpiStart).toBeGreaterThan(-1);
     expect(kpiEnd).toBeGreaterThan(kpiStart);
     const kpiSource = source.slice(kpiStart, kpiEnd);
 
-    expect(kpiSource).toContain("snap-x snap-proximity");
     expect(kpiSource).toContain("overflow-x-auto");
-    expect(kpiSource).toContain("overscroll-x-contain");
-    expect(kpiSource).toContain("scroll-px-4");
+    expect(kpiSource).toContain("[-webkit-overflow-scrolling:touch]");
     expect(kpiSource).toContain("scrollbar-none");
     expect(kpiSource).toContain("md:grid md:grid-cols-3");
     expect(kpiSource).toContain("xl:grid-cols-5");
+    expect(kpiSource).not.toContain("snap-x");
+    expect(kpiSource).not.toContain("snap-proximity");
+    expect(kpiSource).not.toContain("overscroll-x-contain");
+    expect(kpiSource).not.toContain("scroll-px-4");
   });
 
-  it("makes both interactive and non-interactive KPI cards snap to the start of the mobile rail", () => {
+  it("keeps KPI card widths for swipe browsing without per-card snap alignment", () => {
     const start = source.indexOf("function KpiCard({");
     const end = source.indexOf("\nfunction Panel({", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const kpiCardSource = source.slice(start, end);
 
-    expect(kpiCardSource.split("snap-start").length - 1).toBe(2);
+    expect(kpiCardSource).not.toContain("snap-start");
     expect(kpiCardSource.split("min-w-52").length - 1).toBe(2);
     expect(kpiCardSource.split("md:min-w-0").length - 1).toBe(2);
   });

@@ -16,7 +16,7 @@ describe("DASHBOARD-CUSTOMIZATION-1 wiring", () => {
 
   it("keeps Net Worth Hero and Operating KPIs outside the customizable zone", () => {
     const hero = source.indexOf("{/* Executive overview */}");
-    const kpis = source.indexOf("{/* Operating KPIs */}");
+    const kpis = source.indexOf("{kpiCards.map((item) => (");
     const zone = source.indexOf('data-dashboard-customization-zone="supporting-sections"');
     const decision = source.indexOf('data-dashboard-section="decision"');
 

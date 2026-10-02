@@ -3350,7 +3350,7 @@ export default function DashboardPage() {
               {netWorthTrendReady && hasNetWorthHistoryComparison ? (
                 <div
                   data-dashboard-surface="networth-history-delta"
-                  className="rounded-xl border border-[#CFE0ED] bg-white/90 px-3 py-2 text-right shadow-[0_6px_16px_rgba(45,76,102,0.08)] backdrop-blur-sm"
+                  className="rounded-xl border border-[#CFE0ED] bg-white/90 px-3 py-2 text-right shadow-[0_6px_16px_rgba(45,76,102,0.08)] sm:backdrop-blur-sm"
                 >
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#60778D]">
                     So với snapshot trước
@@ -3441,8 +3441,9 @@ export default function DashboardPage() {
       </section>
 
       {/* Operating KPIs */}
+      {/* Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2: keep horizontal swipe, remove scroll-snap arbitration on touch */}
       <section>
-        <div className="-mx-4 flex snap-x snap-proximity gap-3 overflow-x-auto overscroll-x-contain scroll-px-4 px-4 pb-2 scrollbar-none md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none [-webkit-overflow-scrolling:touch] md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
           {kpiCards.map((item) => (
             <KpiCard
               key={item.title}
@@ -3637,7 +3638,7 @@ export default function DashboardPage() {
           ) : (
             <div data-dashboard-decision="safe-to-spend" className="mt-4">
               <div className="relative overflow-hidden rounded-2xl border border-[#CFE0ED] bg-linear-to-br from-[#F7FBFF] to-[#EDF7FC] p-4">
-                <div className="pointer-events-none absolute -right-8 -top-10 size-28 rounded-full bg-cyan-100/50 blur-2xl" />
+                <div className="pointer-events-none absolute -right-8 -top-10 hidden size-28 rounded-full bg-cyan-100/50 blur-2xl sm:block" />
                 <p className="relative text-[10px] font-black uppercase tracking-[0.12em] text-[#60778D]">Safe to Spend</p>
                 <p className="relative mt-1 text-[clamp(1.55rem,6vw,2.15rem)] font-black tracking-[-0.045em] tabular-nums text-[#2F80ED]">
                   {formatVND(safeToSpend.amount)}
@@ -4962,7 +4963,7 @@ export default function DashboardPage() {
       >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
-          <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
+          <div className="pointer-events-none absolute -right-16 -top-20 hidden size-48 rounded-full bg-blue-50 blur-3xl sm:block" />
 
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -5199,7 +5200,7 @@ function KpiCard({
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
         data-dashboard-depth-card="kpi"
-        className={`min-w-52 snap-start cursor-pointer overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
+        className={`min-w-52 cursor-pointer overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
       >
         {content}
       </button>
@@ -5209,7 +5210,7 @@ function KpiCard({
   return (
     <div
       data-dashboard-depth-card="kpi"
-      className={`min-w-52 snap-start overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
+      className={`min-w-52 overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
     >
       {content}
     </div>
