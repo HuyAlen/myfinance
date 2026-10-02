@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import type { Database } from "@/src/lib/database.types";
 import { getCachedFinanceOwnerUserId } from "@/src/services/finance/householdService";
 
 import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
@@ -2123,7 +2124,21 @@ export async function updateWallet(
 
 export type WalletReconciliationErrorCode =
   | "conflict"
-  | "invalid";
+  | "invalid"
+  | "forbidden"
+  | "not_found";
+
+export type WalletReconciliationRecord = {
+  id: string;
+  userId: string;
+  walletId: string;
+  expectedBalance: number;
+  actualBalance: number;
+  difference: number;
+  note: string | null;
+  actorUserId: string;
+  reconciledAt: string;
+};
 
 export type WalletReconciliationResult =
   | {
@@ -2131,27 +2146,103 @@ export type WalletReconciliationResult =
       previousBalance: number;
       actualBalance: number;
       difference: number;
+      reconciliationId: string;
+      reconciledAt: string;
     }
   | {
       error: string;
       code: WalletReconciliationErrorCode;
     };
 
+function mapWalletReconciliationRow(
+  row: Database["public"]["Tables"]["wallet_reconciliations"]["Row"],
+): WalletReconciliationRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    walletId: row.wallet_id,
+    expectedBalance: Number(row.expected_balance),
+    actualBalance: Number(row.actual_balance),
+    difference: Number(row.difference),
+    note: row.note,
+    actorUserId: row.actor_user_id,
+    reconciledAt: row.reconciled_at,
+  };
+}
+
+function mapWalletReconciliationError(error: { code?: string; message: string }) {
+  switch (error.code) {
+    case "MFR02":
+      return {
+        error:
+          "Số dư ví đã thay đổi kể từ khi bạn mở đối soát. Hãy tải dữ liệu mới và thử lại.",
+        code: "conflict" as const,
+      };
+    case "MFR03":
+      return { error: "Không tìm thấy ví cần đối soát.", code: "not_found" as const };
+    case "MFR06":
+      return { error: "Bạn không có quyền đối soát ví này.", code: "forbidden" as const };
+    case "MFR05":
+      return {
+        error: "Số dư thực tế đang trùng với MyFinance, không cần điều chỉnh.",
+        code: "invalid" as const,
+      };
+    case "MFR04":
+    case "MFR07":
+      return { error: "Dữ liệu đối soát không hợp lệ.", code: "invalid" as const };
+    default:
+      return { error: error.message, code: "invalid" as const };
+  }
+}
+
+export async function getWalletReconciliations(options: {
+  walletId?: string;
+  limit?: number;
+} = {}): Promise<WalletReconciliationRecord[]> {
+  const userId = await getAuthUserId();
+  if (!userId) throw new Error(ERR_NO_AUTH);
+
+  const limit = Math.min(200, Math.max(1, Math.floor(options.limit ?? 100)));
+  let query = supabase
+    .from("wallet_reconciliations")
+    .select(
+      "id,user_id,wallet_id,expected_balance,actual_balance,difference,note,actor_user_id,reconciled_at,created_at",
+    )
+    .eq("user_id", userId)
+    .order("reconciled_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit);
+
+  if (options.walletId) query = query.eq("wallet_id", options.walletId);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[financeStorage] getWalletReconciliations:", error.message);
+    throw new Error("Không thể tải lịch sử đối soát ví.");
+  }
+
+  return (data ?? []).map(mapWalletReconciliationRow);
+}
+
 export async function reconcileWalletBalance(input: {
   walletId: string;
   expectedBalance: number;
   actualBalance: number;
+  note?: string | null;
 }): Promise<WalletReconciliationResult> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH, code: "invalid" };
 
   const expectedBalance = Number(input.expectedBalance);
   const actualBalance = Number(input.actualBalance);
+  const note = input.note?.trim() || null;
+
   if (
     !input.walletId ||
     !Number.isFinite(expectedBalance) ||
     !Number.isFinite(actualBalance) ||
-    actualBalance < 0
+    actualBalance < 0 ||
+    (note?.length ?? 0) > 500
   ) {
     return { error: "Số dư đối soát không hợp lệ.", code: "invalid" };
   }
@@ -2162,42 +2253,35 @@ export async function reconcileWalletBalance(input: {
     };
   }
 
-  // Optimistic compare-and-set: a transaction, transfer, Savings or Forex
-  // mutation that changes this wallet after the modal opens makes the expected
-  // balance predicate miss, so reconciliation fails closed rather than
-  // overwriting newer money movement. The existing finance audit trigger runs
-  // in the SAME database statement/transaction and records OLD/NEW balance,
-  // actor and timestamp; no synthetic income/expense transaction is created.
-  const { data, error } = await supabase
-    .from("wallets")
-    .update({ balance: actualBalance })
-    .eq("id", input.walletId)
-    .eq("user_id", userId)
-    .eq("balance", expectedBalance)
-    .neq("type", "investment")
-    .select("id,balance");
+  const { data, error } = await supabase.rpc("reconcile_wallet_balance_atomic", {
+    p_wallet_id: input.walletId,
+    p_expected_balance: expectedBalance,
+    p_actual_balance: actualBalance,
+    p_note: note,
+  });
 
   if (error) {
     console.error("[financeStorage] reconcileWalletBalance:", error.message);
-    return { error: error.message, code: "invalid" };
+    return mapWalletReconciliationError(error);
   }
 
-  if (!data || data.length !== 1) {
+  const row = data?.[0];
+  if (!row) {
     return {
-      error:
-        "Số dư ví đã thay đổi kể từ khi bạn mở đối soát. Hãy tải dữ liệu mới và thử lại.",
-      code: "conflict",
+      error: "Không nhận được receipt đối soát từ máy chủ.",
+      code: "invalid",
     };
   }
 
   return {
     error: null,
-    previousBalance: expectedBalance,
-    actualBalance,
-    difference: actualBalance - expectedBalance,
+    previousBalance: Number(row.expected_balance),
+    actualBalance: Number(row.actual_balance),
+    difference: Number(row.difference),
+    reconciliationId: row.id,
+    reconciledAt: row.reconciled_at,
   };
 }
-
 export type WalletDeleteErrorCode = "referenced" | "not_found";
 
 type WalletDeleteResult = {

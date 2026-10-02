@@ -65,13 +65,22 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(transactions).not.toContain("function getCategoryPlanningGroup(");
   });
 
-  it("Wallet analytics load Categories as a required dependency and pass them into real-expense totals", () => {
+  it("Wallet analytics load Categories as a required dependency and preserve reconciliation realtime refresh", () => {
     const wallets = read("../../components/wallets/WalletsPage.tsx");
     expect(wallets).toContain("getCategories(),");
     expect(wallets).toContain("setCategories(loadedCategories)");
     expect(wallets).toContain("getTotalExpense(currentMonthTxns, categories)");
     expect(wallets).toContain("expense: getTotalExpense(wt, categories)");
-    expect(wallets).toContain('["wallets", "transactions", "categories"]');
+
+    const realtimeStart = wallets.indexOf("useRealtimeTable(");
+    const realtimeEnd = wallets.indexOf(");", realtimeStart);
+    expect(realtimeStart).toBeGreaterThan(-1);
+    const realtimeRegion = wallets.slice(realtimeStart, realtimeEnd);
+
+    expect(realtimeRegion).toContain('"wallets"');
+    expect(realtimeRegion).toContain('"transactions"');
+    expect(realtimeRegion).toContain('"categories"');
+    expect(realtimeRegion).toContain('"wallet_reconciliations"');
   });
 
   it("AI monthly forecast receives Categories so saving/investment allocations cannot leak into projected expense", () => {

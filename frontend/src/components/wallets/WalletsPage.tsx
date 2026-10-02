@@ -41,6 +41,7 @@ import {
   getForexCashWalletLinks,
   getTransactionWalletLinks,
   getTransactionsInRange,
+  getWalletReconciliations,
   getWallets,
   hasWalletReferences,
   reconcileWalletBalance,
@@ -56,6 +57,8 @@ import {
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
+import WalletReconciliationCenter from "@/src/components/wallets/WalletReconciliationCenter";
+import type { WalletReconciliationRecord } from "@/src/services/finance/financeStorage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -283,6 +286,10 @@ export default function WalletsPage() {
     null,
   );
   const [reconcileBalance, setReconcileBalance] = useState("");
+  const [reconcileNote, setReconcileNote] = useState("");
+  const [reconciliationHistory, setReconciliationHistory] = useState<WalletReconciliationRecord[]>([]);
+  const [isLoadingReconciliationHistory, setIsLoadingReconciliationHistory] = useState(true);
+  const [reconciliationHistoryError, setReconciliationHistoryError] = useState<string | null>(null);
   const [reconcileError, setReconcileError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [transferForm, setTransferForm] = useState<TransferFormState>(
@@ -347,6 +354,20 @@ export default function WalletsPage() {
         setIsLoadingMonthAnalytics(false);
       });
 
+    const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })
+      .then((records) => {
+        setReconciliationHistory(records);
+        setReconciliationHistoryError(null);
+      })
+      .catch((error) => {
+        console.error("[WalletsPage] reconciliation history reload failed:", error);
+        setReconciliationHistoryError(
+          error instanceof Error ? error.message : "Không thể tải lịch sử đối soát.",
+        );
+      })
+      .finally(() => {
+        setIsLoadingReconciliationHistory(false);
+      });
     const linkCountsTask = Promise.all([
       getTransactionWalletLinks(),
       getForexCashWalletLinks(),
@@ -375,7 +396,12 @@ export default function WalletsPage() {
         console.error("[WalletsPage] wallet link-count reload failed:", error);
       });
 
-    await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask]);
+    await Promise.all([
+      walletTask,
+      monthlyAnalyticsTask,
+      linkCountsTask,
+      reconciliationHistoryTask,
+    ]);
   }, []);
 
   // ── Reload coordinator ──────────────────────────────────────────────────
@@ -429,7 +455,7 @@ export default function WalletsPage() {
   // `wallets.balance` directly, so watching `wallets` already catches them —
   // no separate forex_cash_transactions subscription needed here.
   useRealtimeTable(
-    ["wallets", "transactions", "categories"],
+    ["wallets", "transactions", "categories", "wallet_reconciliations"],
     requestRealtimeRefresh,
   );
 
@@ -626,6 +652,7 @@ export default function WalletsPage() {
   function openReconcileForm(wallet: SpendableWallet) {
     setReconcileTarget(wallet);
     setReconcileBalance(String(wallet.balance));
+    setReconcileNote("");
     setReconcileError(null);
   }
 
@@ -765,6 +792,7 @@ export default function WalletsPage() {
         walletId: reconcileTarget.id,
         expectedBalance: reconcileTarget.balance,
         actualBalance,
+        note: reconcileNote,
       });
 
       if (result.error !== null) {
@@ -772,6 +800,7 @@ export default function WalletsPage() {
           await runReload();
           setReconcileTarget(null);
           setReconcileBalance("");
+          setReconcileNote("");
           toast({
             variant: "warning",
             message:
@@ -794,6 +823,7 @@ export default function WalletsPage() {
       });
       setReconcileTarget(null);
       setReconcileBalance("");
+      setReconcileNote("");
     } finally {
       setIsReconciling(false);
     }
@@ -1055,6 +1085,14 @@ export default function WalletsPage() {
           />
         </div>
       </section>
+      <WalletReconciliationCenter
+        wallets={spendableWallets}
+        records={reconciliationHistory}
+        isLoading={isLoadingReconciliationHistory}
+        error={reconciliationHistoryError}
+        onReconcile={openReconcileForm}
+      />
+
       {/* SECTION 2 · Wallet Types */}
       <section className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
         <div className="flex items-center justify-between gap-3">
@@ -1627,6 +1665,7 @@ export default function WalletsPage() {
                 onClick={() => {
                   if (!isReconciling) {
                     setReconcileTarget(null);
+                    setReconcileNote("");
                     setReconcileError(null);
                   }
                 }}
@@ -1691,6 +1730,25 @@ export default function WalletsPage() {
                   />
                 </div>
 
+                <div className="mt-4">
+                  <label
+                    htmlFor="wallet-reconciliation-note"
+                    className="mb-1.5 block text-sm font-black text-slate-700"
+                  >
+                    Ghi chú đối soát <span className="font-semibold text-slate-400">(tùy chọn)</span>
+                  </label>
+                  <textarea
+                    id="wallet-reconciliation-note"
+                    value={reconcileNote}
+                    onChange={(event) => setReconcileNote(event.target.value.slice(0, 500))}
+                    rows={3}
+                    placeholder="Ví dụ: Đối chiếu theo số dư app ngân hàng lúc 21:30"
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  />
+                  <p className="mt-1 text-right text-[10px] font-semibold text-slate-400">
+                    {reconcileNote.length}/500
+                  </p>
+                </div>
                 <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
                   <p className="text-xs font-black text-blue-800">
                     Điều chỉnh số dư, không tạo dòng tiền giả
@@ -1718,6 +1776,7 @@ export default function WalletsPage() {
                     type="button"
                     onClick={() => {
                       setReconcileTarget(null);
+                    setReconcileNote("");
                       setReconcileError(null);
                     }}
                     disabled={isReconciling}

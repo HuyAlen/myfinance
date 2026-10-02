@@ -3,9 +3,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * WALLETS-CORRECTNESS-1 / FINANCE-DATA-1B — Wallet snapshot loading must
- * distinguish unknown / failure / legitimate-empty, and secondary reads must
- * not be able to suppress a successful Wallet snapshot.
+ * WALLETS-CORRECTNESS-1 / FINANCE-DATA-1B / WALLET-RECONCILIATION-CENTER-1
+ * Wallet snapshot loading must distinguish unknown / failure / legitimate-empty,
+ * and secondary reads must not be able to suppress a successful Wallet snapshot.
  */
 describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
   const source = readFileSync(
@@ -24,7 +24,7 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(source).toContain("monthAnalyticsError");
   });
 
-  it("applies critical Wallet, monthly analytics, and caption-only link counts independently", () => {
+  it("applies Wallet, monthly analytics, link counts and reconciliation history independently", () => {
     const start = source.indexOf("const reloadData = useCallback(async () => {");
     const end = source.indexOf("}, []);", start);
     expect(start).toBeGreaterThan(-1);
@@ -36,23 +36,50 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(fnSource).toContain("getTransactionsInRange(startDate, endDate)");
     expect(fnSource).toContain("getCategories()");
     expect(fnSource).toContain("setCategories(loadedCategories)");
+
+    expect(fnSource).toContain(
+      "const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })",
+    );
+    expect(fnSource).toContain("setReconciliationHistory(records)");
+    expect(fnSource).toContain("setIsLoadingReconciliationHistory(false)");
+
     expect(fnSource).toContain("const linkCountsTask = Promise.all([");
     expect(fnSource).toContain("getTransactionWalletLinks()");
     expect(fnSource).toContain("getForexCashWalletLinks()");
-    expect(fnSource).toContain(
-      "await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask])",
+
+    expect(fnSource).toMatch(
+      /await Promise\.all\(\[\s*walletTask,\s*monthlyAnalyticsTask,\s*linkCountsTask,\s*reconciliationHistoryTask,\s*\]\);/,
     );
+
     expect(fnSource).not.toContain(
       "const [w, monthTxns, txnLinks, forexLinks] = await Promise.all",
     );
   });
 
+  it("a reconciliation-history failure remains secondary and never becomes a Wallet load error", () => {
+    const start = source.indexOf(
+      "const reconciliationHistoryTask = getWalletReconciliations",
+    );
+    const end = source.indexOf("const linkCountsTask = Promise.all([", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const reconciliationSource = source.slice(start, end);
+
+    expect(reconciliationSource).toContain(
+      "[WalletsPage] reconciliation history reload failed:",
+    );
+    expect(reconciliationSource).toContain(
+      'setReconciliationHistoryError(',
+    );
+    expect(reconciliationSource).not.toContain("setWalletsLoadError(");
+    expect(reconciliationSource).not.toContain("setWallets([])");
+  });
+
   it("a caption-only link-count failure never becomes a Wallet load error", () => {
     const start = source.indexOf("const linkCountsTask = Promise.all([");
-    const end = source.indexOf(
-      "await Promise.all([walletTask, monthlyAnalyticsTask, linkCountsTask])",
-      start,
-    );
+    const end = source.indexOf("await Promise.all([", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
     const linkSource = source.slice(start, end);
 
     expect(linkSource).toContain("wallet link-count reload failed");

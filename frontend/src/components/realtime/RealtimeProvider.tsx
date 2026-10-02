@@ -19,6 +19,7 @@ import { markInstant, measureAndReport } from "@/src/lib/performance/performance
 
 type RealtimeTable =
   | "wallets"
+  | "wallet_reconciliations"
   | "categories"
   | "transactions"
   | "budgets"
@@ -91,7 +92,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     markInstant("realtime:subscribe:start");
 
     const tables: RealtimeTable[] = [
-      "wallets",
+      "wallets",      "wallet_reconciliations",
+
       "categories",
       "transactions",
       "budgets",

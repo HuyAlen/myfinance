@@ -164,6 +164,31 @@ type WalletInsert = {
 };
 type WalletUpdate = Partial<WalletInsert>;
 
+type WalletReconciliationRow = {
+  id: string;
+  user_id: string;
+  wallet_id: string;
+  expected_balance: number;
+  actual_balance: number;
+  difference: number;
+  note: string | null;
+  actor_user_id: string;
+  reconciled_at: string;
+  created_at: string;
+};
+type WalletReconciliationInsert = {
+  id?: string;
+  user_id: string;
+  wallet_id: string;
+  expected_balance: number;
+  actual_balance: number;
+  note?: string | null;
+  actor_user_id: string;
+  reconciled_at?: string;
+  created_at?: string;
+};
+type WalletReconciliationUpdate = never;
+
 type CategoryRow = {
   id: string;
   user_id: string;
@@ -724,6 +749,12 @@ export type Database = {
       finance_audit_log: { Row: FinanceAuditLogRow; Insert: FinanceAuditLogInsert; Update: FinanceAuditLogUpdate; Relationships: [] };
 // END AUDIT-TRAIL-1 TABLE SURFACE
       wallets: { Row: WalletRow; Insert: WalletInsert; Update: WalletUpdate; Relationships: [] };
+      wallet_reconciliations: {
+        Row: WalletReconciliationRow;
+        Insert: WalletReconciliationInsert;
+        Update: WalletReconciliationUpdate;
+        Relationships: [{ foreignKeyName: "wallet_reconciliations_wallet_id_fkey"; columns: ["wallet_id"]; isOneToOne: false; referencedRelation: "wallets"; referencedColumns: ["id"] }];
+      };
       categories: {
         Row: CategoryRow;
         Insert: CategoryInsert;
@@ -855,6 +886,10 @@ export type Database = {
         Returns: undefined;
       };
       delete_wallet_atomic: { Args: { p_wallet_id: string }; Returns: undefined };
+      reconcile_wallet_balance_atomic: {
+        Args: { p_wallet_id: string; p_expected_balance: number; p_actual_balance: number; p_note?: string | null };
+        Returns: WalletReconciliationRow[];
+      };
       delete_category_atomic: { Args: { p_category_id: string }; Returns: undefined };
       create_saving_account: {
         Args: { p_saving_id: string; p_name: string; p_type: string; p_balance: number; p_wallet_id: string; p_saving_transaction_id: string; p_transaction_date: string; p_interest_rate?: number | null; p_maturity_date?: string | null; p_notes?: string | null };
