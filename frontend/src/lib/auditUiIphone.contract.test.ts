@@ -41,8 +41,8 @@ describe("AUDIT-UI-1.3 iPhone filter sheet, readability and touch targets", () =
     expect(activityPage).toContain("text-[10px] font-black ${actionMeta.badge}");
     expect(activityPage).toContain('text-[10px] font-black uppercase tracking-wide text-slate-400');
     expect(activityPage).toContain('mt-1 truncate text-[13px] font-black text-slate-900');
-    expect(activityPage).toContain('mt-0.5 truncate text-[10px] font-semibold text-slate-400 sm:text-[11px]');
-    expect(activityPage).toContain('truncate text-[11px] font-bold text-slate-500 sm:text-[12px]');
+    expect(activityPage).toContain('mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-slate-400 sm:text-[11px]');
+    expect(activityPage).toContain('truncate text-[11px] font-black text-slate-600 sm:text-[12px]');
   });
 
   it("stacks before and after values vertically on mobile while retaining desktop side-by-side comparison", () => {

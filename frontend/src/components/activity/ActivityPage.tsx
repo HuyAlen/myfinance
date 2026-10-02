@@ -362,12 +362,12 @@ export default function ActivityPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-3 overflow-x-hidden pb-5 pt-1 md:space-y-4 md:pb-0 md:pt-2">
-      <section className="rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-5 sm:py-3.5">
+    <div data-activity-center="true" className="w-full space-y-3 overflow-x-hidden pb-5 pt-1 md:space-y-5 md:pb-0 md:pt-0">
+      <section data-activity-hero="true" className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[10px]">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">
                 Audit Center
               </p>
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">
@@ -377,10 +377,10 @@ export default function ActivityPage() {
                 {filterLabel}
               </span>
             </div>
-            <h1 className="mt-1 text-lg font-black tracking-tight text-slate-900 sm:text-xl">
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
               Lịch sử hoạt động
             </h1>
-            <p className="mt-0.5 max-w-3xl text-[11px] leading-4 text-slate-500 sm:text-xs sm:leading-5">
+            <p className="mt-1 max-w-4xl text-[12px] font-medium leading-5 text-slate-500 sm:text-sm">
               Ai đã thay đổi dữ liệu tài chính, thay đổi gì và giá trị trước / sau trong {household?.name ?? "gia đình MyFinance"}.
             </p>
           </div>
@@ -395,7 +395,7 @@ export default function ActivityPage() {
           </button>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-500">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-slate-500 sm:text-[11px]">
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1">
             <History size={11} /> {events.length} hoạt động trên trang
           </span>
@@ -435,28 +435,37 @@ export default function ActivityPage() {
         </button>
       </section>
 
-      <section className="sticky top-0 z-20 hidden rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:block">
-        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
-          <div className="min-w-0">
+      <section
+        data-activity-desktop-filters="true"
+        className="sticky top-0 z-20 hidden rounded-3xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:block"
+      >
+        <div className="mb-2 flex items-center justify-between gap-3 px-0.5">
+          <div className="flex min-w-0 items-center gap-2">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
               Bộ lọc
             </p>
-            <p className="text-[11px] text-slate-400">
-              Lọc server-side theo dữ liệu, thao tác, thành viên và khoảng thời gian đang chọn.
-            </p>
+            {activeFilterCount > 0 ? (
+              <span className="inline-flex min-h-5 items-center rounded-full bg-blue-50 px-2 text-[10px] font-black text-blue-700">
+                {activeFilterCount} đang bật
+              </span>
+            ) : (
+              <span className="hidden text-[10px] font-semibold text-slate-300 lg:inline">
+                Server-side · theo kỳ đang chọn
+              </span>
+            )}
           </div>
           {activeFilterCount > 0 ? (
             <button
               type="button"
               onClick={clearFilters}
-              className="min-h-11 shrink-0 rounded-xl px-3 text-[11px] font-black text-blue-700 transition hover:bg-blue-50"
+              className="min-h-9 shrink-0 rounded-xl px-3 text-[11px] font-black text-blue-700 transition hover:bg-blue-50"
             >
               Xóa lọc
             </button>
           ) : null}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 xl:gap-3">
           <label className="min-w-0">
             <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">
               Dữ liệu
@@ -466,7 +475,7 @@ export default function ActivityPage() {
               onChange={(event) =>
                 setEntityFilter(event.target.value as AuditEntityType | "all")
               }
-              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:bg-white"
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
             >
               <option value="all">Tất cả</option>
               {AUDIT_ENTITY_TYPES.map((entityType) => (
@@ -486,7 +495,7 @@ export default function ActivityPage() {
               onChange={(event) =>
                 setActionFilter(event.target.value as AuditAction | "all")
               }
-              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:bg-white"
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
             >
               <option value="all">Tất cả</option>
               <option value="insert">Đã tạo</option>
@@ -503,7 +512,7 @@ export default function ActivityPage() {
               value={actorFilter}
               onChange={(event) => setActorFilter(event.target.value)}
               disabled={householdLoading}
-              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:bg-white disabled:opacity-60"
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:opacity-60"
             >
               <option value="all">Tất cả thành viên</option>
               {actorOptions.map((actor) => (
@@ -515,11 +524,7 @@ export default function ActivityPage() {
           </label>
         </div>
 
-        {activeFilterCount > 0 ? (
-          <p className="mt-2 text-[10px] font-bold text-blue-600">
-            {activeFilterCount} bộ lọc đang bật
-          </p>
-        ) : null}
+
       </section>
 
       {mobileFiltersOpen ? (
@@ -720,10 +725,12 @@ export default function ActivityPage() {
                       (actor) => actor.id === event.actor_user_id,
                     )?.label ||
                     `Thành viên ${event.actor_user_id.slice(0, 8)}`;
-                  const actorLabel =
-                    event.actor_user_id === user?.id
-                      ? `Bạn · ${actorEmail}`
-                      : actorEmail;
+                  const isCurrentActor = event.actor_user_id === user?.id;
+                  const actorLabel = isCurrentActor
+                    ? `Bạn · ${actorEmail}`
+                    : actorEmail;
+                  const actorRoleLabel =
+                    ROLE_LABELS[event.actor_role] ?? event.actor_role;
                   const presentation = buildAuditPresentation(
                     event,
                     referenceLabels,
@@ -736,7 +743,7 @@ export default function ActivityPage() {
                       key={event.id}
                       className={`group ${index > 0 ? "border-t border-slate-100" : ""}`}
                     >
-                      <summary className="flex min-h-[72px] cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 outline-none transition hover:bg-slate-50/80 focus-visible:bg-blue-50/60 [&::-webkit-details-marker]:hidden sm:gap-3 sm:px-4">
+                      <summary className="flex min-h-[76px] cursor-pointer list-none items-center gap-2.5 px-3 py-3 outline-none transition hover:bg-slate-50/80 focus-visible:bg-blue-50/60 [&::-webkit-details-marker]:hidden sm:gap-3 sm:px-4 sm:py-3">
                         <span className="hidden w-10 shrink-0 text-center text-[10px] font-black tabular-nums text-slate-400 sm:block">
                           {formatEventClock(event.created_at)}
                         </span>
@@ -744,7 +751,7 @@ export default function ActivityPage() {
                           <EntityIcon size={16} />
                         </span>
 
-                        <div className="min-w-0 flex-1 sm:grid sm:grid-cols-[minmax(160px,0.85fr)_minmax(0,1.35fr)] sm:items-center sm:gap-4">
+                        <div className="min-w-0 flex-1 sm:grid sm:grid-cols-[minmax(220px,0.9fr)_minmax(0,1.1fr)] sm:items-center sm:gap-5 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.35fr)]">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span
@@ -762,14 +769,25 @@ export default function ActivityPage() {
                             <h3 className="mt-1 truncate text-[13px] font-black text-slate-900 sm:text-[13px]">
                               {entityName}
                             </h3>
-                            <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-400 sm:text-[11px]">
-                              {actorLabel} · {ROLE_LABELS[event.actor_role] ?? event.actor_role}
-                              <span className="sm:hidden"> · {formatEventClock(event.created_at)}</span>
-                            </p>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-slate-400 sm:text-[11px]">
+                              {isCurrentActor ? (
+                                <span className="inline-flex shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-black text-blue-700">
+                                  Bạn
+                                </span>
+                              ) : (
+                                <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-black text-slate-600">
+                                  Thành viên
+                                </span>
+                              )}
+                              <span className="min-w-0 truncate">{actorEmail}</span>
+                              <span className="hidden shrink-0 text-slate-300 sm:inline">·</span>
+                              <span className="hidden shrink-0 sm:inline">{actorRoleLabel}</span>
+                              <span className="shrink-0 sm:hidden">· {formatEventClock(event.created_at)}</span>
+                            </div>
                           </div>
 
                           <div className="mt-1.5 min-w-0 sm:mt-0">
-                            <p className="truncate text-[11px] font-bold text-slate-500 sm:text-[12px]">
+                            <p className="truncate text-[11px] font-black text-slate-600 sm:text-[12px]">
                               {presentation.primaryText}
                             </p>
                             <p className="mt-0.5 text-[9px] font-semibold text-slate-300 sm:text-[10px]">
@@ -785,7 +803,7 @@ export default function ActivityPage() {
                       </summary>
 
                       <div className="border-t border-slate-100 bg-slate-50/45 px-3 py-3 sm:px-4">
-                        <div className="grid gap-3 sm:grid-cols-[190px_minmax(0,1fr)] sm:gap-4">
+                        <div className="grid gap-3 sm:grid-cols-[210px_minmax(0,1fr)] sm:gap-5">
                           <aside className="rounded-xl border border-slate-100 bg-white p-3 text-[10px] leading-5 text-slate-500">
                             <p className="font-black uppercase tracking-wide text-slate-400">
                               Người thay đổi
@@ -793,7 +811,7 @@ export default function ActivityPage() {
                             <p className="mt-1 break-all font-black text-slate-700">
                               {actorLabel}
                             </p>
-                            <p>{ROLE_LABELS[event.actor_role] ?? event.actor_role}</p>
+                            <p>{actorRoleLabel}</p>
                             <p className="mt-2 font-black uppercase tracking-wide text-slate-400">
                               Thời gian
                             </p>
@@ -892,7 +910,7 @@ export default function ActivityPage() {
 
           <nav
             aria-label="Phân trang lịch sử hoạt động"
-            className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm sm:px-3"
+            className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 shadow-sm sm:ml-auto sm:w-fit sm:min-w-[430px] sm:px-3"
           >
             <button
               type="button"

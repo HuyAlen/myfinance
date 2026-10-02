@@ -23,8 +23,9 @@ describe("AUDIT-UI-1.1 compact activity hierarchy", () => {
     expect(activityPage).toContain("useSuppressGlobalFabsWhileOpen(true)");
   });
 
-  it("keeps the activity workspace intentionally bounded on wide desktop screens", () => {
-    expect(activityPage).toContain("max-w-6xl");
+  it("uses the full AppShell content width on wide desktop screens", () => {
+    expect(activityPage).toContain('data-activity-center="true"');
+    expect(activityPage).not.toContain("max-w-6xl");
     expect(activityPage).toContain("Lịch sử hoạt động");
     expect(activityPage).not.toContain(
       "bg-linear-to-br from-blue-50 via-white to-cyan-50",
@@ -40,14 +41,14 @@ describe("AUDIT-UI-1.1 compact activity hierarchy", () => {
 
   it("uses dense expandable ledger rows instead of tall cards", () => {
     expect(activityPage).toContain("<details");
-    expect(activityPage).toContain('min-h-[72px]');
+    expect(activityPage).toContain('min-h-[76px]');
     expect(activityPage).toContain("Nhấn để xem chi tiết");
     expect(activityPage).toContain("group-open:rotate-90");
   });
 
   it("keeps actor, role and event time compact while preserving full detail on expansion", () => {
     expect(activityPage).toContain("actorLabel");
-    expect(activityPage).toContain("ROLE_LABELS[event.actor_role]");
+    expect(activityPage).toContain("actorRoleLabel");
     expect(activityPage).toContain("formatEventClock(event.created_at)");
     expect(activityPage).toContain("formatEventTime(event.created_at)");
   });

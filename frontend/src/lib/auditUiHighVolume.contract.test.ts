@@ -49,7 +49,7 @@ describe("AUDIT-UI-1.2 high-volume activity ledger", () => {
 
   it("uses compact expandable rows with 44px navigation targets on mobile", () => {
     expect(activityPage).toContain("<details");
-    expect(activityPage).toContain('min-h-[72px]');
+    expect(activityPage).toContain('min-h-[76px]');
     expect(activityPage).toContain("min-h-11");
     expect(activityPage).toContain("Mới hơn");
     expect(activityPage).toContain("Cũ hơn");
