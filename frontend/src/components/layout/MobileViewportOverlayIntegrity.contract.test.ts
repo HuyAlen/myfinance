@@ -24,9 +24,10 @@ const pageOverlaySources = [
   "src/components/debts/DebtsPage.tsx",
   "src/components/dashboard/DashboardPage.tsx",
   "src/components/categories/CategoriesPage.tsx",
-  "src/components/recurring/RecurringMoneyPage.tsx",
   "src/components/investments/InvestmentsPage.tsx",
 ].map(read);
+
+const recurring = read("src/components/recurring/RecurringMoneyPage.tsx");
 
 describe("cross-page viewport overlay integrity", () => {
   it("keeps finance-main as a plain shared content scroller without iOS stacking hacks", () => {
@@ -40,6 +41,11 @@ describe("cross-page viewport overlay integrity", () => {
     for (const source of pageOverlaySources) {
       expect(source).toContain("fixed inset-0");
     }
+
+    expect(recurring).toContain('data-recurring-mobile-viewport="true"');
+    expect(recurring).toContain("fixed inset-x-0 z-100");
+    expect(recurring).toContain("--recurring-visual-viewport-height");
+    expect(recurring).toContain("--recurring-visual-viewport-offset-top");
   });
 
   it("keeps the Transactions editor above the shared header and bottom navigation", () => {

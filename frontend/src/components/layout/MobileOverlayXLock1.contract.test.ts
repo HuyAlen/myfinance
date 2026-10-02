@@ -18,10 +18,12 @@ const overlayOwners = [
   "src/components/debts/DebtsPage.tsx",
   "src/components/categories/CategoriesPage.tsx",
   "src/components/investments/InvestmentsPage.tsx",
-  "src/components/recurring/RecurringMoneyPage.tsx",
   "src/components/activity/ActivityPage.tsx",
   "src/components/dashboard/DashboardPage.tsx",
 ].map((relativePath) => ({ relativePath, source: read(relativePath) }));
+
+const recurringPath = "src/components/recurring/RecurringMoneyPage.tsx";
+const recurringSource = read(recurringPath);
 
 function fixedOverlayClassNames(source: string) {
   return [...source.matchAll(/className="([^"]*fixed inset-0[^"]*)"/g)].map(
@@ -47,6 +49,14 @@ describe("MOBILE-OVERLAY-X-LOCK-1", () => {
         ).toContain("overflow-x-hidden");
       }
     }
+
+    expect(recurringSource).toContain('data-recurring-mobile-viewport="true"');
+    expect(recurringSource).toContain(
+      "fixed inset-x-0 z-100 flex items-stretch justify-center overflow-x-hidden",
+    );
+    expect(recurringSource).toContain(
+      "overflow-x-hidden overflow-y-auto overscroll-contain",
+    );
   });
 
   it("locks x overflow on modal vertical scrollers while preserving y scrolling", () => {

@@ -119,6 +119,53 @@ export default function RecurringMoneyPage() {
 
   useSuppressGlobalFabsWhileOpen(Boolean(editor) || Boolean(pendingConfirm));
 
+  // RECURRING-MOBILE-VISUAL-VIEWPORT-1:
+  // iOS Safari's layout viewport can remain taller than the actually visible
+  // area while browser chrome or the software keyboard is present. Keep the
+  // recurring editor bound to the Visual Viewport so its footer actions never
+  // fall below what the user can really see.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncRecurringVisualViewport = () => {
+      const nextHeight = Math.max(
+        1,
+        Math.round(viewport?.height ?? window.innerHeight),
+      );
+      const nextOffsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+
+      root.style.setProperty(
+        "--recurring-visual-viewport-height",
+        `${nextHeight}px`,
+      );
+      root.style.setProperty(
+        "--recurring-visual-viewport-offset-top",
+        `${nextOffsetTop}px`,
+      );
+    };
+
+    syncRecurringVisualViewport();
+    viewport?.addEventListener("resize", syncRecurringVisualViewport);
+    viewport?.addEventListener("scroll", syncRecurringVisualViewport);
+    window.addEventListener("resize", syncRecurringVisualViewport);
+    window.addEventListener("orientationchange", syncRecurringVisualViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncRecurringVisualViewport);
+      viewport?.removeEventListener("scroll", syncRecurringVisualViewport);
+      window.removeEventListener("resize", syncRecurringVisualViewport);
+      window.removeEventListener(
+        "orientationchange",
+        syncRecurringVisualViewport,
+      );
+      root.style.removeProperty("--recurring-visual-viewport-height");
+      root.style.removeProperty("--recurring-visual-viewport-offset-top");
+    };
+  }, []);
+
   const reloadData = useCallback(async () => {
     try {
       setLoadError(null);
@@ -452,7 +499,7 @@ export default function RecurringMoneyPage() {
   }
 
   return (
-    <div data-recurring-money-manager="true" className="mx-auto max-w-7xl space-y-4 sm:space-y-5">
+    <div data-recurring-money-manager="true" className="space-y-3 overflow-x-hidden md:space-y-5">
       <section className="relative overflow-hidden rounded-3xl border border-[#C9DCEB] bg-white p-4 shadow-[0_14px_34px_rgba(45,76,102,0.10)] sm:rounded-4xl sm:p-6">
         <div className="pointer-events-none absolute -right-20 -top-24 size-64 rounded-full bg-blue-100/70 blur-3xl" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -572,9 +619,16 @@ export default function RecurringMoneyPage() {
       )}
 
       {editor && (
-        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
+        <div
+          data-recurring-mobile-viewport="true"
+          className="fixed inset-x-0 z-100 flex items-stretch justify-center overflow-x-hidden overflow-y-hidden bg-white p-0 sm:inset-0 sm:h-auto sm:items-center sm:bg-slate-950/55 sm:p-4 sm:backdrop-blur-[2px]"
+          style={{
+            top: "var(--recurring-visual-viewport-offset-top, 0px)",
+            height: "var(--recurring-visual-viewport-height, 100dvh)",
+          }}
+        >
+          <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div>
                 <h2 className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl">
                   {editor.sourceId ? "Chỉnh lịch định kỳ" : "Thêm khoản định kỳ"}
@@ -586,7 +640,7 @@ export default function RecurringMoneyPage() {
               <button type="button" onClick={() => setEditor(null)} className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900 active:scale-95 sm:size-9 sm:rounded-2xl"><X size={18} /></button>
             </div>
 
-            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-2.5 pb-24 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5">
+            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 touch-pan-y space-y-2.5 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-2.5 pb-4 [-webkit-overflow-scrolling:touch] sm:space-y-3 sm:px-6 sm:py-4 sm:pb-5">
               {editor.source === "category" ? (
                 <label className="block">
                   <span className="text-sm font-black text-slate-700">Danh mục</span>
@@ -702,7 +756,7 @@ export default function RecurringMoneyPage() {
               <button type="button" onClick={() => setEditor((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)} className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-left transition hover:bg-slate-100/70">
                 <div>
                   <p className="text-sm font-black text-slate-700">Kích hoạt lịch</p>
-                  <p className="mt-0.5 text-xs font-medium text-slate-400">Tắt để tạm dừng nhưng vẫn giữ cấu hình.</p>
+                  <p className="mt-0.5 text-[11px] font-medium leading-4 text-slate-400 sm:text-xs">Tắt để tạm dừng nhưng vẫn giữ cấu hình.</p>
                 </div>
                 <span className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${editor.enabled ? "bg-blue-600 shadow-sm shadow-blue-200" : "bg-slate-300"}`}><span className={`size-5 rounded-full bg-white shadow transition-transform ${editor.enabled ? "translate-x-6" : "translate-x-1"}`} /></span>
               </button>
@@ -710,7 +764,7 @@ export default function RecurringMoneyPage() {
               <SaveError message={saveError} onDismiss={() => setSaveError(null)} />
             </form>
 
-            <div className="safe-bottom-padding relative z-20 shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
+            <div className="relative z-20 shrink-0 border-t border-slate-100 bg-white/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 sm:py-3.5">
               <div className="flex gap-3">
                 <button type="button" onClick={() => setEditor(null)} className="min-h-11 flex-1 rounded-2xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50 active:scale-[.99]">Hủy</button>
                 <button form="recurring-money-form" type="submit" disabled={isSaving} className="min-h-11 flex-1 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? "Đang lưu..." : "Lưu lịch"}</button>

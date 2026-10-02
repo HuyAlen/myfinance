@@ -9,11 +9,16 @@ const source = readFileSync(
 
 describe("RECURRING-UI-POLISH-1", () => {
   it("uses the canonical full-screen-mobile / rounded-desktop modal shell", () => {
+    expect(source).toContain('data-recurring-mobile-viewport="true"');
+    expect(source).toContain("fixed inset-x-0 z-100");
     expect(source).toContain(
-      "fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55",
+      'top: "var(--recurring-visual-viewport-offset-top, 0px)"',
     );
     expect(source).toContain(
-      "flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl",
+      'height: "var(--recurring-visual-viewport-height, 100dvh)"',
+    );
+    expect(source).toContain(
+      "flex h-full min-h-0 w-full flex-col overflow-hidden bg-white shadow-2xl",
     );
     expect(source).toContain("sm:max-w-lg sm:rounded-4xl");
     expect(source).toContain("env(safe-area-inset-top)");
