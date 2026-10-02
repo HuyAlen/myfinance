@@ -44,6 +44,15 @@ const QuickActionFab = dynamic(
 // display:none, per this being a rendering decision, not a style one.
 const SHOW_AI_FLOATING_BUTTON = false;
 
+// REAL-IPHONE-DASHBOARD-SCROLL-1: visualViewport can emit many resize/scroll
+// events while iOS browser chrome collapses during a finger scroll. Writing the
+// shell height for every one of those events forces layout while the inner main
+// scroller is in motion and can make momentum scrolling feel like it catches.
+// Coalesce viewport-height writes after resize settles, and reserve the smaller
+// visual viewport for a likely software keyboard rather than browser chrome.
+const APP_HEIGHT_SETTLE_MS = 180;
+const IOS_KEYBOARD_VIEWPORT_DELTA_PX = 120;
+
 type AppShellProps = {
   children: React.ReactNode;
 };
@@ -89,29 +98,77 @@ export default function AppShell({ children }: AppShellProps) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Keep real viewport height in sync for iPhone Safari/Chrome.
+  // Keep the shell aligned with the real iPhone viewport without mutating
+  // layout on every browser-toolbar scroll event. A debounced resize sync still
+  // follows orientation changes and the software keyboard, but normal finger
+  // scrolling is left entirely to the native momentum scroller.
   useEffect(() => {
-    const updateAppHeight = () => {
-      const height =
-        window.visualViewport?.height ||
-        window.innerHeight ||
-        document.documentElement.clientHeight;
+    let settleTimerId: number | null = null;
+    let animationFrameId: number | null = null;
 
-      document.documentElement.style.setProperty("--app-height", `${height}px`);
+    const writeAppHeight = () => {
+      animationFrameId = null;
+
+      const visualViewport = window.visualViewport;
+      const activeElement = document.activeElement;
+      const isKeyboardTarget =
+        activeElement instanceof HTMLElement &&
+        (activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.tagName === "SELECT" ||
+          activeElement.isContentEditable);
+      const keyboardLikelyOpen =
+        visualViewport !== null &&
+        isKeyboardTarget &&
+        window.innerHeight - visualViewport.height >=
+          IOS_KEYBOARD_VIEWPORT_DELTA_PX;
+      const height =
+        keyboardLikelyOpen && visualViewport
+          ? visualViewport.height
+          : window.innerHeight || document.documentElement.clientHeight;
+
+      document.documentElement.style.setProperty(
+        "--app-height",
+        `${Math.round(height)}px`,
+      );
     };
 
-    updateAppHeight();
+    const requestAppHeightWrite = () => {
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      animationFrameId = window.requestAnimationFrame(writeAppHeight);
+    };
 
-    window.visualViewport?.addEventListener("resize", updateAppHeight);
-    window.visualViewport?.addEventListener("scroll", updateAppHeight);
-    window.addEventListener("resize", updateAppHeight);
-    window.addEventListener("orientationchange", updateAppHeight);
+    const scheduleAppHeightSync = () => {
+      if (settleTimerId !== null) {
+        window.clearTimeout(settleTimerId);
+      }
+      settleTimerId = window.setTimeout(
+        requestAppHeightWrite,
+        APP_HEIGHT_SETTLE_MS,
+      );
+    };
+
+    requestAppHeightWrite();
+
+    window.visualViewport?.addEventListener("resize", scheduleAppHeightSync);
+    window.addEventListener("resize", scheduleAppHeightSync);
+    window.addEventListener("orientationchange", scheduleAppHeightSync);
 
     return () => {
-      window.visualViewport?.removeEventListener("resize", updateAppHeight);
-      window.visualViewport?.removeEventListener("scroll", updateAppHeight);
-      window.removeEventListener("resize", updateAppHeight);
-      window.removeEventListener("orientationchange", updateAppHeight);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        scheduleAppHeightSync,
+      );
+      window.removeEventListener("resize", scheduleAppHeightSync);
+      window.removeEventListener("orientationchange", scheduleAppHeightSync);
+      if (settleTimerId !== null) {
+        window.clearTimeout(settleTimerId);
+      }
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
     };
   }, []);
 
@@ -171,7 +228,7 @@ export default function AppShell({ children }: AppShellProps) {
             sidebarOpen={sidebarOpen}
           />
 
-          <main className="finance-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+          <main className="finance-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
               {children}
             </FabSuppressionProvider>
