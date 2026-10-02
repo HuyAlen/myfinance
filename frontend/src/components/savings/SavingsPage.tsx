@@ -15,6 +15,7 @@ import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import { formatLocalISODate } from "@/src/lib/date/calendarDate";
 import {
   ArrowDownLeft,
+  ArrowLeftRight,
   ArrowUpRight,
   Banknote,
   CheckCircle2,
@@ -39,11 +40,13 @@ import type {
 import {
   createSavingAccount,
   createSavingMovement,
+  type SavingInternalTransferResult,
   deleteSavingAccount,
   getWallets,
   updateWallet,
 } from "@/src/services/finance/financeStorage";
 import { supabase } from "@/src/lib/supabase";
+import SavingsInternalTransferModal from "@/src/components/savings/SavingsInternalTransferModal";
 
 type SavingWithWallet = SavingAccount & {
   walletId?: string;
@@ -81,6 +84,8 @@ type SavingTransaction = {
   amount: number;
   date: string;
   note: string;
+  transferReference?: string;
+  transferDirection?: "out" | "in";
 };
 
 type TransactionFormState = {
@@ -134,16 +139,34 @@ const mapSavingRowToSaving = (row: SavingRow): SavingWithWallet => ({
   updatedAt: row.updated_at ?? undefined,
 });
 
+const parseSavingTransferLedgerNote = (note: string) => {
+  const match = note.match(
+    /^__saving_transfer__:([0-9a-f-]+):(out|in)\|(.*)$/i,
+  );
+  if (!match) return null;
+
+  return {
+    reference: match[1],
+    direction: match[2] as "out" | "in",
+    displayNote: match[3] || "Chuyển giữa các khoản tiết kiệm",
+  };
+};
 const mapTransactionRowToTransaction = (
   row: SavingTransactionRow,
-): SavingTransaction => ({
-  id: row.id,
-  savingId: row.saving_id,
-  type: row.type,
-  amount: Number(row.amount ?? 0),
-  date: row.transaction_date,
-  note: row.note ?? getTransactionLabel(row.type),
-});
+): SavingTransaction => {
+  const transfer = parseSavingTransferLedgerNote(row.note ?? "");
+
+  return {
+    id: row.id,
+    savingId: row.saving_id,
+    type: row.type,
+    amount: Number(row.amount ?? 0),
+    date: row.transaction_date,
+    note: transfer?.displayNote ?? row.note ?? getTransactionLabel(row.type),
+    transferReference: transfer?.reference,
+    transferDirection: transfer?.direction,
+  };
+};
 
 const groupTransactionsBySavingId = (transactions: SavingTransaction[]) =>
   transactions.reduce<Record<string, SavingTransaction[]>>((grouped, item) => {
@@ -490,6 +513,7 @@ export default function SavingsPage({
     null,
   );
   const [historySavingId, setHistorySavingId] = useState<string | null>(null);
+  const [transferSourceId, setTransferSourceId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavingWithWallet | null>(
     null,
   );
@@ -649,7 +673,10 @@ export default function SavingsPage({
   }, [wallets]);
 
   const activeSavingId =
-    editingSavingId ?? transactionSavingId ?? historySavingId;
+    editingSavingId ??
+    transactionSavingId ??
+    historySavingId ??
+    transferSourceId;
   const selectedSaving = useMemo(
     () =>
       activeSavingId
@@ -773,10 +800,13 @@ export default function SavingsPage({
 
   const savingsAnalytics = useMemo(() => {
     const allTransactions = Object.values(transactionsBySavingId).flat();
-    const totalDeposits = allTransactions
+    const externalTransactions = allTransactions.filter(
+      (item) => !item.transferReference,
+    );
+    const totalDeposits = externalTransactions
       .filter((item) => item.type === "deposit" || item.type === "interest")
       .reduce((sum, item) => sum + item.amount, 0);
-    const totalWithdrawals = allTransactions
+    const totalWithdrawals = externalTransactions
       .filter((item) => item.type === "withdraw" || item.type === "settlement")
       .reduce((sum, item) => sum + item.amount, 0);
     const netMovement = totalDeposits - totalWithdrawals;
@@ -1139,6 +1169,66 @@ export default function SavingsPage({
     setEditingSavingId(null);
     setTransactionSavingId(null);
     setHistorySavingId(saving.id);
+  };
+  const openInternalTransfer = (saving: SavingWithWallet) => {
+    setIsAddOpen(false);
+    setEditingSavingId(null);
+    setTransactionSavingId(null);
+    setHistorySavingId(null);
+    setTransferSourceId(saving.id);
+  };
+
+  const closeInternalTransfer = () => {
+    setTransferSourceId(null);
+  };
+
+  const handleInternalTransferred = (
+    result: SavingInternalTransferResult,
+  ) => {
+    const sourceSaving = mapSavingRowToSaving(result.sourceSaving as SavingRow);
+    const destinationSaving = mapSavingRowToSaving(
+      result.destinationSaving as SavingRow,
+    );
+
+    const sourceTransaction = {
+      ...mapTransactionRowToTransaction(
+        result.sourceTransaction as SavingTransactionRow,
+      ),
+      transferReference: result.transferReference,
+      transferDirection: "out" as const,
+    };
+    const destinationTransaction = {
+      ...mapTransactionRowToTransaction(
+        result.destinationTransaction as SavingTransactionRow,
+      ),
+      transferReference: result.transferReference,
+      transferDirection: "in" as const,
+    };
+
+    setLocalSavings((current) =>
+      current.map((saving) => {
+        if (saving.id === sourceSaving.id) return sourceSaving;
+        if (saving.id === destinationSaving.id) return destinationSaving;
+        return saving;
+      }),
+    );
+
+    setTransactionsBySavingId((current) => ({
+      ...current,
+      [sourceSaving.id]: [
+        sourceTransaction,
+        ...(current[sourceSaving.id] ?? []),
+      ],
+      [destinationSaving.id]: [
+        destinationTransaction,
+        ...(current[destinationSaving.id] ?? []),
+      ],
+    }));
+
+    showToast({
+      type: "success",
+      message: "Đã chuyển tiền giữa các khoản tiết kiệm.",
+    });
   };
 
   const closeAddModal = () => {
@@ -1796,7 +1886,7 @@ export default function SavingsPage({
             </div>
           </div>
           <p className="hidden text-xs font-medium text-[#61788F] md:block">
-            Nạp, rút hoặc xem lịch sử ngay trên từng khoản.
+            Nạp, rút, chuyển hoặc xem lịch sử ngay trên từng khoản.
           </p>
         </div>
 
@@ -1868,7 +1958,16 @@ export default function SavingsPage({
             </button>
           </div>
         ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div
+            data-savings-account-grid
+            className={`mt-4 grid gap-3 ${
+              filteredSavings.length === 1
+                ? "md:grid-cols-1 md:place-items-center"
+                : filteredSavings.length === 2
+                  ? "md:grid-cols-2 xl:grid-cols-2"
+                  : "md:grid-cols-2 xl:grid-cols-3"
+            }`}
+          >
             {filteredSavings.map((item) => {
               const status = getSavingStatus(item);
               const expectedInterest = estimateAnnualInterest(item);
@@ -1879,7 +1978,7 @@ export default function SavingsPage({
                 <article
                   key={item.id}
                   id={`saving-card-${item.id}`}
-                  className={`group rounded-2xl border bg-white p-3.5 transition sm:p-4 md:hover:border-blue-200 md:hover:shadow-[0_8px_20px_rgba(54,83,107,0.07)] ${
+                  className={`group rounded-2xl border bg-white p-3.5 transition sm:p-4 ${filteredSavings.length === 1 ? "w-full md:max-w-3xl" : ""} md:hover:border-blue-200 md:hover:shadow-[0_8px_20px_rgba(54,83,107,0.07)] ${
                     highlightedSavingId === item.id
                       ? "border-blue-300 ring-2 ring-blue-200 ring-offset-2"
                       : "border-[#DCE6EF]"
@@ -1996,7 +2095,7 @@ export default function SavingsPage({
                     </div>
                   ) : null}
 
-                  <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
                     <button
                       type="button"
                       onClick={() => openMoneyMovementModal(item, "deposit")}
@@ -2012,6 +2111,16 @@ export default function SavingsPage({
                     >
                       <ArrowDownLeft size={14} />
                       Rút
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openInternalTransfer(item)}
+                      disabled={item.balance <= 0 || localSavings.length < 2}
+                      className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-violet-50 px-2 text-[11px] font-black text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300 disabled:opacity-100 sm:text-xs"
+                      title={localSavings.length < 2 ? "Cần ít nhất hai khoản tiết kiệm" : undefined}
+                    >
+                      <ArrowLeftRight size={14} />
+                      Chuyển
                     </button>
                     <button
                       type="button"
@@ -2092,30 +2201,44 @@ export default function SavingsPage({
             Theo lãi suất trung bình hiện tại, chưa tính khoản nạp thêm.
           </p>
 
-          <div
-            data-dark-surface="savings-forecast-list"
-            className="mt-3 divide-y divide-[#E8EEF4]"
-          >
-            {savingsAnalytics.projection.map((item) => (
-              <div
-                key={item.years}
-                data-dark-surface="savings-forecast-item"
-                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                <div>
-                  <p className="text-sm font-black text-[#36536B]">
-                    Sau {item.years} năm
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-[#8CA0B3]">
-                    Giá trị ước tính
-                  </p>
+          {savingsExperience.averageRate <= 0 ? (
+            <div
+              data-savings-zero-rate-projection
+              className="mt-3 rounded-2xl border border-dashed border-[#DCE6EF] bg-[#F8FBFE] px-4 py-4"
+            >
+              <p className="text-sm font-black text-[#36536B]">
+                Chưa có lãi suất để dự phóng tăng trưởng
+              </p>
+              <p className="mt-1 text-xs font-medium leading-5 text-[#8CA0B3]">
+                Số dư tương lai hiện bằng số dư hôm nay. Thêm lãi suất cho khoản phù hợp để xem dự phóng 1–5 năm.
+              </p>
+            </div>
+          ) : (
+            <div
+              data-dark-surface="savings-forecast-list"
+              className="mt-3 divide-y divide-[#E8EEF4]"
+            >
+              {savingsAnalytics.projection.map((item) => (
+                <div
+                  key={item.years}
+                  data-dark-surface="savings-forecast-item"
+                  className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div>
+                    <p className="text-sm font-black text-[#36536B]">
+                      Sau {item.years} năm
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[#8CA0B3]">
+                      Giá trị ước tính
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-sm font-black tabular-nums text-[#2F80ED]">
+                    {formatCurrency(item.value)}
+                  </span>
                 </div>
-                <span className="shrink-0 text-sm font-black tabular-nums text-[#2F80ED]">
-                  {formatCurrency(item.value)}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -2137,7 +2260,29 @@ export default function SavingsPage({
           </div>
 
           <div className="mt-4 space-y-3">
-            {savingsAnalytics.allocation.length > 0 ? (
+            {savingsAnalytics.allocation.length === 1 ? (
+              <div
+                data-savings-single-allocation
+                className="flex items-center justify-between gap-3 rounded-2xl bg-[#F8FBFE] px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-[#36536B]">
+                    {savingsAnalytics.allocation[0].label}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-[#8CA0B3]">
+                    Toàn bộ số dư hiện nằm trong một loại khoản.
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-black tabular-nums text-[#36536B]">
+                    {formatCurrency(savingsAnalytics.allocation[0].value)}
+                  </p>
+                  <span className="mt-1 inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                    100%
+                  </span>
+                </div>
+              </div>
+            ) : savingsAnalytics.allocation.length > 1 ? (
               savingsAnalytics.allocation.map((item, index) => {
                 const percent =
                   metrics.totalSavings > 0
@@ -2249,6 +2394,7 @@ export default function SavingsPage({
             savingsAnalytics.recentTransactions.map((transaction) => {
               const signedAmount = getSignedTransactionAmount(transaction);
               const isPositive = signedAmount > 0;
+              const isInternalTransfer = Boolean(transaction.transferReference);
 
               return (
                 <div
@@ -2258,18 +2404,21 @@ export default function SavingsPage({
                   <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
                     <span
                       className={`flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9 ${
-                        isPositive
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-rose-50 text-rose-600"
+                        isInternalTransfer
+                          ? "bg-violet-50 text-violet-600"
+                          : isPositive
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-rose-50 text-rose-600"
                       }`}
                     >
-                      {getTransactionIcon(transaction.type)}
+                      {isInternalTransfer ? <ArrowLeftRight size={15} /> : getTransactionIcon(transaction.type)}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-[#36536B]">
                         {transaction.savingName}
                       </p>
                       <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8CA0B3] sm:text-xs">
+                        {isInternalTransfer ? "Chuyển nội bộ · " : ""}
                         {transaction.note} · {formatDate(transaction.date)}
                       </p>
                     </div>
@@ -2354,9 +2503,12 @@ export default function SavingsPage({
                         <CheckCircle2 size={11} />
                         {getSavingStatus(selectedSaving).label}
                       </span>
-                      <span className="max-w-36 truncate text-[10px] font-semibold text-slate-500 sm:max-w-none sm:text-xs">
-                        {getSavingTypeLabel(selectedSaving.type)}
-                      </span>
+                      {getSavingTypeLabel(selectedSaving.type) !==
+                      getSavingStatus(selectedSaving).label ? (
+                        <span className="max-w-36 truncate text-[10px] font-semibold text-slate-500 sm:max-w-none sm:text-xs">
+                          {getSavingTypeLabel(selectedSaving.type)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
@@ -2394,7 +2546,7 @@ export default function SavingsPage({
                       </div>
                     </label>
 
-                    <label className="col-span-2 min-w-0 sm:col-span-1">
+                    <label className={`col-span-2 min-w-0 ${isEditing ? "" : "sm:col-span-1"}`}>
                       <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         Loại tiết kiệm
                       </span>
@@ -2412,24 +2564,36 @@ export default function SavingsPage({
                       </select>
                     </label>
 
-                    <label className="col-span-2 min-w-0 sm:col-span-1">
+                    <label className={`col-span-2 min-w-0 ${isEditing ? "" : "sm:col-span-1"}`}>
                       <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                         {isEditing ? "Ví liên kết" : "Ví nguồn"}
                       </span>
                       <select
                         value={form.walletId}
+                        title={selectedInitialWallet?.name}
                         onChange={(event) => updateForm("walletId", event.target.value)}
-                        className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:rounded-2xl sm:px-4 sm:text-sm"
+                        className="mt-1 min-h-10 w-full min-w-0 truncate rounded-xl border border-slate-200 bg-white px-3 pr-10 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:mt-1.5 sm:min-h-11 sm:rounded-2xl sm:px-4 sm:pr-10 sm:text-sm"
                       >
                         <option value="">
                           {isEditing ? "Chọn ví liên kết" : "Chọn ví nguồn"}
                         </option>
                         {wallets.map((wallet) => (
                           <option key={wallet.id} value={wallet.id}>
-                            {wallet.name} · {formatCurrency(wallet.balance)}
+                            {wallet.name}
                           </option>
                         ))}
                       </select>
+                      {selectedInitialWallet ? (
+                        <div
+                          data-saving-wallet-balance
+                          className="mt-1.5 flex items-center justify-between gap-3 rounded-xl bg-slate-100/70 px-3 py-2 text-[11px] font-semibold text-slate-500 sm:rounded-2xl sm:px-4 sm:text-xs"
+                        >
+                          <span className="truncate">{selectedInitialWallet.name}</span>
+                          <span className="shrink-0 font-black tabular-nums text-slate-700">
+                            {formatCurrency(selectedInitialWallet.balance)}
+                          </span>
+                        </div>
+                      ) : null}
                     </label>
 
                     {!isEditing ? (
@@ -2747,7 +2911,7 @@ export default function SavingsPage({
                     <option value="">Chọn ví</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} · {formatCurrency(wallet.balance)}
+                        {wallet.name}
                       </option>
                     ))}
                   </select>
@@ -2878,6 +3042,14 @@ export default function SavingsPage({
         </div>
       ) : null}
 
+      {transferSourceId && selectedSaving ? (
+        <SavingsInternalTransferModal
+          source={selectedSaving}
+          savings={localSavings}
+          onClose={closeInternalTransfer}
+          onTransferred={handleInternalTransferred}
+        />
+      ) : null}
       {/* SAVINGS-UX-1: history is a read-only sheet, not part of edit. */}
       {historySavingId && selectedSaving ? (
         <div className="fixed inset-x-0 top-0 z-140 flex h-[var(--savings-visual-viewport-height,100dvh)] items-end justify-center overflow-hidden bg-slate-950/45 sm:inset-0 sm:h-auto p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
@@ -2953,7 +3125,11 @@ export default function SavingsPage({
                             </p>
                             <p className="mt-1 text-xs font-bold text-slate-400">
                               {formatDate(transaction.date)} ·{" "}
-                              {getTransactionLabel(transaction.type)}
+                              {transaction.transferReference
+                                ? transaction.transferDirection === "out"
+                                  ? "Chuyển đi"
+                                  : "Nhận chuyển"
+                                : getTransactionLabel(transaction.type)}
                             </p>
                           </div>
                         </div>
@@ -2977,7 +3153,7 @@ export default function SavingsPage({
                       Chưa có giao dịch
                     </p>
                     <p className="mt-1 text-xs font-semibold text-slate-400">
-                      Các lần nạp, rút và tất toán sẽ xuất hiện tại đây.
+                      Các lần nạp, rút, chuyển và tất toán sẽ xuất hiện tại đây.
                     </p>
                   </div>
                 )}

@@ -26,7 +26,10 @@ export type RecurringMoneySchedule = {
   walletId: string;
   walletName: string;
   recurrence?: RecurrenceFrequency;
+  /** Persisted schedule anchor / last explicitly configured next date. */
   nextRunDate?: string;
+  /** Derived first occurrence on/after the supplied reference calendar date. */
+  effectiveNextRunDate?: string;
   enabled: boolean;
   legacy: boolean;
   issues: RecurringMoneyIssue[];
@@ -67,6 +70,123 @@ function scheduleIssues(input: {
   return issues;
 }
 
+type CalendarParts = {
+  year: number;
+  month: number;
+  day: number;
+};
+
+function parseCalendarDate(value: string): CalendarParts | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return undefined;
+
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day > lastDay) return undefined;
+
+  return { year, month, day };
+}
+
+function calendarDateKey(parts: CalendarParts) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function clampedCalendarDate(
+  year: number,
+  month: number,
+  anchorDay: number,
+): string {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return calendarDateKey({
+    year,
+    month,
+    day: Math.min(anchorDay, lastDay),
+  });
+}
+
+function calendarOrdinal(parts: CalendarParts) {
+  return Math.floor(
+    Date.UTC(parts.year, parts.month - 1, parts.day) / 86_400_000,
+  );
+}
+
+/**
+ * RECURRING-NEXT-RUN-ROLLFORWARD-1
+ *
+ * Returns the first real calendar occurrence on or after `referenceDate`.
+ * `nextRunDate` remains the persisted anchor; callers use this derived value
+ * for presentation, ordering and forecast without silently rewriting storage.
+ *
+ * Monthly/yearly schedules preserve the ORIGINAL anchor day/month across short
+ * months (Jan 31 -> Feb 28 -> Mar 31; leap-day -> Feb 28 -> Feb 29 when valid).
+ */
+export function resolveEffectiveNextRunDate(
+  nextRunDate: string | undefined,
+  recurrence: RecurrenceFrequency | undefined,
+  referenceDate: string,
+): string | undefined {
+  if (!nextRunDate || !recurrence) return nextRunDate;
+
+  const anchor = parseCalendarDate(nextRunDate);
+  const reference = parseCalendarDate(referenceDate);
+  if (!anchor || !reference) return undefined;
+
+  if (nextRunDate >= referenceDate) return nextRunDate;
+
+  if (recurrence === "daily" || recurrence === "weekly") {
+    const intervalDays = recurrence === "daily" ? 1 : 7;
+    const elapsedDays = calendarOrdinal(reference) - calendarOrdinal(anchor);
+    const steps = Math.max(0, Math.ceil(elapsedDays / intervalDays));
+    const targetOrdinal = calendarOrdinal(anchor) + steps * intervalDays;
+    const target = new Date(targetOrdinal * 86_400_000);
+    return calendarDateKey({
+      year: target.getUTCFullYear(),
+      month: target.getUTCMonth() + 1,
+      day: target.getUTCDate(),
+    });
+  }
+
+  if (recurrence === "monthly") {
+    let offset =
+      (reference.year - anchor.year) * 12 +
+      (reference.month - anchor.month);
+    offset = Math.max(0, offset);
+
+    let absoluteMonth = anchor.year * 12 + (anchor.month - 1) + offset;
+    let year = Math.floor(absoluteMonth / 12);
+    let month = (absoluteMonth % 12) + 1;
+    let candidate = clampedCalendarDate(year, month, anchor.day);
+
+    if (candidate < referenceDate) {
+      absoluteMonth += 1;
+      year = Math.floor(absoluteMonth / 12);
+      month = (absoluteMonth % 12) + 1;
+      candidate = clampedCalendarDate(year, month, anchor.day);
+    }
+
+    return candidate;
+  }
+
+  let targetYear = Math.max(anchor.year, reference.year);
+  let candidate = clampedCalendarDate(
+    targetYear,
+    anchor.month,
+    anchor.day,
+  );
+  if (candidate < referenceDate) {
+    targetYear += 1;
+    candidate = clampedCalendarDate(
+      targetYear,
+      anchor.month,
+      anchor.day,
+    );
+  }
+  return candidate;
+}
 function exactMirrorKey(schedule: RecurringMoneySchedule) {
   return [
     schedule.type,
@@ -95,6 +215,7 @@ export function buildRecurringMoneySchedules(input: {
   categories: Category[];
   transactions: Transaction[];
   wallets: Wallet[];
+  referenceDate?: string;
 }): RecurringMoneySchedule[] {
   const categoriesById = new Map(input.categories.map((item) => [item.id, item]));
   const walletsById = new Map(input.wallets.map((item) => [item.id, item]));
@@ -118,6 +239,13 @@ export function buildRecurringMoneySchedules(input: {
         walletName: walletsById.get(walletId)?.name ?? "Chưa chọn ví",
         recurrence: category.recurrence,
         nextRunDate: category.nextRunDate,
+        effectiveNextRunDate: input.referenceDate
+          ? resolveEffectiveNextRunDate(
+              category.nextRunDate,
+              category.recurrence,
+              input.referenceDate,
+            )
+          : category.nextRunDate,
         enabled: category.isRecurring === true,
         legacy: false,
         issues: scheduleIssues({
@@ -160,6 +288,13 @@ export function buildRecurringMoneySchedules(input: {
       walletName: walletsById.get(walletId)?.name ?? "Không tìm thấy ví",
       recurrence: transaction.recurrence,
       nextRunDate: transaction.nextRunDate,
+      effectiveNextRunDate: input.referenceDate
+        ? resolveEffectiveNextRunDate(
+            transaction.nextRunDate,
+            transaction.recurrence,
+            input.referenceDate,
+          )
+        : transaction.nextRunDate,
       enabled: transaction.isRecurring === true,
       legacy: true,
       issues: scheduleIssues({
@@ -186,8 +321,10 @@ export function buildRecurringMoneySchedules(input: {
 
   return [...categorySchedules, ...legacySchedules].sort((a, b) => {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-    const aDate = a.nextRunDate ?? "9999-12-31";
-    const bDate = b.nextRunDate ?? "9999-12-31";
+    const aDate =
+      a.effectiveNextRunDate ?? a.nextRunDate ?? "9999-12-31";
+    const bDate =
+      b.effectiveNextRunDate ?? b.nextRunDate ?? "9999-12-31";
     if (aDate !== bDate) return aDate.localeCompare(bDate);
     if (a.type !== b.type) return a.type === "expense" ? -1 : 1;
     return a.title.localeCompare(b.title, "vi");
@@ -204,7 +341,8 @@ export function toRecurringScheduleInputs(schedules: RecurringMoneySchedule[]) {
       title: schedule.title,
       amount: schedule.amount,
       type: schedule.type,
-      nextRunDate: schedule.nextRunDate!,
+      nextRunDate:
+        schedule.effectiveNextRunDate ?? schedule.nextRunDate!,
       recurrence: schedule.recurrence,
       categoryId: schedule.categoryId,
       categoryName: schedule.categoryName,

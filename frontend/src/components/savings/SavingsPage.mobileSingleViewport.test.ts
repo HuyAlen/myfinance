@@ -78,7 +78,7 @@ describe("SavingsPage mobile action surfaces use one full dynamic viewport", () 
 
   it("avoids truncating type and source-wallet controls on narrow iPhones", () => {
     expect(editSource).toContain(
-      'className="col-span-2 min-w-0 sm:col-span-1"',
+      'className={`col-span-2 min-w-0 ${isEditing ? "" : "sm:col-span-1"}`}',
     );
     expect(editSource).toContain("Loại tiết kiệm");
     expect(editSource).toContain('{isEditing ? "Ví liên kết" : "Ví nguồn"}');

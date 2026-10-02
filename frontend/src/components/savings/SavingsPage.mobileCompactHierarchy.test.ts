@@ -72,7 +72,7 @@ describe("SavingsPage compact mobile financial hierarchy", () => {
     expect(accounts).toContain('"border-[#DCE6EF]"');
     expect(accounts).toContain("Số dư hiện tại");
     expect(accounts).toContain("border-t border-[#E8EEF4] pt-3");
-    expect(accounts).toContain("mt-3 grid grid-cols-3 gap-2");
+    expect(accounts).toContain("mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4");
     expect(accounts).toContain("min-h-10");
   });
 

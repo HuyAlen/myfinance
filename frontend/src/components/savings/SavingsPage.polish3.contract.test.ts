@@ -68,7 +68,7 @@ describe("SavingsPage action-first polish", () => {
     expect(accounts).toContain("Số dư hiện tại");
     expect(accounts).toContain("border-t border-[#E8EEF4] pt-3");
     expect(accounts.match(/data-dark-surface="savings-account-meta"/g)?.length).toBe(2);
-    expect(accounts).toContain("mt-3 grid grid-cols-3 gap-2");
+    expect(accounts).toContain("mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4");
     expect(accounts).toContain('openMoneyMovementModal(item, "deposit")');
     expect(accounts).toContain('openMoneyMovementModal(item, "withdraw")');
     expect(accounts).toContain("openHistoryModal(item)");

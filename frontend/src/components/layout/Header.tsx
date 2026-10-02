@@ -52,6 +52,12 @@ import {
   getCurrentLocalMonthKey,
 } from "@/src/lib/notifications/financeNotifications";
 import {
+  buildRecurringMoneySchedules,
+} from "@/src/lib/recurring/recurringMoney";
+import {
+  buildRecurringDueActions,
+  summarizeRecurringDueActions,
+} from "@/src/lib/recurring/recurringDueAction";import {
   buildActionableFinanceAlerts,
   getActionableAlertPriorityLabel,
   isActionRequiredPriority,
@@ -365,10 +371,37 @@ function buildNotifications(data: AppData): NotificationItem[] {
     transactions: data.transactions,
   });
 
+  const recurringDateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((parts, part) => {
+      if (part.type !== "literal") parts[part.type] = part.value;
+      return parts;
+    }, {});
+  const recurringReferenceDate = `${recurringDateParts.year}-${recurringDateParts.month}-${recurringDateParts.day}`;
+  const recurringSchedules = buildRecurringMoneySchedules({
+    categories: data.categories,
+    transactions: data.transactions,
+    wallets: data.wallets,
+    referenceDate: recurringReferenceDate,
+  });
+  const recurringDueSummary = summarizeRecurringDueActions(
+    buildRecurringDueActions({
+      schedules: recurringSchedules,
+      transactions: data.transactions,
+      referenceDate: recurringReferenceDate,
+      upcomingDays: 3,
+    }),
+  );
   return buildActionableFinanceAlerts({
     baseNotifications,
     reviewInbox,
     invalidRecurringScheduleCount,
+    recurringDueSummary,
     currentMonth,
   }).map((notification) => ({ ...notification, read: false }));
 }

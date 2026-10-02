@@ -2497,6 +2497,21 @@ export type SavingTransactionRow = {
   created_at?: string;
 };
 
+export type SavingInternalTransferResult = {
+  sourceSaving: SavingAccountRow;
+  destinationSaving: SavingAccountRow;
+  sourceTransaction: SavingTransactionRow;
+  destinationTransaction: SavingTransactionRow;
+  transferReference: string;
+};
+
+type SavingInternalTransferRpcRow = {
+  source_saving: SavingAccountRow;
+  destination_saving: SavingAccountRow;
+  source_transaction: SavingTransactionRow;
+  destination_transaction: SavingTransactionRow;
+  transfer_reference: string;
+};
 export type SavingMovementResult = {
   saving: SavingAccountRow;
   wallet: Wallet;
@@ -2530,6 +2545,8 @@ function mapSavingsEngineError(error: { code?: string; message: string }) {
       return "Số dư ví không đủ để tạo khoản tiết kiệm.";
     case "MFS06":
       return "Khoản tiết kiệm vẫn còn số dư. Vui lòng rút hết hoặc tất toán trước khi xóa.";
+    case "MFS07":
+      return "Khoản tiết kiệm nguồn và khoản đích phải khác nhau.";
     default:
       return mapFinanceEngineError(error);
   }
@@ -2646,6 +2663,56 @@ export async function createSavingMovement(input: {
   return { data: fromSavingMovementRpcRow(row), error: null };
 }
 
+/**
+ * Atomically transfers value from one saving account to another.
+ * No wallet mutation and no main transactions row are created.
+ */
+export async function createSavingInternalTransfer(input: {
+  sourceSavingId: string;
+  destinationSavingId: string;
+  amount: number;
+  transactionDate: string;
+  sourceTransactionId: string;
+  destinationTransactionId: string;
+  note?: string | null;
+}): Promise<{ data: SavingInternalTransferResult | null; error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { data: null, error: ERR_NO_AUTH };
+
+  const { data, error } = await supabase.rpc("transfer_saving_balance", {
+    p_source_saving_id: input.sourceSavingId,
+    p_destination_saving_id: input.destinationSavingId,
+    p_amount: input.amount,
+    p_transaction_date: input.transactionDate,
+    p_source_transaction_id: input.sourceTransactionId,
+    p_destination_transaction_id: input.destinationTransactionId,
+    p_note: input.note ?? null,
+  });
+
+  if (error) {
+    console.error("[financeStorage] createSavingInternalTransfer:", error.message);
+    return { data: null, error: mapSavingsEngineError(error) };
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | SavingInternalTransferRpcRow
+    | undefined;
+
+  if (!row) {
+    return { data: null, error: "Không nhận được phản hồi từ máy chủ." };
+  }
+
+  return {
+    data: {
+      sourceSaving: row.source_saving,
+      destinationSaving: row.destination_saving,
+      sourceTransaction: row.source_transaction,
+      destinationTransaction: row.destination_transaction,
+      transferReference: row.transfer_reference,
+    },
+    error: null,
+  };
+}
 /**
  * Atomically deletes a saving account and its saving_transactions ledger —
  * but only when the RPC's own server-side, locked read of its balance is

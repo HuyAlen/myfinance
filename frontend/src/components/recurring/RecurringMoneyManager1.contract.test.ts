@@ -22,11 +22,14 @@ describe("RECURRING-MONEY-MANAGER-1 product wiring", () => {
     expect(header).toContain('"/recurring": {');
   });
 
-  it("manages category schedules and legacy transaction schedules without creating wallet movements", () => {
+  it("manages schedules without automatic wallet movements and realizes due items only explicitly", () => {
     expect(page).toContain("updateCategoryRecurringSchedule");
     expect(page).toContain("updateTransactionRecurringSchedule");
     expect(page).toContain("clearShadowedLegacySchedules");
-    expect(page).not.toContain("addTransaction(");
+    expect(page).toContain("requestRecordDueTransaction");
+    expect(page).toContain("await addTransaction(transaction)");
+    expect(page).toContain('confirmText: "Ghi giao dịch"');
+    expect(page).toContain('if (dueAction.status !== "due-today") return;');
     expect(page).not.toContain("updateTransaction(");
     expect(page).toContain("Nguồn: giao dịch cũ");
     expect(page).toContain("Nguồn: danh mục");

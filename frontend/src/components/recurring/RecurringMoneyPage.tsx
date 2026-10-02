@@ -24,6 +24,7 @@ import ConfirmDialog, { type PendingConfirm } from "@/src/components/ui/ConfirmD
 import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import {
+  addTransaction,
   getCategories,
   getTransactions,
   getWallets,
@@ -38,6 +39,10 @@ import {
   type RecurringMoneySchedule,
 } from "@/src/lib/recurring/recurringMoney";
 import { expandRecurringScheduleOccurrences } from "@/src/lib/dashboard/dashboardIntelligence";
+import {
+  buildRecurringDueActions,
+  type RecurringDueAction,
+} from "@/src/lib/recurring/recurringDueAction";
 import type {
   Category,
   RecurrenceFrequency,
@@ -78,6 +83,11 @@ function formatDate(value?: string) {
   return date.toLocaleDateString("vi-VN");
 }
 
+function formatRecurringAmountInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("vi-VN");
+}
 function emptyEditor(categories: Category[], wallets: Wallet[]): EditorState {
   const category = categories.find((item) => item.type === "expense") ?? categories[0];
   return {
@@ -140,17 +150,38 @@ export default function RecurringMoneyPage() {
     void reloadData();
   });
 
+  const todayKey = localDateKey();
   const schedules = useMemo(
-    () => buildRecurringMoneySchedules({ categories, transactions, wallets }),
-    [categories, transactions, wallets],
+    () =>
+      buildRecurringMoneySchedules({
+        categories,
+        transactions,
+        wallets,
+        referenceDate: todayKey,
+      }),
+    [categories, transactions, wallets, todayKey],
   );
   const forecastSchedules = useMemo(
     () => toRecurringScheduleInputs(schedules),
     [schedules],
   );
   const occurrences = useMemo(
-    () => expandRecurringScheduleOccurrences(forecastSchedules, new Date(), 30),
-    [forecastSchedules],
+    () => expandRecurringScheduleOccurrences(forecastSchedules, todayKey, 30),
+    [forecastSchedules, todayKey],
+  );
+  const dueActions = useMemo(
+    () =>
+      buildRecurringDueActions({
+        schedules,
+        transactions,
+        referenceDate: todayKey,
+        upcomingDays: 3,
+      }),
+    [schedules, todayKey, transactions],
+  );
+  const dueActionByScheduleId = useMemo(
+    () => new Map(dueActions.map((item) => [item.scheduleId, item])),
+    [dueActions],
   );
 
   const overview = useMemo(() => {
@@ -334,6 +365,48 @@ export default function RecurringMoneyPage() {
     toast({ variant: "success", message: next.enabled ? "Đã bật lịch định kỳ." : "Đã tạm dừng lịch định kỳ." });
   }
 
+  function requestRecordDueTransaction(
+    schedule: RecurringMoneySchedule,
+    dueAction: RecurringDueAction,
+  ) {
+    if (dueAction.status !== "due-today") return;
+
+    setPendingConfirm({
+      title: `Ghi giao dịch “${schedule.title}”?`,
+      description:
+        schedule.type === "income"
+          ? `Ghi nhận khoản thu ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate)}. MyFinance chỉ tạo giao dịch sau khi bạn xác nhận.`
+          : `Ghi nhận khoản chi ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate)}. MyFinance chỉ trừ ví sau khi bạn xác nhận.`,
+      confirmText: "Ghi giao dịch",
+      variant: schedule.type === "expense" ? "danger" : "info",
+      onConfirm: async () => {
+        const transaction: Transaction = {
+          id: crypto.randomUUID(),
+          type: schedule.type,
+          amount: schedule.amount,
+          categoryId: schedule.categoryId,
+          walletId: schedule.walletId,
+          note: schedule.title,
+          date: dueAction.dueDate,
+        };
+
+        const result = await addTransaction(transaction);
+        if (result.error) {
+          toast({ variant: "error", message: result.error });
+          return;
+        }
+
+        await reloadData();
+        toast({
+          variant: "success",
+          message:
+            schedule.type === "income"
+              ? "Đã ghi nhận khoản thu định kỳ."
+              : "Đã ghi nhận khoản chi định kỳ.",
+        });
+      },
+    });
+  }
   function requestClear(schedule: RecurringMoneySchedule) {
     setPendingConfirm({
       title: "Xóa lịch định kỳ?",
@@ -456,6 +529,10 @@ export default function RecurringMoneyPage() {
               <ScheduleCard
                 key={schedule.id}
                 schedule={schedule}
+                dueAction={dueActionByScheduleId.get(schedule.id)}
+                onRecord={(dueAction) =>
+                  requestRecordDueTransaction(schedule, dueAction)
+                }
                 onEdit={() => openEdit(schedule)}
                 onToggle={() => void handleToggle(schedule)}
                 onClear={() => requestClear(schedule)}
@@ -495,25 +572,29 @@ export default function RecurringMoneyPage() {
       )}
 
       {editor && (
-        <div className="fixed inset-0 overflow-x-hidden z-80 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
-          <div className="flex max-h-[calc(var(--app-height)-0.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">Recurring</p>
-                <h2 className="mt-1 text-xl font-black text-[#294A66]">{editor.sourceId ? "Chỉnh lịch định kỳ" : "Thêm khoản định kỳ"}</h2>
+                <h2 className="text-[1.15rem] font-black tracking-tight text-slate-900 sm:text-xl">
+                  {editor.sourceId ? "Chỉnh lịch định kỳ" : "Thêm khoản định kỳ"}
+                </h2>
+                <p className="mt-0.5 max-w-72 text-[10px] font-medium leading-4 text-slate-400 sm:max-w-none sm:text-xs">
+                  Thiết lập khoản thu hoặc chi lặp lại để dự báo dòng tiền.
+                </p>
               </div>
-              <button type="button" onClick={() => setEditor(null)} className="flex size-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-500"><X size={18} /></button>
+              <button type="button" onClick={() => setEditor(null)} className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900 active:scale-95 sm:size-9 sm:rounded-2xl"><X size={18} /></button>
             </div>
 
-            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 pb-28 sm:px-6 sm:pb-6">
+            <form id="recurring-money-form" onSubmit={handleSave} className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-2.5 pb-24 [-webkit-overflow-scrolling:touch] sm:px-6 sm:py-4 sm:pb-5">
               {editor.source === "category" ? (
                 <label className="block">
-                  <span className="text-xs font-black text-[#506A82]">Danh mục</span>
+                  <span className="text-sm font-black text-slate-700">Danh mục</span>
                   <select
                     value={editor.categoryId}
                     disabled={Boolean(editor.sourceId)}
                     onChange={(event) => setEditor((prev) => prev ? { ...prev, categoryId: event.target.value, sourceId: undefined } : prev)}
-                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm"
                   >
                     {(editor.sourceId ? categories.filter((item) => item.id === editor.categoryId) : selectableCategories).map((category) => (
                       <option key={category.id} value={category.id}>{category.name} · {category.type === "income" ? "Thu" : "Chi"}</option>
@@ -521,68 +602,118 @@ export default function RecurringMoneyPage() {
                   </select>
                 </label>
               ) : (
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-3.5 text-xs leading-5 text-[#506A82]">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs font-medium leading-5 text-slate-600">
                   Đây là lịch legacy từ một giao dịch đã ghi nhận. Số tiền, ví và danh mục giữ nguyên để không tạo thay đổi số dư ngoài ý muốn; sửa các trường đó tại trang Giao dịch.
                 </div>
-              )}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-xs font-black text-[#506A82]">Số tiền</span>
+              )}<div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-black text-slate-700">Số tiền</p>
+                  {Number(editor.amount) > 0 ? (
+                    <p className="text-xs font-black text-blue-600">
+                      {formatVND(Number(editor.amount))}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="relative rounded-2xl border-2 border-slate-200 bg-white transition focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">
+                    ₫
+                  </span>
                   <input
+                    type="text"
                     inputMode="numeric"
-                    value={editor.amount}
+                    value={formatRecurringAmountInput(editor.amount)}
                     disabled={editor.source === "transaction"}
-                    onChange={(event) => setEditor((prev) => prev ? { ...prev, amount: event.target.value.replace(/[^0-9]/g, "") } : prev)}
-                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                    placeholder="500000"
+                    onChange={(event) =>
+                      setEditor((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              amount: event.target.value.replace(/[^0-9]/g, ""),
+                            }
+                          : prev,
+                      )
+                    }
+                    placeholder="Nhập số tiền"
+                    className="w-full rounded-2xl bg-transparent py-3 pl-11 pr-4 text-[1.25rem] font-black tracking-tight text-slate-900 outline-none placeholder:text-sm placeholder:font-bold placeholder:tracking-normal placeholder:text-slate-300 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 sm:py-3.5 sm:text-xl"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black text-[#506A82]">Ví</span>
-                  <select
-                    value={editor.walletId}
-                    disabled={editor.source === "transaction"}
-                    onChange={(event) => setEditor((prev) => prev ? { ...prev, walletId: event.target.value } : prev)}
-                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  >
-                    <option value="">Chọn ví</option>
-                    {wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
-                  </select>
-                </label>
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-xs font-black text-[#506A82]">Tần suất</span>
-                  <select value={editor.recurrence} onChange={(event) => setEditor((prev) => prev ? { ...prev, recurrence: event.target.value as RecurrenceFrequency } : prev)} className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none">
+                  <span className="text-sm font-black text-slate-700">Tần suất</span>
+                  <select
+                    value={editor.recurrence}
+                    onChange={(event) =>
+                      setEditor((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              recurrence: event.target.value as RecurrenceFrequency,
+                            }
+                          : prev,
+                      )
+                    }
+                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:text-sm"
+                  >
                     <option value="daily">Hàng ngày</option>
                     <option value="weekly">Hàng tuần</option>
                     <option value="monthly">Hàng tháng</option>
                     <option value="yearly">Hàng năm</option>
                   </select>
                 </label>
+
                 <label className="block">
-                  <span className="text-xs font-black text-[#506A82]">Ngày chạy tiếp</span>
-                  <input type="date" value={editor.nextRunDate} onChange={(event) => setEditor((prev) => prev ? { ...prev, nextRunDate: event.target.value } : prev)} className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 px-3 text-sm font-bold outline-none" />
+                  <span className="text-sm font-black text-slate-700">Ví tiền</span>
+                  <select
+                    value={editor.walletId}
+                    disabled={editor.source === "transaction"}
+                    onChange={(event) =>
+                      setEditor((prev) =>
+                        prev ? { ...prev, walletId: event.target.value } : prev,
+                      )
+                    }
+                    className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm"
+                  >
+                    <option value="">Chọn ví</option>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>
+                        {wallet.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
-              <button type="button" onClick={() => setEditor((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)} className="flex min-h-12 w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 text-left">
+              <label className="block">
+                <span className="text-sm font-black text-slate-700">Ngày chạy tiếp</span>
+                <input
+                  type="date"
+                  value={editor.nextRunDate}
+                  onChange={(event) =>
+                    setEditor((prev) =>
+                      prev ? { ...prev, nextRunDate: event.target.value } : prev,
+                    )
+                  }
+                  className="mt-1.5 min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100 sm:text-sm"
+                />
+              </label>
+
+              <button type="button" onClick={() => setEditor((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev)} className="flex min-h-12 w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-left transition hover:bg-slate-100/70">
                 <div>
-                  <p className="text-sm font-black text-[#294A66]">Kích hoạt lịch</p>
-                  <p className="mt-0.5 text-xs text-[#71879A]">Tắt để tạm dừng nhưng vẫn giữ cấu hình.</p>
+                  <p className="text-sm font-black text-slate-700">Kích hoạt lịch</p>
+                  <p className="mt-0.5 text-xs font-medium text-slate-400">Tắt để tạm dừng nhưng vẫn giữ cấu hình.</p>
                 </div>
-                <span className={`relative inline-flex h-8 w-13 items-center rounded-full transition ${editor.enabled ? "bg-blue-600" : "bg-slate-300"}`}><span className={`size-6 rounded-full bg-white shadow transition-transform ${editor.enabled ? "translate-x-6" : "translate-x-1"}`} /></span>
+                <span className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${editor.enabled ? "bg-blue-600 shadow-sm shadow-blue-200" : "bg-slate-300"}`}><span className={`size-5 rounded-full bg-white shadow transition-transform ${editor.enabled ? "translate-x-6" : "translate-x-1"}`} /></span>
               </button>
 
               <SaveError message={saveError} onDismiss={() => setSaveError(null)} />
             </form>
 
-            <div className="safe-bottom-padding shrink-0 border-t border-slate-100 bg-white/95 px-4 pt-3 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] sm:px-6 sm:pb-4">
+            <div className="safe-bottom-padding relative z-20 shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_32px_rgba(15,23,42,0.06)] backdrop-blur sm:px-6 sm:py-3.5">
               <div className="flex gap-3">
-                <button type="button" onClick={() => setEditor(null)} className="min-h-11 flex-1 rounded-2xl border border-slate-200 text-sm font-black text-slate-600">Hủy</button>
-                <button form="recurring-money-form" type="submit" disabled={isSaving} className="min-h-11 flex-1 rounded-2xl bg-[#2F80ED] text-sm font-black text-white shadow-lg shadow-blue-200 disabled:opacity-60">{isSaving ? "Đang lưu..." : "Lưu lịch"}</button>
+                <button type="button" onClick={() => setEditor(null)} className="min-h-11 flex-1 rounded-2xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-50 active:scale-[.99]">Hủy</button>
+                <button form="recurring-money-form" type="submit" disabled={isSaving} className="min-h-11 flex-1 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? "Đang lưu..." : "Lưu lịch"}</button>
               </div>
             </div>
           </div>
@@ -615,7 +746,21 @@ function EmptyState({ onCreate, calendar = false }: { onCreate: () => void; cale
   );
 }
 
-function ScheduleCard({ schedule, onEdit, onToggle, onClear }: { schedule: RecurringMoneySchedule; onEdit: () => void; onToggle: () => void; onClear: () => void }) {
+function ScheduleCard({
+  schedule,
+  dueAction,
+  onRecord,
+  onEdit,
+  onToggle,
+  onClear,
+}: {
+  schedule: RecurringMoneySchedule;
+  dueAction?: RecurringDueAction;
+  onRecord: (dueAction: RecurringDueAction) => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onClear: () => void;
+}) {
   return (
     <article className={`rounded-3xl border bg-white p-4 shadow-sm sm:p-5 ${schedule.issues.length > 0 ? "border-amber-200" : "border-slate-200/80"}`}>
       <div className="flex items-start justify-between gap-3">
@@ -640,10 +785,48 @@ function ScheduleCard({ schedule, onEdit, onToggle, onClear }: { schedule: Recur
         </div>
         <div className="rounded-xl bg-[#F8FBFE] px-3 py-2.5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#8297A9]">Lần tới</p>
-          <p className="mt-1 text-xs font-black text-[#3F5F79]">{formatDate(schedule.nextRunDate)}</p>
+          <p className="mt-1 text-xs font-black text-[#3F5F79]">{formatDate(schedule.effectiveNextRunDate ?? schedule.nextRunDate)}</p>
         </div>
       </div>
 
+      {dueAction ? (
+        <div
+          data-recurring-due-status={dueAction.status}
+          className={
+            "mt-3 flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-3 " +
+            (dueAction.status === "due-today"
+              ? "border-amber-200/80 bg-amber-50/70"
+              : "border-blue-100 bg-blue-50/55")
+          }
+        >
+          <div className="min-w-0">
+            <p
+              className={
+                "text-xs font-black tracking-tight " +
+                (dueAction.status === "due-today"
+                  ? "text-amber-800"
+                  : "text-blue-700")
+              }
+            >
+              {dueAction.status === "due-today"
+                ? "Đến hạn hôm nay"
+                : `Sắp đến hạn · còn ${dueAction.daysUntilDue} ngày`}
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-slate-500">
+              {formatDate(dueAction.dueDate)} · MyFinance không tự ghi giao dịch
+            </p>
+          </div>
+          {dueAction?.status === "due-today" ? (
+            <button
+              type="button"
+              onClick={() => onRecord(dueAction)}
+              className="min-h-10 shrink-0 rounded-xl bg-amber-600 px-3.5 text-xs font-black text-white shadow-sm transition hover:bg-amber-700 active:scale-[.98]"
+            >
+              Ghi giao dịch
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${schedule.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{schedule.enabled ? "Đang chạy" : "Tạm dừng"}</span>
         {schedule.legacy ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Nguồn: giao dịch cũ</span> : <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">Nguồn: danh mục</span>}
@@ -656,13 +839,13 @@ function ScheduleCard({ schedule, onEdit, onToggle, onClear }: { schedule: Recur
           <p className="text-xs font-semibold leading-5 text-amber-800">{schedule.issues.map(getRecurringIssueLabel).join(" · ")}</p>
         </div>
       ) : schedule.enabled ? (
-        <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} /> Đủ dữ liệu cho forecast</div>
+        <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700/90"><CheckCircle2 size={13} /> Đủ dữ liệu cho forecast</div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
-        <button type="button" onClick={onToggle} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-50 text-xs font-black text-[#506A82] hover:bg-slate-100">{schedule.enabled ? <PauseCircle size={15} /> : <PlayCircle size={15} />}{schedule.enabled ? "Dừng" : "Bật"}</button>
-        <button type="button" onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-xs font-black text-blue-700 hover:bg-blue-100"><Pencil size={14} /> Sửa</button>
-        <button type="button" onClick={onClear} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-rose-50 text-xs font-black text-rose-600 hover:bg-rose-100"><Trash2 size={14} /> Xóa lịch</button>
+      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3.5">
+        <button type="button" onClick={onToggle} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 text-xs font-bold text-slate-600 transition hover:bg-slate-100 active:scale-[.99]">{schedule.enabled ? <PauseCircle size={15} /> : <PlayCircle size={15} />}{schedule.enabled ? "Dừng" : "Bật"}</button>
+        <button type="button" onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 text-xs font-bold text-blue-700 transition hover:bg-blue-100 active:scale-[.99]"><Pencil size={14} /> Sửa</button>
+        <button type="button" onClick={onClear} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 text-xs font-bold text-rose-600 transition hover:bg-rose-100 active:scale-[.99]"><Trash2 size={14} /> Xóa lịch</button>
       </div>
     </article>
   );
