@@ -16,7 +16,7 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
   );
 
   const markers = {
-    hero: "Tài sản ròng",
+    hero: 'data-dashboard-surface="hero-shell"',
     operatingKpis: "{/* Operating KPIs */}",
     budgetAttention: "{/* Budget attention */}",
     monthlyProgress: "{/* Monthly progress */}",

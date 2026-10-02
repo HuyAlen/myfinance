@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
+import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import { formatCompactVND } from "./dashboardFormat";
 import { markInstant, measureAndReport } from "@/src/lib/performance/performanceMarks";
 import { reportPerformanceMetric } from "@/src/lib/performance/performanceReporter";
@@ -77,6 +78,19 @@ import {
   buildTransactionsHref,
 } from "@/src/lib/navigation/financeNavigation";
 import { isInternalTransferTransaction } from "@/src/lib/transactions/transactionClassification";
+import {
+  DASHBOARD_CUSTOMIZATION_SECTIONS,
+  DASHBOARD_CUSTOMIZATION_STORAGE_KEY,
+  createDefaultDashboardCustomization,
+  getDashboardSectionOrder,
+  isDashboardSectionVisible,
+  moveDashboardSection,
+  persistDashboardCustomization,
+  readDashboardCustomization,
+  toggleDashboardSection,
+  type DashboardCustomization,
+  type DashboardSectionId,
+} from "@/src/lib/dashboard/dashboardCustomization";
 
 import {
   ArrowDownLeft,
@@ -84,7 +98,11 @@ import {
   ArrowUpRight,
   Briefcase,
   CalendarClock,
+  ChevronDown,
+  ChevronUp,
   CreditCard,
+  Eye,
+  EyeOff,
   Info,
   Landmark,
   PiggyBank,
@@ -93,6 +111,9 @@ import {
   TrendingUp,
   Wallet,
   ReceiptText,
+  RotateCcw,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 import {
@@ -3065,6 +3086,72 @@ export default function DashboardPage() {
     setMonthEndReviewHistoryError(null);
   }
 
+  // DASHBOARD-CUSTOMIZATION-1: this is device-local presentation state only.
+  // The financial-position Hero and Operating KPIs remain pinned and cannot be
+  // hidden/reordered; only supporting modules below them participate.
+  const [dashboardCustomization, setDashboardCustomization] =
+    useState<DashboardCustomization>(() => createDefaultDashboardCustomization());
+  const [isDashboardCustomizationOpen, setIsDashboardCustomizationOpen] =
+    useState(false);
+  const [dashboardCustomizationError, setDashboardCustomizationError] =
+    useState<string | null>(null);
+  useSuppressGlobalFabsWhileOpen(isDashboardCustomizationOpen);
+
+  useEffect(() => {
+    setDashboardCustomization(readDashboardCustomization());
+  }, []);
+
+  useEffect(() => {
+    function handleDashboardCustomizationStorage(event: StorageEvent) {
+      if (event.key !== DASHBOARD_CUSTOMIZATION_STORAGE_KEY) return;
+      setDashboardCustomization(readDashboardCustomization());
+    }
+
+    window.addEventListener("storage", handleDashboardCustomizationStorage);
+    return () =>
+      window.removeEventListener("storage", handleDashboardCustomizationStorage);
+  }, []);
+
+  useEffect(() => {
+    if (!isDashboardCustomizationOpen) return;
+    function handleDashboardCustomizationKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsDashboardCustomizationOpen(false);
+    }
+    document.addEventListener("keydown", handleDashboardCustomizationKeyDown);
+    return () =>
+      document.removeEventListener("keydown", handleDashboardCustomizationKeyDown);
+  }, [isDashboardCustomizationOpen]);
+
+  function applyDashboardCustomization(nextCustomization: DashboardCustomization) {
+    setDashboardCustomization(nextCustomization);
+    if (persistDashboardCustomization(nextCustomization)) {
+      setDashboardCustomizationError(null);
+      return;
+    }
+    setDashboardCustomizationError(
+      "Tùy chỉnh đã áp dụng cho phiên này nhưng trình duyệt không thể lưu lại.",
+    );
+  }
+
+  function handleToggleDashboardSection(sectionId: DashboardSectionId) {
+    applyDashboardCustomization(
+      toggleDashboardSection(dashboardCustomization, sectionId),
+    );
+  }
+
+  function handleMoveDashboardSection(
+    sectionId: DashboardSectionId,
+    direction: "up" | "down",
+  ) {
+    applyDashboardCustomization(
+      moveDashboardSection(dashboardCustomization, sectionId, direction),
+    );
+  }
+
+  function handleResetDashboardCustomization() {
+    applyDashboardCustomization(createDefaultDashboardCustomization());
+  }
+
   return (
     <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-hidden sm:space-y-5">
       {/* UI-DASH-1: financial position leads the page — Hero communicates
@@ -3367,8 +3454,169 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <div
+        data-dashboard-customization-toolbar="true"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 sm:px-4"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#60778D]">
+            Dashboard của bạn
+          </p>
+          <p className="mt-0.5 truncate text-[11px] font-semibold text-[#71879A]">
+            {DASHBOARD_CUSTOMIZATION_SECTIONS.length - dashboardCustomization.hidden.length}/{DASHBOARD_CUSTOMIZATION_SECTIONS.length} mục hỗ trợ đang hiển thị
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsDashboardCustomizationOpen(true)}
+          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50"
+          aria-haspopup="dialog"
+        >
+          <SlidersHorizontal size={15} />
+          Tùy chỉnh
+        </button>
+      </div>
+
+      {isDashboardCustomizationOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
+            aria-label="Đóng tùy chỉnh Dashboard"
+            onClick={() => setIsDashboardCustomizationOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-customization-title"
+            className="relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#D5E3EE] bg-white shadow-2xl sm:max-w-2xl sm:rounded-3xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-[#E4EDF4] bg-[#F8FBFE] px-4 py-4 sm:px-5">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#2F80ED]">
+                  Cá nhân hóa
+                </p>
+                <h2 id="dashboard-customization-title" className="mt-1 text-lg font-black text-[#294A66]">
+                  Tùy chỉnh Dashboard
+                </h2>
+                <p className="mt-1 max-w-xl text-xs leading-5 text-[#60778D]">
+                  Tài sản ròng và các KPI vận hành luôn được ghim ở đầu để giữ thứ tự ưu tiên tài chính. Bạn có thể ẩn hoặc sắp xếp các mục hỗ trợ bên dưới.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDashboardCustomizationOpen(false)}
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700"
+                aria-label="Đóng tùy chỉnh Dashboard"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+              <div className="space-y-2">
+                {dashboardCustomization.order.map((sectionId, index) => {
+                  const section = DASHBOARD_CUSTOMIZATION_SECTIONS.find(
+                    (candidate) => candidate.id === sectionId,
+                  );
+                  if (!section) return null;
+                  const visible = isDashboardSectionVisible(
+                    dashboardCustomization,
+                    sectionId,
+                  );
+                  return (
+                    <div
+                      key={sectionId}
+                      className="flex items-center gap-2 rounded-2xl border border-[#DCE8F1] bg-[#FCFEFF] p-2.5 sm:p-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDashboardSection(sectionId)}
+                        aria-pressed={visible}
+                        className={`flex size-10 shrink-0 items-center justify-center rounded-xl border transition ${
+                          visible
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-slate-50 text-slate-400"
+                        }`}
+                        aria-label={visible ? `Ẩn ${section.label}` : `Hiện ${section.label}`}
+                      >
+                        {visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-black ${visible ? "text-[#31536F]" : "text-slate-400"}`}>
+                          {section.label}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-[#71879A]">
+                          {section.description}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMoveDashboardSection(sectionId, "up")}
+                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                          aria-label={`Đưa ${section.label} lên`}
+                        >
+                          <ChevronUp size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === dashboardCustomization.order.length - 1}
+                          onClick={() => handleMoveDashboardSection(sectionId, "down")}
+                          className="flex size-10 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+                          aria-label={`Đưa ${section.label} xuống`}
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {dashboardCustomizationError && (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-700">
+                  {dashboardCustomizationError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-[#E4EDF4] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+              <button
+                type="button"
+                onClick={handleResetDashboardCustomization}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-black text-[#60778D] transition hover:bg-slate-50 hover:text-[#31536F]"
+              >
+                <RotateCcw size={15} />
+                Khôi phục mặc định
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDashboardCustomizationOpen(false)}
+                className="min-h-10 rounded-xl bg-[#2F80ED] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#246FD0]"
+              >
+                Xong
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        data-dashboard-customization-zone="supporting-sections"
+        className="flex flex-col gap-4 sm:gap-5"
+      >
       {/* DASHBOARD-DECISION-INTELLIGENCE-2: spend decision + liquidity runway */}
-      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+      <section
+        data-dashboard-section="decision"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "decision"),
+          display: isDashboardSectionVisible(dashboardCustomization, "decision")
+            ? undefined
+            : "none",
+        }}
+        className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[0.9fr_1.1fr]"
+      >
         <Panel
           title="Có thể chi an toàn"
           subtitle="Giới hạn chi thêm trong tháng hiện tại, không tính trước thu nhập chưa nhận"
@@ -3474,7 +3722,15 @@ export default function DashboardPage() {
           by isHeroReady/isDashboardReady, so budgets remain
           non-critical-path. */}
       {/* Budget attention */}
-      <section>
+      <section
+        data-dashboard-section="budget"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "budget"),
+          display: isDashboardSectionVisible(dashboardCustomization, "budget")
+            ? undefined
+            : "none",
+        }}
+      >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -3665,7 +3921,15 @@ export default function DashboardPage() {
           calendar widget) — moved up from the bottom half of the page.
           Content and calculation (`monthlyPulse`) unchanged. */}
       {/* Monthly progress */}
-      <section>
+      <section
+        data-dashboard-section="month-progress"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "month-progress"),
+          display: isDashboardSectionVisible(dashboardCustomization, "month-progress")
+            ? undefined
+            : "none",
+        }}
+      >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -3817,7 +4081,16 @@ export default function DashboardPage() {
       </section>
 
       {/* Cash flow and structure */}
-      <section className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <section
+        data-dashboard-section="cash-flow"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "cash-flow"),
+          display: isDashboardSectionVisible(dashboardCustomization, "cash-flow")
+            ? undefined
+            : "none",
+        }}
+        className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]"
+      >
         <Panel
           title="Dòng tiền trong kỳ"
           subtitle="Tiền thực sự vào/ra ví, gồm Savings và Forex nhưng không làm thay đổi chi tiêu thật"
@@ -3934,7 +4207,16 @@ export default function DashboardPage() {
       </section>
 
       {/* DASHBOARD-INTELLIGENCE-WAVE-1: period comparison + review inbox */}
-      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2">
+      <section
+        data-dashboard-section="review"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "review"),
+          display: isDashboardSectionVisible(dashboardCustomization, "review")
+            ? undefined
+            : "none",
+        }}
+        className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2"
+      >
         <Panel
           title="So với kỳ trước"
           subtitle={periodComparison?.isComplete ? "So sánh toàn tháng với tháng liền trước" : "So sánh cùng số ngày đã trôi qua với tháng trước"}
@@ -4031,7 +4313,16 @@ export default function DashboardPage() {
       </section>
 
       {/* DASHBOARD-DECISION-INTELLIGENCE-2: data confidence + month-end lifecycle */}
-      <section className={`grid items-start gap-4 sm:gap-5 ${monthEndCloseout.visible ? "xl:grid-cols-2" : ""}`}>
+      <section
+        data-dashboard-section="closeout"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "closeout"),
+          display: isDashboardSectionVisible(dashboardCustomization, "closeout")
+            ? undefined
+            : "none",
+        }}
+        className={`grid items-start gap-4 sm:gap-5 ${monthEndCloseout.visible ? "xl:grid-cols-2" : ""}`}
+      >
         <Panel
           title="Sức khỏe dữ liệu"
           subtitle="Chỉ cảnh báo những vấn đề có bằng chứng từ dữ liệu hiện tại"
@@ -4231,7 +4522,16 @@ export default function DashboardPage() {
           priority) but not the primary Dashboard job. Content, readiness
           gating (cashFlowReady on top spending), and empty states
           unchanged. */}
-      <section className="grid items-start gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <section
+        data-dashboard-section="recurring"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "recurring"),
+          display: isDashboardSectionVisible(dashboardCustomization, "recurring")
+            ? undefined
+            : "none",
+        }}
+        className="grid items-start gap-4 xl:grid-cols-[0.9fr_1.1fr]"
+      >
         <Panel
           title="Sắp đến hạn trong 30 ngày"
           subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
@@ -4336,7 +4636,16 @@ export default function DashboardPage() {
       </section>
 
       {/* DASHBOARD-INTELLIGENCE-WAVE-1: wealth intelligence */}
-      <section className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2">
+      <section
+        data-dashboard-section="wealth"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "wealth"),
+          display: isDashboardSectionVisible(dashboardCustomization, "wealth")
+            ? undefined
+            : "none",
+        }}
+        className="grid items-start gap-4 sm:gap-5 xl:grid-cols-2"
+      >
         <Panel
           title="Vì sao tài sản ròng thay đổi"
           subtitle="Đóng góp giữa hai snapshot Net Worth gần nhất đã được lưu"
@@ -4408,7 +4717,16 @@ export default function DashboardPage() {
       </section>
 
       {/* Forex + goals + recent activity */}
-      <section className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 *:min-w-0">
+      <section
+        data-dashboard-section="portfolio"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "portfolio"),
+          display: isDashboardSectionVisible(dashboardCustomization, "portfolio")
+            ? undefined
+            : "none",
+        }}
+        className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 *:min-w-0"
+      >
         <Panel
           title="Tài khoản Forex"
           subtitle="Vốn đã nạp, Balance hiện tại và hiệu suất giao dịch"
@@ -4633,7 +4951,15 @@ export default function DashboardPage() {
           audit (a single day's numbers rarely change a decision) — moved
           from leading the page to the end. Content/semantics unchanged. */}
       {/* Today's summary */}
-      <section>
+      <section
+        data-dashboard-section="today"
+        style={{
+          order: getDashboardSectionOrder(dashboardCustomization, "today"),
+          display: isDashboardSectionVisible(dashboardCustomization, "today")
+            ? undefined
+            : "none",
+        }}
+      >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="relative overflow-hidden rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
           <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-600 via-sky-500 to-cyan-400" />
           <div className="pointer-events-none absolute -right-16 -top-20 size-48 rounded-full bg-blue-50 blur-3xl" />
@@ -4676,6 +5002,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

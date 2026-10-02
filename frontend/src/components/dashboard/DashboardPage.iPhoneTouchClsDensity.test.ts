@@ -109,8 +109,20 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
   });
 
   it("uses the compact 16px mobile gap between stacked cash-flow/structure panels while restoring 20px from sm", () => {
-    expect(source).toContain(
-      '<section className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]">',
+    const cashFlowSectionIndex = source.indexOf(
+      'data-dashboard-section="cash-flow"',
+    );
+    expect(cashFlowSectionIndex).toBeGreaterThan(-1);
+
+    const cashFlowSectionOpenEnd = source.indexOf(">", cashFlowSectionIndex);
+    expect(cashFlowSectionOpenEnd).toBeGreaterThan(cashFlowSectionIndex);
+    const cashFlowSectionOpening = source.slice(
+      cashFlowSectionIndex,
+      cashFlowSectionOpenEnd + 1,
+    );
+
+    expect(cashFlowSectionOpening).toContain(
+      'className="grid gap-4 sm:gap-5 xl:grid-cols-[1.2fr_0.8fr]"',
     );
   });
 
