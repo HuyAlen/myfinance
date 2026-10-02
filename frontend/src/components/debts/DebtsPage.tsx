@@ -50,6 +50,12 @@ import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
+import {
+  buildDebtPaydownPlan,
+  formatDebtPayoffDuration,
+  getDebtPaydownImpact,
+  type DebtPaydownStrategy,
+} from "@/src/lib/debts/debtPaydownPlanner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -57,12 +63,16 @@ type FormState = {
   name: string;
   totalAmount: string;
   remainingAmount: string;
+  interestRate: string;
+  minimumPayment: string;
 };
 
 const emptyForm: FormState = {
   name: "",
   totalAmount: "",
   remainingAmount: "",
+  interestRate: "",
+  minimumPayment: "",
 };
 
 type DebtTier = "paid" | "near" | "progress" | "started";
@@ -177,6 +187,9 @@ export default function DebtsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [paydownStrategy, setPaydownStrategy] =
+    useState<DebtPaydownStrategy>("avalanche");
+  const [extraMonthlyPayment, setExtraMonthlyPayment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
@@ -497,6 +510,33 @@ export default function DebtsPage() {
     [debtMeta],
   );
 
+  const extraPaydownAmount = Math.max(
+    0,
+    Number(extraMonthlyPayment) || 0,
+  );
+  const baselinePaydownPlan = useMemo(
+    () =>
+      buildDebtPaydownPlan({
+        debts,
+        strategy: paydownStrategy,
+        extraMonthlyPayment: 0,
+      }),
+    [debts, paydownStrategy],
+  );
+  const scenarioPaydownPlan = useMemo(
+    () =>
+      buildDebtPaydownPlan({
+        debts,
+        strategy: paydownStrategy,
+        extraMonthlyPayment: extraPaydownAmount,
+      }),
+    [debts, paydownStrategy, extraPaydownAmount],
+  );
+  const paydownImpact = useMemo(
+    () => getDebtPaydownImpact(baselinePaydownPlan, scenarioPaydownPlan),
+    [baselinePaydownPlan, scenarioPaydownPlan],
+  );
+
   // ── PRESERVED: CRUD ───────────────────────────────────────────────────────
   function openCreateForm() {
     editingDebtRef.current = null;
@@ -512,6 +552,14 @@ export default function DebtsPage() {
       name: debt.name,
       totalAmount: String(debt.totalAmount),
       remainingAmount: String(debt.remainingAmount),
+      interestRate:
+        debt.interestRate === undefined || debt.interestRate === null
+          ? ""
+          : String(debt.interestRate),
+      minimumPayment:
+        debt.minimumPayment === undefined || debt.minimumPayment === null
+          ? ""
+          : String(debt.minimumPayment),
     });
     setSaveError(null);
     setIsFormOpen(true);
@@ -523,6 +571,12 @@ export default function DebtsPage() {
 
     const totalAmount = Number(form.totalAmount);
     const remainingAmount = Number(form.remainingAmount);
+    const interestRate =
+      form.interestRate.trim() === "" ? undefined : Number(form.interestRate);
+    const minimumPayment =
+      form.minimumPayment.trim() === ""
+        ? undefined
+        : Number(form.minimumPayment);
     if (!form.name.trim()) {
       setSaveError("Vui lòng nhập tên khoản nợ");
       return;
@@ -539,6 +593,20 @@ export default function DebtsPage() {
       setSaveError("Số tiền còn lại không được lớn hơn tổng số tiền vay");
       return;
     }
+    if (
+      interestRate !== undefined &&
+      (!Number.isFinite(interestRate) || interestRate < 0)
+    ) {
+      setSaveError("Vui lòng nhập lãi suất năm hợp lệ");
+      return;
+    }
+    if (
+      minimumPayment !== undefined &&
+      (!Number.isFinite(minimumPayment) || minimumPayment < 0)
+    ) {
+      setSaveError("Vui lòng nhập mức trả tối thiểu hợp lệ");
+      return;
+    }
 
     const existingDebt = form.id ? editingDebtRef.current : null;
     const debt: Debt = {
@@ -547,6 +615,8 @@ export default function DebtsPage() {
       name: form.name.trim(),
       totalAmount,
       remainingAmount,
+      interestRate,
+      minimumPayment,
     } as Debt;
 
     saveInFlightRef.current = true;
@@ -1290,8 +1360,128 @@ export default function DebtsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 4 · Payoff Planner
           ══════════════════════════════════════════════════════════════════ */}
-      {isDebtsDataReady && snowballOrder.length > 1 && (
+      {isDebtsDataReady && snowballOrder.length > 0 && (
         <section className="grid gap-5 xl:grid-cols-2">
+          <div
+            data-debt-paydown-planner="true"
+            className="rounded-4xl border border-blue-100 bg-white p-4 shadow-sm sm:p-6 xl:col-span-2"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-black text-slate-900 sm:text-lg">
+                    Kế hoạch trả nợ
+                  </h2>
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">
+                    Mô phỏng, không tạo giao dịch
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Dùng dư nợ, lãi suất và mức trả tối thiểu hiện tại để ước tính thời gian tất toán.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setPaydownStrategy("avalanche")}
+                  className={
+                    "min-h-10 rounded-xl px-3 text-xs font-black transition " +
+                    (paydownStrategy === "avalanche"
+                      ? "bg-white text-rose-600 shadow-sm"
+                      : "text-slate-500")
+                  }
+                >
+                  Avalanche
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaydownStrategy("snowball")}
+                  className={
+                    "min-h-10 rounded-xl px-3 text-xs font-black transition " +
+                    (paydownStrategy === "snowball"
+                      ? "bg-white text-blue-700 shadow-sm"
+                      : "text-slate-500")
+                  }
+                >
+                  Snowball
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+              <CurrencyInput
+                label="Trả thêm mỗi tháng"
+                value={extraMonthlyPayment}
+                onChange={setExtraMonthlyPayment}
+                placeholder="0"
+              />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Mức trả / tháng</p>
+                  <p className="mt-1 text-sm font-black tabular-nums text-slate-800">{formatVND(scenarioPaydownPlan.monthlyPayment)}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Ước tính tất toán</p>
+                  <p className="mt-1 text-sm font-black text-slate-800">{formatDebtPayoffDuration(scenarioPaydownPlan.payoffMonths)}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Rút ngắn</p>
+                  <p className="mt-1 text-sm font-black text-emerald-600">
+                    {paydownImpact.monthsSaved === null
+                      ? "—"
+                      : paydownImpact.monthsSaved === 0
+                        ? "0 tháng"
+                        : formatDebtPayoffDuration(paydownImpact.monthsSaved)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Giảm lãi ước tính</p>
+                  <p className="mt-1 text-sm font-black tabular-nums text-emerald-600">
+                    {scenarioPaydownPlan.missingInterestRateCount === 0 &&
+                    paydownImpact.interestSaved !== null
+                      ? formatVND(paydownImpact.interestSaved)
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {scenarioPaydownPlan.firstTargetName ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 px-3.5 py-3 text-xs text-blue-800">
+                <span className="font-black">Ưu tiên đầu tiên:</span>
+                <span className="font-bold">{scenarioPaydownPlan.firstTargetName}</span>
+                <span className="text-blue-500">·</span>
+                <span>Ngân sách cơ sở {formatVND(scenarioPaydownPlan.baseMinimumPayment)} / tháng</span>
+              </div>
+            ) : null}
+
+            {scenarioPaydownPlan.status === "unfunded" ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                Chưa có mức trả hàng tháng để mô phỏng. Nhập mức trả tối thiểu cho khoản nợ hoặc thêm một khoản trả thêm mỗi tháng.
+              </div>
+            ) : scenarioPaydownPlan.status === "capped" ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                Kịch bản chưa tất toán trong giới hạn mô phỏng 50 năm. Hãy tăng mức trả hàng tháng hoặc kiểm tra lại lãi suất.
+              </div>
+            ) : null}
+
+            {scenarioPaydownPlan.missingInterestRateCount > 0 ||
+            scenarioPaydownPlan.missingMinimumPaymentCount > 0 ? (
+              <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+                {scenarioPaydownPlan.missingInterestRateCount > 0 ? (
+                  <p>
+                    {scenarioPaydownPlan.missingInterestRateCount} khoản chưa nhập lãi suất; mô phỏng tạm tính 0% cho phần dữ liệu còn thiếu và không khẳng định số lãi tiết kiệm.
+                  </p>
+                ) : null}
+                {scenarioPaydownPlan.missingMinimumPaymentCount > 0 ? (
+                  <p>
+                    {scenarioPaydownPlan.missingMinimumPaymentCount} khoản chưa nhập mức trả tối thiểu; khoản đó chỉ nhận phần ngân sách còn lại theo chiến lược đã chọn.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           {/* Snowball */}
           <div className="rounded-4xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
@@ -1448,6 +1638,34 @@ export default function DebtsPage() {
                   }
                   placeholder="25000000"
                 />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-black text-slate-700">
+                      Lãi suất năm (%)
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.interestRate}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          interestRate: event.target.value.replace(",", "."),
+                        }))
+                      }
+                      placeholder="12.5"
+                      className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:border-blue-400 focus:bg-white sm:text-sm"
+                    />
+                  </label>
+                  <AmountInput
+                    label="Mức trả tối thiểu / tháng"
+                    value={form.minimumPayment}
+                    onChange={(v) =>
+                      setForm((p) => ({ ...p, minimumPayment: v }))
+                    }
+                    placeholder="1000000"
+                  />
+                </div>
               </div>
               <SaveError
                 message={saveError}
