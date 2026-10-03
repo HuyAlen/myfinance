@@ -50,4 +50,13 @@ describe("CASH-MOVEMENT-SSOT-1 cross-page adoption", () => {
     expect(reports).toContain("curMonthFlow.netCashMovement");
     expect(reports).toContain("previousEquivalentFlow.netCashMovement");
   });
-});
+
+  it("preserves Savings wallet identity across Dashboard and Reports", () => {
+    const dashboard = read("../../components/dashboard/DashboardPage.tsx");
+    const reports = read("../../components/reports/ReportsPage.tsx");
+
+    expect(dashboard).toContain("walletId: row.wallet_id");
+    expect(dashboard).toContain("wallet_id");
+    expect(reports).toContain("walletId: row.wallet_id");
+    expect(reports).toContain("wallet_id");
+  });});

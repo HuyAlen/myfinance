@@ -30,9 +30,9 @@ function tx(
 }
 
 const savingMovements: SavingAllocationMovement[] = [
-  { type: "deposit", amount: 5_000_000, date: "2026-10-02" },
-  { type: "withdraw", amount: 1_000_000, date: "2026-10-03" },
-  { type: "interest", amount: 300_000, date: "2026-10-04" },
+  { type: "deposit", amount: 5_000_000, date: "2026-10-02", walletId: "wallet-1" },
+  { type: "withdraw", amount: 1_000_000, date: "2026-10-03", walletId: "wallet-1" },
+  { type: "interest", amount: 300_000, date: "2026-10-04", walletId: null },
 ];
 
 const forexCashTransactions: ForexCashTransaction[] = [
@@ -104,6 +104,40 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
     });
   });
 
+  it("excludes Savings-to-Savings internal transfers from gross wallet liquidity", () => {
+    const internalTransfer: SavingAllocationMovement[] = [
+      {
+        type: "withdraw",
+        amount: 50_000_000,
+        date: "2026-10-07",
+        walletId: null,
+      },
+      {
+        type: "deposit",
+        amount: 50_000_000,
+        date: "2026-10-07",
+        walletId: null,
+      },
+    ];
+
+    expect(getSavingCashMovementFromLedger(internalTransfer)).toEqual({
+      deposits: 0,
+      withdrawals: 0,
+      settlements: 0,
+      cashIn: 0,
+      cashOut: 0,
+    });
+
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: [],
+      categories,
+      savingMovements: internalTransfer,
+    });
+    expect(flow.cashIn).toBe(0);
+    expect(flow.cashOut).toBe(0);
+    expect(flow.netCashMovement).toBe(0);
+  });
+
   it("counts Forex principal and fees in liquidity without reclassifying principal as income/expense", () => {
     expect(getForexCashMovementFromLedger(forexCashTransactions)).toEqual({
       deposits: 10_000_000,
@@ -112,6 +146,40 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
       cashIn: 3_000_000,
       cashOut: 10_100_000,
     });
+  });
+
+  it("uses the net wallet receipt for a Forex withdrawal fee instead of inflating both gross bars", () => {
+    const withdrawalWithFee: ForexCashTransaction[] = [
+      {
+        id: "fx-withdraw-fee",
+        forexAccountId: "fx-1",
+        walletId: "wallet-1",
+        type: "withdrawal",
+        amount: 10_000_000,
+        fee: 100_000,
+        currency: "VND",
+        transactionDate: "2026-10-08",
+        transactionTime: "09:00",
+      },
+    ];
+
+    expect(getForexCashMovementFromLedger(withdrawalWithFee)).toEqual({
+      deposits: 0,
+      withdrawals: 10_000_000,
+      fees: 100_000,
+      cashIn: 9_900_000,
+      cashOut: 0,
+    });
+
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: [],
+      categories,
+      forexCashTransactions: withdrawalWithFee,
+    });
+    expect(flow.cashIn).toBe(9_900_000);
+    expect(flow.cashOut).toBe(0);
+    expect(flow.netCashMovement).toBe(9_900_000);
+    expect(flow.realExpense).toBe(100_000);
   });
 
   it("keeps legacy allocation transactions as cash out without turning them into realExpense", () => {

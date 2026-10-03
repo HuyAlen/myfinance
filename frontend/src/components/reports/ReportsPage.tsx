@@ -133,6 +133,7 @@ type SavingRow = {
 type SavingTransactionRow = {
   type: string;
   amount: number | string | null;
+  wallet_id: string | null;
   transaction_date: string | null;
   created_at?: string | null;
 };
@@ -143,6 +144,7 @@ function mapSavingAllocationMovement(
   return {
     type: row.type,
     amount: toNumber(row.amount),
+    walletId: row.wallet_id,
     date: row.transaction_date ?? row.created_at ?? "",
   };
 }
@@ -571,7 +573,7 @@ export default function ReportsPage() {
           supabase
             ? supabase
                 .from("saving_transactions")
-                .select("type, amount, transaction_date, created_at")
+                .select("type, amount, wallet_id, transaction_date, created_at")
             : Promise.resolve({ data: [], error: null }),
         ]);
 

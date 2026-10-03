@@ -1379,6 +1379,12 @@ export type SavingAllocationMovement = {
   type: string;
   amount: number;
   date: string;
+  /**
+   * Wallet touched by this Savings movement. Internal Savings-to-Savings
+   * transfers deliberately persist wallet_id = null and must not inflate
+   * gross wallet liquidity.
+   */
+  walletId?: string | null;
 };
 
 export type FinanceFlowSnapshot = {
@@ -1518,6 +1524,12 @@ export function getSavingCashMovementFromLedger(
   let settlements = 0;
 
   for (const movement of scopeSavingMovements(movements, dateRange)) {
+    // SAVINGS-INTERNAL-TRANSFER-1 writes paired saving_transactions rows with
+    // wallet_id = null because no spendable Wallet changes. Those rows remain
+    // part of the Savings ledger/allocation history, but they are not gross
+    // wallet cash-in/cash-out and therefore stay out of this liquidity view.
+    if (!movement.walletId) continue;
+
     const amount = Math.max(0, Number(movement.amount) || 0);
     if (movement.type === "deposit") deposits += amount;
     else if (movement.type === "withdraw") withdrawals += amount;
@@ -1554,21 +1566,33 @@ export function getForexCashMovementFromLedger(
   let deposits = 0;
   let withdrawals = 0;
   let fees = 0;
+  let cashIn = 0;
+  let cashOut = 0;
 
   for (const transaction of scopeForexCashTransactions(transactions, dateRange)) {
     const amount = normalizeForexMoney(transaction.amount);
     const fee = normalizeForexMoney(transaction.fee);
     fees += fee;
-    if (transaction.type === "deposit") deposits += amount;
-    else withdrawals += amount;
+
+    if (transaction.type === "deposit") {
+      deposits += amount;
+      // DB wallet delta for a Forex deposit is -(amount + fee).
+      cashOut += amount + fee;
+    } else {
+      withdrawals += amount;
+      // DB wallet delta for a Forex withdrawal is amount - fee. Represent the
+      // actual wallet receipt directly instead of fabricating equal gross
+      // cash-in/cash-out fee legs that leave net unchanged but inflate bars.
+      cashIn += Math.max(0, amount - fee);
+    }
   }
 
   return {
     deposits,
     withdrawals,
     fees,
-    cashIn: withdrawals,
-    cashOut: deposits + fees,
+    cashIn,
+    cashOut,
   };
 }
 

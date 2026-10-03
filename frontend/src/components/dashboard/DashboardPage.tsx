@@ -254,6 +254,7 @@ type SavingTransactionRow = {
   saving_id: string;
   type: "deposit" | "withdraw" | "interest" | "settlement";
   amount: number | string | null;
+  wallet_id: string | null;
   transaction_date: string | null;
   created_at?: string | null;
   note: string | null;
@@ -265,6 +266,7 @@ type DashboardSavingTransaction = {
   type: SavingTransactionRow["type"];
   amount: number;
   date: string;
+  walletId?: string | null;
   createdAt?: string;
   note: string;
 };
@@ -306,6 +308,7 @@ const mapSavingTransactionRow = (
   savingId: row.saving_id,
   type: row.type,
   amount: Number(row.amount ?? 0),
+  walletId: row.wallet_id,
   date:
     row.transaction_date ??
     row.created_at ??
@@ -1109,7 +1112,7 @@ export default function DashboardPage() {
         const { data, error } = await supabase
           .from("saving_transactions")
           .select(
-            "id,saving_id,type,amount,transaction_date,created_at,note",
+            "id,saving_id,type,amount,wallet_id,transaction_date,created_at,note",
           )
           .order("transaction_date", { ascending: false })
           .order("created_at", { ascending: false });
