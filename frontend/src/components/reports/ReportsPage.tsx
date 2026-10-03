@@ -436,7 +436,20 @@ function buildMonthlyReportRow(
     investmentAllocation: flow.investmentAllocation,
     futureAllocation: flow.futureAllocation,
     cashFlow: flow.netCashFlow,
-    // CASH-MOVEMENT-SSOT-1 liquidity semantics.
+    // DASHBOARD-CASHFLOW-SEMANTICS-2 primary operating semantics.
+    operatingCashIn: flow.operatingCashIn / 1e6,
+    operatingCashOut: flow.operatingCashOut / 1e6,
+    operatingNetCashFlow: flow.operatingNetCashFlow / 1e6,
+    operatingCashInRaw: flow.operatingCashIn,
+    operatingCashOutRaw: flow.operatingCashOut,
+    operatingNetCashFlowRaw: flow.operatingNetCashFlow,
+    capitalMovementIn: flow.capitalMovementIn / 1e6,
+    capitalMovementOut: flow.capitalMovementOut / 1e6,
+    netCapitalMovement: flow.netCapitalMovement / 1e6,
+    capitalMovementInRaw: flow.capitalMovementIn,
+    capitalMovementOutRaw: flow.capitalMovementOut,
+    netCapitalMovementRaw: flow.netCapitalMovement,
+    // CASH-MOVEMENT-SSOT-1 liquidity semantics retained for reconciliation.
     cashIn: flow.cashIn / 1e6,
     cashOut: flow.cashOut / 1e6,
     netCashMovement: flow.netCashMovement / 1e6,
@@ -726,9 +739,12 @@ export default function ReportsPage() {
     const investmentAllocation = flow.investmentAllocation;
     const futureAllocation = flow.futureAllocation;
     const cashFlowAfterExpense = flow.netCashFlow;
-    const cashIn = flow.cashIn;
-    const cashOut = flow.cashOut;
-    const netCashMovement = flow.netCashMovement;
+    const operatingCashIn = flow.operatingCashIn;
+    const operatingCashOut = flow.operatingCashOut;
+    const operatingNetCashFlow = flow.operatingNetCashFlow;
+    const capitalMovementIn = flow.capitalMovementIn;
+    const capitalMovementOut = flow.capitalMovementOut;
+    const netCapitalMovement = flow.netCapitalMovement;
     const availableAfterFutureAllocation =
       cashFlowAfterExpense - futureAllocation;
     const cashFlowRate =
@@ -748,9 +764,12 @@ export default function ReportsPage() {
       income,
       expense,
       cashFlowAfterExpense,
-      cashIn,
-      cashOut,
-      netCashMovement,
+      operatingCashIn,
+      operatingCashOut,
+      operatingNetCashFlow,
+      capitalMovementIn,
+      capitalMovementOut,
+      netCapitalMovement,
       savingAllocation,
       investmentAllocation,
       futureAllocation,
@@ -1007,8 +1026,8 @@ export default function ReportsPage() {
           getRealExpenseTotal(prevMonthTxns, categories),
         ),
         cashFlow: delta(
-          curMonthFlow.netCashMovement,
-          prevMonthFlow.netCashMovement,
+          curMonthFlow.operatingNetCashFlow,
+          prevMonthFlow.operatingNetCashFlow,
         ),
       },
       qoq: {
@@ -1018,8 +1037,8 @@ export default function ReportsPage() {
           getRealExpenseTotal(prevQTxns, categories),
         ),
         cashFlow: delta(
-          curQuarterFlow.netCashMovement,
-          prevQuarterFlow.netCashMovement,
+          curQuarterFlow.operatingNetCashFlow,
+          prevQuarterFlow.operatingNetCashFlow,
         ),
       },
       yoy: {
@@ -1032,8 +1051,8 @@ export default function ReportsPage() {
           getRealExpenseTotal(previousEquivalentPeriodTxns, categories),
         ),
         cashFlow: delta(
-          currentPeriodFlow.netCashMovement,
-          previousEquivalentFlow.netCashMovement,
+          currentPeriodFlow.operatingNetCashFlow,
+          previousEquivalentFlow.operatingNetCashFlow,
         ),
       },
     };
@@ -1284,9 +1303,15 @@ export default function ReportsPage() {
         "Chi phí thật (đ)",
         "Tiết kiệm + Đầu tư (đ)",
         "Dòng tiền sau chi phí (đ)",
-        "Thu vào (đ)",
-        "Chi ra (đ)",
-        "Dòng tiền ròng thanh khoản (đ)",
+        "Thu vào hoạt động (đ)",
+        "Chi ra hoạt động (đ)",
+        "Dòng tiền hoạt động ròng (đ)",
+        "Dịch chuyển tài sản vào (đ)",
+        "Dịch chuyển tài sản ra (đ)",
+        "Dịch chuyển tài sản ròng (đ)",
+        "Thanh khoản ví vào (đ)",
+        "Thanh khoản ví ra (đ)",
+        "Biến động thanh khoản ròng (đ)",
       ],
       ...periodMonthly.map((row) => [
         row.periodLabel,
@@ -1294,6 +1319,12 @@ export default function ReportsPage() {
         Math.round(row.chi * 1e6),
         Math.round((row.tichLuy ?? 0) * 1e6),
         Math.round(row.dongTienRong * 1e6),
+        Math.round(row.operatingCashInRaw),
+        Math.round(row.operatingCashOutRaw),
+        Math.round(row.operatingNetCashFlowRaw),
+        Math.round(row.capitalMovementInRaw),
+        Math.round(row.capitalMovementOutRaw),
+        Math.round(row.netCapitalMovementRaw),
         Math.round(row.cashInRaw),
         Math.round(row.cashOutRaw),
         Math.round(row.netCashMovementRaw),
@@ -1383,7 +1414,7 @@ export default function ReportsPage() {
     cashflow: {
       title: "Báo cáo dòng tiền",
       description:
-        "Đối chiếu tiền vào, chi phí thật, tích lũy và biến động tài sản ròng.",
+        "Thu nhập và chi phí thật là dòng tiền chính; Savings/Forex được tách riêng thành dịch chuyển tài sản.",
     },
     investment: {
       title: "Hiệu quả đầu tư",
@@ -2463,29 +2494,29 @@ export default function ReportsPage() {
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatMini
               label="Thu vào"
-              value={formatVND(summary.cashIn)}
+              value={formatVND(summary.operatingCashIn)}
               color="text-emerald-600"
               bg="bg-emerald-50"
               border="border-emerald-100"
             />
             <StatMini
               label="Chi ra"
-              value={formatVND(summary.cashOut)}
+              value={formatVND(summary.operatingCashOut)}
               color="text-rose-600"
               bg="bg-rose-50"
               border="border-rose-100"
             />
             <StatMini
               label="Dòng tiền ròng"
-              value={formatVND(summary.netCashMovement)}
-              color={summary.netCashMovement >= 0 ? "text-blue-600" : "text-rose-600"}
+              value={formatVND(summary.operatingNetCashFlow)}
+              color={summary.operatingNetCashFlow >= 0 ? "text-blue-600" : "text-rose-600"}
               bg="bg-blue-50"
               border="border-blue-100"
             />
             <StatMini
-              label="Phân bổ tài sản"
-              value={formatVND(summary.futureAllocation)}
-              color="text-indigo-600"
+              label="Dịch chuyển tài sản"
+              value={formatVND(summary.netCapitalMovement)}
+              color={summary.netCapitalMovement >= 0 ? "text-cyan-700" : "text-indigo-600"}
               bg="bg-indigo-50"
               border="border-indigo-100"
             />
@@ -2554,13 +2585,13 @@ export default function ReportsPage() {
                         labelFormatter={(label) => String(label)}
                       />
                       <Bar
-                        dataKey="cashIn"
+                        dataKey="operatingCashIn"
                         name="Thu vào"
                         fill="#10b981"
                         radius={[6, 6, 0, 0]}
                       />
                       <Bar
-                        dataKey="cashOut"
+                        dataKey="operatingCashOut"
                         name="Chi ra"
                         fill="#f43f5e"
                         radius={[6, 6, 0, 0]}
@@ -2577,6 +2608,23 @@ export default function ReportsPage() {
                     <span className="size-2 rounded-full bg-rose-500" />
                     Chi ra
                   </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2.5 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500">Dịch chuyển tài sản vào</p>
+                    <p className="mt-1 text-sm font-black text-cyan-700">
+                      {formatVND(summary.capitalMovementIn)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500">Dịch chuyển tài sản ra</p>
+                    <p className="mt-1 text-sm font-black text-indigo-700">
+                      {formatVND(summary.capitalMovementOut)}
+                    </p>
+                  </div>
+                  <p className="col-span-2 text-[11px] font-semibold text-slate-500">
+                    Savings/Forex không tính vào Thu vào / Chi ra phía trên.
+                  </p>
                 </div>
                 <div className="mt-6 overflow-x-auto">
                   <table className="min-w-[460px] w-full text-xs sm:min-w-0">
@@ -2596,27 +2644,27 @@ export default function ReportsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {monthly
-                        .filter((m) => m.cashIn > 0 || m.cashOut > 0)
+                        .filter((m) => m.operatingCashIn > 0 || m.operatingCashOut > 0)
                         .map((m) => (
                           <tr key={m.month}>
                             <td className="py-1.5 font-bold text-slate-700">
                               {m.month}
                             </td>
                             <td className="py-1.5 text-right text-emerald-600">
-                              {m.cashIn.toFixed(1)}
+                              {m.operatingCashIn.toFixed(1)}
                             </td>
                             <td className="py-1.5 text-right text-rose-500">
-                              {m.cashOut.toFixed(1)}
+                              {m.operatingCashOut.toFixed(1)}
                             </td>
                             <td
                               className={
                                 "py-1.5 text-right font-bold " +
-                                (m.netCashMovement >= 0
+                                (m.operatingNetCashFlow >= 0
                                   ? "text-blue-600"
                                   : "text-rose-500")
                               }
                             >
-                              {m.netCashMovement.toFixed(1)}
+                              {m.operatingNetCashFlow.toFixed(1)}
                             </td>
                           </tr>
                         ))}

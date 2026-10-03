@@ -77,6 +77,13 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
     expect(flow.realExpense).toBe(8_100_000);
     expect(flow.netCashFlow).toBe(21_900_000);
 
+    expect(flow.operatingCashIn).toBe(30_000_000);
+    expect(flow.operatingCashOut).toBe(8_100_000);
+    expect(flow.operatingNetCashFlow).toBe(21_900_000);
+    expect(flow.capitalMovementIn).toBe(4_000_000);
+    expect(flow.capitalMovementOut).toBe(15_000_000);
+    expect(flow.netCapitalMovement).toBe(-11_000_000);
+
     expect(flow.savingLedgerNet).toBe(4_000_000);
     expect(flow.investmentLedgerNet).toBe(7_000_000);
     expect(flow.savingAllocation).toBe(4_000_000);
@@ -86,6 +93,9 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
     expect(flow.cashOut).toBe(23_100_000);
     expect(flow.netCashMovement).toBe(10_900_000);
     expect(flow.netCashMovement).toBe(flow.cashIn - flow.cashOut);
+    expect(flow.netCashMovement).toBe(
+      flow.operatingNetCashFlow + flow.netCapitalMovement,
+    );
 
     expect(flow.ordinaryCashOut).toBe(8_000_000);
     expect(flow.savingCashIn).toBe(1_000_000);
@@ -180,6 +190,12 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
     expect(flow.cashOut).toBe(0);
     expect(flow.netCashMovement).toBe(9_900_000);
     expect(flow.realExpense).toBe(100_000);
+    expect(flow.operatingCashIn).toBe(0);
+    expect(flow.operatingCashOut).toBe(100_000);
+    expect(flow.operatingNetCashFlow).toBe(-100_000);
+    expect(flow.capitalMovementIn).toBe(10_000_000);
+    expect(flow.capitalMovementOut).toBe(0);
+    expect(flow.netCapitalMovement).toBe(10_000_000);
   });
 
   it("keeps legacy allocation transactions as cash out without turning them into realExpense", () => {
@@ -213,6 +229,12 @@ describe("CASH-MOVEMENT-SSOT-1", () => {
     expect(october).toBeDefined();
     expect(october?.thu).toBe(30_000_000);
     expect(october?.chi).toBe(8_100_000);
+    expect(october?.operatingCashIn).toBe(30_000_000);
+    expect(october?.operatingCashOut).toBe(8_100_000);
+    expect(october?.operatingNetCashFlow).toBe(21_900_000);
+    expect(october?.capitalMovementIn).toBe(4_000_000);
+    expect(october?.capitalMovementOut).toBe(15_000_000);
+    expect(october?.netCapitalMovement).toBe(-11_000_000);
     expect(october?.cashIn).toBe(34_000_000);
     expect(october?.cashOut).toBe(23_100_000);
     expect(october?.netCashMovement).toBe(10_900_000);

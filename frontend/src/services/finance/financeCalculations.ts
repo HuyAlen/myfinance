@@ -1394,6 +1394,16 @@ export type FinanceFlowSnapshot = {
   realExpenseCount: number;
   netCashFlow: number;
 
+  /** Operating flow shown as Thu vào / Chi ra in primary UI surfaces. */
+  operatingCashIn: number;
+  operatingCashOut: number;
+  operatingNetCashFlow: number;
+
+  /** Principal moved between spendable Wallets and Savings/Forex. */
+  capitalMovementIn: number;
+  capitalMovementOut: number;
+  netCapitalMovement: number;
+
   /** Liquidity semantics: actual money entering/leaving spendable wallets. */
   cashIn: number;
   cashOut: number;
@@ -1689,11 +1699,32 @@ export function calculateFinanceFlowSnapshot(input: {
   const cashOut = ordinaryCashOut + savingCashOut + forexCashOut;
   const netCashMovement = cashIn - cashOut;
 
+  // DASHBOARD-CASHFLOW-SEMANTICS-2: primary cash-flow UI is operating flow.
+  // Savings/Forex principal is a capital movement, not income or real expense.
+  // Forex fees remain realExpense; principal stays in the capital bucket.
+  const operatingCashIn = income;
+  const operatingCashOut = realExpense;
+  const operatingNetCashFlow = operatingCashIn - operatingCashOut;
+  const capitalMovementIn =
+    savingCashMovement.cashIn + forexCashMovement.withdrawals;
+  const capitalMovementOut =
+    transactionSavingAllocation +
+    transactionInvestmentAllocation +
+    savingCashMovement.cashOut +
+    forexCashMovement.deposits;
+  const netCapitalMovement = capitalMovementIn - capitalMovementOut;
+
   return {
     income,
     realExpense,
     realExpenseCount: realExpenses.length + forexFeeCount,
     netCashFlow: income - realExpense,
+    operatingCashIn,
+    operatingCashOut,
+    operatingNetCashFlow,
+    capitalMovementIn,
+    capitalMovementOut,
+    netCapitalMovement,
     cashIn,
     cashOut,
     netCashMovement,
@@ -2944,7 +2975,15 @@ export interface MonthlyCashFlow {
   chi: number; // real expense in VND (saving/investment principal excluded)
   tietKiem: number; // income - real expense
   tichLuy: number; // saving + investment allocations
-  /** CASH-MOVEMENT-SSOT-1 liquidity semantics. */
+  /** DASHBOARD-CASHFLOW-SEMANTICS-2 primary operating-flow semantics. */
+  operatingCashIn: number;
+  operatingCashOut: number;
+  operatingNetCashFlow: number;
+  /** Savings/Forex principal movement, intentionally separate from operating flow. */
+  capitalMovementIn: number;
+  capitalMovementOut: number;
+  netCapitalMovement: number;
+  /** CASH-MOVEMENT-SSOT-1 liquidity semantics retained for reconciliation. */
   cashIn: number;
   cashOut: number;
   netCashMovement: number;
@@ -3019,6 +3058,12 @@ export function buildMonthlyCashFlowData(
       chi: flow.realExpense,
       tietKiem: flow.netCashFlow,
       tichLuy: flow.futureAllocation,
+      operatingCashIn: flow.operatingCashIn,
+      operatingCashOut: flow.operatingCashOut,
+      operatingNetCashFlow: flow.operatingNetCashFlow,
+      capitalMovementIn: flow.capitalMovementIn,
+      capitalMovementOut: flow.capitalMovementOut,
+      netCapitalMovement: flow.netCapitalMovement,
       cashIn: flow.cashIn,
       cashOut: flow.cashOut,
       netCashMovement: flow.netCashMovement,

@@ -815,16 +815,29 @@ export default function DashboardPage() {
     [periodFinanceFlow.income, periodFinanceFlow.realExpense],
   );
 
-  const periodCashMovement = useMemo(
+  const periodOperatingCashFlow = useMemo(
     () => ({
-      cashIn: periodFinanceFlow.cashIn,
-      cashOut: periodFinanceFlow.cashOut,
-      net: periodFinanceFlow.netCashMovement,
+      cashIn: periodFinanceFlow.operatingCashIn,
+      cashOut: periodFinanceFlow.operatingCashOut,
+      net: periodFinanceFlow.operatingNetCashFlow,
     }),
     [
-      periodFinanceFlow.cashIn,
-      periodFinanceFlow.cashOut,
-      periodFinanceFlow.netCashMovement,
+      periodFinanceFlow.operatingCashIn,
+      periodFinanceFlow.operatingCashOut,
+      periodFinanceFlow.operatingNetCashFlow,
+    ],
+  );
+
+  const periodCapitalMovement = useMemo(
+    () => ({
+      cashIn: periodFinanceFlow.capitalMovementIn,
+      cashOut: periodFinanceFlow.capitalMovementOut,
+      net: periodFinanceFlow.netCapitalMovement,
+    }),
+    [
+      periodFinanceFlow.capitalMovementIn,
+      periodFinanceFlow.capitalMovementOut,
+      periodFinanceFlow.netCapitalMovement,
     ],
   );
 
@@ -2109,9 +2122,9 @@ export default function DashboardPage() {
 
   // ── Spending ──────────────────────────────────────────────────────────────
 
-  // CASH-MOVEMENT-SSOT-1: the chart is now a liquidity view. Income/expense
-  // remain available separately through periodFlowSummary and continue to feed
-  // Budget, spending and Financial Structure unchanged.
+  // DASHBOARD-CASHFLOW-SEMANTICS-2: the primary chart shows operating flow
+  // only (real income vs real expense). Savings/Forex principal movement is
+  // rendered separately below the chart as capital movement.
   const cashFlowData = useMemo(() => {
     const now = new Date();
     const latestActualMonth =
@@ -2137,15 +2150,15 @@ export default function DashboardPage() {
 
       return {
         label: item.label,
-        cashIn: item.cashIn,
-        cashOut: item.cashOut,
-        netCashMovement: item.netCashMovement,
-        hasData: item.cashIn > 0 || item.cashOut > 0,
+        cashIn: item.operatingCashIn,
+        cashOut: item.operatingCashOut,
+        netCashMovement: item.operatingNetCashFlow,
+        hasData: item.operatingCashIn > 0 || item.operatingCashOut > 0,
       };
     });
   }, [cashFlowTrend, selectedYear]);
 
-  const netCashMovement = periodCashMovement.net;
+  const operatingNetCashFlow = periodOperatingCashFlow.net;
 
   // DASH-EMERGENCY-FUND-BASELINE-1: use completed-month expense evidence
   // rather than the in-progress selected month, which can wildly inflate coverage.
@@ -2485,9 +2498,9 @@ export default function DashboardPage() {
   const kpiCards = [
     {
       title: "Dòng tiền ròng",
-      value: formatVND(netCashMovement),
-      note: `Thu vào ${formatCompactVND(periodCashMovement.cashIn)} · Chi ra ${formatCompactVND(periodCashMovement.cashOut)}`,
-      tone: netCashMovement >= 0 ? "good" : "danger",
+      value: formatVND(periodOperatingCashFlow.net),
+      note: `Thu vào ${formatCompactVND(periodOperatingCashFlow.cashIn)} · Chi ra ${formatCompactVND(periodOperatingCashFlow.cashOut)}`,
+      tone: periodOperatingCashFlow.net >= 0 ? "good" : "danger",
       icon: TrendingUp,
       ready: cashMovementReady,
       // Cash movement spans Transactions + Savings + Investments/Forex, so a
@@ -4116,30 +4129,62 @@ export default function DashboardPage() {
       >
         <Panel
           title="Dòng tiền trong kỳ"
-          subtitle="Tiền thực sự vào/ra ví, gồm Savings và Forex nhưng không làm thay đổi chi tiêu thật"
+          subtitle="Thu nhập và chi phí thật; Savings/Forex được tách riêng thành dịch chuyển tài sản"
         >
           {cashMovementReady ? (
             <>
               <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
                 <MiniStat
                   label="Thu vào"
-                  value={formatVND(periodCashMovement.cashIn)}
+                  value={formatVND(periodOperatingCashFlow.cashIn)}
                   color="text-emerald-600"
                 />
                 <MiniStat
                   label="Chi ra"
-                  value={formatVND(periodCashMovement.cashOut)}
+                  value={formatVND(periodOperatingCashFlow.cashOut)}
                   color="text-rose-500"
                 />
                 <MiniStat
                   label="Dòng tiền ròng"
-                  value={formatVND(netCashMovement)}
-                  color={netCashMovement >= 0 ? "text-blue-600" : "text-rose-500"}
+                  value={formatVND(operatingNetCashFlow)}
+                  color={operatingNetCashFlow >= 0 ? "text-blue-600" : "text-rose-500"}
                   className="col-span-2 sm:col-span-1"
                 />
               </div>
 
               <CashFlowChart data={cashFlowData} />
+
+              <div
+                data-dashboard-capital-movement
+                className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-black text-[#23466F]">
+                    Dịch chuyển tài sản
+                  </p>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Không tính vào Thu vào / Chi ra
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl bg-white px-3 py-2.5">
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      Từ Savings/Forex về ví
+                    </p>
+                    <p className="mt-1 text-sm font-black text-cyan-700">
+                      {formatVND(periodCapitalMovement.cashIn)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2.5">
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      Từ ví sang Savings/Forex
+                    </p>
+                    <p className="mt-1 text-sm font-black text-indigo-700">
+                      {formatVND(periodCapitalMovement.cashOut)}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </>
           ) : (
             <>

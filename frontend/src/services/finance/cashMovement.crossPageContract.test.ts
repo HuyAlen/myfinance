@@ -10,6 +10,12 @@ describe("CASH-MOVEMENT-SSOT-1 cross-page adoption", () => {
     const finance = read("financeCalculations.ts");
     expect(finance).toContain("realExpense: number;");
     expect(finance).toContain("netCashFlow: number;");
+    expect(finance).toContain("operatingCashIn: number;");
+    expect(finance).toContain("operatingCashOut: number;");
+    expect(finance).toContain("operatingNetCashFlow: number;");
+    expect(finance).toContain("capitalMovementIn: number;");
+    expect(finance).toContain("capitalMovementOut: number;");
+    expect(finance).toContain("netCapitalMovement: number;");
     expect(finance).toContain("cashIn: number;");
     expect(finance).toContain("cashOut: number;");
     expect(finance).toContain("netCashMovement: number;");
@@ -21,13 +27,15 @@ describe("CASH-MOVEMENT-SSOT-1 cross-page adoption", () => {
     expect(finance).toContain("// ─── Canonical Budget Spending Engine");
   });
 
-  it("Dashboard renders cash movement without routing the metric to Transactions only", () => {
+  it("Dashboard shows operating cash flow and separates capital movement", () => {
     const dashboard = read("../../components/dashboard/DashboardPage.tsx");
-    expect(dashboard).toContain("const periodCashMovement = useMemo(");
-    expect(dashboard).toContain("const cashMovementReady = cashFlowReady && savingInvestmentReady;");
-    expect(dashboard).toContain('label="Thu vào"');
-    expect(dashboard).toContain('label="Chi ra"');
-    expect(dashboard).toContain("netCashMovement: item.netCashMovement");
+    expect(dashboard).toContain("const periodOperatingCashFlow = useMemo(");
+    expect(dashboard).toContain("const periodCapitalMovement = useMemo(");
+    expect(dashboard).toContain("cashIn: item.operatingCashIn");
+    expect(dashboard).toContain("cashOut: item.operatingCashOut");
+    expect(dashboard).toContain("netCashMovement: item.operatingNetCashFlow");
+    expect(dashboard).toContain("Dịch chuyển tài sản");
+    expect(dashboard).toContain("Không tính vào Thu vào / Chi ra");
     expect(dashboard).toContain("href: undefined as string | undefined");
   });
 
@@ -40,15 +48,18 @@ describe("CASH-MOVEMENT-SSOT-1 cross-page adoption", () => {
     expect(chart).not.toContain('dataKey="chi"');
   });
 
-  it("Reports cash-flow tab and comparisons consume canonical cash movement", () => {
+  it("Reports cash-flow UI uses operating flow and exposes capital movement separately", () => {
     const reports = read("../../components/reports/ReportsPage.tsx");
-    expect(reports).toContain("const cashIn = flow.cashIn;");
-    expect(reports).toContain("const cashOut = flow.cashOut;");
-    expect(reports).toContain("const netCashMovement = flow.netCashMovement;");
-    expect(reports).toContain('dataKey="cashIn"');
-    expect(reports).toContain('dataKey="cashOut"');
-    expect(reports).toContain("curMonthFlow.netCashMovement");
-    expect(reports).toContain("previousEquivalentFlow.netCashMovement");
+    expect(reports).toContain("const operatingCashIn = flow.operatingCashIn;");
+    expect(reports).toContain("const operatingCashOut = flow.operatingCashOut;");
+    expect(reports).toContain("const operatingNetCashFlow = flow.operatingNetCashFlow;");
+    expect(reports).toContain('dataKey="operatingCashIn"');
+    expect(reports).toContain('dataKey="operatingCashOut"');
+    expect(reports).toContain("curMonthFlow.operatingNetCashFlow");
+    expect(reports).toContain("previousEquivalentFlow.operatingNetCashFlow");
+    expect(reports).toContain("Dịch chuyển tài sản");
+    expect(reports).toContain("capitalMovementInRaw");
+    expect(reports).toContain("capitalMovementOutRaw");
   });
 
   it("preserves Savings wallet identity across Dashboard and Reports", () => {
