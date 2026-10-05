@@ -7,14 +7,14 @@ import {
   Home,
   MoreHorizontal,
   ReceiptText,
-  Target,
+  PiggyBank,
 } from "lucide-react";
 
 const tabs = [
   { label: "Tổng quan", icon: Home, href: "/" },
   { label: "Giao dịch", icon: ReceiptText, href: "/transactions" },
   { label: "Ngân sách", icon: ChartPie, href: "/budgets" },
-  { label: "Mục tiêu", icon: Target, href: "/goals" },
+  { label: "Tiết kiệm", icon: PiggyBank, href: "/savings" },
   { label: "Thêm", icon: MoreHorizontal, href: "/categories" },
 ];
 
@@ -28,6 +28,7 @@ function isActivePath(pathname: string, href: string) {
       "/wallets",
       "/investments",
       "/debts",
+      "/goals",
       "/ai-insights",
       "/settings",
       "/help",
