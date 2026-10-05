@@ -129,13 +129,18 @@ export default function NetWorthTrendChart({
     const snapshotPoints = trendWithDeltas.filter(
       (point) => point.hasData && point.value !== null,
     );
-    const firstPoint = snapshotPoints[0] ?? null;
     const latestPoint = snapshotPoints[snapshotPoints.length - 1] ?? null;
-    const labeledTrendWithDeltas = trendWithDeltas.map((point) => ({
-      ...point,
-      chartLabel:
-        point === firstPoint || point === latestPoint ? point.value : null,
-    }));
+    let snapshotLabelIndex = 0;
+    const labeledTrendWithDeltas = trendWithDeltas.map((point) => {
+      const hasSnapshot = point.hasData && point.value !== null;
+      const labelLane = hasSnapshot ? snapshotLabelIndex++ % 2 : -1;
+
+      return {
+        ...point,
+        chartLabelNear: hasSnapshot && labelLane === 0 ? point.value : null,
+        chartLabelFar: hasSnapshot && labelLane === 1 ? point.value : null,
+      };
+    });
 
     return {
       trendWithDeltas: labeledTrendWithDeltas,
@@ -177,7 +182,7 @@ export default function NetWorthTrendChart({
         <ResponsiveContainer width="100%" height={148} minWidth={0}>
           <AreaChart
             data={trendWithDeltas}
-            margin={{ top: 22, right: 18, bottom: 0, left: 0 }}
+            margin={{ top: 34, right: 18, bottom: 0, left: 0 }}
           >
             <defs>
               <linearGradient id="dashboardNetWorth" x1="0" y1="0" x2="0" y2="1">
@@ -243,11 +248,22 @@ export default function NetWorthTrendChart({
               }}
             >
               <LabelList
-                dataKey="chartLabel"
+                dataKey="chartLabelNear"
                 position="top"
-                offset={9}
+                offset={7}
                 fill="#41627C"
-                fontSize={11}
+                fontSize={10}
+                fontWeight={800}
+                formatter={(value) =>
+                  value == null ? "" : formatCompactVND(Number(value))
+                }
+              />
+              <LabelList
+                dataKey="chartLabelFar"
+                position="top"
+                offset={20}
+                fill="#41627C"
+                fontSize={10}
                 fontWeight={800}
                 formatter={(value) =>
                   value == null ? "" : formatCompactVND(Number(value))

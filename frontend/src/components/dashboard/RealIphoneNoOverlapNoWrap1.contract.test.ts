@@ -45,14 +45,13 @@ describe("REAL-IPHONE-NO-OVERLAP-NOWRAP-1", () => {
     );
   });
 
-  it("prevents adjacent Net Worth point labels from colliding on narrow real-iPhone charts", () => {
-    expect(netWorthChart).toContain("const firstPoint = snapshotPoints[0] ?? null;");
-    expect(netWorthChart).toContain("chartLabel:");
-    const labelStart = netWorthChart.indexOf("<LabelList");
-    const labelEnd = netWorthChart.indexOf("/>", labelStart);
-    const labelSource = netWorthChart.slice(labelStart, labelEnd);
-    expect(labelSource).toContain('dataKey="chartLabel"');
-    expect(labelSource).not.toContain('dataKey="value"');
+  it("prevents adjacent Net Worth point labels from colliding without hiding middle snapshot months", () => {
+    expect(netWorthChart).toContain("let snapshotLabelIndex = 0;");
+    expect(netWorthChart).toContain("chartLabelNear:");
+    expect(netWorthChart).toContain("chartLabelFar:");
+    expect(netWorthChart).toContain('dataKey="chartLabelNear"');
+    expect(netWorthChart).toContain('dataKey="chartLabelFar"');
+    expect(netWorthChart).not.toContain("const firstPoint = snapshotPoints[0] ?? null;");
   });
 
   it("uses a 2+1 reconciliation summary on mobile and keeps summary labels on one line", () => {
