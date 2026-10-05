@@ -26,13 +26,18 @@ describe("FINANCE-CONTENT-SCROLL-OWNER-2 Dashboard scroll contract", () => {
     expect(region).not.toContain("overflow-y-scroll");
   });
 
-  it("keeps horizontal KPI browsing independent from the shared vertical scroller", () => {
-    const start = pageSource.indexOf("Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2");
+  it("keeps KPI layout inside the shared vertical scroller without creating a nested horizontal scroll owner", () => {
+    const start = pageSource.indexOf("Operating KPIs");
     const end = pageSource.indexOf("data-dashboard-customization-toolbar", start);
     const region = pageSource.slice(start, end);
     expect(start).toBeGreaterThan(-1);
-    expect(region).toContain("overflow-x-auto");
-    expect(region).toContain("[-webkit-overflow-scrolling:touch]");
+    expect(end).toBeGreaterThan(start);
+
+    expect(region).toContain(
+      'className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3 xl:grid-cols-5"',
+    );
+    expect(region).not.toContain("overflow-x-auto");
+    expect(region).not.toContain("[-webkit-overflow-scrolling:touch]");
     expect(region).not.toContain("snap-x");
     expect(region).not.toContain("snap-proximity");
     expect(region).not.toContain("overscroll-x-contain");

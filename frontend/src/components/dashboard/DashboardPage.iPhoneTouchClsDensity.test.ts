@@ -80,25 +80,24 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     );
   });
 
-  it("keeps the mobile KPI rail horizontally scrollable without scroll-snap gesture contention", () => {
-    const kpiStart = source.indexOf("{/* Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2");
+  it("keeps mobile operating KPIs inside the iPhone viewport as a 2-column grid instead of a clipped horizontal rail", () => {
+    const kpiStart = source.indexOf("{/* Operating KPIs");
     const kpiEnd = source.indexOf("data-dashboard-customization-toolbar", kpiStart);
     expect(kpiStart).toBeGreaterThan(-1);
     expect(kpiEnd).toBeGreaterThan(kpiStart);
     const kpiSource = source.slice(kpiStart, kpiEnd);
 
-    expect(kpiSource).toContain("overflow-x-auto");
-    expect(kpiSource).toContain("[-webkit-overflow-scrolling:touch]");
-    expect(kpiSource).toContain("scrollbar-none");
-    expect(kpiSource).toContain("md:grid md:grid-cols-3");
-    expect(kpiSource).toContain("xl:grid-cols-5");
+    expect(kpiSource).toContain(
+      'className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3 xl:grid-cols-5"',
+    );
+    expect(kpiSource).not.toContain("overflow-x-auto");
+    expect(kpiSource).not.toContain("[-webkit-overflow-scrolling:touch]");
+    expect(kpiSource).not.toContain("scrollbar-none");
     expect(kpiSource).not.toContain("snap-x");
     expect(kpiSource).not.toContain("snap-proximity");
-    expect(kpiSource).not.toContain("overscroll-x-contain");
-    expect(kpiSource).not.toContain("scroll-px-4");
   });
 
-  it("keeps KPI card widths for swipe browsing without per-card snap alignment", () => {
+  it("lets KPI cards shrink inside the mobile grid instead of reserving swipe-rail widths", () => {
     const start = source.indexOf("function KpiCard({");
     const end = source.indexOf("\nfunction Panel({", start);
     expect(start).toBeGreaterThan(-1);
@@ -106,8 +105,14 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     const kpiCardSource = source.slice(start, end);
 
     expect(kpiCardSource).not.toContain("snap-start");
-    expect(kpiCardSource.split("min-w-52").length - 1).toBe(2);
-    expect(kpiCardSource.split("md:min-w-0").length - 1).toBe(2);
+    expect(kpiCardSource).not.toContain("min-w-52");
+    expect(kpiCardSource).not.toContain("md:min-w-0");
+    expect(kpiCardSource).toContain(
+      "min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1",
+    );
+    expect(kpiCardSource).toContain(
+      "min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1",
+    );
   });
 
   it("uses the compact 16px mobile gap between stacked cash-flow/structure panels while restoring 20px from sm", () => {

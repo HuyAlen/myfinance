@@ -129,10 +129,16 @@ export default function NetWorthTrendChart({
     const snapshotPoints = trendWithDeltas.filter(
       (point) => point.hasData && point.value !== null,
     );
+    const firstPoint = snapshotPoints[0] ?? null;
     const latestPoint = snapshotPoints[snapshotPoints.length - 1] ?? null;
+    const labeledTrendWithDeltas = trendWithDeltas.map((point) => ({
+      ...point,
+      chartLabel:
+        point === firstPoint || point === latestPoint ? point.value : null,
+    }));
 
     return {
-      trendWithDeltas,
+      trendWithDeltas: labeledTrendWithDeltas,
       snapshotPoints,
       latestPoint,
     };
@@ -237,7 +243,7 @@ export default function NetWorthTrendChart({
               }}
             >
               <LabelList
-                dataKey="value"
+                dataKey="chartLabel"
                 position="top"
                 offset={9}
                 fill="#41627C"

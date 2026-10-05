@@ -3478,7 +3478,7 @@ export default function DashboardPage() {
       {/* Operating KPIs */}
       {/* Operating KPIs · REAL-IPHONE-DASHBOARD-SCROLL-2: keep horizontal swipe, remove scroll-snap arbitration on touch */}
       <section>
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none [-webkit-overflow-scrolling:touch] md:mx-0 md:grid md:grid-cols-3 md:px-0 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3 xl:grid-cols-5">
           {kpiCards.map((item) => (
             <KpiCard
               key={item.title}
@@ -5233,7 +5233,7 @@ function KpiCard({
   const content = (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold text-slate-600">{title}</p>
+        <p className="whitespace-nowrap text-[10px] font-bold tracking-[-0.02em] text-slate-600 sm:text-xs sm:tracking-normal" title={title}>{title}</p>
         {isLoading ? (
           <>
             <div className="mt-2 h-5 w-20 animate-pulse rounded-lg bg-slate-200/80" />
@@ -5248,12 +5248,12 @@ function KpiCard({
             >
               {value}
             </p>
-            <p className="mt-1 truncate text-xs text-slate-500">{note}</p>
+            <p className="mt-1 truncate text-[10px] text-slate-500 sm:text-xs" title={note}>{note}</p>
           </>
         )}
       </div>
       <div
-        className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}
+        className={`flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-10 ${styles.icon}`}
       >
         <Icon size={18} />
       </div>
@@ -5267,7 +5267,7 @@ function KpiCard({
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
         data-dashboard-depth-card="kpi"
-        className={`min-w-52 cursor-pointer overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 md:min-w-0 ${styles.border}`}
+        className={`min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 ${styles.border}`}
       >
         {content}
       </button>
@@ -5277,7 +5277,7 @@ function KpiCard({
   return (
     <div
       data-dashboard-depth-card="kpi"
-      className={`min-w-52 overflow-hidden rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 md:min-w-0 ${styles.border}`}
+      className={`min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 ${styles.border}`}
     >
       {content}
     </div>

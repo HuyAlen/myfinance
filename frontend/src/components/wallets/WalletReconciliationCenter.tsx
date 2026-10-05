@@ -96,11 +96,11 @@ export default function WalletReconciliationCenter({
         ) : null}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="flex items-center gap-1.5 text-slate-400">
             <WalletCards size={13} />
-            <span className="text-[10px] font-black uppercase tracking-wide">
+            <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wide">
               Coverage
             </span>
           </div>
@@ -115,7 +115,7 @@ export default function WalletReconciliationCenter({
         <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-3">
           <div className="flex items-center gap-1.5 text-amber-500">
             <Clock3 size={13} />
-            <span className="text-[10px] font-black uppercase tracking-wide">
+            <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wide">
               Chưa đối soát
             </span>
           </div>
@@ -127,14 +127,14 @@ export default function WalletReconciliationCenter({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
+        <div className="col-span-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 sm:col-span-1">
           <div className="flex items-center gap-1.5 text-emerald-500">
             <CheckCircle2 size={13} />
-            <span className="text-[10px] font-black uppercase tracking-wide">
+            <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wide">
               Gần nhất
             </span>
           </div>
-          <p className="mt-1.5 truncate text-[11px] font-black text-emerald-800 sm:text-sm">
+          <p className="mt-1.5 whitespace-nowrap text-[11px] font-black text-emerald-800 sm:text-sm">
             {latestRecord ? formatDateTime(latestRecord.reconciledAt) : "Chưa có"}
           </p>
           <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-700/80 sm:text-xs">
