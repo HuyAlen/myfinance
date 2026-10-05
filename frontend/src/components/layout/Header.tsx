@@ -14,12 +14,14 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bell,
+  BookOpen,
   BriefcaseBusiness,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Folder,
+  History,
   Landmark,
   LogOut,
   Moon,
@@ -1029,6 +1031,19 @@ export default function Header({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [notifOpen]);
 
+  // MOBILE-NAV-DISCOVERABILITY-1: the account popup is one of the two
+  // mobile escape hatches for secondary/system destinations (the hamburger
+  // Sidebar is the other). Match the notification popover behavior and keep
+  // this listener mounted only while the account popup is open.
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setDropdownOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [dropdownOpen]);
+
   function handleNotifClick(href: string, id: string) {
     const readIds = readNotificationIds();
     readIds.add(id);
@@ -1756,6 +1771,10 @@ export default function Header({
                 setNotifOpen(false);
                 setMonthOpen(false);
               }}
+              aria-label="Mở menu tài khoản"
+              aria-haspopup="dialog"
+              aria-expanded={dropdownOpen}
+              aria-controls="header-account-menu"
               className="flex h-11 items-center gap-2 rounded-2xl border border-[#DBE6EF] bg-white py-1.5 pl-1.5 pr-2 shadow-[0_3px_10px_rgba(54,83,107,0.06)] transition hover:bg-[#F3F7FB] active:scale-[.98] sm:pr-3"
             >
               <div className="flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-cyan-500 text-sm font-black text-white">
@@ -1779,7 +1798,12 @@ export default function Header({
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64">
+                <div
+                  id="header-account-menu"
+                  role="dialog"
+                  aria-label="Menu tài khoản"
+                  className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64 sm:pb-0"
+                >
                   {/* User info */}
                   <div className="border-b border-slate-100 bg-linear-to-br from-blue-50 to-cyan-50 px-4 py-4">
                     <div className="flex items-center gap-3">
@@ -1797,25 +1821,75 @@ export default function Header({
                     </div>
                   </div>
 
-                  {/* Profile */}
-                  <Link
-                    href="/settings"
-                    onClick={closeAll}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-sm text-slate-600 transition hover:bg-slate-50"
+                  <div
+                    data-mobile-account-navigation="true"
+                    className="border-b border-slate-100 py-1 md:hidden"
                   >
-                    <User size={15} className="text-slate-400" />
-                    Hồ sơ cá nhân
-                  </Link>
+                    <p className="px-4 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                      Truy cập nhanh
+                    </p>
+                    <Link
+                      href="/ai-insights"
+                      onClick={closeAll}
+                      aria-current={pathname.startsWith("/ai-insights") ? "page" : undefined}
+                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
+                    >
+                      <Sparkles size={16} className="text-blue-500" />
+                      Cố vấn AI
+                    </Link>
+                    <Link
+                      href="/activity"
+                      onClick={closeAll}
+                      aria-current={pathname.startsWith("/activity") ? "page" : undefined}
+                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
+                    >
+                      <History size={16} className="text-slate-400" />
+                      Hoạt động
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={closeAll}
+                      aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
+                    >
+                      <Settings size={16} className="text-slate-400" />
+                      Cài đặt
+                    </Link>
+                    <Link
+                      href="/help"
+                      onClick={closeAll}
+                      aria-current={pathname.startsWith("/help") ? "page" : undefined}
+                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
+                    >
+                      <BookOpen size={16} className="text-slate-400" />
+                      Hướng dẫn
+                    </Link>
+                  </div>
 
-                  {/* Settings */}
-                  <Link
-                    href="/settings"
-                    onClick={closeAll}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-sm text-slate-600 transition hover:bg-slate-50"
+                  <div
+                    data-desktop-account-navigation="true"
+                    className="hidden md:block"
                   >
-                    <Settings size={15} className="text-slate-400" />
-                    Cài đặt
-                  </Link>
+                    {/* Profile */}
+                    <Link
+                      href="/settings#settings-profile"
+                      onClick={closeAll}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-sm text-slate-600 transition hover:bg-slate-50"
+                    >
+                      <User size={15} className="text-slate-400" />
+                      Hồ sơ cá nhân
+                    </Link>
+
+                    {/* Settings */}
+                    <Link
+                      href="/settings"
+                      onClick={closeAll}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-sm text-slate-600 transition hover:bg-slate-50"
+                    >
+                      <Settings size={15} className="text-slate-400" />
+                      Cài đặt
+                    </Link>
+                  </div>
 
                   {/* Logout */}
                   <button
