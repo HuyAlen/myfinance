@@ -2,17 +2,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(
-  path.resolve(__dirname, "BottomNav.tsx"),
-  "utf8",
-).replace(/\r\n/g, "\n");
+const read = (fileName: string) =>
+  readFileSync(path.resolve(__dirname, fileName), "utf8").replace(/\r\n/g, "\n");
 
-function region(startMarker: string, endMarker: string) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
+const source = read("BottomNav.tsx");
+const mobileNavigation = read("mobileNavigation.ts");
+
+function region(sourceText: string, startMarker: string, endMarker: string) {
+  const start = sourceText.indexOf(startMarker);
+  const end = sourceText.indexOf(endMarker, start + startMarker.length);
   expect(start, `Missing start marker: ${startMarker}`).toBeGreaterThan(-1);
   expect(end, `Missing end marker: ${endMarker}`).toBeGreaterThan(start);
-  return source.slice(start, end);
+  return sourceText.slice(start, end);
 }
 
 describe("MOBILE-MORE-BOTTOM-SHEET-1", () => {
@@ -27,7 +28,11 @@ describe("MOBILE-MORE-BOTTOM-SHEET-1", () => {
   });
 
   it("keeps the five primary mobile destinations unchanged except for Thêm becoming the sheet trigger", () => {
-    const primary = region("const PRIMARY_TABS = [", "const MORE_GROUPS = [");
+    const primary = region(
+      mobileNavigation,
+      "export const MOBILE_PRIMARY_NAV_ITEMS = [",
+      "export const MOBILE_MORE_GROUPS = [",
+    );
     expect(primary).toContain('{ label: "Tổng quan", icon: Home, href: "/" }');
     expect(primary).toContain(
       '{ label: "Giao dịch", icon: ReceiptText, href: "/transactions" }',
@@ -38,11 +43,16 @@ describe("MOBILE-MORE-BOTTOM-SHEET-1", () => {
     expect(primary).toContain(
       '{ label: "Tiết kiệm", icon: PiggyBank, href: "/savings" }',
     );
+    expect(source).toContain("MOBILE_PRIMARY_NAV_ITEMS.map");
     expect(source).toContain("grid-cols-5");
   });
 
   it("shows only the agreed seven secondary destinations in two groups", () => {
-    const more = region("const MORE_GROUPS = [", "const MORE_ROUTES =");
+    const more = region(
+      mobileNavigation,
+      "export const MOBILE_MORE_GROUPS = [",
+      "export const MOBILE_ACCOUNT_NAV_ITEMS = [",
+    );
 
     for (const href of [
       "/wallets",
@@ -68,6 +78,7 @@ describe("MOBILE-MORE-BOTTOM-SHEET-1", () => {
 
     expect(more).toContain('label: "Quản lý"');
     expect(more).toContain('label: "Phân tích & tài sản"');
+    expect(source).toContain("MOBILE_MORE_GROUPS.map");
   });
 
   it("uses an iPhone-safe modal bottom sheet above the persistent bottom navigation", () => {
@@ -92,18 +103,12 @@ describe("MOBILE-MORE-BOTTOM-SHEET-1", () => {
   });
 
   it("derives Thêm active state from the same grouped destinations rendered by the sheet", () => {
-    expect(source).toContain(
-      "const MORE_ROUTES = MORE_GROUPS.flatMap((group) =>",
+    expect(mobileNavigation).toContain(
+      "export const MOBILE_MORE_ROUTES = MOBILE_MORE_GROUPS.flatMap((group) =>",
     );
-    expect(source).toContain(
-      "group.items.map((item) => item.href)",
-    );
-    expect(source).toContain(
-      "return MORE_ROUTES.some((href) => pathname.startsWith(href));",
-    );
-    expect(source).toContain(
-      "const moreRouteActive = isMorePath(pathname);",
-    );
+    expect(mobileNavigation).toContain("group.items.map((item) => item.href)");
+    expect(mobileNavigation).toContain("export function isMobileMorePath(pathname: string)");
+    expect(source).toContain("const moreRouteActive = isMobileMorePath(pathname);");
     expect(source).toContain(
       'aria-current={moreRouteActive ? "page" : undefined}',
     );

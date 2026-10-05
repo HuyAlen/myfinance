@@ -14,14 +14,12 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bell,
-  BookOpen,
   BriefcaseBusiness,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Folder,
-  History,
   Landmark,
   LogOut,
   Moon,
@@ -48,6 +46,10 @@ import {
   useDateFilter,
   type DateFilterMode,
 } from "../layout/DateFilterProvider";
+import {
+  MOBILE_ACCOUNT_NAV_ITEMS,
+  isMobileNavigationPathActive,
+} from "./mobileNavigation";
 import { signOut } from "@/src/lib/auth";
 import {
   buildFinanceNotifications,
@@ -1892,42 +1894,26 @@ export default function Header({
                     <p className="px-4 pb-1 pt-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                       Truy cập nhanh
                     </p>
-                    <Link
-                      href="/ai-insights"
-                      onClick={closeAll}
-                      aria-current={pathname.startsWith("/ai-insights") ? "page" : undefined}
-                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
-                    >
-                      <Sparkles size={16} className="text-blue-500" />
-                      Cố vấn AI
-                    </Link>
-                    <Link
-                      href="/activity"
-                      onClick={closeAll}
-                      aria-current={pathname.startsWith("/activity") ? "page" : undefined}
-                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
-                    >
-                      <History size={16} className="text-slate-400" />
-                      Hoạt động
-                    </Link>
-                    <Link
-                      href="/settings"
-                      onClick={closeAll}
-                      aria-current={pathname.startsWith("/settings") ? "page" : undefined}
-                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
-                    >
-                      <Settings size={16} className="text-slate-400" />
-                      Cài đặt
-                    </Link>
-                    <Link
-                      href="/help"
-                      onClick={closeAll}
-                      aria-current={pathname.startsWith("/help") ? "page" : undefined}
-                      className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
-                    >
-                      <BookOpen size={16} className="text-slate-400" />
-                      Hướng dẫn
-                    </Link>
+                    {MOBILE_ACCOUNT_NAV_ITEMS.map((item) => {
+                      const Icon = item.icon;
+                      const active = isMobileNavigationPathActive(
+                        pathname,
+                        item.href,
+                      );
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={closeAll}
+                          aria-current={active ? "page" : undefined}
+                          className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-600 transition active:bg-blue-50 active:text-blue-700"
+                        >
+                          <Icon size={16} className={item.iconClass} />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
                   </div>
 
                   <div

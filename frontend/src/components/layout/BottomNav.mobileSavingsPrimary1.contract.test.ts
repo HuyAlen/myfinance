@@ -2,22 +2,27 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(
-  path.resolve(__dirname, "BottomNav.tsx"),
-  "utf8",
-).replace(/\r\n/g, "\n");
+const read = (fileName: string) =>
+  readFileSync(path.resolve(__dirname, fileName), "utf8").replace(/\r\n/g, "\n");
 
-function region(startMarker: string, endMarker: string) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
+const source = read("BottomNav.tsx");
+const mobileNavigation = read("mobileNavigation.ts");
+
+function region(sourceText: string, startMarker: string, endMarker: string) {
+  const start = sourceText.indexOf(startMarker);
+  const end = sourceText.indexOf(endMarker, start + startMarker.length);
   expect(start, `Missing start marker: ${startMarker}`).toBeGreaterThan(-1);
   expect(end, `Missing end marker: ${endMarker}`).toBeGreaterThan(start);
-  return source.slice(start, end);
+  return sourceText.slice(start, end);
 }
 
 describe("MOBILE-BOTTOM-NAV-SAVINGS-1", () => {
   it("uses Tiết kiệm as the fourth primary mobile tab instead of Mục tiêu", () => {
-    const primary = region("const PRIMARY_TABS = [", "const MORE_GROUPS = [");
+    const primary = region(
+      mobileNavigation,
+      "export const MOBILE_PRIMARY_NAV_ITEMS = [",
+      "export const MOBILE_MORE_GROUPS = [",
+    );
 
     expect(primary).toContain(
       '{ label: "Tiết kiệm", icon: PiggyBank, href: "/savings" }',
@@ -28,13 +33,22 @@ describe("MOBILE-BOTTOM-NAV-SAVINGS-1", () => {
   });
 
   it("keeps exactly five primary mobile slots and the existing mobile-only navigation", () => {
+    expect(source).toContain("MOBILE_PRIMARY_NAV_ITEMS.map");
     expect(source).toContain("grid-cols-5");
     expect(source).toContain("fixed inset-x-0 bottom-0 z-50 lg:hidden");
   });
 
   it("keeps Tiết kiệm primary while Mục tiêu remains reachable from Thêm", () => {
-    const primary = region("const PRIMARY_TABS = [", "const MORE_GROUPS = [");
-    const more = region("const MORE_GROUPS = [", "const MORE_ROUTES =");
+    const primary = region(
+      mobileNavigation,
+      "export const MOBILE_PRIMARY_NAV_ITEMS = [",
+      "export const MOBILE_MORE_GROUPS = [",
+    );
+    const more = region(
+      mobileNavigation,
+      "export const MOBILE_MORE_GROUPS = [",
+      "export const MOBILE_ACCOUNT_NAV_ITEMS = [",
+    );
 
     expect(primary).toContain(
       '{ label: "Tiết kiệm", icon: PiggyBank, href: "/savings" }',

@@ -3,96 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MoreHorizontal, X } from "lucide-react";
 import {
-  BarChart3,
-  BriefcaseBusiness,
-  ChartPie,
-  Folder,
-  Home,
-  Landmark,
-  MoreHorizontal,
-  PiggyBank,
-  ReceiptText,
-  Repeat2,
-  Target,
-  Wallet,
-  X,
-} from "lucide-react";
+  MOBILE_MORE_GROUPS,
+  MOBILE_PRIMARY_NAV_ITEMS,
+  isMobileMorePath,
+  isMobileNavigationPathActive,
+} from "./mobileNavigation";
 
-const PRIMARY_TABS = [
-  { label: "Tổng quan", icon: Home, href: "/" },
-  { label: "Giao dịch", icon: ReceiptText, href: "/transactions" },
-  { label: "Ngân sách", icon: ChartPie, href: "/budgets" },
-  { label: "Tiết kiệm", icon: PiggyBank, href: "/savings" },
-] as const;
-
-const MORE_GROUPS = [
-  {
-    label: "Quản lý",
-    items: [
-      {
-        label: "Ví tiền",
-        icon: Wallet,
-        href: "/wallets",
-        iconClass: "bg-blue-50 text-blue-700",
-      },
-      {
-        label: "Mục tiêu",
-        icon: Target,
-        href: "/goals",
-        iconClass: "bg-violet-50 text-violet-700",
-      },
-      {
-        label: "Định kỳ",
-        icon: Repeat2,
-        href: "/recurring",
-        iconClass: "bg-cyan-50 text-cyan-700",
-      },
-      {
-        label: "Danh mục",
-        icon: Folder,
-        href: "/categories",
-        iconClass: "bg-slate-100 text-slate-700",
-      },
-    ],
-  },
-  {
-    label: "Phân tích & tài sản",
-    items: [
-      {
-        label: "Báo cáo",
-        icon: BarChart3,
-        href: "/reports",
-        iconClass: "bg-indigo-50 text-indigo-700",
-      },
-      {
-        label: "Đầu tư",
-        icon: BriefcaseBusiness,
-        href: "/investments",
-        iconClass: "bg-emerald-50 text-emerald-700",
-      },
-      {
-        label: "Nợ & khoản vay",
-        icon: Landmark,
-        href: "/debts",
-        iconClass: "bg-amber-50 text-amber-700",
-      },
-    ],
-  },
-] as const;
-
-const MORE_ROUTES = MORE_GROUPS.flatMap((group) =>
-  group.items.map((item) => item.href),
-);
-
-function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  return pathname.startsWith(href);
-}
-
-function isMorePath(pathname: string) {
-  return MORE_ROUTES.some((href) => pathname.startsWith(href));
-}
 
 type BottomNavProps = {
   onMoreMenuOpenChange?: (open: boolean) => void;
@@ -103,7 +21,7 @@ export default function BottomNav({
 }: BottomNavProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRouteActive = isMorePath(pathname);
+  const moreRouteActive = isMobileMorePath(pathname);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -187,8 +105,8 @@ export default function BottomNav({
         ].join(" ")}
       >
         <div className="mx-auto grid max-w-md grid-cols-5 px-1 pt-1">
-          {PRIMARY_TABS.map(({ label, icon: Icon, href }) => {
-            const active = isActivePath(pathname, href);
+          {MOBILE_PRIMARY_NAV_ITEMS.map(({ label, icon: Icon, href }) => {
+            const active = isMobileNavigationPathActive(pathname, href);
 
             return (
               <Link
@@ -294,7 +212,7 @@ export default function BottomNav({
 
             <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
               <div className="space-y-5">
-                {MORE_GROUPS.map((group) => (
+                {MOBILE_MORE_GROUPS.map((group) => (
                   <section key={group.label}>
                     <h3 className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                       {group.label}
@@ -302,7 +220,7 @@ export default function BottomNav({
                     <div className="grid grid-cols-2 gap-2">
                       {group.items.map((item) => {
                         const Icon = item.icon;
-                        const active = isActivePath(pathname, item.href);
+                        const active = isMobileNavigationPathActive(pathname, item.href);
 
                         return (
                           <Link

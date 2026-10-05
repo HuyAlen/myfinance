@@ -9,7 +9,7 @@ const page = read("src/components/recurring/RecurringMoneyPage.tsx");
 const route = read("app/recurring/page.tsx");
 const dashboard = read("src/components/dashboard/DashboardPage.tsx");
 const sidebar = read("src/components/layout/Sidebar.tsx");
-const bottomNav = read("src/components/layout/BottomNav.tsx");
+const mobileNavigation = read("src/components/layout/mobileNavigation.ts");
 const header = read("src/components/layout/Header.tsx");
 
 describe("RECURRING-MONEY-MANAGER-1 product wiring", () => {
@@ -18,8 +18,8 @@ describe("RECURRING-MONEY-MANAGER-1 product wiring", () => {
     expect(route).toContain("<RecurringMoneyPage />");
     expect(sidebar).toContain('href: "/recurring"');
     expect(sidebar).toContain('label: "Định Kỳ"');
-    expect(bottomNav).toContain('"/recurring"');
-    expect(header).toContain('"/recurring": {');
+    expect(mobileNavigation).toContain('href: "/recurring"');
+    expect(header).toContain('\"/recurring\": {');
   });
 
   it("manages schedules without automatic wallet movements and realizes due items only explicitly", () => {

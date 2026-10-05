@@ -2,15 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const header = readFileSync(
-  path.resolve(__dirname, "Header.tsx"),
-  "utf8",
-).replace(/\r\n/g, "\n");
+const read = (fileName: string) =>
+  readFileSync(path.resolve(__dirname, fileName), "utf8").replace(/\r\n/g, "\n");
 
-const bottomNav = readFileSync(
-  path.resolve(__dirname, "BottomNav.tsx"),
-  "utf8",
-).replace(/\r\n/g, "\n");
+const header = read("Header.tsx");
+const bottomNav = read("BottomNav.tsx");
+const mobileNavigation = read("mobileNavigation.ts");
 
 function region(source: string, startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
@@ -22,6 +19,11 @@ function region(source: string, startMarker: string, endMarker: string) {
 
 describe("MOBILE-NAV-DISCOVERABILITY-1", () => {
   it("makes the four non-bottom-nav destinations discoverable from the mobile account menu", () => {
+    const accountItems = region(
+      mobileNavigation,
+      "export const MOBILE_ACCOUNT_NAV_ITEMS = [",
+      "export const MOBILE_MORE_ROUTES =",
+    );
     const mobile = region(
       header,
       'data-mobile-account-navigation="true"',
@@ -34,15 +36,20 @@ describe("MOBILE-NAV-DISCOVERABILITY-1", () => {
       ["/settings", "Cài đặt"],
       ["/help", "Hướng dẫn"],
     ]) {
-      expect(mobile).toContain(`href="${href}"`);
-      expect(mobile).toContain(label);
+      expect(accountItems).toContain(`href: "${href}"`);
+      expect(accountItems).toContain(label);
     }
 
+    expect(mobile).toContain("MOBILE_ACCOUNT_NAV_ITEMS.map((item) => {");
     expect(mobile).toContain("md:hidden");
   });
 
   it("keeps these utility destinations out of the mobile Thêm bottom sheet", () => {
-    const more = region(bottomNav, "const MORE_GROUPS = [", "const MORE_ROUTES =");
+    const more = region(
+      mobileNavigation,
+      "export const MOBILE_MORE_GROUPS = [",
+      "export const MOBILE_ACCOUNT_NAV_ITEMS = [",
+    );
 
     for (const excluded of [
       "/ai-insights",
@@ -52,6 +59,7 @@ describe("MOBILE-NAV-DISCOVERABILITY-1", () => {
     ]) {
       expect(more).not.toContain(`href: "${excluded}"`);
     }
+    expect(bottomNav).toContain("MOBILE_MORE_GROUPS.map");
   });
 
   it("keeps desktop profile/settings actions separate from the mobile quick-access group", () => {
