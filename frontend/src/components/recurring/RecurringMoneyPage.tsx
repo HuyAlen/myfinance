@@ -816,8 +816,8 @@ function ScheduleCard({
   onClear: () => void;
 }) {
   return (
-    <article className={`rounded-3xl border bg-white p-4 shadow-sm sm:p-5 ${schedule.issues.length > 0 ? "border-amber-200" : "border-slate-200/80"}`}>
-      <div className="flex items-start justify-between gap-3">
+    <article className={`min-w-0 rounded-3xl border bg-white p-4 shadow-sm sm:p-5 ${schedule.issues.length > 0 ? "border-amber-200" : "border-slate-200/80"}`}>
+      <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`flex size-9 items-center justify-center rounded-xl ${schedule.type === "income" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
@@ -829,7 +829,7 @@ function ScheduleCard({
             </div>
           </div>
         </div>
-        <p className={`shrink-0 text-sm font-black tabular-nums ${schedule.type === "income" ? "text-emerald-600" : "text-rose-500"}`}>{schedule.type === "income" ? "+" : "−"}{formatVND(schedule.amount)}</p>
+        <p className={`max-w-full break-words text-left text-sm font-black tabular-nums sm:shrink-0 sm:text-right ${schedule.type === "income" ? "text-emerald-600" : "text-rose-500"}`}>{schedule.type === "income" ? "+" : "−"}{formatVND(schedule.amount)}</p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -847,7 +847,7 @@ function ScheduleCard({
         <div
           data-recurring-due-status={dueAction.status}
           className={
-            "mt-3 flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-3 " +
+            "mt-3 flex min-w-0 flex-col items-stretch gap-2.5 rounded-2xl border px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 " +
             (dueAction.status === "due-today"
               ? "border-amber-200/80 bg-amber-50/70"
               : "border-blue-100 bg-blue-50/55")
@@ -874,7 +874,7 @@ function ScheduleCard({
             <button
               type="button"
               onClick={() => onRecord(dueAction)}
-              className="min-h-10 shrink-0 rounded-xl bg-amber-600 px-3.5 text-xs font-black text-white shadow-sm transition hover:bg-amber-700 active:scale-[.98]"
+              className="min-h-10 w-full min-w-0 rounded-xl bg-amber-600 px-3.5 text-xs font-black text-white shadow-sm transition hover:bg-amber-700 active:scale-[.98] sm:w-auto sm:shrink-0"
             >
               Ghi giao dịch
             </button>
@@ -896,10 +896,10 @@ function ScheduleCard({
         <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700/90"><CheckCircle2 size={13} /> Đủ dữ liệu cho forecast</div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3.5">
+      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3">
         <button type="button" onClick={onToggle} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 text-xs font-bold text-slate-600 transition hover:bg-slate-100 active:scale-[.99]">{schedule.enabled ? <PauseCircle size={15} /> : <PlayCircle size={15} />}{schedule.enabled ? "Dừng" : "Bật"}</button>
         <button type="button" onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 text-xs font-bold text-blue-700 transition hover:bg-blue-100 active:scale-[.99]"><Pencil size={14} /> Sửa</button>
-        <button type="button" onClick={onClear} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 text-xs font-bold text-rose-600 transition hover:bg-rose-100 active:scale-[.99]"><Trash2 size={14} /> Xóa lịch</button>
+        <button type="button" onClick={onClear} className="col-span-2 inline-flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 text-xs font-bold text-rose-600 transition hover:bg-rose-100 active:scale-[.99] sm:col-span-1"><Trash2 size={14} /> Xóa lịch</button>
       </div>
     </article>
   );
