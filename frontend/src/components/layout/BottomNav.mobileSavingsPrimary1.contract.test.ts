@@ -7,12 +7,22 @@ const source = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 
+function region(startMarker: string, endMarker: string) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  expect(start, `Missing start marker: ${startMarker}`).toBeGreaterThan(-1);
+  expect(end, `Missing end marker: ${endMarker}`).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
 describe("MOBILE-BOTTOM-NAV-SAVINGS-1", () => {
   it("uses Tiết kiệm as the fourth primary mobile tab instead of Mục tiêu", () => {
-    expect(source).toContain(
+    const primary = region("const PRIMARY_TABS = [", "const MORE_GROUPS = [");
+
+    expect(primary).toContain(
       '{ label: "Tiết kiệm", icon: PiggyBank, href: "/savings" }',
     );
-    expect(source).not.toContain(
+    expect(primary).not.toContain(
       '{ label: "Mục tiêu", icon: Target, href: "/goals" }',
     );
   });
@@ -22,14 +32,17 @@ describe("MOBILE-BOTTOM-NAV-SAVINGS-1", () => {
     expect(source).toContain("fixed inset-x-0 bottom-0 z-50 lg:hidden");
   });
 
-  it("moves Mục tiêu into the Thêm active-route family while Tiết kiệm stays a direct tab", () => {
-    const moreStart = source.indexOf('if (href === "/categories")');
-    const moreEnd = source.indexOf("return pathname.startsWith(href);", moreStart);
-    const moreRegion = source.slice(moreStart, moreEnd);
+  it("keeps Tiết kiệm primary while Mục tiêu remains reachable from Thêm", () => {
+    const primary = region("const PRIMARY_TABS = [", "const MORE_GROUPS = [");
+    const more = region("const MORE_GROUPS = [", "const MORE_ROUTES =");
 
-    expect(moreStart).toBeGreaterThan(-1);
-    expect(moreEnd).toBeGreaterThan(moreStart);
-    expect(moreRegion).toContain('"/goals"');
-    expect(moreRegion).not.toContain('"/savings"');
+    expect(primary).toContain(
+      '{ label: "Tiết kiệm", icon: PiggyBank, href: "/savings" }',
+    );
+    expect(primary).not.toContain('href: "/goals"');
+
+    expect(more).toContain('label: "Mục tiêu"');
+    expect(more).toContain('href: "/goals"');
+    expect(more).not.toContain('href: "/savings"');
   });
 });

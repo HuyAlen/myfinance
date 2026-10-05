@@ -130,11 +130,11 @@ describe("AUDIT-UI-1 Activity History & Changed by UX", () => {
     expect(activityPage).not.toContain("dedupeEvents");
   });
 
-  it("makes activity discoverable from desktop, mobile More state and household settings", () => {
+  it("keeps activity discoverable from the sidebar and household settings without crowding mobile Thêm", () => {
     expect(sidebar).toContain(
       '{ label: "Hoạt động", icon: History, href: "/activity" }',
     );
-    expect(bottomNav).toContain('"/activity"');
+    expect(bottomNav).not.toContain('href: "/activity"');
     expect(householdCard).toContain('href="/activity"');
     expect(householdCard).toContain("Lịch sử hoạt động");
   });
