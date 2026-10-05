@@ -1800,7 +1800,7 @@ export default function SavingsPage({
     <section className="space-y-4 overflow-x-hidden sm:space-y-5">
       {!isSupabaseConfigured ? (
         <div className="rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-700">
-          Chưa cấu hình Supabase env. Thêm NEXT_PUBLIC_SUPABASE_URL và
+          Chưa cấu hình biến môi trường Supabase. Thêm NEXT_PUBLIC_SUPABASE_URL và
           NEXT_PUBLIC_SUPABASE_ANON_KEY để lưu thật.
         </div>
       ) : null}
@@ -3064,7 +3064,7 @@ export default function SavingsPage({
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">
-                  HISTORY
+                  LỊCH SỬ
                 </p>
                 <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
                   Lịch sử tiết kiệm

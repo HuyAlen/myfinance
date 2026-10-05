@@ -25,7 +25,7 @@ describe("FINANCE-REVIEW-INBOX-2 page contract", () => {
 
   it("shows and explicitly applies a matching transaction rule inside review", () => {
     expect(page).toContain("activeReviewRuleSuggestion");
-    expect(page).toContain("Suggested by rule");
+    expect(page).toContain("Đề xuất theo quy tắc");
     expect(page).toContain("handleApplyReviewRuleSuggestion");
   });
 

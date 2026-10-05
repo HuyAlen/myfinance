@@ -939,7 +939,7 @@ export default function BudgetsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-blue-500">
-                Budget Intelligence
+                Phân tích ngân sách
               </p>
               <h1 className="mt-1 text-[22px] font-black tracking-tight text-[#36536B] sm:text-4xl">
                 Ngân sách chi tiêu
@@ -1034,7 +1034,7 @@ export default function BudgetsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">
-                    Budget Health
+                    Sức khỏe ngân sách
                   </p>
                   <p className="mt-1 text-xl font-black tracking-tight text-rose-700 sm:text-2xl">
                     {budgetHealthScore}
@@ -1111,7 +1111,7 @@ export default function BudgetsPage() {
               <MetricTile
                 label="Ổn định tài chính"
                 value={`${financialPlanning.stabilityScore}/100`}
-                sub="Planning score"
+                sub="Điểm kế hoạch"
               />
             </div>
             <div className="mt-3 space-y-1.5 sm:mt-4 sm:space-y-2">

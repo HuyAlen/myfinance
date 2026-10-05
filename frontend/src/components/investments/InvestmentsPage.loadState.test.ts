@@ -35,7 +35,7 @@ describe("InvestmentsPage distinguishes load failure from legitimate empty (FINA
   });
 
   it("the error and empty-CTA blocks render different copy", () => {
-    expect(source).toContain("Không thể tải dữ liệu Forex");
+    expect(source).toContain("Không thể tải dữ liệu ngoại hối");
     expect(source).not.toBe("");
   });
 });

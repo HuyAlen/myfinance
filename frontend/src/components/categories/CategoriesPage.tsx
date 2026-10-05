@@ -1250,7 +1250,7 @@ export default function CategoriesPage() {
                         Khoản định kỳ
                       </p>
                       <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                        Bật để khoản này xuất hiện trong dự báo Dashboard. Tắt là
+                        Bật để khoản này xuất hiện trong dự báo Tổng quan. Tắt là
                         tạm dừng và vẫn giữ cấu hình; xóa lịch tại trang Định Kỳ.
                       </p>
                     </div>

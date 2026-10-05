@@ -96,7 +96,7 @@ describe("MYFINANCE-VIETNAMESE-UI-SSOT-1 rendered-copy completion", () => {
       "Powered by OpenAI",
       ">Status<",
       "label=\"Provider\"",
-      "Local AI only",
+      "AI cục bộ only",
       "OpenAI là provider chính",
       "label=\"Model\"",
       "Model mặc định cho AI Finance Chat",

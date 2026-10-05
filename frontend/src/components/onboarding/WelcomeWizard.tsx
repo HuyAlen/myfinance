@@ -39,7 +39,7 @@ const STEPS: WizardStep[] = [
   {
     id: "welcome",
     title: "Chào mừng đến với MyFinance!",
-    subtitle: "Your Personal CFO",
+    subtitle: "Trợ lý tài chính cá nhân",
     desc: "Ứng dụng quản lý tài chính thông minh giúp bạn theo dõi thu chi, quản lý ngân sách, đặt mục tiêu và nhận tư vấn AI cá nhân hoá.",
     icon: PiggyBank,
     iconBg: "bg-linear-to-br from-blue-600 to-cyan-500",
@@ -91,7 +91,7 @@ const STEPS: WizardStep[] = [
     id: "goal",
     title: "Đặt mục tiêu tài chính",
     subtitle: "Bước 5 / 5",
-    desc: "Thiết lập mục tiêu tiết kiệm có deadline. AI tự động tính số tiền cần tiết kiệm mỗi tháng và dự báo ngày đạt được mục tiêu.",
+    desc: "Thiết lập mục tiêu tiết kiệm có hạn hoàn thành. AI tự động tính số tiền cần tiết kiệm mỗi tháng và dự báo ngày đạt được mục tiêu.",
     icon: Target,
     iconBg: "bg-linear-to-br from-rose-500 to-pink-600",
     actions: [{ label: "Tạo mục tiêu", href: "/goals", primary: true }],
@@ -182,7 +182,7 @@ export default function WelcomeWizard() {
         <button
           onClick={handleSkip}
           className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
-          aria-label="Bỏ qua onboarding"
+          aria-label="Bỏ qua hướng dẫn thiết lập"
         >
           <X size={15} />
         </button>
@@ -246,7 +246,7 @@ export default function WelcomeWizard() {
                   </p>
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
-                  Khám phá ngay với wallets, transactions và goals mẫu được tạo
+                  Khám phá ngay với ví, giao dịch và mục tiêu mẫu được tạo
                   sẵn.
                 </p>
               </button>

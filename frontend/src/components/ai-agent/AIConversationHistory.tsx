@@ -156,7 +156,7 @@ export default function AIConversationHistory({
             <History size={16} />
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-900">Lịch sử chat</h3>
+            <h3 className="text-sm font-black text-slate-900">Lịch sử trò chuyện</h3>
             <p className="text-[10px] font-semibold text-slate-400">
               Mở lại cuộc trò chuyện trước
             </p>

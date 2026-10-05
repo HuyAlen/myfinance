@@ -120,7 +120,7 @@ function parseStreamLine(line: string): StreamEvent | null {
 
 async function readErrorMessage(response: Response) {
   const text = await response.text().catch(() => "");
-  if (!text) return `Request failed (${response.status}).`;
+  if (!text) return `Yêu cầu thất bại (${response.status}).`;
 
   try {
     const payload = JSON.parse(text) as { error?: string };
@@ -132,8 +132,8 @@ async function readErrorMessage(response: Response) {
 
 function sourceLabel(source?: ChatSource) {
   if (source === "openai") return "OpenAI";
-  if (source === "fallback") return "Local fallback";
-  if (source === "local") return "Local AI";
+  if (source === "fallback") return "Dự phòng cục bộ";
+  if (source === "local") return "AI cục bộ";
   return "MyFinance AI";
 }
 
@@ -187,7 +187,7 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
       >
         <span className="flex min-w-0 items-center gap-2 text-[11px] font-black text-blue-800">
           <Bug size={14} className="shrink-0" />
-          Planner Debug
+          Gỡ lỗi bộ lập kế hoạch
           <span className="truncate rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide text-blue-600 ring-1 ring-blue-100">
             {debug.plannerStatus}
           </span>
@@ -205,25 +205,25 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
         <div className="border-t border-blue-100 bg-white/80 px-3.5 py-3 text-[11px] text-slate-600">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div>
-              <div className="font-bold text-slate-400">Attempt</div>
+              <div className="font-bold text-slate-400">Lần thử</div>
               <div className="mt-0.5 font-black text-slate-700">
                 {debug.plannerAttempt}
               </div>
             </div>
             <div>
-              <div className="font-bold text-slate-400">Total</div>
+              <div className="font-bold text-slate-400">Tổng</div>
               <div className="mt-0.5 font-black text-slate-700">
                 {debug.timing.totalMs}ms
               </div>
             </div>
             <div>
-              <div className="font-bold text-slate-400">Planning</div>
+              <div className="font-bold text-slate-400">Lập kế hoạch</div>
               <div className="mt-0.5 font-black text-slate-700">
                 {debug.timing.planningMs ?? 0}ms
               </div>
             </div>
             <div>
-              <div className="font-bold text-slate-400">Execution</div>
+              <div className="font-bold text-slate-400">Thực thi</div>
               <div className="mt-0.5 font-black text-slate-700">
                 {debug.timing.executionMs ?? 0}ms
               </div>
@@ -233,13 +233,13 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
           {debug.continuation?.matched ? (
             <div className="mt-3 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2">
               <div className="font-black text-cyan-800">
-                Pending Action Continuation · {debug.continuation.mode}
+                Tiếp tục thao tác đang chờ · {debug.continuation.mode}
               </div>
               <div className="mt-1 text-[10px] text-cyan-700">
-                source: {debug.continuation.source} · lock:{" "}
+                nguồn: {debug.continuation.source} · khóa:{" "}
                 {String(debug.continuation.lockTool)}
                 {debug.continuation.toolName
-                  ? ` · tool: ${debug.continuation.toolName}`
+                  ? ` · công cụ: ${debug.continuation.toolName}`
                   : ""}
               </div>
               <div className="mt-1 text-[10px] text-cyan-700">
@@ -250,7 +250,7 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
 
           {debug.intent ? (
             <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2">
-              <span className="font-bold text-slate-400">Intent:</span>{" "}
+              <span className="font-bold text-slate-400">Ý định:</span>{" "}
               <span className="font-black text-slate-700">{debug.intent}</span>
             </div>
           ) : null}
@@ -271,8 +271,8 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
                     </span>
                   </div>
                   <div className="mt-1 text-[10px] text-slate-400">
-                    {tool.durationMs ?? 0}ms · keys:{" "}
-                    {tool.argumentKeys.join(", ") || "none"}
+                    {tool.durationMs ?? 0}ms · khóa:{" "}
+                    {tool.argumentKeys.join(", ") || "không có"}
                   </div>
                   {tool.error ? (
                     <div className="mt-1 text-[10px] font-semibold text-rose-600">
@@ -283,7 +283,7 @@ function PlannerDebugPanel({ debug }: { debug: AIPlannerDebugMetadata }) {
               ))
             ) : (
               <div className="rounded-xl bg-slate-50 px-3 py-2 text-slate-400">
-                Không có tool nào được thực thi.
+                Không có công cụ nào được thực thi.
               </div>
             )}
           </div>
@@ -741,7 +741,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
           throw new Error(await readErrorMessage(response));
         }
         if (!response.body) {
-          throw new Error("Server không trả về stream dữ liệu.");
+          throw new Error("Máy chủ không trả về luồng dữ liệu.");
         }
 
         const reader = response.body.getReader();
@@ -1019,7 +1019,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
       ].join(" ")}
       role="dialog"
       aria-modal="false"
-      aria-label="MyFinance AI Agent"
+      aria-label="Trợ lý AI MyFinance"
     >
       {historyOpen ? (
         <button
@@ -1051,12 +1051,12 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                     MyFinance AI
                   </h2>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-700">
-                    Secure BYOK
+                    BYOK an toàn
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
                   <span className={historyOpen ? "hidden xl:inline" : "inline"}>
-                    Personal CFO Copilot
+                    Trợ lý tài chính cá nhân
                   </span>
                   <span className={historyOpen ? "hidden xl:inline" : "inline"}>
                     ·
@@ -1083,9 +1083,9 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                     ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
                     : "text-slate-500 hover:bg-blue-50 hover:text-blue-700",
                 ].join(" ")}
-                aria-label="Developer Mode"
+                aria-label="Chế độ nhà phát triển"
                 title={
-                  developerMode ? "Tắt Planner Debug" : "Bật Planner Debug"
+                  developerMode ? "Tắt Gỡ lỗi bộ lập kế hoạch" : "Bật Gỡ lỗi bộ lập kế hoạch"
                 }
               >
                 <Bug size={17} />
@@ -1108,8 +1108,8 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                 type="button"
                 onClick={handleNewChat}
                 className="flex size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Chat mới"
-                title="Chat mới"
+                aria-label="Trò chuyện mới"
+                title="Trò chuyện mới"
               >
                 <MessageSquarePlus size={17} />
               </button>

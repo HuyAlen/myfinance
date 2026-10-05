@@ -383,7 +383,7 @@ export default function GoalsPage() {
           <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#2F80ED] sm:text-[11px] sm:tracking-[0.18em]">
-                Goal Center
+                Trung tâm mục tiêu
               </p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-[#36536B] sm:text-4xl">
                 Mục tiêu tài chính
@@ -702,7 +702,7 @@ export default function GoalsPage() {
                   </p>
                   {g.supabaseSavingAmount > 0 && (
                     <p className="mt-1 whitespace-nowrap text-[9.5px] font-semibold tracking-[-0.015em] text-cyan-600 sm:text-[11px]">
-                      Đã đồng bộ {formatVND(g.supabaseSavingAmount)} từ Savings
+                      Đã đồng bộ {formatVND(g.supabaseSavingAmount)} từ Tiết kiệm
                     </p>
                   )}
                   {g.linkedSavingAmount > 0 && (

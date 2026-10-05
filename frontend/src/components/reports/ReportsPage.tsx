@@ -1472,7 +1472,7 @@ export default function ReportsPage() {
           <div className="flex items-start justify-between gap-3 sm:flex-wrap sm:gap-4">
             <div className="min-w-0">
               <p className="hidden text-[11px] font-black uppercase tracking-widest text-blue-500 sm:block">
-                Financial Report Center
+                Trung tâm báo cáo tài chính
               </p>
               <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-4xl">
                 Báo cáo tài chính
@@ -1591,7 +1591,7 @@ export default function ReportsPage() {
               }
             >
               <p className="text-[10px] font-black uppercase tracking-wide text-white/80">
-                Financial Health · hiện tại
+                Sức khỏe tài chính · hiện tại
               </p>
               <p className="mt-1 text-3xl font-black text-white">
                 {healthV2.total}
@@ -1998,7 +1998,7 @@ export default function ReportsPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
               <SectionHeader
                 icon={<Brain size={20} />}
-                title="Executive Summary"
+                title="Tóm tắt điều hành"
                 subtitle="Điểm chính cần chú ý trong kỳ"
               />
               <div className="mt-5 grid gap-3">
@@ -2096,19 +2096,19 @@ export default function ReportsPage() {
             <SectionHeader
               icon={<BarChart3 size={20} />}
               title="So sánh kỳ"
-              subtitle="Month · Quarter · Year over Year"
+              subtitle="Tháng · Quý · Cùng kỳ năm trước"
             />
             <div className="mt-5 space-y-6">
               <CompareSection
-                title="Month over Month (MoM)"
+                title="So với tháng trước (MoM)"
                 data={comparisons.mom}
               />
               <CompareSection
-                title="Quarter over Quarter (QoQ)"
+                title="So với quý trước (QoQ)"
                 data={comparisons.qoq}
               />
               <CompareSection
-                title="Year over Year (YoY)"
+                title="So với cùng kỳ năm trước (YoY)"
                 data={comparisons.yoy}
               />
             </div>
@@ -3364,7 +3364,7 @@ export default function ReportsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          Export Center (always visible)
+          Trung tâm xuất dữ liệu (always visible)
           ══════════════════════════════════════════════════════════════════ */}
       <section className="hidden rounded-4xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-6 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -3374,7 +3374,7 @@ export default function ReportsPage() {
             </div>
             <div>
               <h2 className="text-base font-black text-slate-900">
-                Export Center
+                Trung tâm xuất dữ liệu
               </h2>
               <p className="text-xs text-slate-500">
                 CSV theo kỳ {label} · PDF in tab báo cáo đang mở

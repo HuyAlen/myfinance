@@ -141,7 +141,7 @@ describe("AUDIT-UI-1 Activity History & Changed by UX", () => {
 
   it("communicates immutable audit semantics and honest non-backfill behavior", () => {
     expect(activityPage).toContain("Chỉ đọc");
-    expect(activityPage).toContain("không được tự suy diễn hoặc backfill");
+    expect(activityPage).toContain("không được tự suy diễn hoặc bổ sung ngược");
     expect(activityPage).toContain("Đang giữ lịch sử đã tải gần nhất.");
   });
 });

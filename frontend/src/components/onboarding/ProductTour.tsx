@@ -163,7 +163,7 @@ export default function ProductTour() {
           <button
             onClick={handleSkip}
             className="absolute right-4 top-4 z-10 flex size-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
-            aria-label="Bỏ qua tour"
+            aria-label="Bỏ qua hướng dẫn"
           >
             <X size={15} />
           </button>
@@ -206,7 +206,7 @@ export default function ProductTour() {
                 onClick={handleSkip}
                 className="text-xs font-bold text-slate-400 transition-colors hover:text-slate-600"
               >
-                Bỏ qua tour
+                Bỏ qua hướng dẫn
               </button>
 
               <div className="flex items-center gap-2">

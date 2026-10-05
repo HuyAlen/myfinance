@@ -509,7 +509,7 @@ export default function RecurringMoneyPage() {
             </div>
             <h1 className="mt-3 text-2xl font-black tracking-tight text-[#294A66] sm:text-3xl">Dòng tiền định kỳ</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-[#60778D]">
-              Một nơi quản lý lương, hóa đơn và khoản thu/chi lặp lại. Dashboard Safe to Spend và Cash Runway dùng chính lịch hợp lệ ở đây. Lịch chỉ dùng cho dự báo; đến hạn không tự ghi giao dịch hay đổi số dư.
+              Một nơi quản lý lương, hóa đơn và khoản thu/chi lặp lại. Các chỉ số Có thể chi an toàn và Dự báo thanh khoản trên Tổng quan dùng chính lịch hợp lệ ở đây. Lịch chỉ dùng cho dự báo; đến hạn không tự ghi giao dịch hay đổi số dư.
             </p>
           </div>
           <button
@@ -794,7 +794,7 @@ function EmptyState({ onCreate, calendar = false }: { onCreate: () => void; cale
     <section className="rounded-3xl border border-dashed border-[#C9DCEB] bg-white/80 p-8 text-center">
       <Repeat2 className="mx-auto text-[#8ABBE8]" size={28} />
       <p className="mt-3 text-base font-black text-[#294A66]">{calendar ? "Chưa có khoản đến hạn trong 30 ngày" : "Chưa có lịch định kỳ phù hợp"}</p>
-      <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-[#71879A]">Tạo lịch từ một danh mục thu/chi để Safe to Spend và Cash Runway có dữ liệu dự báo đáng tin hơn.</p>
+      <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-[#71879A]">Tạo lịch từ một danh mục thu/chi để Có thể chi an toàn và Dự báo thanh khoản có dữ liệu dự báo đáng tin hơn.</p>
       <button type="button" onClick={onCreate} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-50 px-4 text-sm font-black text-blue-700"><Plus size={16} /> Thêm khoản định kỳ</button>
     </section>
   );

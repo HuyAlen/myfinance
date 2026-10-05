@@ -674,7 +674,7 @@ export default function ActivityPage() {
             Chưa có hoạt động phù hợp
           </p>
           <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">
-            Audit Trail chỉ ghi các thay đổi phát sinh sau khi tính năng được bật; dữ liệu lịch sử cũ không được tự suy diễn hoặc backfill.
+            Nhật ký hoạt động chỉ ghi các thay đổi phát sinh sau khi tính năng được bật; dữ liệu lịch sử cũ không được tự suy diễn hoặc bổ sung ngược.
           </p>
           {activeFilterCount > 0 ? (
             <button
@@ -837,7 +837,7 @@ export default function ActivityPage() {
                             </div>
                             {presentation.incompleteComparison ? (
                               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-700">
-                                Audit cũ không có đủ snapshot trước và sau. MyFinance chỉ hiển thị dữ liệu đã ghi nhận, không suy diễn trường thay đổi.
+                                Nhật ký cũ không có đủ bản ghi trước và sau. MyFinance chỉ hiển thị dữ liệu đã ghi nhận, không suy diễn trường thay đổi.
                               </p>
                             ) : null}
                             {detailRows.length === 0 ? (

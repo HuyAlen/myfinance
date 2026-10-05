@@ -5,14 +5,14 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
 
 describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
-  it("reuses canonical budget spending for Safe to Spend", () => {
+  it("reuses canonical budget spending for Có thể chi an toàn", () => {
     expect(source).toContain("calculateBudgetSpendingCollection({");
     expect(source).toContain("const budgetSpendingSnapshot = useMemo(");
     expect(source).toContain("const budgetRemaining = useMemo(");
     expect(source).toContain("buildSafeToSpend({");
   });
 
-  it("uses one normalized recurring occurrence stream for upcoming, runway and Safe to Spend", () => {
+  it("uses one normalized recurring occurrence stream for upcoming, runway and Có thể chi an toàn", () => {
     expect(source).toContain("const recurringSchedules = useMemo(() => {");
     expect(source).toContain("expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90)");
     expect(source).toContain("const recurringOccurrences = useMemo(");
@@ -27,7 +27,7 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
     expect(source).toContain('data-dashboard-decision="month-end-closeout"');
   });
 
-  it("keeps Safe to Spend current-month only and does not count expected income as wallet cash", () => {
+  it("keeps Có thể chi an toàn current-month only and does not count expected income as wallet cash", () => {
     expect(source).toContain("selectedMonthKey: dashboardMonthKey");
     expect(source).toContain("spendableCash: summary.liquidBalance");
     expect(source).toContain("budgetedCategoryIds");

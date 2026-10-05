@@ -134,7 +134,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     expect(source).toContain('label="Danh mục đầu tư hiện tại"');
     expect(source).toContain("value={formatVND(summary.investmentAssets)}");
     expect(source).not.toContain("displayedInvestmentCapital");
-    expect(source).toContain("Financial Health · hiện tại");
+    expect(source).toContain("Sức khỏe tài chính · hiện tại");
     expect(source).toContain("Giá trị và Tỷ suất lợi nhuận là bản ghi hiện tại; vốn phân bổ được tính theo kỳ báo cáo.");
   });
 

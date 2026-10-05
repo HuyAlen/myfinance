@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900">
               MyFinance
             </h1>
-            <p className="text-sm text-slate-500">Personal Wealth OS</p>
+            <p className="text-sm text-slate-500">Nền tảng tài chính cá nhân</p>
           </div>
         </div>
 
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h2 className="text-xl font-black text-slate-900">Đã gửi email!</h2>
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              Chúng tôi đã gửi link đặt lại mật khẩu tới{" "}
+              Chúng tôi đã gửi liên kết đặt lại mật khẩu tới{" "}
               <span className="font-bold text-slate-700">{email}</span>. Vui
               lòng kiểm tra hộp thư (kể cả thư mục spam).
             </p>
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
           <div className="rounded-4xl border border-slate-200 bg-white p-8 shadow-sm">
             <h2 className="text-xl font-black text-slate-900">Quên mật khẩu</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Nhập email của bạn để nhận link đặt lại mật khẩu.
+              Nhập email của bạn để nhận liên kết đặt lại mật khẩu.
             </p>
 
             {error && (
@@ -97,7 +97,7 @@ export default function ForgotPasswordPage() {
                 disabled={submitting}
                 className="mt-2 w-full rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition hover:opacity-90 disabled:opacity-60"
               >
-                {submitting ? "Đang gửi..." : "Gửi link đặt lại mật khẩu"}
+                {submitting ? "Đang gửi..." : "Gửi liên kết đặt lại mật khẩu"}
               </button>
             </form>
 

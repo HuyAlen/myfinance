@@ -2000,7 +2000,7 @@ export default function TransactionsPage() {
         <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
           <div className="min-w-0">
             <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">
-              Transaction Center
+              Trung tâm giao dịch
             </p>
             <h1 className="mt-0.5 whitespace-nowrap text-2xl font-black tracking-tight text-slate-900 sm:mt-1 sm:text-3xl">
               Giao dịch
@@ -2262,7 +2262,7 @@ export default function TransactionsPage() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
-                          Suggested by rule
+                          Đề xuất theo quy tắc
                         </p>
                         <p className="mt-1 truncate text-sm font-black text-slate-800">
                           {activeReviewRuleSuggestion.rule.name}
@@ -3823,7 +3823,7 @@ export default function TransactionsPage() {
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                        Wallet Preview
+                        Xem trước ví
                       </p>
                       <p className="mt-1 text-sm font-black text-slate-800">
                         {selectedWallet?.name}

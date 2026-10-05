@@ -42,7 +42,7 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 pure decision helpers", () => {
     expect(occurrences).toHaveLength(1);
   });
 
-  it("keeps Safe to Spend conservative by reserving recurring expense and not pre-spending future income", () => {
+  it("keeps Có thể chi an toàn conservative by reserving recurring expense and not pre-spending future income", () => {
     const occurrences = expandRecurringScheduleOccurrences(
       [
         { id: "rent", title: "Rent", categoryId: "rent", amount: 2_000_000, type: "expense", nextRunDate: "2026-10-10" },

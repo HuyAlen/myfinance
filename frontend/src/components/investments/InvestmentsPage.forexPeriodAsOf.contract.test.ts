@@ -63,8 +63,8 @@ describe("FOREX-BALANCE-ASOF-1C — Period UI Adoption", () => {
   it("fails closed in the UI when historical Balance is missing", () => {
     expect(page).toContain('data-ui="forex-historical-balance-missing"');
     expect(page).toContain("Chưa có dữ liệu lịch sử số dư");
-    expect(page).toContain("Balance tổng và");
-    expect(page).toContain("Profit tổng được để trống thay vì suy đoán từ dòng tiền.");
+    expect(page).toContain("Tổng số dư và");
+    expect(page).toContain("tổng lợi nhuận được để trống thay vì suy đoán từ dòng tiền.");
     expect(page).toContain('"Chưa đủ dữ liệu"');
     expect(page).toContain("Không suy đoán lợi nhuận khi thiếu lịch sử số dư");
   });

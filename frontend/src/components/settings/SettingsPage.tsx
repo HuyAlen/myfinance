@@ -78,8 +78,8 @@ const SECTIONS = [
 ];
 
 const AI_MODEL_OPTIONS = [
-  { value: "gpt-5.2", label: "GPT-5.2 · Recommended" },
-  { value: "gpt-5.2-mini", label: "GPT-5.2 Mini · Fast" },
+  { value: "gpt-5.2", label: "GPT-5.2 · Khuyên dùng" },
+  { value: "gpt-5.2-mini", label: "GPT-5.2 Mini · Nhanh" },
   { value: "gpt-5.1", label: "GPT-5.1" },
   { value: "gpt-4.1", label: "GPT-4.1" },
   { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
@@ -1183,8 +1183,8 @@ export default function SettingsPage() {
                   onChange={setCurrency}
                   options={[
                     { value: "VND", label: "Đồng Việt Nam (VND)" },
-                    { value: "USD", label: "US Dollar (USD)" },
-                    { value: "EUR", label: "Euro (EUR)" },
+                    { value: "USD", label: "Đô la Mỹ (USD)" },
+                    { value: "EUR", label: "Đồng euro (EUR)" },
                   ]}
                 />
               </div>

@@ -149,7 +149,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             MyFinance
           </h1>
           <p className="text-[11px] font-semibold text-slate-400">
-            Your Personal CFO
+            Trợ lý tài chính cá nhân
           </p>
         </div>
       </Link>
@@ -226,7 +226,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-[10px] text-slate-400">Realtime · Supabase</p>
+        <p className="mt-0.5 text-[10px] text-slate-400">Thời gian thực · Supabase</p>
       </div>
     </aside>
   );

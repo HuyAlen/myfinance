@@ -3663,18 +3663,18 @@ export default function DashboardPage() {
             <div data-dashboard-decision="safe-to-spend" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
               <p className="text-sm font-black text-[#294A66]">
                 {safeToSpend.reason === "not-current-month"
-                  ? "Chuyển về tháng hiện tại để tính Safe to Spend"
+                  ? "Chuyển về tháng hiện tại để tính mức có thể chi an toàn"
                   : "Chưa có ngân sách để xác định mức chi an toàn"}
               </p>
               <p className="mt-1 text-xs leading-5 text-[#71879A]">
-                Safe to Spend chỉ dùng tiền đang khả dụng trong ví và ngân sách còn lại; Savings, Investment và thu nhập tương lai không được coi là tiền có thể chi ngay.
+                Mức có thể chi an toàn chỉ dùng tiền đang khả dụng trong ví và ngân sách còn lại; Tiết kiệm, Đầu tư và thu nhập tương lai không được coi là tiền có thể chi ngay.
               </p>
             </div>
           ) : (
             <div data-dashboard-decision="safe-to-spend" className="mt-4">
               <div className="relative overflow-hidden rounded-2xl border border-[#CFE0ED] bg-linear-to-br from-[#F7FBFF] to-[#EDF7FC] p-4">
                 <div className="pointer-events-none absolute -right-8 -top-10 hidden size-28 rounded-full bg-cyan-100/50 blur-2xl sm:block" />
-                <p className="relative text-[10px] font-black uppercase tracking-[0.12em] text-[#60778D]">Safe to Spend</p>
+                <p className="relative text-[10px] font-black uppercase tracking-[0.12em] text-[#60778D]">Có thể chi an toàn</p>
                 <p className="relative mt-1 text-[clamp(1.55rem,6vw,2.15rem)] font-black tracking-[-0.045em] tabular-nums text-[#2F80ED]">
                   {formatVND(safeToSpend.amount)}
                 </p>
@@ -4399,7 +4399,7 @@ export default function DashboardPage() {
             <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-100" />
           ) : !financeDataHealth.available ? (
             <div data-dashboard-decision="data-health" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
-              Data Health được đánh giá trên tháng hiện tại. Chuyển về tháng hiện tại để kiểm tra.
+              Sức khỏe dữ liệu được đánh giá trên tháng hiện tại. Chuyển về tháng hiện tại để kiểm tra.
             </div>
           ) : financeDataHealth.issues.length === 0 ? (
             <div data-dashboard-decision="data-health" className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-[#F6FCF9] p-4">

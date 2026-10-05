@@ -153,7 +153,7 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
   },
   "/help": {
     title: "Hướng Dẫn",
-    desc: "Onboarding, tính năng & câu hỏi thường gặp",
+    desc: "Thiết lập ban đầu, tính năng & câu hỏi thường gặp",
   },
 };
 
@@ -1302,7 +1302,7 @@ export default function Header({
                         Kỳ báo cáo
                       </p>
                       <p className="mt-0.5 text-xs font-medium text-slate-400">
-                        Áp dụng cho Dashboard, Giao dịch, Ngân sách và Báo cáo
+                        Áp dụng cho Tổng quan, Giao dịch, Ngân sách và Báo cáo
                       </p>
                     </div>
                     <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">

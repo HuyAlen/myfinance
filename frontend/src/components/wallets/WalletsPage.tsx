@@ -995,7 +995,7 @@ export default function WalletsPage() {
         <div className="flex flex-col gap-3.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
-              Wallet Center
+              Trung tâm ví tiền
             </p>
             <h1 className="mt-1 text-[26px] font-black tracking-tight text-slate-900 sm:text-3xl">
               Ví tiền
@@ -1651,7 +1651,7 @@ export default function WalletsPage() {
                   <RefreshCcw size={18} />
                 </span>
                 <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
-                  Balance reconciliation
+                  Đối soát số dư
                 </p>
                 <h2 className="mt-1 truncate text-xl font-black text-slate-900">
                   Đối soát {reconcileTarget.name}
@@ -1742,7 +1742,7 @@ export default function WalletsPage() {
                     value={reconcileNote}
                     onChange={(event) => setReconcileNote(event.target.value.slice(0, 500))}
                     rows={3}
-                    placeholder="Ví dụ: Đối chiếu theo số dư app ngân hàng lúc 21:30"
+                    placeholder="Ví dụ: Đối chiếu theo số dư ứng dụng ngân hàng lúc 21:30"
                     className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                   />
                   <p className="mt-1 text-right text-[10px] font-semibold text-slate-400">
@@ -1754,7 +1754,7 @@ export default function WalletsPage() {
                     Điều chỉnh số dư, không tạo dòng tiền giả
                   </p>
                   <p className="mt-1 text-[11px] leading-5 text-slate-600">
-                    Đối soát không tạo giao dịch Thu/Chi/Chuyển tiền, nên không làm sai báo cáo Cash Flow. Thay đổi số dư được audit tự động với số dư trước/sau và người thực hiện.
+                    Đối soát không tạo giao dịch Thu/Chi/Chuyển tiền, nên không làm sai báo cáo dòng tiền. Thay đổi số dư được ghi nhật ký tự động với số dư trước/sau và người thực hiện.
                   </p>
                   <Link
                     href="/activity"

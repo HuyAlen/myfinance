@@ -209,7 +209,7 @@ function createEmptyPortfolioForm(): PortfolioFormState {
 
 function getInvestmentTypeLabel(type: InvestmentType): string {
   if (type === "stock") return "Cổ phiếu";
-  if (type === "crypto") return "Crypto";
+  if (type === "crypto") return "Tài sản mã hóa";
   if (type === "fund") return "Quỹ / ETF";
   if (type === "gold") return "Vàng";
   return "Khác";
@@ -738,7 +738,7 @@ export default function InvestmentsPage() {
   function requestDeletePortfolioInvestment(investment: Investment) {
     setPendingAction({
       title: "Xóa khoản đầu tư?",
-      description: `${investment.name} sẽ bị xóa khỏi Portfolio. Dữ liệu Forex không bị ảnh hưởng.`,
+      description: `${investment.name} sẽ bị xóa khỏi danh mục đầu tư. Dữ liệu Ngoại hối không bị ảnh hưởng.`,
       variant: "danger",
       onConfirm: async () => {
         const result = await deleteInvestment(investment.id);
@@ -1112,7 +1112,7 @@ export default function InvestmentsPage() {
               Danh mục đầu tư
             </h2>
             <p className="mt-1 text-xs font-semibold text-[#7C91A6] sm:text-sm">
-              Cổ phiếu, quỹ/ETF, crypto, vàng và các tài sản đầu tư khác.
+              Cổ phiếu, quỹ/ETF, tài sản mã hóa, vàng và các tài sản đầu tư khác.
             </p>
           </div>
           <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
@@ -1122,7 +1122,7 @@ export default function InvestmentsPage() {
 
         {isLoading && investments.length === 0 ? (
           <div className="mt-4 rounded-3xl bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
-            Đang tải Portfolio...
+            Đang tải danh mục đầu tư...
           </div>
         ) : null}
 
@@ -1130,7 +1130,7 @@ export default function InvestmentsPage() {
           <div className="mt-4 rounded-3xl border border-dashed border-rose-200 bg-rose-50/40 p-8 text-center">
             <BriefcaseBusiness size={24} className="mx-auto text-rose-500" />
             <p className="mt-4 text-lg font-black text-rose-700">
-              Không thể tải Portfolio
+              Không thể tải danh mục đầu tư
             </p>
             <p className="mt-1 text-sm text-slate-500">{loadError}</p>
           </div>
@@ -1149,10 +1149,10 @@ export default function InvestmentsPage() {
               </span>
               <span className="min-w-0">
                 <span className="block text-[15px] font-black text-sky-900">
-                  Chưa có tài sản Portfolio
+                  Chưa có tài sản đầu tư
                 </span>
                 <span className="mt-0.5 block text-xs font-medium text-slate-500 sm:text-sm">
-                  Thêm cổ phiếu, quỹ/ETF, crypto hoặc vàng để bắt đầu theo dõi.
+                  Thêm cổ phiếu, quỹ/ETF, tài sản mã hóa hoặc vàng để bắt đầu theo dõi.
                 </span>
               </span>
             </span>
@@ -1267,13 +1267,13 @@ export default function InvestmentsPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-              Forex
+              Ngoại hối
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
               Tài khoản ngoại hối
             </h2>
             <p className="mt-1 text-xs font-medium text-[#7C91A6] sm:text-sm">
-              Nạp/rút theo kỳ · Balance và Lợi nhuận tại cuối kỳ.
+              Nạp/rút theo kỳ · Số dư và lợi nhuận tại cuối kỳ.
             </p>
           </div>
           <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
@@ -1287,15 +1287,15 @@ export default function InvestmentsPage() {
             className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-800 sm:mt-4 sm:text-sm"
           >
             Chưa có dữ liệu lịch sử số dư cho {summary.accountsMissingBalance}
-            /{summary.accountCount} tài khoản tại {filterLabel}. Balance tổng và
-            Profit tổng được để trống thay vì suy đoán từ dòng tiền.
+            /{summary.accountCount} tài khoản tại {filterLabel}. Tổng số dư và
+            tổng lợi nhuận được để trống thay vì suy đoán từ dòng tiền.
           </div>
         ) : null}
 
         <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4">
           {isLoading && accounts.length === 0 ? (
             <div className="col-span-full rounded-3xl bg-slate-50 p-8 text-center text-sm font-semibold text-slate-500">
-              Đang tải dữ liệu Forex...
+              Đang tải dữ liệu ngoại hối...
             </div>
           ) : null}
 
@@ -1307,7 +1307,7 @@ export default function InvestmentsPage() {
             <div className="col-span-full flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-rose-50/40 p-8 text-center">
               <Landmark size={24} className="text-rose-500" />
               <p className="mt-4 text-lg font-black text-rose-700">
-                Không thể tải dữ liệu Forex
+                Không thể tải dữ liệu ngoại hối
               </p>
               <p className="mt-1 text-sm text-slate-500">{loadError}</p>
             </div>
@@ -1321,7 +1321,7 @@ export default function InvestmentsPage() {
             >
               <Landmark size={24} className="text-sky-600" />
               <p className="mt-4 text-lg font-black text-sky-800">
-                Chưa có tài khoản Forex
+                Chưa có tài khoản ngoại hối
               </p>
               <p className="mt-1 text-sm text-slate-500">
                 Tạo tài khoản đầu tiên để bắt đầu quản lý vốn và lời/lỗ.
@@ -1388,7 +1388,7 @@ export default function InvestmentsPage() {
               >
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/65 p-3.5 sm:p-4">
                   <p className="text-[9px] font-black uppercase tracking-[0.12em] text-blue-600/75">
-                    Balance
+                    Số dư
                   </p>
                   <p
                     className="mt-1.5 whitespace-nowrap text-[17px] font-black tabular-nums text-blue-700 sm:text-xl"
@@ -1416,7 +1416,7 @@ export default function InvestmentsPage() {
                       : account.historicalBalanceMissing
                         ? "Chưa có dữ liệu lịch sử số dư"
                         : account.hasAsOfPerformance
-                          ? `As-of cuối ${filterLabel}`
+                          ? `Tại cuối ${filterLabel}`
                           : `Không có dữ liệu tại ${filterLabel}`}
                   </p>
                 </div>
@@ -1629,7 +1629,7 @@ export default function InvestmentsPage() {
                 options={[
                   { value: "stock", label: "Cổ phiếu" },
                   { value: "fund", label: "Quỹ / ETF" },
-                  { value: "crypto", label: "Crypto" },
+                  { value: "crypto", label: "Tài sản mã hóa" },
                   { value: "gold", label: "Vàng" },
                   { value: "other", label: "Khác" },
                 ]}
@@ -1765,7 +1765,7 @@ export default function InvestmentsPage() {
                 Nhập số dư đang hiển thị trên Exness, MT4/MT5 hoặc ứng dụng của sàn. Không dùng giá trị có bao gồm lời/lỗ lệnh đang mở.
                 <span className="font-black">
                   {" "}
-                  Profit = Balance - Tổng nạp + Tổng rút
+                  Lợi nhuận = Số dư - Tổng nạp + Tổng rút
                 </span>
                 .
               </div>

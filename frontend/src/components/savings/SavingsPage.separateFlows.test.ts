@@ -70,7 +70,7 @@ describe("SavingsPage separates edit, money movement, and history flows", () => 
   });
 
   it("provides a read-only history sheet with no form controls", () => {
-    expect(historySource).toContain("HISTORY");
+    expect(historySource).toContain("LỊCH SỬ");
     expect(historySource).toContain("selectedTransactions.map");
     expect(historySource).toContain("Chưa có giao dịch");
     expect(historySource).not.toContain("<input");

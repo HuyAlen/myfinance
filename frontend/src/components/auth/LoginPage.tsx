@@ -53,7 +53,7 @@ export default function LoginPage() {
             <h1 className="text-2xl font-black tracking-tight text-slate-900">
               MyFinance
             </h1>
-            <p className="text-sm text-slate-500">Personal Wealth OS</p>
+            <p className="text-sm text-slate-500">Nền tảng tài chính cá nhân</p>
           </div>
         </div>
 
