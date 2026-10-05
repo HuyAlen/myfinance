@@ -227,7 +227,7 @@ export default function TransactionCsvImportModal({
           </div>
 
           <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] leading-5 text-slate-600">
-            <strong className="text-slate-800">Quy tắc an toàn:</strong> Thu/Chi cần khớp Danh mục và Ví hiện có. Chuyển tiền dùng “Ví A -&gt; Ví B” hoặc cột Ví nhận. Dòng trùng hoàn toàn với lịch sử sẽ tự bỏ qua. Import dùng cùng Finance Engine với thao tác thêm thủ công nên ảnh hưởng số dư Ví tương ứng.
+            <strong className="text-slate-800">Quy tắc an toàn:</strong> Thu/Chi cần khớp Danh mục và Ví hiện có. Chuyển tiền dùng “Ví A -&gt; Ví B” hoặc cột Ví nhận. Dòng trùng hoàn toàn với lịch sử sẽ tự bỏ qua. Nhập dữ liệu dùng cùng bộ máy tài chính với thao tác thêm thủ công nên ảnh hưởng số dư Ví tương ứng.
           </div>
 
           {loadError ? (
@@ -241,7 +241,7 @@ export default function TransactionCsvImportModal({
             <>
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <StatusCard label="Sẵn sàng" value={preview.readyCount} tone="ready" />
-                <StatusCard label="Theo rule" value={preview.ruleAppliedCount ?? 0} tone="rule" />
+                <StatusCard label="Theo quy tắc" value={preview.ruleAppliedCount ?? 0} tone="rule" />
                 <StatusCard label="Trùng" value={preview.duplicateCount} tone="duplicate" />
                 <StatusCard label="Lỗi" value={preview.errorCount} tone="error" />
               </div>

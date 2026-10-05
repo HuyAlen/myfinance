@@ -167,14 +167,14 @@ const QUICK_FLOW: QuickFlowStep[] = [
   { num: 2, title: "Thêm giao dịch", desc: "Ghi chép thu chi hàng ngày", href: "/transactions", numBg: "bg-emerald-600", numText: "text-white" },
   { num: 3, title: "Tạo ngân sách", desc: "Kiểm soát chi tiêu theo tháng", href: "/budgets", numBg: "bg-cyan-600", numText: "text-white" },
   { num: 4, title: "Tạo mục tiêu", desc: "Đặt mục tiêu tiết kiệm cụ thể", href: "/goals", numBg: "bg-indigo-600", numText: "text-white" },
-  { num: 5, title: "Theo dõi Dashboard", desc: "Xem tổng quan tài chính mỗi ngày", href: "/", numBg: "bg-violet-600", numText: "text-white" },
-  { num: 6, title: "Xem AI Insights", desc: "Xem phân tích và gợi ý từ dữ liệu", href: "/ai-insights", numBg: "bg-rose-500", numText: "text-white" },
+  { num: 5, title: "Theo dõi Tổng quan", desc: "Xem tổng quan tài chính mỗi ngày", href: "/", numBg: "bg-violet-600", numText: "text-white" },
+  { num: 6, title: "Xem Phân tích AI", desc: "Xem phân tích và gợi ý từ dữ liệu", href: "/ai-insights", numBg: "bg-rose-500", numText: "text-white" },
 ];
 
 const FEATURE_GUIDES: Guide[] = [
   {
     id: "dashboard",
-    title: "Dashboard · Tổng quan",
+    title: "Tổng quan",
     icon: Home,
     href: "/",
     accentBg: "bg-blue-600",
@@ -182,20 +182,20 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-blue-700",
     accentBorder: "border-blue-200",
     accentIcon: "bg-blue-100 text-blue-600",
-    purpose: "Xem nhanh tình hình tài chính trong một màn hình: Net Worth, dòng tiền, quỹ khẩn cấp, ngân sách, mục tiêu và các chỉ số sức khỏe tài chính.",
+    purpose: "Xem nhanh tình hình tài chính trong một màn hình: Tài sản ròng, dòng tiền, quỹ khẩn cấp, ngân sách, mục tiêu và các chỉ số sức khỏe tài chính.",
     when: "Mở khi cần đánh giá nhanh trạng thái tài chính hiện tại hoặc kiểm tra xu hướng theo kỳ.",
     howTo: [
-      "Mở MyFinance → Dashboard hiển thị ngay trang chủ",
-      "Đọc Net Worth theo balance sheet chuẩn: Ví tiền + Tiết kiệm + Portfolio + Forex − Tổng nợ",
+      "Mở MyFinance → Tổng quan hiển thị ngay trang chủ",
+      "Đọc Tài sản ròng theo bảng cân đối tài sản chuẩn: Ví tiền + Tiết kiệm + Danh mục đầu tư + Ngoại hối − Tổng nợ",
       "Kiểm tra Thu, Chi thực và dòng tiền của kỳ đang chọn",
       "Xem Quỹ khẩn cấp theo số tháng chi tiêu thực bình quân của các tháng đã hoàn tất — không dùng tháng hiện tại đang chạy dở làm mẫu số",
       "Mở các hành động/gợi ý để đi tới đúng trang dữ liệu cần xử lý",
     ],
-    example: "Đầu tháng mới chỉ phát sinh một ít chi tiêu, Dashboard vẫn không dùng khoản chi nhỏ của vài ngày đầu tháng để kết luận quỹ khẩn cấp đủ hàng chục tháng; coverage dựa trên baseline các tháng đã hoàn tất.",
+    example: "Đầu tháng mới chỉ phát sinh một ít chi tiêu, Tổng quan vẫn không dùng khoản chi nhỏ của vài ngày đầu tháng để kết luận quỹ khẩn cấp đủ hàng chục tháng; mức dự phòng dựa trên mức chi tham chiếu của các tháng đã hoàn tất.",
     tips: [
-      "Net Worth là snapshot hiện tại, còn dòng tiền phụ thuộc kỳ đang chọn",
-      "Savings, Portfolio và Forex đều là tài sản riêng trên balance sheet, không nằm trong số dư Ví",
-      "Nếu chưa đủ dữ liệu tháng hoàn tất, coverage quỹ khẩn cấp có thể hiển thị chưa đủ dữ liệu thay vì kết luận sai",
+      "Tài sản ròng là bản ghi hiện tại, còn dòng tiền phụ thuộc kỳ đang chọn",
+      "Tiết kiệm, Danh mục đầu tư và Ngoại hối đều là tài sản riêng trên bảng cân đối tài sản, không nằm trong số dư Ví",
+      "Nếu chưa đủ dữ liệu tháng hoàn tất, mức dự phòng quỹ khẩn cấp có thể hiển thị chưa đủ dữ liệu thay vì kết luận sai",
     ],
   },
   {
@@ -208,20 +208,20 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-emerald-700",
     accentBorder: "border-emerald-200",
     accentIcon: "bg-emerald-100 text-emerald-600",
-    purpose: "Ghi chép thu nhập, chi tiêu và chuyển tiền giữa các ví. Đây là nguồn dữ liệu dòng tiền cho Dashboard, Budgets và Reports.",
+    purpose: "Ghi chép thu nhập, chi tiêu và chuyển tiền giữa các ví. Đây là nguồn dữ liệu dòng tiền cho Tổng quan, Ngân sách và Báo cáo.",
     when: "Sau khi phát sinh thu nhập, chi tiêu hoặc chuyển tiền cần được ghi nhận.",
     howTo: [
       "Nhấn 'Thêm giao dịch'",
       "Chọn đúng loại: Thu nhập / Chi tiêu / Chuyển tiền",
       "Nhập số tiền, danh mục, ví và ngày giao dịch",
       "Dùng Chuyển tiền khi di chuyển tiền giữa các ví của chính bạn",
-      "Lưu để cập nhật ledger và các chỉ số liên quan",
+      "Lưu để cập nhật sổ cái và các chỉ số liên quan",
     ],
-    example: "Chi 45.000đ ăn sáng được tính là chi thực. Chuyển 2M từ ngân hàng sang ví khác của bạn là transfer, không phải một khoản chi tiêu mới.",
+    example: "Chi 45.000đ ăn sáng được tính là chi thực. Chuyển 2M từ ngân hàng sang ví khác của bạn là chuyển tiền nội bộ, không phải một khoản chi tiêu mới.",
     tips: [
       "Ghi giao dịch sớm để số liệu theo kỳ chính xác",
-      "Không đổi transfer thành expense chỉ để khớp số dư",
-      "Các khoản phân bổ tương lai như Savings/Investment được theo dõi tách khỏi chi tiêu sinh hoạt thực",
+      "Không đổi chuyển tiền thành chi tiêu chỉ để khớp số dư",
+      "Các khoản phân bổ tương lai như Tiết kiệm/Đầu tư được theo dõi tách khỏi chi tiêu sinh hoạt thực",
       "Dùng bộ lọc và CSV khi cần đối soát chi tiết",
     ],
   },
@@ -235,7 +235,7 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-cyan-700",
     accentBorder: "border-cyan-200",
     accentIcon: "bg-cyan-100 text-cyan-600",
-    purpose: "Quản lý tiền mặt, tài khoản ngân hàng và ví điện tử. Ví là phần tài sản thanh khoản/spendable; Savings, Portfolio và Forex được quản lý ở domain riêng.",
+    purpose: "Quản lý tiền mặt, tài khoản ngân hàng và ví điện tử. Ví là phần tài sản thanh khoản có thể chi tiêu; Tiết kiệm, Danh mục đầu tư và Ngoại hối được quản lý ở phân hệ riêng.",
     when: "Khi mở tài khoản thanh toán mới, cần đối soát số dư hoặc muốn xem tiền có thể chi tiêu ngay.",
     howTo: [
       "Vào 'Ví Tiền' → nhấn 'Thêm ví tiền'",
@@ -244,12 +244,12 @@ const FEATURE_GUIDES: Guide[] = [
       "Dùng giao dịch để ghi nhận các thay đổi số dư thường xuyên",
       "Dùng 'Chuyển tiền' khi chuyển giữa hai ví để không làm tăng chi tiêu thực",
     ],
-    example: "MB Bank 48M + Tiền mặt 1,5M + MoMo 300K là phần Ví. Một sổ tiết kiệm 20M và Portfolio 30M vẫn góp vào Net Worth nhưng không được cộng lẫn vào số dư Ví.",
+    example: "MB Bank 48M + Tiền mặt 1,5M + MoMo 300K là phần Ví. Một sổ tiết kiệm 20M và Danh mục đầu tư 30M vẫn góp vào Tài sản ròng nhưng không được cộng lẫn vào số dư Ví.",
     tips: [
       "Tách từng tài khoản thực tế thành từng ví để dễ đối soát",
-      "Không tạo ví giả để đại diện cho Savings hoặc Portfolio nếu đã dùng đúng module tương ứng",
+      "Không tạo ví giả để đại diện cho Tiết kiệm hoặc Danh mục đầu tư nếu đã dùng đúng phân hệ tương ứng",
       "Số dư Ví không đồng nghĩa với Tổng tài sản",
-      "Dùng transfer cho luồng tiền nội bộ giữa các ví",
+      "Dùng chuyển tiền cho luồng tiền nội bộ giữa các ví",
     ],
   },
   {
@@ -262,21 +262,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-indigo-700",
     accentBorder: "border-indigo-200",
     accentIcon: "bg-indigo-100 text-indigo-600",
-    purpose: "Phân loại thu nhập và chi tiêu thành các nhóm rõ ràng để Budgets, Reports và các phân tích dùng cùng một ngữ nghĩa.",
+    purpose: "Phân loại thu nhập và chi tiêu thành các nhóm rõ ràng để Ngân sách, Báo cáo và các phân tích dùng cùng một ngữ nghĩa.",
     when: "Khi thiết lập lần đầu hoặc khi phát sinh một loại thu/chi mới chưa có danh mục phù hợp.",
     howTo: [
       "Vào 'Danh Mục' → xem danh sách hiện có",
       "Nhấn 'Thêm danh mục' để tạo loại mới",
       "Chọn đúng loại Thu nhập hoặc Chi tiêu",
       "Dùng danh mục đó khi tạo giao dịch",
-      "Review danh mục không còn dùng để giữ báo cáo dễ đọc",
+      "Rà soát danh mục không còn dùng để giữ báo cáo dễ đọc",
     ],
-    example: "Chi: Ăn uống, Đi lại, Nhà ở, Y tế. Thu: Lương, Freelance, Thưởng. Transfer không cần được ngụy trang thành một danh mục chi.",
+    example: "Chi: Ăn uống, Đi lại, Nhà ở, Y tế. Thu: Lương, Làm tự do, Thưởng. Chuyển tiền không cần được ngụy trang thành một danh mục chi.",
     tips: [
       "Giữ danh mục đủ chi tiết nhưng tránh trùng nghĩa",
       "Hạn chế danh mục 'Khác' nếu có thể phân loại rõ",
-      "Budget và Reports dùng phân loại chi thực nhất quán",
-      "Review định kỳ để tránh dữ liệu bị phân mảnh",
+      "Ngân sách và Báo cáo dùng phân loại chi thực nhất quán",
+      "Rà soát định kỳ để tránh dữ liệu bị phân mảnh",
     ],
   },
   {
@@ -289,16 +289,16 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-violet-700",
     accentBorder: "border-violet-200",
     accentIcon: "bg-violet-100 text-violet-600",
-    purpose: "Đặt hạn mức chi tiêu theo danh mục cho từng tháng và so sánh với chi tiêu thực được phân loại canonical.",
+    purpose: "Đặt hạn mức chi tiêu theo danh mục cho từng tháng và so sánh với chi tiêu thực được phân loại theo chuẩn.",
     when: "Đầu tháng hoặc khi cần điều chỉnh hạn mức cho một danh mục cụ thể.",
     howTo: [
       "Vào 'Ngân Sách' → nhấn 'Thêm ngân sách'",
       "Chọn danh mục và tháng áp dụng",
       "Nhập hạn mức phù hợp với kế hoạch của bạn",
       "Theo dõi phần đã chi từ các giao dịch chi thực của danh mục",
-      "Review các danh mục gần/vượt hạn mức và điều chỉnh hành vi hoặc kế hoạch khi cần",
+      "Rà soát các danh mục gần/vượt hạn mức và điều chỉnh hành vi hoặc kế hoạch khi cần",
     ],
-    example: "Ngân sách Ăn uống 3M; chi thực đã ghi nhận 1,8M thì tiến độ là 60%. Chuyển tiền nội bộ hoặc khoản phân bổ Savings/Investment không được biến thành chi ăn uống.",
+    example: "Ngân sách Ăn uống 3M; chi thực đã ghi nhận 1,8M thì tiến độ là 60%. Chuyển tiền nội bộ hoặc khoản phân bổ Tiết kiệm/Đầu tư không được biến thành chi ăn uống.",
     tips: [
       "Đặt ngân sách dựa trên dữ liệu thực tế và ưu tiên của bạn",
       "Bắt đầu với 3–5 danh mục chi lớn nhất",
@@ -308,7 +308,7 @@ const FEATURE_GUIDES: Guide[] = [
   },
   {
     id: "goals",
-    title: "Mục Tiêu · Funding progress",
+    title: "Mục Tiêu · Tiến độ nguồn vốn",
     icon: Target,
     href: "/goals",
     accentBg: "bg-rose-600",
@@ -316,21 +316,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-rose-700",
     accentBorder: "border-rose-200",
     accentIcon: "bg-rose-100 text-rose-600",
-    purpose: "Thiết lập mục tiêu tài chính và theo dõi tiến độ bằng snapshot funding chuẩn, có thể kết hợp số tiền gốc của Goal với Savings được liên kết và các funding transaction tương ứng.",
+    purpose: "Thiết lập mục tiêu tài chính và theo dõi tiến độ bằng bản ghi nguồn vốn chuẩn, có thể kết hợp số tiền gốc của Mục tiêu với Tiết kiệm được liên kết và các giao dịch cấp vốn tương ứng.",
     when: "Khi lập quỹ khẩn cấp, kế hoạch mua sắm lớn hoặc mục tiêu tài chính có số tiền đích.",
     howTo: [
       "Vào 'Mục Tiêu' → nhấn 'Thêm mục tiêu'",
-      "Đặt tên, số tiền mục tiêu và deadline nếu cần",
-      "Liên kết đúng tài khoản Savings khi muốn Savings tự đóng góp vào tiến độ Goal",
-      "Theo dõi số tiền hiệu lực và % tiến độ từ canonical funding snapshot",
+      "Đặt tên, số tiền mục tiêu và hạn hoàn thành nếu cần",
+      "Liên kết đúng tài khoản Tiết kiệm khi muốn Tiết kiệm tự đóng góp vào tiến độ Mục tiêu",
+      "Theo dõi số tiền hiệu lực và % tiến độ từ bản ghi nguồn vốn chuẩn",
       "Dùng dự báo/gợi ý mức đóng góp để điều chỉnh kế hoạch thay vì nhập trùng tiền ở nhiều nơi",
     ],
-    example: "Goal Quỹ khẩn cấp 120M liên kết với Savings đang có 13,07M sẽ phản ánh khoảng 11% tiến độ mà không cần cộng thủ công lại cùng một số tiền ở hai nơi.",
+    example: "Mục tiêu Quỹ khẩn cấp 120M liên kết với Tiết kiệm đang có 13,07M sẽ phản ánh khoảng 11% tiến độ mà không cần cộng thủ công lại cùng một số tiền ở hai nơi.",
     tips: [
-      "Liên kết đúng Savings để tránh tiến độ Goal lệch với số dư thực",
-      "Không cộng cùng một khoản funding hai lần",
-      "Quỹ khẩn cấp thường đặt mục tiêu theo nhiều tháng chi tiêu, nhưng % Goal và số tháng coverage là hai chỉ số khác nhau",
-      "Review tiến độ theo dòng tiền thực tế thay vì chỉ nhìn deadline",
+      "Liên kết đúng Tiết kiệm để tránh tiến độ Mục tiêu lệch với số dư thực",
+      "Không cộng cùng một khoản nguồn vốn hai lần",
+      "Quỹ khẩn cấp thường đặt mục tiêu theo nhiều tháng chi tiêu, nhưng % Mục tiêu và số tháng dự phòng là hai chỉ số khác nhau",
+      "Rà soát tiến độ theo dòng tiền thực tế thay vì chỉ nhìn hạn hoàn thành",
     ],
   },
   {
@@ -349,20 +349,20 @@ const FEATURE_GUIDES: Guide[] = [
       "Vào 'Nợ & Khoản Vay' → nhấn 'Thêm khoản nợ'",
       "Nhập số dư nợ, lãi suất và mức trả tối thiểu nếu có",
       "Cập nhật dư nợ còn lại theo tiến độ thanh toán",
-      "Xem Debt Ratio = Tổng dư nợ ÷ Tổng tài sản để đánh giá đòn bẩy balance sheet",
-      "Xem Gợi ý trả nợ; chiến lược Avalanche ưu tiên khoản có lãi suất cao hơn",
+      "Xem Tỷ lệ nợ = Tổng dư nợ ÷ Tổng tài sản để đánh giá đòn bẩy trên bảng cân đối tài sản",
+      "Xem Gợi ý trả nợ; chiến lược ưu tiên lãi suất cao tập trung vào khoản có lãi suất cao hơn",
     ],
-    example: "Nếu tổng dư nợ là 200M và tổng tài sản hiện tại là 1 tỷ thì Debt Ratio là 20%. Nếu tổng mức trả tối thiểu mỗi tháng là 12M trên thu nhập tháng 40M thì gánh nặng trả nợ tháng là 30% — đây là chỉ số khác.",
+    example: "Nếu tổng dư nợ là 200M và tổng tài sản hiện tại là 1 tỷ thì Tỷ lệ nợ là 20%. Nếu tổng mức trả tối thiểu mỗi tháng là 12M trên thu nhập tháng 40M thì gánh nặng trả nợ tháng là 30% — đây là chỉ số khác.",
     tips: [
-      "Debt Ratio trong MyFinance là dư nợ / tổng tài sản, không phải dư nợ / thu nhập tháng",
-      "Gánh nặng trả nợ tháng dùng tổng minimum payment / thu nhập tháng",
-      "Avalanche ưu tiên lãi suất cao nhất để giảm chi phí lãi",
-      "Các gợi ý trả nợ là rule-based/deterministic; không gắn nhãn AI khi không có AI tham gia",
+      "Tỷ lệ nợ trong MyFinance là dư nợ / tổng tài sản, không phải dư nợ / thu nhập tháng",
+      "Gánh nặng trả nợ tháng dùng tổng khoản trả tối thiểu / thu nhập tháng",
+      "Ưu tiên khoản có lãi suất cao nhất để giảm chi phí lãi",
+      "Các gợi ý trả nợ được xác định theo quy tắc; không gắn nhãn AI khi không có AI tham gia",
     ],
   },
   {
     id: "investments",
-    title: "Đầu Tư · Portfolio & Forex",
+    title: "Đầu Tư · Danh mục đầu tư & Ngoại hối",
     icon: BriefcaseBusiness,
     href: "/investments",
     accentBg: "bg-teal-600",
@@ -370,20 +370,20 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-teal-700",
     accentBorder: "border-teal-200",
     accentIcon: "bg-teal-100 text-teal-600",
-    purpose: "Quản lý Portfolio (cổ phiếu, crypto, quỹ ETF, vàng) và tài khoản Forex trong cùng một không gian; Forex tập trung vào Balance, Nạp, Rút và Profit.",
-    when: "Khi mua/bán tài sản Portfolio, nạp/rút vốn Forex, cập nhật Balance hoặc muốn đánh giá hiệu suất đầu tư tổng thể.",
+    purpose: "Quản lý Danh mục đầu tư (cổ phiếu, tài sản mã hóa, quỹ ETF, vàng) và tài khoản Ngoại hối trong cùng một không gian; Ngoại hối tập trung vào Số dư, Nạp, Rút và Lợi nhuận.",
+    when: "Khi mua/bán tài sản trong Danh mục đầu tư, nạp/rút vốn Ngoại hối, cập nhật Số dư hoặc muốn đánh giá hiệu suất đầu tư tổng thể.",
     howTo: [
-      "Vào 'Đầu Tư' → 'Thêm tài sản' để quản lý cổ phiếu / Crypto / Quỹ ETF / Vàng / Khác",
-      "Nhập tên, mã (nếu có), vốn đầu tư và giá trị hiện tại của Portfolio",
-      "Dùng 'Thêm Forex' để tạo tài khoản broker và nhập Balance hiện tại",
-      "Ghi nhận Nạp / Rút trên từng tài khoản Forex để theo dõi dòng tiền",
-      "Portfolio giữ P&L/ROI riêng; Forex dùng Balance / Nạp / Rút / Profit",
+      "Vào 'Đầu Tư' → 'Thêm tài sản' để quản lý cổ phiếu / Tài sản mã hóa / Quỹ ETF / Vàng / Khác",
+      "Nhập tên, mã (nếu có), vốn đầu tư và giá trị hiện tại của Danh mục đầu tư",
+      "Dùng 'Thêm ngoại hối' để tạo tài khoản sàn và nhập Số dư hiện tại",
+      "Ghi nhận Nạp / Rút trên từng tài khoản Ngoại hối để theo dõi dòng tiền",
+      "Danh mục đầu tư giữ Lãi/lỗ và Tỷ suất lợi nhuận riêng; Ngoại hối dùng Số dư / Nạp / Rút / Lợi nhuận",
     ],
-    example: "FPT: vốn 20M → giá trị 24,8M; Forex Main Balance 30M. Trang Đầu Tư hiển thị riêng hiệu suất Portfolio/Forex và tổng giá trị đầu tư 54,8M.",
+    example: "FPT: vốn 20M → giá trị 24,8M; tài khoản Ngoại hối chính có Số dư 30M. Trang Đầu Tư hiển thị riêng hiệu suất Danh mục đầu tư/Ngoại hối và tổng giá trị đầu tư 54,8M.",
     tips: [
-      "Đánh giá ROI trong bối cảnh thời gian và rủi ro, không dùng một ngưỡng lợi nhuận cố định cho mọi tài sản",
-      "Cập nhật current value / Forex Balance để snapshot hiện tại chính xác",
-      "Portfolio và Forex là hai nguồn dữ liệu riêng nhưng cùng đóng góp vào balance sheet",
+      "Đánh giá Tỷ suất lợi nhuận trong bối cảnh thời gian và rủi ro, không dùng một ngưỡng lợi nhuận cố định cho mọi tài sản",
+      "Cập nhật giá trị hiện tại / Số dư Ngoại hối để bản ghi hiện tại chính xác",
+      "Danh mục đầu tư và Ngoại hối là hai nguồn dữ liệu riêng nhưng cùng đóng góp vào bảng cân đối tài sản",
       "Phân bổ tài sản nên phù hợp khẩu vị rủi ro và thời hạn của chính bạn, không có một tỷ lệ mẫu đúng cho tất cả",
     ],
   },
@@ -397,26 +397,26 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-purple-700",
     accentBorder: "border-purple-200",
     accentIcon: "bg-purple-100 text-purple-600",
-    purpose: "Phân tích tài chính theo kỳ bằng cùng balance sheet và cash-flow semantics với Dashboard: tài sản/nợ hiện tại, thu nhập, chi thực và các khoản phân bổ tương lai được tách rõ.",
+    purpose: "Phân tích tài chính theo kỳ bằng cùng bảng cân đối tài sản và ngữ nghĩa dòng tiền với Tổng quan: tài sản/nợ hiện tại, thu nhập, chi thực và các khoản phân bổ tương lai được tách rõ.",
     when: "Cuối tháng, cuối quý hoặc khi cần đối chiếu xu hướng giữa các kỳ.",
     howTo: [
       "Vào 'Báo cáo' và chọn kỳ cần phân tích",
-      "Đọc Net Worth từ canonical balance sheet hiện tại",
+      "Đọc Tài sản ròng từ bảng cân đối tài sản chuẩn hiện tại",
       "Xem Thu nhập và Chi thực của kỳ",
-      "Xem Savings/Investment allocation tách khỏi real expense để biết tiền đã được phân bổ cho tương lai",
-      "Dùng các biểu đồ và export để đối soát theo danh mục/kỳ",
+      "Xem phân bổ Tiết kiệm/Đầu tư tách khỏi chi tiêu thực để biết tiền đã được phân bổ cho tương lai",
+      "Dùng các biểu đồ và chức năng xuất dữ liệu để đối soát theo danh mục/kỳ",
     ],
-    example: "Trong một kỳ có Thu 30M, Chi thực 18M và phân bổ 5M sang Savings/Investment, Reports giữ 18M là expense và 5M là future allocation thay vì cộng cả hai thành 23M chi tiêu sinh hoạt.",
+    example: "Trong một kỳ có Thu 30M, Chi thực 18M và phân bổ 5M sang Tiết kiệm/Đầu tư, Báo cáo giữ 18M là chi tiêu thực và 5M là phân bổ tương lai thay vì cộng cả hai thành 23M chi tiêu sinh hoạt.",
     tips: [
-      "So sánh các kỳ cùng semantics thay vì chỉ nhìn một con số tổng",
-      "Transfer nội bộ không tạo thêm expense",
-      "Savings/Investment allocation được theo dõi riêng khỏi chi thực",
-      "Net Worth hiện tại và cash flow theo kỳ là hai lát cắt khác nhau",
+      "So sánh các kỳ cùng ngữ nghĩa thay vì chỉ nhìn một con số tổng",
+      "Chuyển tiền nội bộ không tạo thêm chi tiêu",
+      "Phân bổ Tiết kiệm/Đầu tư được theo dõi riêng khỏi chi thực",
+      "Tài sản ròng hiện tại và dòng tiền theo kỳ là hai lát cắt khác nhau",
     ],
   },
   {
     id: "ai-insights",
-    title: "AI Insights · Phân tích",
+    title: "Phân tích AI",
     icon: Bot,
     href: "/ai-insights",
     accentBg: "bg-fuchsia-600",
@@ -424,19 +424,19 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-fuchsia-700",
     accentBorder: "border-fuchsia-200",
     accentIcon: "bg-fuchsia-100 text-fuchsia-600",
-    purpose: "Xem các phân tích, dự báo và gợi ý dựa trên dữ liệu tài chính đã ghi nhận. AI không thay thế dữ liệu nguồn hoặc các calculation service canonical.",
+    purpose: "Xem các phân tích, dự báo và gợi ý dựa trên dữ liệu tài chính đã ghi nhận. AI không thay thế dữ liệu nguồn hoặc các dịch vụ tính toán chuẩn.",
     when: "Khi muốn hiểu xu hướng, bất thường hoặc cần một góc nhìn bổ sung từ dữ liệu đã có.",
     howTo: [
-      "Vào 'AI Insights'",
-      "Kiểm tra dữ liệu/kỳ mà insight đang dựa vào",
-      "Đọc Health/Risk/Forecast theo ngữ cảnh thay vì xem như cam kết kết quả",
+      "Vào 'Phân tích AI'",
+      "Kiểm tra dữ liệu/kỳ mà phân tích đang dựa vào",
+      "Đọc Sức khỏe/Rủi ro/Dự báo theo ngữ cảnh thay vì xem như cam kết kết quả",
       "Mở trang nguồn khi cần kiểm tra giao dịch, nợ, đầu tư hoặc mục tiêu cụ thể",
-      "Ưu tiên sửa dữ liệu nguồn nếu insight phản ánh số liệu chưa đầy đủ",
+      "Ưu tiên sửa dữ liệu nguồn nếu phân tích phản ánh số liệu chưa đầy đủ",
     ],
-    example: "Nếu một insight cảnh báo chi tiêu tăng, hãy mở Transactions/Reports để kiểm tra real expense và danh mục trước khi hành động.",
+    example: "Nếu một phân tích cảnh báo chi tiêu tăng, hãy mở Giao dịch/Báo cáo để kiểm tra chi tiêu thực và danh mục trước khi hành động.",
     tips: [
       "AI chỉ hữu ích khi dữ liệu đầu vào đủ và đúng",
-      "Phân biệt gợi ý AI với các rule deterministic trên các page khác",
+      "Phân biệt gợi ý AI với các quy tắc xác định trên các trang khác",
       "Không dùng dự báo như một cam kết lợi nhuận",
       "Đối chiếu lại dữ liệu nguồn trước quyết định tài chính quan trọng",
     ],
@@ -451,21 +451,21 @@ const FEATURE_GUIDES: Guide[] = [
     accentText: "text-slate-700",
     accentBorder: "border-slate-200",
     accentIcon: "bg-slate-100 text-slate-600",
-    purpose: "Quản lý hồ sơ, giao diện, cấu hình AI, household và các tùy chọn ứng dụng có sẵn.",
-    when: "Khi cần thay đổi thông tin cá nhân, theme hoặc cấu hình tính năng.",
+    purpose: "Quản lý hồ sơ, giao diện, cấu hình AI, gia đình và các tùy chọn ứng dụng có sẵn.",
+    when: "Khi cần thay đổi thông tin cá nhân, giao diện hoặc cấu hình tính năng.",
     howTo: [
       "Vào 'Cài Đặt'",
       "Cập nhật hồ sơ và tùy chọn tài khoản",
       "Chọn giao diện sáng / tối / theo hệ thống",
-      "Kiểm tra các cấu hình AI nếu bạn sử dụng AI Finance",
-      "Review household và các thiết lập dữ liệu đang khả dụng",
+      "Kiểm tra các cấu hình AI nếu bạn sử dụng tính năng tài chính AI",
+      "Rà soát gia đình và các thiết lập dữ liệu đang khả dụng",
     ],
-    example: "Bạn có thể chọn Dark Mode trong Settings hoặc dùng quick toggle trên Header; theme vẫn dùng cùng một nguồn cấu hình.",
+    example: "Bạn có thể chọn Chế độ tối trong Cài đặt hoặc dùng nút chuyển nhanh trên thanh đầu trang; giao diện vẫn dùng cùng một nguồn cấu hình.",
     tips: [
       "Không chia sẻ khóa AI hoặc thông tin đăng nhập",
-      "Review thiết lập sau khi thay đổi thiết bị",
-      "Giữ cấu hình đồng bộ với cách bạn thực sự dùng app",
-      "Dùng Help khi cần hiểu semantics trước khi thay đổi dữ liệu tài chính",
+      "Rà soát thiết lập sau khi thay đổi thiết bị",
+      "Giữ cấu hình đồng bộ với cách bạn thực sự dùng ứng dụng",
+      "Dùng Hướng dẫn khi cần hiểu ngữ nghĩa trước khi thay đổi dữ liệu tài chính",
     ],
   },
 ];
@@ -473,87 +473,87 @@ const FEATURE_GUIDES: Guide[] = [
 const FAQ_ITEMS: FaqItem[] = [
   {
     id: "net-worth",
-    q: "Tài sản ròng (Net Worth) trong MyFinance được tính thế nào?",
-    a: "MyFinance dùng một balance sheet chuẩn cho snapshot hiện tại. Ví tiền, Savings, Portfolio và Forex cùng đóng góp vào Tổng tài sản; sau đó trừ Tổng nợ. Vì vậy số dư Ví chỉ là một phần của Net Worth, không phải toàn bộ tài sản.",
-    formula: "Net Worth = Ví tiền + Tiết kiệm + Portfolio + Forex − Tổng nợ",
+    q: "Tài sản ròng trong MyFinance được tính thế nào?",
+    a: "MyFinance dùng một bảng cân đối tài sản chuẩn cho bản ghi hiện tại. Ví tiền, Tiết kiệm, Danh mục đầu tư và Ngoại hối cùng đóng góp vào Tổng tài sản; sau đó trừ Tổng nợ. Vì vậy số dư Ví chỉ là một phần của Tài sản ròng, không phải toàn bộ tài sản.",
+    formula: "Tài sản ròng = Ví tiền + Tiết kiệm + Danh mục đầu tư + Ngoại hối − Tổng nợ",
   },
   {
     id: "debt-ratio",
-    q: "Debt Ratio khác gánh nặng trả nợ hàng tháng thế nào?",
-    a: "Debt Ratio trên domain Nợ đo dư nợ còn lại so với Tổng tài sản hiện tại. Gánh nặng trả nợ hàng tháng là chỉ số khác: tổng mức trả tối thiểu hàng tháng so với thu nhập tháng. Không dùng Tổng nợ ÷ Thu nhập tháng để gọi là Debt Ratio.",
-    formula: "Debt Ratio = Tổng dư nợ ÷ Tổng tài sản × 100% · Debt service / income = Tổng minimum payment ÷ Thu nhập tháng × 100%",
+    q: "Tỷ lệ nợ khác gánh nặng trả nợ hàng tháng thế nào?",
+    a: "Tỷ lệ nợ trong phân hệ Nợ đo dư nợ còn lại so với Tổng tài sản hiện tại. Gánh nặng trả nợ hàng tháng là chỉ số khác: tổng mức trả tối thiểu hàng tháng so với thu nhập tháng. Không dùng Tổng nợ ÷ Thu nhập tháng để gọi là Tỷ lệ nợ.",
+    formula: "Tỷ lệ nợ = Tổng dư nợ ÷ Tổng tài sản × 100% · Tỷ lệ trả nợ / thu nhập = Tổng khoản trả tối thiểu ÷ Thu nhập tháng × 100%",
   },
   {
     id: "health-score",
-    q: "Financial Health Score là gì?",
-    a: "Đây là điểm 0–100 tổng hợp 10 yếu tố có trọng số như saving rate, cash flow, debt ratio, quỹ khẩn cấp, tiến độ mục tiêu và tuân thủ ngân sách. Hãy xem điểm cùng các factor/note đi kèm thay vì coi một ngưỡng duy nhất là kết luận tài chính tuyệt đối.",
+    q: "Điểm sức khỏe tài chính là gì?",
+    a: "Đây là điểm 0–100 tổng hợp 10 yếu tố có trọng số như tỷ lệ tiết kiệm, dòng tiền, tỷ lệ nợ, quỹ khẩn cấp, tiến độ mục tiêu và tuân thủ ngân sách. Hãy xem điểm cùng các yếu tố/ghi chú đi kèm thay vì coi một ngưỡng duy nhất là kết luận tài chính tuyệt đối.",
   },
   {
     id: "roi",
-    q: "ROI là gì? Tính như thế nào?",
-    a: "ROI (Return on Investment) đo mức lãi/lỗ so với vốn đã đầu tư. Không có một ngưỡng ROI cố định phù hợp cho mọi tài sản; cần đọc cùng thời gian nắm giữ, mức rủi ro và loại tài sản.",
-    formula: "ROI = (Giá trị hiện tại − Vốn đầu tư) ÷ Vốn đầu tư × 100%",
+    q: "Tỷ suất lợi nhuận là gì? Tính như thế nào?",
+    a: "Tỷ suất lợi nhuận đo mức lãi/lỗ so với vốn đã đầu tư. Không có một ngưỡng tỷ suất lợi nhuận cố định phù hợp cho mọi tài sản; cần đọc cùng thời gian nắm giữ, mức rủi ro và loại tài sản.",
+    formula: "Tỷ suất lợi nhuận = (Giá trị hiện tại − Vốn đầu tư) ÷ Vốn đầu tư × 100%",
   },
   {
     id: "emergency-fund",
-    q: "Quỹ khẩn cấp và số tháng coverage được tính thế nào?",
-    a: "Mục tiêu quỹ thường được đặt theo nhiều tháng chi tiêu. Trên Dashboard, số tháng coverage dùng số dư quỹ chia cho chi tiêu thực bình quân của tối đa 6 tháng đã hoàn tất gần nhất có dữ liệu; tháng hiện tại đang chạy dở không được dùng làm mẫu số chính. Nếu chưa có đủ bằng chứng tháng hoàn tất, Dashboard có thể hiển thị chưa đủ dữ liệu thay vì báo đạt sai.",
+    q: "Quỹ khẩn cấp và số tháng dự phòng được tính thế nào?",
+    a: "Mục tiêu quỹ thường được đặt theo nhiều tháng chi tiêu. Trên Tổng quan, số tháng dự phòng dùng số dư quỹ chia cho chi tiêu thực bình quân của tối đa 6 tháng đã hoàn tất gần nhất có dữ liệu; tháng hiện tại đang chạy dở không được dùng làm mẫu số chính. Nếu chưa có đủ bằng chứng tháng hoàn tất, Tổng quan có thể hiển thị chưa đủ dữ liệu thay vì báo đạt sai.",
     formula: "Số tháng quỹ khẩn cấp = Số dư quỹ ÷ Chi tiêu thực bình quân các tháng đã hoàn tất",
   },
   {
     id: "saving-rate",
     q: "Tỷ lệ tiết kiệm trong MyFinance nên đọc thế nào?",
-    a: "Saving rate phản ánh phần thu nhập còn lại sau chi tiêu thực. Savings/Investment allocation được theo dõi riêng như phân bổ cho tương lai, nên cần phân biệt chúng với chi tiêu sinh hoạt khi đọc Reports và Dashboard.",
-    formula: "Saving Rate = (Thu nhập − Chi tiêu thực) ÷ Thu nhập × 100%",
+    a: "Tỷ lệ tiết kiệm phản ánh phần thu nhập còn lại sau chi tiêu thực. Phân bổ Tiết kiệm/Đầu tư được theo dõi riêng như phân bổ cho tương lai, nên cần phân biệt chúng với chi tiêu sinh hoạt khi đọc Báo cáo và Tổng quan.",
+    formula: "Tỷ lệ tiết kiệm = (Thu nhập − Chi tiêu thực) ÷ Thu nhập × 100%",
   },
   {
     id: "goal-funding",
-    q: "Vì sao tiến độ Goal có thể thay đổi theo Savings?",
-    a: "Goal dùng canonical funding snapshot. Khi Goal được liên kết với Savings, số dư/funding hợp lệ từ tài khoản liên kết có thể đóng góp vào effective current amount. Cơ chế này giúp Goals và Savings không hiển thị hai tiến độ mâu thuẫn cho cùng một nguồn tiền.",
+    q: "Vì sao tiến độ Mục tiêu có thể thay đổi theo Tiết kiệm?",
+    a: "Mục tiêu dùng bản ghi nguồn vốn chuẩn. Khi Mục tiêu được liên kết với Tiết kiệm, số dư/nguồn vốn hợp lệ từ tài khoản liên kết có thể đóng góp vào số tiền hiện có hiệu lực. Cơ chế này giúp Mục tiêu và Tiết kiệm không hiển thị hai tiến độ mâu thuẫn cho cùng một nguồn tiền.",
   },
   {
     id: "diversification",
-    q: "Nên phân bổ Portfolio theo tỷ lệ nào?",
-    a: "Không có một tỷ lệ cổ phiếu, ETF, vàng, crypto hay tiền mặt cố định phù hợp với mọi người. Hãy đa dạng hóa theo thời hạn mục tiêu, nhu cầu thanh khoản và mức chịu rủi ro của bạn; MyFinance theo dõi giá trị/ROI chứ không áp một công thức phân bổ bắt buộc.",
+    q: "Nên phân bổ Danh mục đầu tư theo tỷ lệ nào?",
+    a: "Không có một tỷ lệ cổ phiếu, ETF, vàng, tài sản mã hóa hay tiền mặt cố định phù hợp với mọi người. Hãy đa dạng hóa theo thời hạn mục tiêu, nhu cầu thanh khoản và mức chịu rủi ro của bạn; MyFinance theo dõi giá trị/tỷ suất lợi nhuận chứ không áp một công thức phân bổ bắt buộc.",
   },
 ];
 
 const GLOSSARY_ITEMS = [
   {
-    term: "Net Worth",
-    formula: "Ví + Savings + Portfolio + Forex − Nợ",
+    term: "Tài sản ròng",
+    formula: "Ví + Tiết kiệm + Danh mục đầu tư + Ngoại hối − Nợ",
     color: "emerald",
-    desc: "Snapshot tài sản ròng hiện tại theo canonical balance sheet. Số dư Ví chỉ là một phần của Tổng tài sản.",
+    desc: "Bản ghi tài sản ròng hiện tại theo bảng cân đối tài sản chuẩn. Số dư Ví chỉ là một phần của Tổng tài sản.",
   },
   {
-    term: "Debt Ratio",
+    term: "Tỷ lệ nợ",
     formula: "Dư nợ ÷ Tổng tài sản × 100%",
     color: "rose",
-    desc: "Mức đòn bẩy trên balance sheet. Đây không phải tỷ lệ dư nợ chia cho thu nhập tháng.",
+    desc: "Mức đòn bẩy trên bảng cân đối tài sản. Đây không phải tỷ lệ dư nợ chia cho thu nhập tháng.",
   },
   {
-    term: "Debt Service / Income",
-    formula: "Minimum payments ÷ Thu nhập tháng × 100%",
+    term: "Tỷ lệ trả nợ / thu nhập",
+    formula: "Khoản trả tối thiểu ÷ Thu nhập tháng × 100%",
     color: "amber",
-    desc: "Gánh nặng thanh toán nợ hàng tháng, được tách khỏi Debt Ratio.",
+    desc: "Gánh nặng thanh toán nợ hàng tháng, được tách khỏi Tỷ lệ nợ.",
   },
   {
-    term: "Emergency Coverage",
+    term: "Mức dự phòng khẩn cấp",
     formula: "Số dư quỹ ÷ TB chi thực tháng hoàn tất",
     color: "blue",
-    desc: "Dashboard dùng baseline ổn định từ tối đa 6 tháng đã hoàn tất, không phóng đại coverage vì đầu tháng mới chi ít.",
+    desc: "Tổng quan dùng mức chi tham chiếu ổn định từ tối đa 6 tháng đã hoàn tất, không phóng đại mức dự phòng vì đầu tháng mới chi ít.",
   },
   {
-    term: "ROI",
+    term: "Tỷ suất lợi nhuận",
     formula: "(Giá trị − Vốn) ÷ Vốn × 100%",
     color: "cyan",
     desc: "Tỷ lệ lãi/lỗ đầu tư. Cần đọc cùng thời gian và rủi ro; không có một ngưỡng tốt cố định cho mọi tài sản.",
   },
   {
-    term: "Budget Adherence",
+    term: "Mức tuân thủ ngân sách",
     formula: "Chi thực danh mục ÷ Hạn mức × 100%",
     color: "violet",
-    desc: "So sánh real expense của danh mục với ngân sách. Transfer và future allocation không được biến thành chi sinh hoạt.",
+    desc: "So sánh chi tiêu thực của danh mục với ngân sách. Chuyển tiền và phân bổ tương lai không được biến thành chi sinh hoạt.",
   },
 ] as const;
 
@@ -611,13 +611,13 @@ export default function HelpPage() {
           </div>
 
           <p className="relative text-[11px] font-black uppercase tracking-widest text-blue-500">
-            Help Center
+            Trung tâm hướng dẫn
           </p>
           <h1 className="relative mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
             Hướng Dẫn
           </h1>
           <p className="relative mt-1 text-sm text-slate-500">
-            Onboarding, hướng dẫn tính năng, FAQ và ngữ nghĩa tài chính đang dùng trong MyFinance.
+            Thiết lập ban đầu, hướng dẫn tính năng, câu hỏi thường gặp và ngữ nghĩa tài chính đang dùng trong MyFinance.
           </p>
 
           <div className="relative mt-6 flex items-center gap-2.5 rounded-2xl border border-blue-200 bg-white px-4 py-3 shadow-sm transition-all focus-within:border-blue-400 focus-within:shadow-md">
@@ -625,7 +625,7 @@ export default function HelpPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder='Tìm hướng dẫn... "Net Worth", "nợ", "quỹ khẩn cấp"'
+              placeholder='Tìm hướng dẫn... "tài sản ròng", "nợ", "quỹ khẩn cấp"'
               className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
             />
             {search ? (
@@ -773,10 +773,10 @@ export default function HelpPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 size={14} className="text-emerald-600" />
-                  <p className="text-sm font-black text-slate-800">Checklist thiết lập</p>
+                  <p className="text-sm font-black text-slate-800">Danh sách kiểm tra thiết lập</p>
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Đồng bộ với tiến độ onboarding trên toàn bộ MyFinance.
+                  Đồng bộ với tiến độ thiết lập ban đầu trên toàn bộ MyFinance.
                 </p>
               </div>
               <div className="text-right">
@@ -984,7 +984,7 @@ export default function HelpPage() {
               <p className="text-sm font-black text-slate-800">Thuật ngữ tài chính</p>
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
-              Các chỉ số dưới đây dùng cùng ngữ nghĩa với các page tài chính hiện tại.
+              Các chỉ số dưới đây dùng cùng ngữ nghĩa với các trang tài chính hiện tại.
             </p>
           </div>
 
@@ -1074,7 +1074,7 @@ export default function HelpPage() {
             <p className="text-[11px] font-black uppercase tracking-widest text-blue-200">Sẵn sàng bắt đầu?</p>
             <h2 className="mt-2 text-2xl font-black text-white">Bắt đầu quản lý tài chính ngay hôm nay</h2>
             <p className="mt-2 text-sm text-blue-200">
-              Ghi dữ liệu đúng domain trước, sau đó dùng Dashboard và Reports để đọc một bức tranh nhất quán.
+              Ghi dữ liệu đúng phân hệ trước, sau đó dùng Tổng quan và Báo cáo để đọc một bức tranh nhất quán.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
@@ -1096,7 +1096,7 @@ export default function HelpPage() {
                 className="flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/20 active:scale-95"
               >
                 <Bot size={15} />
-                Xem AI Insights
+                Xem Phân tích AI
               </Link>
             </div>
           </div>

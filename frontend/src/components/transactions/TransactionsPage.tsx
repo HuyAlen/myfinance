@@ -1203,7 +1203,7 @@ export default function TransactionsPage() {
 
     // CROSS-DOMAIN-INTEGRITY-1: preflight the whole selection BEFORE the
     // first independently-committed delete. A Savings-owned mirror can only
-    // be reconciled by the Savings Engine; allowing earlier rows to commit
+    // be reconciled by the hệ thống Tiết kiệm; allowing earlier rows to commit
     // before discovering one would create an avoidable partial batch.
     const savingsManagedCount = Array.from(idsToDelete).filter((id) => {
       const transaction = transactions.find((item) => item.id === id);
@@ -1546,7 +1546,7 @@ export default function TransactionsPage() {
       toast({
         variant: "info",
         message:
-          "Bút toán này thuộc Savings Engine và không thể sửa riêng từ Giao dịch. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
+          "Bút toán này thuộc hệ thống Tiết kiệm và không thể sửa riêng từ Giao dịch. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
       });
       return;
     }
@@ -2081,7 +2081,7 @@ export default function TransactionsPage() {
         >
           <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">Review workflow</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">Quy trình rà soát</p>
               <h2 className="mt-1 text-lg font-black text-slate-900">Rà soát giao dịch</h2>
               <p className="mt-1 text-xs text-slate-500">
                 Còn {transactionReviewInbox.total} giao dịch cần xử lý trong kỳ đang xem.
@@ -2092,7 +2092,7 @@ export default function TransactionsPage() {
               onClick={closeReviewWorkspace}
               className="min-h-10 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-50"
             >
-              Đóng review
+              Đóng rà soát
             </button>
           </div>
 
@@ -2368,7 +2368,7 @@ export default function TransactionsPage() {
                   <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-rose-100 bg-rose-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-black text-slate-800">Khoản chi cao hơn mức thường thấy</p>
-                      <p className="mt-1 text-xs text-slate-500">Nếu đây là khoản hợp lệ, xác nhận để bỏ khỏi hàng đợi review.</p>
+                      <p className="mt-1 text-xs text-slate-500">Nếu đây là khoản hợp lệ, xác nhận để bỏ khỏi hàng đợi rà soát.</p>
                     </div>
                     <button
                       type="button"

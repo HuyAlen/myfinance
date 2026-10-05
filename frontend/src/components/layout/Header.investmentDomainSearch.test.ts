@@ -13,7 +13,7 @@ describe("Header unified investment-domain search", () => {
 
   it("deep-links Portfolio results to a concrete investment entity", () => {
     expect(source).toContain("buildInvestmentsHref({ investmentId: i.id })");
-    expect(source).toContain('sub: i.symbol ? i.symbol + " · Portfolio" : "Portfolio"');
+    expect(source).toContain('sub: i.symbol ? i.symbol + " · Danh mục đầu tư" : "Danh mục đầu tư"');
   });
 
   it("searches Forex by account, broker and account number and focuses the account", () => {

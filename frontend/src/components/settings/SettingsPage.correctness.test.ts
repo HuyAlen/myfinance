@@ -82,7 +82,7 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
   });
 
   it("bounds the AI settings read instead of allowing an infinite settings spinner", () => {
-    expect(normalized).toContain('withSettingsTimeout( getAIFinanceSettings(accessToken), "AI settings", )');
+    expect(normalized).toContain('withSettingsTimeout( getAIFinanceSettings(accessToken), "cài đặt AI", )');
     expect(source).toContain("const loadAISettings = useCallback(async (): Promise<boolean> => {");
     expect(source).toContain("void loadAISettings()");
     expect(source).toContain("aiSettingsLoadError");
@@ -121,7 +121,7 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
   });
 
   it("does not describe cloud deletion as device-only deletion", () => {
-    expect(source).toContain("toàn bộ dữ liệu tài chính trong tài khoản này trên cloud");
+    expect(source).toContain("toàn bộ dữ liệu tài chính trong tài khoản này trên đám mây");
     expect(source).not.toContain("dữ liệu tài chính trên thiết bị hiện tại");
   });
 

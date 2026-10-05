@@ -161,7 +161,7 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     expect(source).toContain("Theo thời gian");
     expect(source).toContain("Tiến độ tháng {monthlyPulse.month}");
     expect(source).toContain(
-      'subtitle="Top danh mục trong tháng đang xem để nhận diện nơi cần tối ưu"',
+      'subtitle="Các danh mục chi tiêu lớn nhất trong tháng đang xem để nhận diện nơi cần tối ưu"',
     );
     expect(source).toContain("Chưa có chi tiêu trong tháng đang xem.");
     expect(source).not.toContain("Top danh mục trong tháng hiện tại");

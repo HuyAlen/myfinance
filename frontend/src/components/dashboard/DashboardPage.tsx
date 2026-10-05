@@ -2123,7 +2123,7 @@ export default function DashboardPage() {
   // ── Spending ──────────────────────────────────────────────────────────────
 
   // DASHBOARD-CASHFLOW-SEMANTICS-2: the primary chart shows operating flow
-  // only (real income vs real expense). Savings/Forex principal movement is
+  // only (real income vs real expense). Tiết kiệm/Ngoại hối principal movement is
   // rendered separately below the chart as capital movement.
   const cashFlowData = useMemo(() => {
     const now = new Date();
@@ -2404,7 +2404,7 @@ export default function DashboardPage() {
       const accountName =
         forexAccounts.find(
           (account) => account.id === transaction.forexAccountId,
-        )?.name ?? "Forex";
+        )?.name ?? "Ngoại hối";
       const walletName =
         wallets.find((wallet) => wallet.id === transaction.walletId)?.name ??
         "Ví";
@@ -2417,7 +2417,7 @@ export default function DashboardPage() {
         id: `forex-${transaction.id}`,
         title:
           transaction.notes?.trim() ||
-          (isDeposit ? "Nạp tiền Forex" : "Rút tiền Forex"),
+          (isDeposit ? "Nạp tiền ngoại hối" : "Rút tiền ngoại hối"),
         subtitle: isDeposit
           ? `${walletName} → ${accountName}`
           : `${accountName} → ${walletName}`,
@@ -2546,15 +2546,15 @@ export default function DashboardPage() {
       href: buildSavingsHref(),
     },
     {
-      title: "Forex",
+      title: "Ngoại hối",
       value:
         forexSnapshot.profitLoss === null
-          ? "Chưa có Balance"
+          ? "Chưa có số dư"
           : `${forexSnapshot.profitLoss >= 0 ? "+" : ""}${formatVND(forexSnapshot.profitLoss)}`,
       note:
         forexSnapshot.roi === null
           ? `${forexSnapshot.currentAccountCount} tài khoản hiện tại`
-          : `ROI ${forexSnapshot.roi >= 0 ? "+" : ""}${forexSnapshot.roi}%`,
+          : `Tỷ suất lợi nhuận ${forexSnapshot.roi >= 0 ? "+" : ""}${forexSnapshot.roi}%`,
       tone:
         forexSnapshot.profitLoss === null
           ? "neutral"
@@ -3207,7 +3207,7 @@ export default function DashboardPage() {
             <div className="min-w-0">
               <p className="text-sm font-bold text-[#36536B]">
                 {dashboardRecoveryError
-                  ? "Chưa thể đồng bộ Dashboard"
+                  ? "Chưa thể đồng bộ Tổng quan"
                   : "Đang thử kết nối lại…"}
               </p>
               <p className="mt-0.5 text-xs leading-5 text-[#687E93]">
@@ -3305,11 +3305,11 @@ export default function DashboardPage() {
                 >
                   {netWorthHistorySummary.changeFromPrevious! >= 0 ? "↑" : "↓"}{" "}
                   {netWorthHistorySummary.changeFromPrevious! >= 0 ? "+" : ""}
-                  {formatVND(netWorthHistorySummary.changeFromPrevious!)} · so với snapshot trước
+                  {formatVND(netWorthHistorySummary.changeFromPrevious!)} · so với bản ghi trước
                 </span>
               ) : hasNetWorthHistoryData ? (
                 <span className="inline-flex items-center rounded-full border border-[#D6E3ED] bg-[#F7FAFD] px-2.5 py-1 text-[11px] font-bold text-[#60778D] sm:px-3 sm:text-xs">
-                  Snapshot Net Worth đã ghi nhận
+                  Bản ghi Tài sản ròng đã ghi nhận
                 </span>
               ) : null}
             </div>
@@ -3378,7 +3378,7 @@ export default function DashboardPage() {
                   data-dashboard-ink="history-copy"
                   className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs"
                 >
-                  Snapshot Net Worth đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
+                  Bản ghi Tài sản ròng đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
                 </p>
               </div>
 
@@ -3388,7 +3388,7 @@ export default function DashboardPage() {
                   className="rounded-xl border border-[#CFE0ED] bg-white/90 px-3 py-2 text-right shadow-[0_6px_16px_rgba(45,76,102,0.08)] sm:backdrop-blur-sm"
                 >
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#60778D]">
-                    So với snapshot trước
+                    So với bản ghi trước
                   </p>
                   <p
                     className={`text-sm font-black ${
@@ -3412,7 +3412,7 @@ export default function DashboardPage() {
                   Chưa có lịch sử tài sản ròng
                 </p>
                 <p className="mt-1 text-[11px] leading-4 text-[#687E93] sm:text-xs sm:leading-5">
-                  Chưa có snapshot Net Worth nào được ghi nhận cho kỳ đang xem.
+                  Chưa có bản ghi Tài sản ròng nào được ghi nhận cho kỳ đang xem.
                   Hệ thống không tự dựng số liệu cho các tháng chưa từng được lưu.
                 </p>
               </div>
@@ -3424,7 +3424,7 @@ export default function DashboardPage() {
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
-                      Snapshot đã ghi nhận
+                      Bản ghi đã ghi nhận
                     </p>
                     <p
                       data-dashboard-ink="snapshot-value"
@@ -3444,7 +3444,7 @@ export default function DashboardPage() {
                       Chưa đủ dữ liệu để so sánh
                     </p>
                     <p className="mt-1 text-[10px] font-medium leading-4 text-[#60778D] sm:text-[11px]">
-                      Cần ít nhất 2 snapshot ở các tháng khác nhau.
+                      Cần ít nhất 2 bản ghi ở các tháng khác nhau.
                     </p>
                   </div>
                 </div>
@@ -3465,7 +3465,7 @@ export default function DashboardPage() {
                   >
                     <Info size={12} className="mt-0.5 shrink-0 text-[#6FAAE0]" />
                     <span>
-                      {"D\u1EEF li\u1EC7u snapshot c\u00F2n \u00EDt; m\u1ED7i \u0111i\u1EC3m tr\u00EAn bi\u1EC3u \u0111\u1ED3 l\u00E0 m\u1ED9t snapshot \u0111\u00E3 l\u01B0u, th\u00E1ng ch\u01B0a ghi nh\u1EADn v\u1EABn l\u00E0 d\u1EEF li\u1EC7u ch\u01B0a bi\u1EBFt."}
+                      {"D\u1EEF li\u1EC7u b\u1EA3n ghi c\u00F2n \u00EDt; m\u1ED7i \u0111i\u1EC3m tr\u00EAn bi\u1EC3u \u0111\u1ED3 l\u00E0 m\u1ED9t b\u1EA3n ghi \u0111\u00E3 l\u01B0u, th\u00E1ng ch\u01B0a ghi nh\u1EADn v\u1EABn l\u00E0 d\u1EEF li\u1EC7u ch\u01B0a bi\u1EBFt."}
                     </span>
                   </div>
                 ) : null}
@@ -3496,7 +3496,7 @@ export default function DashboardPage() {
       >
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.12em] text-[#60778D]">
-            Dashboard của bạn
+            Tổng quan của bạn
           </p>
           <p className="mt-0.5 truncate text-[11px] font-semibold text-[#71879A]">
             {DASHBOARD_CUSTOMIZATION_SECTIONS.length - dashboardCustomization.hidden.length}/{DASHBOARD_CUSTOMIZATION_SECTIONS.length} mục hỗ trợ đang hiển thị
@@ -3518,7 +3518,7 @@ export default function DashboardPage() {
           <button
             type="button"
             className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
-            aria-label="Đóng tùy chỉnh Dashboard"
+            aria-label="Đóng tùy chỉnh Tổng quan"
             onClick={() => setIsDashboardCustomizationOpen(false)}
           />
           <div
@@ -3533,7 +3533,7 @@ export default function DashboardPage() {
                   Cá nhân hóa
                 </p>
                 <h2 id="dashboard-customization-title" className="mt-1 text-lg font-black text-[#294A66]">
-                  Tùy chỉnh Dashboard
+                  Tùy chỉnh Tổng quan
                 </h2>
                 <p className="mt-1 max-w-xl text-xs leading-5 text-[#60778D]">
                   Tài sản ròng và các KPI vận hành luôn được ghim ở đầu để giữ thứ tự ưu tiên tài chính. Bạn có thể ẩn hoặc sắp xếp các mục hỗ trợ bên dưới.
@@ -3543,7 +3543,7 @@ export default function DashboardPage() {
                 type="button"
                 onClick={() => setIsDashboardCustomizationOpen(false)}
                 className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700"
-                aria-label="Đóng tùy chỉnh Dashboard"
+                aria-label="Đóng tùy chỉnh Tổng quan"
               >
                 <X size={17} />
               </button>
@@ -3682,14 +3682,14 @@ export default function DashboardPage() {
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <MiniStat label="Ngân sách còn" value={formatVND(safeToSpend.budgetRemaining)} color="text-[#31536F]" />
-                <MiniStat label="Giữ cho recurring" value={formatVND(safeToSpend.budgetReservedForRecurring)} color="text-[#3977C3]" />
+                <MiniStat label="Giữ cho lịch định kỳ" value={formatVND(safeToSpend.budgetReservedForRecurring)} color="text-[#3977C3]" />
                 <MiniStat label="Tiền ví hiện có" value={formatVND(safeToSpend.spendableCash)} color="text-[#31536F]" />
-                <MiniStat label="Recurring còn phải chi" value={formatVND(safeToSpend.recurringExpense)} color="text-rose-500" />
+                <MiniStat label="Lịch định kỳ còn phải chi" value={formatVND(safeToSpend.recurringExpense)} color="text-rose-500" />
               </div>
               <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5 text-[11px] leading-4 text-[#60778D]">
                 <ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#2F80ED]" />
                 <span>
-                  Bị giới hạn bởi {safeToSpend.limitingConstraint === "budget" ? "ngân sách còn sau recurring" : "thanh khoản hiện có sau recurring"}. Thu nhập recurring dự kiến {formatVND(safeToSpend.expectedRecurringIncome)} không được chi trước.
+                  Bị giới hạn bởi {safeToSpend.limitingConstraint === "budget" ? "ngân sách còn sau lịch định kỳ" : "thanh khoản hiện có sau lịch định kỳ"}. Thu nhập định kỳ dự kiến {formatVND(safeToSpend.expectedRecurringIncome)} không được chi trước.
                 </span>
               </div>
             </div>
@@ -3698,7 +3698,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Dự báo thanh khoản 90 ngày"
-          subtitle="Runway từ tiền trong ví + recurring đã cấu hình; không giả định chi tiêu tự do"
+          subtitle="Khả năng duy trì dòng tiền từ tiền trong ví + lịch định kỳ đã cấu hình; không giả định chi tiêu tự do"
         >
           {!isDashboardReady ? (
             <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
@@ -3728,8 +3728,8 @@ export default function DashboardPage() {
                 </div>
                 <p className="mt-2 text-[11px] leading-4 text-[#60778D]">
                   {cashRunwayForecast.eventCount90 > 0
-                    ? `${cashRunwayForecast.eventCount90} lần recurring được chiếu tới trong 90 ngày.`
-                    : "Chưa có recurring nào để chiếu tới; số dư giữ nguyên theo dữ liệu hiện có."}
+                    ? `${cashRunwayForecast.eventCount90} lần phát sinh định kỳ được dự báo trong 90 ngày.`
+                    : "Chưa có khoản định kỳ nào để dự báo; số dư giữ nguyên theo dữ liệu hiện có."}
                 </p>
               </div>
             </div>
@@ -3796,7 +3796,7 @@ export default function DashboardPage() {
                   : `Chưa có ngân sách cho tháng ${selectedMonth}/${selectedYear}`}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Thiết lập ngân sách theo danh mục để Dashboard theo dõi hạn
+                Thiết lập ngân sách theo danh mục để Tổng quan theo dõi hạn
                 mức chi tiêu.
               </p>
               <button
@@ -4129,7 +4129,7 @@ export default function DashboardPage() {
       >
         <Panel
           title="Dòng tiền trong kỳ"
-          subtitle="Thu nhập và chi phí thật; Savings/Forex được tách riêng thành dịch chuyển tài sản"
+          subtitle="Thu nhập và chi phí thật; Tiết kiệm/Ngoại hối được tách riêng thành dịch chuyển tài sản"
         >
           {cashMovementReady ? (
             <>
@@ -4169,7 +4169,7 @@ export default function DashboardPage() {
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
                   <div className="rounded-xl bg-white px-3 py-2.5">
                     <p className="text-[11px] font-semibold text-slate-500">
-                      Từ Savings/Forex về ví
+                      Từ Tiết kiệm/Ngoại hối về ví
                     </p>
                     <p className="mt-1 text-sm font-black text-cyan-700">
                       {formatVND(periodCapitalMovement.cashIn)}
@@ -4177,7 +4177,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="rounded-xl bg-white px-3 py-2.5">
                     <p className="text-[11px] font-semibold text-slate-500">
-                      Từ ví sang Savings/Forex
+                      Từ ví sang Tiết kiệm/Ngoại hối
                     </p>
                     <p className="mt-1 text-sm font-black text-indigo-700">
                       {formatVND(periodCapitalMovement.cashOut)}
@@ -4406,7 +4406,7 @@ export default function DashboardPage() {
               <ShieldCheck size={20} className="mt-0.5 shrink-0 text-emerald-600" />
               <div>
                 <p className="text-sm font-black text-emerald-700">Dữ liệu cốt lõi đang ổn</p>
-                <p className="mt-1 text-xs leading-5 text-[#60778D]">Không phát hiện category bị thiếu, giao dịch nghi trùng, recurring lỗi cấu hình hoặc snapshot Net Worth bị thiếu theo quy tắc hiện tại.</p>
+                <p className="mt-1 text-xs leading-5 text-[#60778D]">Không phát hiện danh mục bị thiếu, giao dịch nghi trùng, lịch định kỳ lỗi cấu hình hoặc bản ghi Tài sản ròng bị thiếu theo quy tắc hiện tại.</p>
               </div>
             </div>
           ) : (
@@ -4438,8 +4438,8 @@ export default function DashboardPage() {
                   value={monthEndCloseout.budgetConfigured ? `${monthEndCloseout.budgetUsage}%` : "Chưa lập"}
                   color={monthEndCloseout.budgetConfigured && monthEndCloseout.budgetUsage > 100 ? "text-rose-500" : "text-[#31536F]"}
                 />
-                <MiniStat label="Cần review" value={String(monthEndCloseout.reviewPending)} color={monthEndCloseout.reviewPending > 0 ? "text-amber-600" : "text-emerald-600"} />
-                <MiniStat label="Cash ròng" value={formatVND(monthEndCloseout.netCashMovement)} color={monthEndCloseout.netCashMovement >= 0 ? "text-[#2F80ED]" : "text-rose-500"} />
+                <MiniStat label="Cần rà soát" value={String(monthEndCloseout.reviewPending)} color={monthEndCloseout.reviewPending > 0 ? "text-amber-600" : "text-emerald-600"} />
+                <MiniStat label="Dòng tiền ròng" value={formatVND(monthEndCloseout.netCashMovement)} color={monthEndCloseout.netCashMovement >= 0 ? "text-[#2F80ED]" : "text-rose-500"} />
               </div>
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5">
@@ -4456,7 +4456,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               {monthEndCloseout.netWorthDelta !== null ? (
-                <p className="mt-3 text-[11px] font-semibold text-[#60778D]">Net Worth trong snapshot gần nhất của kỳ thay đổi <span className={monthEndCloseout.netWorthDelta >= 0 ? "font-black text-emerald-600" : "font-black text-rose-500"}>{monthEndCloseout.netWorthDelta >= 0 ? "+" : ""}{formatVND(monthEndCloseout.netWorthDelta)}</span>.</p>
+                <p className="mt-3 text-[11px] font-semibold text-[#60778D]">Tài sản ròng trong bản ghi gần nhất của kỳ thay đổi <span className={monthEndCloseout.netWorthDelta >= 0 ? "font-black text-emerald-600" : "font-black text-rose-500"}>{monthEndCloseout.netWorthDelta >= 0 ? "+" : ""}{formatVND(monthEndCloseout.netWorthDelta)}</span>.</p>
               ) : null}
 
               <div
@@ -4470,7 +4470,7 @@ export default function DashboardPage() {
                       : "Lưu kết quả rà soát tháng"}
                   </p>
                   <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
-                    Snapshot chỉ lưu các chỉ số review trên thiết bị này; không tạo giao dịch, không đổi số dư và không khóa sổ cái.
+                    Bản ghi chỉ lưu các chỉ số rà soát trên thiết bị này; không tạo giao dịch, không đổi số dư và không khóa sổ cái.
                   </p>
                   {savedMonthEndReview ? (
                     <p className="mt-1 text-[10px] font-semibold text-[#71879A]">
@@ -4505,7 +4505,7 @@ export default function DashboardPage() {
       {monthEndReviewHistory.length > 0 ? (
         <Panel
           title="Lịch sử chốt tháng"
-          subtitle="Bản lưu review gần đây trên thiết bị này; lưu lại cùng tháng sẽ cập nhật snapshot mới nhất"
+          subtitle="Bản lưu rà soát gần đây trên thiết bị này; lưu lại cùng tháng sẽ cập nhật bản ghi mới nhất"
         >
           <div
             data-dashboard-decision="month-end-review-history"
@@ -4559,13 +4559,13 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="font-semibold text-[#71879A]">Cần review</p>
+                      <p className="font-semibold text-[#71879A]">Cần rà soát</p>
                       <p className="mt-0.5 font-black text-[#31536F]">
                         {record.reviewPending}
                       </p>
                     </div>
                     <div>
-                      <p className="font-semibold text-[#71879A]">Cash ròng</p>
+                      <p className="font-semibold text-[#71879A]">Dòng tiền ròng</p>
                       <p
                         className={[
                           "mt-0.5 font-black tabular-nums",
@@ -4659,7 +4659,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Danh mục chi tiêu lớn nhất"
-          subtitle="Top danh mục trong tháng đang xem để nhận diện nơi cần tối ưu"
+          subtitle="Các danh mục chi tiêu lớn nhất trong tháng đang xem để nhận diện nơi cần tối ưu"
         >
           <div className="mt-4 space-y-3">
             {!cashFlowReady ? (
@@ -4716,14 +4716,14 @@ export default function DashboardPage() {
       >
         <Panel
           title="Vì sao tài sản ròng thay đổi"
-          subtitle="Đóng góp giữa hai snapshot Net Worth gần nhất đã được lưu"
+          subtitle="Đóng góp giữa hai bản ghi Tài sản ròng gần nhất đã được lưu"
         >
           {!netWorthHistoryReady ? (
             <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
           ) : !netWorthAttribution.available ? (
             <div className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
-              <p className="text-sm font-black text-[#294A66]">Chưa đủ snapshot để phân rã biến động</p>
-              <p className="mt-1 text-xs text-[#71879A]">Cần ít nhất 2 snapshot Net Worth để giải thích thay đổi theo từng nhóm tài sản và nợ.</p>
+              <p className="text-sm font-black text-[#294A66]">Chưa đủ bản ghi để phân rã biến động</p>
+              <p className="mt-1 text-xs text-[#71879A]">Cần ít nhất 2 bản ghi Tài sản ròng để giải thích thay đổi theo từng nhóm tài sản và nợ.</p>
             </div>
           ) : (
             <div data-dashboard-intelligence="net-worth-attribution" className="mt-4">
@@ -4754,7 +4754,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Phân bổ đầu tư"
-          subtitle="Tỷ trọng tài sản đầu tư hiện tại, gồm Portfolio và Forex"
+          subtitle="Tỷ trọng tài sản đầu tư hiện tại, gồm Danh mục đầu tư và Ngoại hối"
         >
           {!isDashboardReady ? (
             <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
@@ -4796,8 +4796,8 @@ export default function DashboardPage() {
         className="grid min-w-0 max-w-full gap-4 sm:gap-5 xl:grid-cols-3 *:min-w-0"
       >
         <Panel
-          title="Tài khoản Forex"
-          subtitle="Vốn đã nạp, Balance hiện tại và hiệu suất giao dịch"
+          title="Tài khoản ngoại hối"
+          subtitle="Vốn đã nạp, số dư hiện tại và hiệu suất giao dịch"
         >
           <div className="mt-5 flex min-h-0 flex-1 flex-col gap-3">
             <div className="grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
@@ -4807,7 +4807,7 @@ export default function DashboardPage() {
                 color="text-[#2F80ED]"
               />
               <MiniStat
-                label="Balance hiện tại"
+                label="Số dư hiện tại"
                 value={
                   forexSnapshot.accountsWithEquity > 0
                     ? formatVND(forexSnapshot.currentEquity)
@@ -4831,7 +4831,7 @@ export default function DashboardPage() {
                 }
               />
               <MiniStat
-                label="ROI"
+                label="Tỷ suất lợi nhuận"
                 value={
                   forexSnapshot.roi === null
                     ? "—"
@@ -4859,11 +4859,11 @@ export default function DashboardPage() {
             <div className="flex max-w-full items-start gap-1.5 rounded-xl border border-[#D8E9F3] bg-[#F1F8FC] px-3 py-2 text-[11px] leading-4 text-[#39718A]">
               <Info size={12} className="mt-0.5 shrink-0" />
               <p>
-                <span className="font-bold">Profit</span> = Balance − Nạp +
+                <span className="font-bold">Lợi nhuận</span> = Số dư − Nạp +
                 Rút. Phí nạp/rút là chi phí tiền mặt riêng, không làm thay đổi
-                Trading Profit.
+                Lợi nhuận giao dịch.
                 {forexSnapshot.accountsUsingFallback > 0
-                  ? ` Net Worth đang dùng vốn ròng làm fallback cho ${forexSnapshot.accountsUsingFallback} tài khoản chưa có Balance.`
+                  ? ` Tài sản ròng đang dùng vốn ròng làm giá trị thay thế cho ${forexSnapshot.accountsUsingFallback} tài khoản chưa có số dư.`
                   : ""}
               </p>
             </div>
@@ -4874,7 +4874,7 @@ export default function DashboardPage() {
             className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl bg-linear-to-r from-[#2F80ED] to-[#17A9D4] px-3 py-3 text-center text-sm font-black leading-5 text-white shadow-[0_8px_20px_rgba(47,128,237,0.18)] transition-all duration-200 hover:from-[#246FD0] hover:to-[#138EBD] sm:px-4"
           >
             <span className="max-w-full wrap-break-word">
-              Quản lý tài khoản Forex
+              Quản lý tài khoản ngoại hối
             </span>
           </button>
         </Panel>
@@ -4947,7 +4947,7 @@ export default function DashboardPage() {
                   Chưa có giao dịch trong kỳ
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Thêm thu nhập hoặc chi tiêu để Dashboard cập nhật.
+                  Thêm thu nhập hoặc chi tiêu để Tổng quan cập nhật.
                 </p>
               </div>
             ) : (
@@ -5041,7 +5041,7 @@ export default function DashboardPage() {
                 Tổng quan hôm nay
               </h1>
               <p className="mt-1 text-sm text-slate-600">
-                Snapshot vận hành, dự báo cuối tháng và việc cần ưu tiên.
+                Bản ghi vận hành, dự báo cuối tháng và việc cần ưu tiên.
               </p>
             </div>
           </div>

@@ -28,7 +28,7 @@ describe("DASHBOARD-PERIOD-COMPARISON-1", () => {
     const kpiEnd = source.indexOf("function ComparisonMetricRow(", kpiStart);
     const region = source.slice(kpiStart, kpiEnd > kpiStart ? kpiEnd : source.indexOf("function Panel(", kpiStart));
     expect(region).not.toContain("comparison,");
-    expect(source).toContain("So với snapshot trước");
+    expect(source).toContain("So với bản ghi trước");
   });
 
   it("renders a dedicated comparison intelligence surface", () => {

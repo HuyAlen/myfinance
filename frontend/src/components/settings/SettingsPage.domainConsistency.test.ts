@@ -22,8 +22,8 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup, stats and domain coverage", () =
   });
 
   it("keeps V2/V3 compatibility copy distinct from the current V4 export contract", () => {
-    expect(source).toContain("Backup V2/V3 hợp lệ vẫn được hỗ trợ");
-    expect(source).toContain("backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn");
+    expect(source).toContain("Bản sao lưu V2/V3 hợp lệ vẫn được hỗ trợ");
+    expect(source).toContain("bản sao lưu cũ thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn");
   });
 
   it("loads counts for Budgets, Investments, Savings and Forex accounts with the same failure boundary as existing stats", () => {
@@ -59,7 +59,7 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup, stats and domain coverage", () =
       "Ngân sách",
       "Đầu tư",
       "Tiết kiệm",
-      "Forex",
+      "Ngoại hối",
     ]) {
       expect(registry).toContain(label);
     }
@@ -69,11 +69,11 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 backup, stats and domain coverage", () =
 
   it("describes backup and restore coverage for the four previously omitted domains", () => {
     const dataSection = regionBetween('id="settings-data"', 'id="settings-security"');
-    for (const label of ["Ngân sách", "Đầu tư", "Tiết kiệm", "Forex"]) {
+    for (const label of ["Ngân sách", "Đầu tư", "Tiết kiệm", "Ngoại hối"]) {
       expect(dataSection).toContain(label);
     }
-    expect(dataSection).toContain("lịch sử Balance Forex");
-    expect(dataSection).toContain("lịch sử Balance Forex");
-    expect(dataSection).toContain("lịch sử Net Worth");
+    expect(dataSection).toContain("lịch sử số dư ngoại hối");
+    expect(dataSection).toContain("lịch sử số dư ngoại hối");
+    expect(dataSection).toContain("lịch sử Tài sản ròng");
   });
 });

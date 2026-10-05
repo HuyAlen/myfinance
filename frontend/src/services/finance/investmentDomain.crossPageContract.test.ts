@@ -35,7 +35,7 @@ describe("unified investment domain across UI, balance sheet and AI", () => {
     expect(investmentsPage).not.toContain('from("forex_accounts")');
     expect(investmentsPage).not.toContain('from("forex_cash_transactions")');
     expect(investmentsPage).toContain("Portfolio");
-    expect(investmentsPage).toContain("Tài khoản Forex");
+    expect(investmentsPage).toContain("Tài khoản ngoại hối");
   });
 
   it("makes both Portfolio and Forex discoverable through one global investment route", () => {

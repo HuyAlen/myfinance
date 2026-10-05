@@ -1192,7 +1192,7 @@ export default function ReportsPage() {
       { name: "Thanh khoản", value: balanceSheet.cashAndWallets, color: "#2563eb" },
       { name: "Tiết kiệm", value: balanceSheet.savings, color: "#06b6d4" },
       { name: "Đầu tư", value: balanceSheet.investments, color: "#8b5cf6" },
-      { name: "Forex", value: balanceSheet.forex, color: "#14b8a6" },
+      { name: "Ngoại hối", value: balanceSheet.forex, color: "#14b8a6" },
     ];
     return rows.filter((item) => item.value > 0);
   }, [balanceSheet]);
@@ -1295,7 +1295,7 @@ export default function ReportsPage() {
     const rows: (string | number)[][] = [
       ["Báo cáo", label],
       ["Phạm vi dòng tiền", label],
-      ["Tài sản / nợ / mục tiêu", "Snapshot hiện tại"],
+      ["Tài sản / nợ / mục tiêu", "Bản ghi hiện tại"],
       [],
       [
         "Kỳ",
@@ -1399,7 +1399,7 @@ export default function ReportsPage() {
     overview: {
       title: "Tổng quan tài chính",
       description:
-        "Dòng tiền theo kỳ đã chọn; tài sản, nợ, sức khỏe và mục tiêu là snapshot hiện tại.",
+        "Dòng tiền theo kỳ đã chọn; tài sản, nợ, sức khỏe và mục tiêu là bản ghi hiện tại.",
     },
     income: {
       title: "Phân tích thu nhập",
@@ -1414,17 +1414,17 @@ export default function ReportsPage() {
     cashflow: {
       title: "Báo cáo dòng tiền",
       description:
-        "Thu nhập và chi phí thật là dòng tiền chính; Savings/Forex được tách riêng thành dịch chuyển tài sản.",
+        "Thu nhập và chi phí thật là dòng tiền chính; Tiết kiệm/Ngoại hối được tách riêng thành dịch chuyển tài sản.",
     },
     investment: {
       title: "Hiệu quả đầu tư",
       description:
-        "Giá trị và ROI là snapshot hiện tại; vốn phân bổ được tính theo kỳ báo cáo.",
+        "Giá trị và Tỷ suất lợi nhuận là bản ghi hiện tại; vốn phân bổ được tính theo kỳ báo cáo.",
     },
     goals: {
       title: "Tiến độ mục tiêu",
       description:
-        "Theo dõi snapshot hiện tại của số tiền đã tích lũy, phần còn thiếu và mức góp đề xuất.",
+        "Theo dõi bản ghi hiện tại của số tiền đã tích lũy, phần còn thiếu và mức góp đề xuất.",
     },
     ai: {
       title: "Phân tích và khuyến nghị",
@@ -1484,7 +1484,7 @@ export default function ReportsPage() {
               </p>
               <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                 Dòng tiền theo {label} · Tài sản, nợ, đầu tư, mục tiêu và sức
-                khỏe tài chính là snapshot hiện tại
+                khỏe tài chính là bản ghi hiện tại
               </p>
             </div>
 
@@ -1543,7 +1543,7 @@ export default function ReportsPage() {
             <KpiCard
               label="Tài sản ròng"
               value={formatVND(summary.netWorth)}
-              sub="Snapshot hiện tại · Tài sản − Nợ"
+              sub="Bản ghi hiện tại · Tài sản − Nợ"
               gradient={
                 summary.netWorth >= 0
                   ? "from-blue-500 to-blue-600"
@@ -1574,7 +1574,7 @@ export default function ReportsPage() {
               label="Danh mục đầu tư hiện tại"
               value={formatVND(summary.investmentAssets)}
               sub={
-                "Hiện tại · ROI " +
+                "Hiện tại · Tỷ suất lợi nhuận " +
                 (investmentROI >= 0 ? "+" : "") +
                 investmentROI +
                 "%"
@@ -1911,7 +1911,7 @@ export default function ReportsPage() {
               <SectionHeader
                 icon={<PieChartIcon size={20} />}
                 title="Cấu trúc tài sản"
-                subtitle="Snapshot hiện tại · Thanh khoản · Tiết kiệm · Đầu tư · Forex"
+                subtitle="Bản ghi hiện tại · Thanh khoản · Tiết kiệm · Đầu tư · Ngoại hối"
               />
               <div className="mt-5 grid gap-5 lg:grid-cols-[240px_1fr]">
                 <div className="relative mx-auto h-56 w-56">
@@ -2527,7 +2527,7 @@ export default function ReportsPage() {
             <SectionHeader
               icon={<FileText size={20} />}
               title="Báo cáo tài chính"
-              subtitle="Income Statement · Cash Flow · Net Worth"
+              subtitle="Kết quả kinh doanh · Dòng tiền · Tài sản ròng"
             />
             <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto border-b border-slate-100 pb-0 sm:mt-5 sm:gap-2">
               {(
@@ -2623,7 +2623,7 @@ export default function ReportsPage() {
                     </p>
                   </div>
                   <p className="col-span-2 text-[11px] font-semibold text-slate-500">
-                    Savings/Forex không tính vào Thu vào / Chi ra phía trên.
+                    Tiết kiệm/Ngoại hối không tính vào Thu vào / Chi ra phía trên.
                   </p>
                 </div>
                 <div className="mt-6 overflow-x-auto">
@@ -2852,7 +2852,7 @@ export default function ReportsPage() {
               border="border-slate-200"
             />
             <StatMini
-              label="ROI"
+              label="Tỷ suất lợi nhuận"
               value={(investmentROI >= 0 ? "+" : "") + investmentROI + "%"}
               color={investmentROI >= 0 ? "text-emerald-600" : "text-rose-500"}
               bg={investmentROI >= 0 ? "bg-emerald-50" : "bg-rose-50"}
@@ -2935,7 +2935,7 @@ export default function ReportsPage() {
                               }
                             >
                               {roi >= 0 ? "+" : ""}
-                              {roi}% ROI
+                              {roi}% Tỷ suất lợi nhuận
                             </p>
                           </div>
                         </div>

@@ -16,13 +16,13 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 destructive-action copy", () => {
     const resetRegion = source.slice(resetStart, clearStart);
     const clearRegion = source.slice(clearStart, exportStart);
 
-    for (const label of ["Ngân sách", "Đầu tư", "Tiết kiệm", "Forex"]) {
+    for (const label of ["Ngân sách", "Đầu tư", "Tiết kiệm", "Ngoại hối"]) {
       expect(resetRegion).toContain(label);
       expect(clearRegion).toContain(label);
     }
 
     expect(resetRegion).toContain("resetFinanceDemoData()");
     expect(clearRegion).toContain("clearAllUserData()");
-    expect(clearRegion).toContain("lịch sử Net Worth");
+    expect(clearRegion).toContain("lịch sử Tài sản ròng");
   });
 });

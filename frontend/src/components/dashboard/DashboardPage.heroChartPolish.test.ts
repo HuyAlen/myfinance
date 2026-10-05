@@ -102,7 +102,7 @@ describe("DASH-HERO-POLISH-2 — Net Worth hero and chart polish", () => {
     expect(chart).not.toContain("focusedTrend");
     expect(chart).not.toContain("slice(firstDataIndex, lastDataIndex + 1)");
     expect(chart).toContain('data-dashboard-chart="full-year-timeline"');
-    expect(chart).toContain("{snapshotPoints.length}/12 tháng có snapshot");
+    expect(chart).toContain("{snapshotPoints.length}/12 tháng có bản ghi");
     expect(chart).toContain("interval={0}");
   });
 

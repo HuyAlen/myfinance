@@ -76,7 +76,7 @@ describe("DashboardPage recoverable initial load contract (DASHBOARD-DATA-READIN
 
   it("surfaces a recoverable error instead of leaving only indefinite skeletons after both initial attempts fail", () => {
     expect(dashboardSource).toContain("dashboardRecoveryError");
-    expect(dashboardSource).toContain("Chưa thể đồng bộ Dashboard");
+    expect(dashboardSource).toContain("Chưa thể đồng bộ Tổng quan");
     expect(dashboardSource).toContain("Dữ liệu chưa tải được. Kiểm tra kết nối rồi thử lại.");
     expect(dashboardSource).toContain("Thử lại");
     expect(dashboardSource).toContain("retryDashboardLoad");

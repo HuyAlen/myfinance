@@ -118,7 +118,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     const start = source.indexOf("const assetAllocationData = useMemo(() => {");
     const end = source.indexOf("const goalMeta = useMemo(", start);
     const block = source.slice(start, end);
-    expect(block).toContain('{ name: "Forex", value: balanceSheet.forex');
+    expect(block).toContain('{ name: "Ngoại hối", value: balanceSheet.forex');
     expect(block).not.toContain('{ name: "Nợ"');
     expect(source).toContain("const assetAllocationTotal = useMemo(");
     expect(source).toContain("item.value / assetAllocationTotal");
@@ -127,15 +127,15 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
 
   it("makes current-state snapshot semantics explicit beside period-scoped flows", () => {
     expect(source).toContain("Dòng tiền theo {label}");
-    expect(source).toContain("snapshot hiện tại");
-    expect(source).toContain('sub="Snapshot hiện tại · Tài sản − Nợ"');
+    expect(source).toContain("bản ghi hiện tại");
+    expect(source).toContain('sub="Bản ghi hiện tại · Tài sản − Nợ"');
     expect(source).toContain('label="Tiết kiệm hiện tại"');
     expect(source).toContain("summary.savingAllocation");
     expect(source).toContain('label="Danh mục đầu tư hiện tại"');
     expect(source).toContain("value={formatVND(summary.investmentAssets)}");
     expect(source).not.toContain("displayedInvestmentCapital");
     expect(source).toContain("Financial Health · hiện tại");
-    expect(source).toContain("Giá trị và ROI là snapshot hiện tại; vốn phân bổ được tính theo kỳ báo cáo.");
+    expect(source).toContain("Giá trị và Tỷ suất lợi nhuận là bản ghi hiện tại; vốn phân bổ được tính theo kỳ báo cáo.");
   });
 
   it("does not mutate the memoized goalMeta array to find the lowest-progress goal", () => {
@@ -151,7 +151,7 @@ describe("ReportsPage temporal scope and metric integrity (REPORTS-CORRECTNESS-1
     const block = source.slice(start, end);
     expect(block).toContain("...periodMonthly.map((row) => [");
     expect(block).not.toContain("...monthly.map((m) => [");
-    expect(block).toContain('["Tài sản / nợ / mục tiêu", "Snapshot hiện tại"]');
+    expect(block).toContain('["Tài sản / nợ / mục tiêu", "Bản ghi hiện tại"]');
     expect(block).toContain('"\\uFEFF" +');
     expect(block).toContain('a.download = "myfinance-report-" + reportFileToken + ".csv"');
     expect(source).toContain("function getReportFileToken(");

@@ -1067,7 +1067,7 @@ export default function AIAgentDrawer({ open, onClose }: AIAgentDrawerProps) {
                     ) : (
                       <span className="size-1.5 rounded-full bg-emerald-500" />
                     )}
-                    {streaming ? "Đang phân tích" : "Online"}
+                    {streaming ? "Đang phân tích" : "Trực tuyến"}
                   </span>
                 </div>
               </div>

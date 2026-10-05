@@ -893,7 +893,7 @@ function ScheduleCard({
           <p className="text-xs font-semibold leading-5 text-amber-800">{schedule.issues.map(getRecurringIssueLabel).join(" · ")}</p>
         </div>
       ) : schedule.enabled ? (
-        <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700/90"><CheckCircle2 size={13} /> Đủ dữ liệu cho forecast</div>
+        <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700/90"><CheckCircle2 size={13} /> Đủ dữ liệu cho dự báo</div>
       ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3">

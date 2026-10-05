@@ -75,7 +75,7 @@ describe("Hero headline + asset buckets use isDashboardReady alone (PERF-4B)", (
 
     expect(headlineRegion).toContain("hasNetWorthHistoryComparison ? (");
     expect(headlineRegion).toContain("netWorthHistorySummary.changeFromPrevious!");
-    expect(headlineRegion).toContain("so với snapshot trước");
+    expect(headlineRegion).toContain("so với bản ghi trước");
     expect(headlineRegion).not.toContain("Dòng tiền dương");
     expect(headlineRegion).not.toContain("netCashMovement");
   });

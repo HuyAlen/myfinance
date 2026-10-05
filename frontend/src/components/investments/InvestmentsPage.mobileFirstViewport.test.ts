@@ -18,7 +18,7 @@ function regionBetween(startMarker: string, endMarker: string) {
 describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MOBILE-POLISH-1)", () => {
   it("uses a compact soft-blue mobile hero instead of the previous heavy dark hierarchy", () => {
     expect(source).toContain('text-[22px] font-bold tracking-tight text-[#36536B]');
-    expect(source).toContain("Quản lý Portfolio và Forex trong cùng một không gian đầu tư.");
+    expect(source).toContain("Quản lý danh mục đầu tư và ngoại hối trong cùng một không gian đầu tư.");
     expect(source).not.toContain("Forex Management");
   });
 
@@ -26,7 +26,7 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
     expect(source).toContain('grid grid-cols-[44px_1fr_1fr] gap-2');
     expect(source).toContain('aria-label="Làm mới dữ liệu đầu tư"');
     expect(source).toContain("Thêm tài sản");
-    expect(source).toContain("Thêm Forex");
+    expect(source).toContain("Thêm ngoại hối");
   });
 
   it("turns the six summary cards into a horizontal snap rail on phones", () => {
@@ -70,8 +70,8 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
     const cardFooter = source.slice(start, end);
 
     expect(cardFooter).toContain("grid grid-cols-3 gap-2");
-    expect(cardFooter).toContain("Nhập Balance");
-    expect(cardFooter).toContain("Cập nhật Balance");
+    expect(cardFooter).toContain("Nhập số dư");
+    expect(cardFooter).toContain("Cập nhật số dư");
     expect(cardFooter).toContain("Nạp");
     expect(cardFooter).toContain("Rút");
     expect(cardFooter).toContain("min-h-11");
@@ -91,8 +91,8 @@ describe("InvestmentsPage iPhone hierarchy and action ergonomics (INVESTMENTS-MO
 
   it("uses 44px touch targets for transaction edit and delete controls", () => {
     const history = regionBetween('data-ui="forex-history-workstation"', "{portfolioModalOpen ? (");
-    expect(history).toContain('aria-label="Sửa giao dịch Forex"');
-    expect(history).toContain('aria-label="Xóa giao dịch Forex"');
+    expect(history).toContain('aria-label="Sửa giao dịch ngoại hối"');
+    expect(history).toContain('aria-label="Xóa giao dịch ngoại hối"');
     expect(history.split("size-11 items-center justify-center rounded-xl").length - 1).toBe(2);
   });
 

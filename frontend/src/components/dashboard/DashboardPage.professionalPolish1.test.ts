@@ -11,7 +11,7 @@ describe("DASHBOARD-PROFESSIONAL-POLISH-1", () => {
     const end = dashboard.indexOf("Mobile uses a flatter financial breakdown", start);
     const hero = dashboard.slice(start, end);
     expect(hero).toContain("netWorthHistorySummary.changeFromPrevious!");
-    expect(hero).toContain("so với snapshot trước");
+    expect(hero).toContain("so với bản ghi trước");
     expect(hero).not.toContain("Dòng tiền dương");
     expect(hero).not.toContain("netCashMovement");
   });
@@ -54,7 +54,7 @@ describe("DASHBOARD-PROFESSIONAL-POLISH-1", () => {
 
   it("de-emphasizes realtime status without removing realtime behavior", () => {
     expect(header).toContain('className="hidden h-10 items-center gap-1.5 px-1.5 text-[11px] font-bold text-[#60778D] lg:flex"');
-    expect(header).toContain('connected ? "Online" : "Sync..."');
+    expect(header).toContain('connected ? "Trực tuyến" : "Đang đồng bộ..."');
     expect(header).toContain('const { status, lastSync } = useRealtime();');
   });
 });

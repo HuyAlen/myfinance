@@ -45,7 +45,7 @@ const NAV_GROUPS = [
       { label: "Tiết kiệm", icon: PiggyBank, href: "/savings" },
       { label: "Đầu Tư", icon: BriefcaseBusiness, href: "/investments" },
       { label: "Nợ & Khoản Vay", icon: Landmark, href: "/debts" },
-      { label: "AI Advisor", icon: Bot, href: "/ai-insights" },
+      { label: "Cố vấn AI", icon: Bot, href: "/ai-insights" },
     ],
   },
   {

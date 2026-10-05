@@ -350,7 +350,7 @@ const getSavingFormConfig = (type: SavingType) => {
         maturityLabel: "Ngày đáo hạn",
         maturityRequired: true,
         notesPlaceholder: "Ví dụ: Tự động tái tục gốc và lãi",
-        previewTitle: "Interest Preview",
+        previewTitle: "Xem trước tiền lãi",
         previewDescription:
           "Ước tính lãi theo ngày đáo hạn. Nếu chưa chọn ngày, hệ thống tạm tính theo 1 năm.",
         interestTitle: "Lãi dự kiến",
@@ -370,7 +370,7 @@ const getSavingFormConfig = (type: SavingType) => {
         maturityLabel: "Ngày tất toán",
         maturityRequired: true,
         notesPlaceholder: "Ví dụ: Không rút trước hạn, giữ đến ngày tất toán",
-        previewTitle: "Certificate Preview",
+        previewTitle: "Xem trước chứng chỉ tiền gửi",
         previewDescription:
           "Ước tính lợi tức đến ngày tất toán. Nếu chưa chọn ngày, hệ thống tạm tính theo 1 năm.",
         interestTitle: "Lợi tức dự kiến",
@@ -390,7 +390,7 @@ const getSavingFormConfig = (type: SavingType) => {
         maturityLabel: "",
         maturityRequired: false,
         notesPlaceholder: "Ví dụ: Dự phòng 6 tháng chi phí sinh hoạt",
-        previewTitle: "Emergency Fund Preview",
+        previewTitle: "Xem trước quỹ khẩn cấp",
         previewDescription:
           "Quỹ khẩn cấp là khoản linh hoạt, không cần lãi suất hoặc ngày đáo hạn.",
         interestTitle: "Lãi dự kiến",
@@ -411,7 +411,7 @@ const getSavingFormConfig = (type: SavingType) => {
         maturityLabel: "",
         maturityRequired: false,
         notesPlaceholder: "Ví dụ: Tài khoản linh hoạt, có thể nạp/rút khi cần",
-        previewTitle: "Savings Preview",
+        previewTitle: "Xem trước tiết kiệm",
         previewDescription:
           "Tài khoản tiết kiệm linh hoạt được ước tính theo 1 năm vì không có ngày đáo hạn.",
         interestTitle: "Lãi dự kiến / năm",
@@ -1817,7 +1817,7 @@ export default function SavingsPage({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#2F80ED] sm:text-[11px]">
-              Savings Center
+              Trung tâm tiết kiệm
             </p>
             <h1 className="mt-0.5 text-2xl font-black tracking-tight text-[#36536B] sm:text-3xl">
               Tiết kiệm
@@ -2460,7 +2460,7 @@ export default function SavingsPage({
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-6 sm:py-4">
               <div className="min-w-0">
                 <p className="hidden text-[11px] font-black uppercase tracking-[0.18em] text-blue-600 sm:block">
-                  {isEditing ? "EDIT SAVING" : "NEW SAVING"}
+                  {isEditing ? "CHỈNH SỬA TIẾT KIỆM" : "THÊM TIẾT KIỆM"}
                 </p>
                 <h2 className="truncate text-base font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
                   {isEditing

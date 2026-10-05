@@ -46,7 +46,7 @@ describe("DASHBOARD-CUSTOMIZATION-1 wiring", () => {
   });
 
   it("offers mobile-friendly show/hide, move, reset, close and Escape controls", () => {
-    expect(source).toContain("Tùy chỉnh Dashboard");
+    expect(source).toContain("Tùy chỉnh Tổng quan");
     expect(source).toContain("toggleDashboardSection(dashboardCustomization, sectionId)");
     expect(source).toContain('moveDashboardSection(dashboardCustomization, sectionId, direction)');
     expect(source).toContain("createDefaultDashboardCustomization()");

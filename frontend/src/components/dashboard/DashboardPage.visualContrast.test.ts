@@ -50,7 +50,7 @@ describe("Dashboard visual contrast hierarchy", () => {
     expect(heroEnd).toBeGreaterThan(heroStart);
     const hero = source.slice(heroStart, heroEnd);
 
-    expect(source).toContain("So với snapshot trước");
+    expect(source).toContain("So với bản ghi trước");
     expect(source).toContain("netWorthHistorySummary.changeFromPrevious");
     expect(hero).not.toContain("Dòng tiền dương");
     expect(hero).not.toContain("Dòng tiền âm");

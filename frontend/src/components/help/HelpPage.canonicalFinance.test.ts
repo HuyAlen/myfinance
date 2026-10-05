@@ -28,7 +28,7 @@ describe("HELP-CANONICAL-FINANCE-1 canonical cross-page guidance", () => {
       "const totalAssets = cashAndWallets + savings + investments + forex;",
     );
     expect(help).toContain(
-      "Net Worth = Ví tiền + Tiết kiệm + Portfolio + Forex − Tổng nợ",
+      "Tài sản ròng = Ví tiền + Tiết kiệm + Danh mục đầu tư + Ngoại hối − Tổng nợ",
     );
     expect(help).toContain("Số dư Ví không đồng nghĩa với Tổng tài sản");
     expect(help).not.toContain(
@@ -40,10 +40,10 @@ describe("HELP-CANONICAL-FINANCE-1 canonical cross-page guidance", () => {
     expect(debts).toContain("calculateBalanceSheetSnapshot({");
     expect(debts).toContain("debt.minimumPayment");
     expect(help).toContain(
-      "Debt Ratio = Tổng dư nợ ÷ Tổng tài sản × 100%",
+      "Tỷ lệ nợ = Tổng dư nợ ÷ Tổng tài sản × 100%",
     );
-    expect(help).toContain("Debt service / income");
-    expect(help).toContain("minimum payment");
+    expect(help).toContain("Tỷ lệ trả nợ / thu nhập");
+    expect(help).toContain("khoản trả tối thiểu");
     expect(help).not.toContain(
       "Debt Ratio = Tổng nợ ÷ Thu nhập tháng × 100%",
     );
@@ -60,21 +60,21 @@ describe("HELP-CANONICAL-FINANCE-1 canonical cross-page guidance", () => {
 
   it("describes Goal progress as a funding snapshot that can include linked Savings", () => {
     expect(goals).toContain("calculateGoalFundingSnapshot({");
-    expect(help).toContain("canonical funding snapshot");
-    expect(help).toContain("Liên kết đúng tài khoản Savings");
+    expect(help).toContain("bản ghi nguồn vốn chuẩn");
+    expect(help).toContain("Liên kết đúng tài khoản Tiết kiệm");
     expect(help).not.toContain("AI Goal Coach");
   });
 
-  it("documents the unified Portfolio + Forex investment domain", () => {
-    expect(help).toContain('title: "Đầu Tư · Portfolio & Forex"');
-    expect(help).toContain("Dùng 'Thêm Forex'");
-    expect(help).toContain("Portfolio + Forex");
+  it("documents the unified Danh mục đầu tư + Ngoại hối investment domain", () => {
+    expect(help).toContain('title: "Đầu Tư · Danh mục đầu tư & Ngoại hối"');
+    expect(help).toContain("Dùng 'Thêm ngoại hối'");
+    expect(help).toContain("Danh mục đầu tư + Ngoại hối");
     expect(help).not.toContain('title: "Đầu Tư · Danh mục"');
   });
 
   it("keeps real expense separate from transfers and future allocations", () => {
-    expect(help).toContain("Transfer nội bộ không tạo thêm expense");
-    expect(help).toContain("Savings/Investment allocation được theo dõi riêng");
+    expect(help).toContain("Chuyển tiền nội bộ không tạo thêm chi tiêu");
+    expect(help).toContain("Phân bổ Tiết kiệm/Đầu tư được theo dõi riêng");
     expect(help).toContain("chi tiêu thực");
   });
 

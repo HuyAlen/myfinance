@@ -262,18 +262,18 @@ function validatePortfolioForm(form: PortfolioFormState): string | null {
 
 function validateAccountForm(form: AccountFormState): string | null {
   if (!form.name.trim()) return "Vui lòng nhập tên tài khoản.";
-  if (!form.broker.trim()) return "Vui lòng nhập broker hoặc nền tảng.";
+  if (!form.broker.trim()) return "Vui lòng nhập sàn hoặc nền tảng.";
   if (form.currentEquity.trim()) {
     const balance = Number(form.currentEquity);
     if (!Number.isFinite(balance) || balance < 0) {
-      return "Balance hiện tại phải là số không âm.";
+      return "Số dư hiện tại phải là số không âm.";
     }
   }
   return null;
 }
 
 function validateTransactionForm(form: TransactionFormState): string | null {
-  if (!form.forexAccountId) return "Vui lòng chọn tài khoản Forex.";
+  if (!form.forexAccountId) return "Vui lòng chọn tài khoản ngoại hối.";
   if (!form.walletId) return "Vui lòng chọn ví nguồn hoặc ví nhận.";
   const amount = Number(form.amount);
   const fee = Number(form.fee || 0);
@@ -367,20 +367,20 @@ export default function InvestmentsPage() {
     }
 
     const investmentsRequest = withInvestmentDomainLoadTimeout(
-      "Danh mục Portfolio",
+      "Danh mục đầu tư",
       getInvestments(),
     );
     const walletsRequest = withInvestmentDomainLoadTimeout("Danh sách ví", getWallets());
     const accountsRequest = withInvestmentDomainLoadTimeout(
-      "Tài khoản Forex",
+      "Tài khoản ngoại hối",
       getForexAccounts(),
     );
     const transactionsRequest = withInvestmentDomainLoadTimeout(
-      "Lịch sử nạp/rút Forex",
+      "Lịch sử nạp/rút ngoại hối",
       getForexCashTransactions(),
     );
     const balanceSnapshotsRequest = withInvestmentDomainLoadTimeout(
-      "Lịch sử Balance Forex",
+      "Lịch sử số dư ngoại hối",
       getForexBalanceSnapshotsUpTo(requestedPeriod.cutoffAt),
     );
 
@@ -846,21 +846,21 @@ export default function InvestmentsPage() {
       toast({
         variant: "success",
         message: accountForm.id
-          ? "Đã cập nhật tài khoản Forex."
-          : "Đã thêm tài khoản Forex.",
+          ? "Đã cập nhật tài khoản ngoại hối."
+          : "Đã thêm tài khoản ngoại hối.",
       });
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Không thể lưu tài khoản Forex.";
+          : "Không thể lưu tài khoản ngoại hối.";
 
       if (
         message.toLowerCase().includes("current_equity") ||
         message.toLowerCase().includes("column")
       ) {
         setSaveError(
-          "Cột current_equity chưa tồn tại trong bảng forex_accounts. Hãy chạy migration SQL được cung cấp bên dưới.",
+          "Cột current_equity chưa tồn tại trong bảng forex_accounts. Hãy chạy tập lệnh SQL cập nhật cơ sở dữ liệu được cung cấp bên dưới.",
         );
       } else {
         setSaveError(message);
@@ -911,16 +911,16 @@ export default function InvestmentsPage() {
       toast({
         variant: "success",
         message: transactionForm.id
-          ? "Đã cập nhật giao dịch Forex."
+          ? "Đã cập nhật giao dịch ngoại hối."
           : transactionForm.type === "deposit"
-            ? "Đã ghi nhận nạp tiền vào Forex."
-            : "Đã ghi nhận rút tiền từ Forex.",
+            ? "Đã ghi nhận nạp tiền vào ngoại hối."
+            : "Đã ghi nhận rút tiền từ ngoại hối.",
       });
     } catch (error) {
       setSaveError(
         error instanceof Error
           ? error.message
-          : "Không thể lưu giao dịch Forex.",
+          : "Không thể lưu giao dịch ngoại hối.",
       );
     } finally {
       setIsSaving(false);
@@ -929,7 +929,7 @@ export default function InvestmentsPage() {
 
   function requestDeleteAccount(account: ForexAccount) {
     setPendingAction({
-      title: "Xóa tài khoản Forex?",
+      title: "Xóa tài khoản ngoại hối?",
       description: `Tài khoản ${account.name} và lịch sử liên quan sẽ được xóa trong một giao dịch an toàn; số dư ví được hoàn tác tương ứng.`,
       variant: "danger",
       onConfirm: async () => {
@@ -943,7 +943,7 @@ export default function InvestmentsPage() {
         }
 
         await reload();
-        toast({ variant: "success", message: "Đã xóa tài khoản Forex." });
+        toast({ variant: "success", message: "Đã xóa tài khoản ngoại hối." });
       },
     });
   }
@@ -963,7 +963,7 @@ export default function InvestmentsPage() {
         }
 
         await reload();
-        toast({ variant: "success", message: "Đã xóa giao dịch Forex." });
+        toast({ variant: "success", message: "Đã xóa giao dịch ngoại hối." });
       },
     });
   }
@@ -981,7 +981,7 @@ export default function InvestmentsPage() {
                 Đầu tư
               </h1>
               <p className="mt-0.5 text-[13px] font-medium leading-5 text-[#687E93] sm:text-sm">
-                Quản lý Portfolio và Forex trong cùng một không gian đầu tư.
+                Quản lý danh mục đầu tư và ngoại hối trong cùng một không gian đầu tư.
               </p>
             </div>
           </div>
@@ -1011,7 +1011,7 @@ export default function InvestmentsPage() {
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-3 text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(47,128,237,0.18)] transition hover:bg-blue-600 sm:rounded-2xl sm:px-4 sm:text-sm"
             >
               <Plus size={16} />
-              Thêm Forex
+              Thêm ngoại hối
             </button>
           </div>
         </div>
@@ -1037,19 +1037,19 @@ export default function InvestmentsPage() {
             value={formatMoney(
               portfolioSummary.currentValue + summary.currentExposure,
             )}
-            note="Portfolio + Forex hiện tại · không theo bộ lọc kỳ"
+            note="Danh mục đầu tư + Ngoại hối hiện tại · không theo bộ lọc kỳ"
             tone="blue"
             icon={<WalletCards size={17} />}
           />
           <SummaryCard
-            label="Portfolio"
+            label="Danh mục đầu tư"
             value={formatMoney(portfolioSummary.currentValue)}
             note={`${portfolioSummary.count} tài sản`}
             tone="sky"
             icon={<BriefcaseBusiness size={17} />}
           />
           <SummaryCard
-            label="Balance Forex"
+            label="Số dư ngoại hối"
             value={
               !summary.periodDataReady
                 ? "Đang tải..."
@@ -1063,14 +1063,14 @@ export default function InvestmentsPage() {
               !summary.periodDataReady
                 ? `Đang tải ${filterLabel}`
                 : summary.accountsMissingBalance > 0
-                  ? `${summary.accountsMissingBalance} tài khoản thiếu Balance lịch sử`
-                  : `Balance as-of cuối ${filterLabel}`
+                  ? `${summary.accountsMissingBalance} tài khoản thiếu lịch sử số dư`
+                  : `Số dư tại cuối ${filterLabel}`
             }
             tone="blue"
             icon={<Landmark size={17} />}
           />
           <SummaryCard
-            label="Profit Forex"
+            label="Lợi nhuận ngoại hối"
             value={
               !summary.periodDataReady
                 ? "Đang tải..."
@@ -1085,8 +1085,8 @@ export default function InvestmentsPage() {
               !summary.periodDataReady
                 ? `Đang tải ${filterLabel}`
                 : summary.hasCompleteBalance
-                  ? `Profit as-of cuối ${filterLabel} · không gồm phí nạp/rút`
-                  : "Không suy đoán Profit khi thiếu Balance lịch sử"
+                  ? `Lợi nhuận tại cuối ${filterLabel} · không gồm phí nạp/rút`
+                  : "Không suy đoán lợi nhuận khi thiếu lịch sử số dư"
             }
             tone={
               !summary.periodDataReady ||
@@ -1109,7 +1109,7 @@ export default function InvestmentsPage() {
               Danh mục đầu tư
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
-              Portfolio
+              Danh mục đầu tư
             </h2>
             <p className="mt-1 text-xs font-semibold text-[#7C91A6] sm:text-sm">
               Cổ phiếu, quỹ/ETF, crypto, vàng và các tài sản đầu tư khác.
@@ -1242,7 +1242,7 @@ export default function InvestmentsPage() {
                       tone={profitLoss >= 0 ? "emerald" : "rose"}
                     />
                     <Metric
-                      label="ROI"
+                      label="Tỷ suất lợi nhuận"
                       value={formatPercent(roi)}
                       tone={roi === null || roi >= 0 ? "emerald" : "rose"}
                     />
@@ -1270,10 +1270,10 @@ export default function InvestmentsPage() {
               Forex
             </p>
             <h2 className="mt-1 text-lg font-bold text-[#36536B] sm:text-xl">
-              Tài khoản Forex
+              Tài khoản ngoại hối
             </h2>
             <p className="mt-1 text-xs font-medium text-[#7C91A6] sm:text-sm">
-              Nạp/rút theo kỳ · Balance và Profit as-of cuối kỳ.
+              Nạp/rút theo kỳ · Balance và Lợi nhuận tại cuối kỳ.
             </p>
           </div>
           <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">
@@ -1286,7 +1286,7 @@ export default function InvestmentsPage() {
             data-ui="forex-historical-balance-missing"
             className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-800 sm:mt-4 sm:text-sm"
           >
-            Chưa có dữ liệu Balance lịch sử cho {summary.accountsMissingBalance}
+            Chưa có dữ liệu lịch sử số dư cho {summary.accountsMissingBalance}
             /{summary.accountCount} tài khoản tại {filterLabel}. Balance tổng và
             Profit tổng được để trống thay vì suy đoán từ dòng tiền.
           </div>
@@ -1396,7 +1396,7 @@ export default function InvestmentsPage() {
                       !summary.periodDataReady
                         ? "Đang tải dữ liệu kỳ"
                         : account.historicalBalanceMissing
-                          ? "Chưa có dữ liệu Balance lịch sử"
+                          ? "Chưa có dữ liệu lịch sử số dư"
                           : account.hasAsOfPerformance && account.periodBalance !== null
                             ? formatMoney(account.periodBalance)
                             : `Không có dữ liệu tại ${filterLabel}`
@@ -1414,7 +1414,7 @@ export default function InvestmentsPage() {
                     {!summary.periodDataReady
                       ? `Đang tải ${filterLabel}`
                       : account.historicalBalanceMissing
-                        ? "Chưa có dữ liệu Balance lịch sử"
+                        ? "Chưa có dữ liệu lịch sử số dư"
                         : account.hasAsOfPerformance
                           ? `As-of cuối ${filterLabel}`
                           : `Không có dữ liệu tại ${filterLabel}`}
@@ -1431,7 +1431,7 @@ export default function InvestmentsPage() {
                   tone="slate"
                 />
                 <Metric
-                  label="Profit as-of"
+                  label="Lợi nhuận tại kỳ"
                   value={
                     account.tradingProfitLoss === null
                       ? "—"
@@ -1457,8 +1457,8 @@ export default function InvestmentsPage() {
                     className="min-h-11 rounded-xl border border-[#D9E7F4] bg-white px-3 text-xs font-bold text-[#2F80ED] transition hover:bg-[#F3F8FF] sm:px-4"
                   >
                     {account.currentEquity == null
-                      ? "Nhập Balance"
-                      : "Cập nhật Balance"}
+                      ? "Nhập số dư"
+                      : "Cập nhật số dư"}
                   </button>
                   <button
                     type="button"
@@ -1574,7 +1574,7 @@ export default function InvestmentsPage() {
                         <button
                           type="button"
                           onClick={() => openEditTransaction(transaction)}
-                          aria-label="Sửa giao dịch Forex"
+                          aria-label="Sửa giao dịch ngoại hối"
                           className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-sky-50 hover:text-sky-600 md:size-9"
                         >
                           <Edit3 size={14} />
@@ -1582,7 +1582,7 @@ export default function InvestmentsPage() {
                         <button
                           type="button"
                           onClick={() => requestDeleteTransaction(transaction)}
-                          aria-label="Xóa giao dịch Forex"
+                          aria-label="Xóa giao dịch ngoại hối"
                           className="flex size-11 items-center justify-center rounded-xl border border-[#DCE6EF] text-[#687E93] transition hover:bg-rose-50 hover:text-rose-600 md:size-9"
                         >
                           <Trash2 size={14} />
@@ -1601,10 +1601,10 @@ export default function InvestmentsPage() {
         <Modal
           title={
             portfolioForm.id
-              ? "Cập nhật tài sản Portfolio"
-              : "Thêm tài sản Portfolio"
+              ? "Cập nhật tài sản đầu tư"
+              : "Thêm tài sản đầu tư"
           }
-          description="Portfolio dành cho cổ phiếu, quỹ/ETF, crypto, vàng và các tài sản không thuộc tài khoản Forex."
+          description="Danh mục đầu tư dành cho cổ phiếu, quỹ/ETF, tài sản mã hóa, vàng và các tài sản không thuộc tài khoản ngoại hối."
           onClose={() => !isSaving && setPortfolioModalOpen(false)}
         >
           <form onSubmit={submitPortfolioInvestment} className="space-y-4">
@@ -1712,9 +1712,9 @@ export default function InvestmentsPage() {
       {accountModalOpen ? (
         <Modal
           title={
-            accountForm.id ? "Cập nhật tài khoản Forex" : "Thêm tài khoản Forex"
+            accountForm.id ? "Cập nhật tài khoản ngoại hối" : "Thêm tài khoản ngoại hối"
           }
-          description="Nhập Balance đang hiển thị trên Exness, MT4/MT5 hoặc ứng dụng broker để theo dõi Profit."
+          description="Nhập số dư đang hiển thị trên Exness, MT4/MT5 hoặc ứng dụng của sàn để theo dõi lợi nhuận."
           onClose={() => !isSaving && setAccountModalOpen(false)}
         >
           <form onSubmit={submitAccount} className="space-y-4">
@@ -1728,10 +1728,10 @@ export default function InvestmentsPage() {
                     name: value,
                   }))
                 }
-                placeholder="Forex Main"
+                placeholder="Tài khoản ngoại hối chính"
               />
               <Field
-                label="Broker / nền tảng *"
+                label="Sàn / nền tảng *"
                 value={accountForm.broker}
                 onChange={(value) =>
                   setAccountForm((current) => ({
@@ -1742,7 +1742,7 @@ export default function InvestmentsPage() {
                 placeholder="Exness"
               />
               <Field
-                label="Account number"
+                label="Số tài khoản"
                 value={accountForm.accountNumber}
                 onChange={(value) =>
                   setAccountForm((current) => ({
@@ -1752,7 +1752,7 @@ export default function InvestmentsPage() {
                 }
               />
               <CurrencyField
-                label="Balance hiện tại *"
+                label="Số dư hiện tại *"
                 value={accountForm.currentEquity}
                 onChange={(value) =>
                   setAccountForm((current) => ({
@@ -1762,8 +1762,7 @@ export default function InvestmentsPage() {
                 }
               />
               <div className="md:col-span-2 -mt-1 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-700">
-                Nhập số Balance đang hiển thị trên Exness, MT4/MT5 hoặc ứng
-                dụng broker. Không dùng giá trị có bao gồm lời/lỗ lệnh đang mở.
+                Nhập số dư đang hiển thị trên Exness, MT4/MT5 hoặc ứng dụng của sàn. Không dùng giá trị có bao gồm lời/lỗ lệnh đang mở.
                 <span className="font-black">
                   {" "}
                   Profit = Balance - Tổng nạp + Tổng rút
@@ -1836,8 +1835,8 @@ export default function InvestmentsPage() {
         <Modal
           title={
             transactionForm.id
-              ? "Cập nhật giao dịch Forex"
-              : "Ghi nhận nạp/rút Forex"
+              ? "Cập nhật giao dịch ngoại hối"
+              : "Ghi nhận nạp/rút ngoại hối"
           }
           description="Giao dịch sẽ đồng bộ trực tiếp với số dư ví liên kết."
           onClose={() => !isSaving && setTransactionModalOpen(false)}
@@ -1867,14 +1866,14 @@ export default function InvestmentsPage() {
                           : "text-slate-500"
                       }`}
                     >
-                      {type === "deposit" ? "Nạp vào Forex" : "Rút từ Forex"}
+                      {type === "deposit" ? "Nạp vào ngoại hối" : "Rút từ ngoại hối"}
                     </button>
                   ))}
                 </div>
               </label>
 
               <SelectField
-                label="Tài khoản Forex *"
+                label="Tài khoản ngoại hối *"
                 value={transactionForm.forexAccountId}
                 onChange={(value) =>
                   setTransactionForm((current) => ({

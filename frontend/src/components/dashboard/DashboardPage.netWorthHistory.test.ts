@@ -92,7 +92,7 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
     expect(source).toContain("Chưa có lịch sử tài sản ròng");
     expect(source).toContain("netWorthHistorySummary.snapshotCount === 1");
     expect(source).toContain("Chưa đủ dữ liệu để so sánh");
-    expect(source).toContain("Cần ít nhất 2 snapshot ở các tháng khác nhau");
+    expect(source).toContain("Cần ít nhất 2 bản ghi ở các tháng khác nhau");
     expect(source).toContain("<NetWorthTrendChart trend={netWorthTrend} />");
   });
 

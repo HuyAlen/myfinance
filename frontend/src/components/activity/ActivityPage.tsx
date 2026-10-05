@@ -65,8 +65,8 @@ const ENTITY_META: Record<
   investments: { label: "Đầu tư", icon: BriefcaseBusiness },
   savings: { label: "Tiết kiệm", icon: PiggyBank },
   saving_transactions: { label: "Biến động tiết kiệm", icon: ArrowLeftRight },
-  forex_accounts: { label: "Tài khoản Forex", icon: BriefcaseBusiness },
-  forex_cash_transactions: { label: "Dòng tiền Forex", icon: ArrowLeftRight },
+  forex_accounts: { label: "Tài khoản ngoại hối", icon: BriefcaseBusiness },
+  forex_cash_transactions: { label: "Dòng tiền ngoại hối", icon: ArrowLeftRight },
 };
 
 const ACTION_META: Record<
@@ -368,7 +368,7 @@ export default function ActivityPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">
-                Audit Center
+                Trung tâm nhật ký
               </p>
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700">
                 <ShieldCheck size={11} /> Chỉ đọc
@@ -450,7 +450,7 @@ export default function ActivityPage() {
               </span>
             ) : (
               <span className="hidden text-[10px] font-semibold text-slate-300 lg:inline">
-                Server-side · theo kỳ đang chọn
+                Xử lý trên máy chủ · theo kỳ đang chọn
               </span>
             )}
           </div>

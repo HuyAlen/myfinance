@@ -44,7 +44,7 @@ function NetWorthTrendTooltip({ active, payload }: NetWorthTooltipProps) {
     <div className="min-w-44 rounded-xl border border-[#D8E6F1] bg-white/95 px-3 py-2.5 shadow-[0_16px_36px_-18px_rgba(38,86,126,0.32)]">
       <div className="flex items-center justify-between gap-4">
         <span className="text-[10px] font-black uppercase tracking-[0.12em] text-[#71879A]">
-          Snapshot {point.label}
+          Bản ghi {point.label}
         </span>
         <span className="size-1.5 rounded-full bg-[#2F80ED]" />
       </div>
@@ -67,7 +67,7 @@ function NetWorthTrendTooltip({ active, payload }: NetWorthTooltipProps) {
         </p>
       ) : (
         <p className="mt-1.5 text-[10px] font-semibold text-[#71879A]">
-          Snapshot đầu tiên trong chuỗi
+          Bản ghi đầu tiên trong chuỗi
         </p>
       )}
     </div>
@@ -163,7 +163,7 @@ export default function NetWorthTrendChart({
         className="flex min-h-6 items-center justify-between gap-2 px-1"
       >
         <p className="min-w-0 truncate text-[10px] font-bold text-[#71879A] sm:text-[11px]">
-          {snapshotPoints.length}/12 tháng có snapshot
+          {snapshotPoints.length}/12 tháng có bản ghi
         </p>
         {latestPoint && latestPoint.value !== null ? (
           <div

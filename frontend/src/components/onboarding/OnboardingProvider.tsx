@@ -49,7 +49,7 @@ export const ACHIEVEMENTS: Record<AchievementId, Achievement> = {
   },
   first_goal: { id: "first_goal", emoji: "🎉", title: "Mục tiêu đầu tiên!" },
   first_report: { id: "first_report", emoji: "📊", title: "Báo cáo đầu tiên!" },
-  first_ai: { id: "first_ai", emoji: "🤖", title: "AI Insights đầu tiên!" },
+  first_ai: { id: "first_ai", emoji: "🤖", title: "Phân tích AI đầu tiên!" },
 };
 
 export const CHECKLIST_ITEMS: Array<{
@@ -96,7 +96,7 @@ export const CHECKLIST_ITEMS: Array<{
   },
   {
     id: "ai",
-    label: "Mở AI Insights",
+    label: "Mở phân tích AI",
     desc: "Nhận tư vấn thông minh từ AI",
     href: "/ai-insights",
     achievementId: "first_ai",

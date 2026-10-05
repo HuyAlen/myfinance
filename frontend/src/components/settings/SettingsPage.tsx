@@ -111,7 +111,7 @@ const SETTINGS_STAT_ITEMS = [
   { key: "budgets", label: "Ngân sách" },
   { key: "investments", label: "Đầu tư" },
   { key: "savings", label: "Tiết kiệm" },
-  { key: "forex", label: "Forex" },
+  { key: "forex", label: "Ngoại hối" },
 ] as const satisfies ReadonlyArray<{
   key: keyof SettingsStats;
   label: string;
@@ -289,19 +289,19 @@ export default function SettingsPage() {
     aiProvider === "local" || aiHasStoredApiKey || Boolean(aiApiKey.trim());
   const aiConnectionLabel =
     aiProvider === "openai" && !aiConnectionReady
-      ? "API Key Missing"
+      ? "Thiếu khóa API"
       : aiTestStatus === "success"
-        ? "Connected"
+        ? "Đã kết nối"
         : aiTestStatus === "error"
-          ? "Action needed"
+          ? "Cần xử lý"
           : aiTestStatus === "testing"
-            ? "Testing"
+            ? "Đang kiểm tra"
             : aiConnectionReady
-              ? "Ready to test"
-              : "Setup required";
+              ? "Sẵn sàng kiểm tra"
+              : "Cần thiết lập";
   const aiMaskedKeyText = aiHasStoredApiKey
     ? aiMaskedApiKey || "••••••••••••••••"
-    : "No API key stored";
+    : "Chưa lưu khóa API";
   const aiTemperatureNumber = Number(aiTemperature || "0.2");
   const aiMaxTokensNumber = Number(aiMaxTokens || "4096");
 
@@ -510,14 +510,14 @@ export default function SettingsPage() {
       setAiSettingsLoading(true);
       const settings = await withSettingsTimeout(
         getAIFinanceSettings(accessToken),
-        "AI settings",
+        "cài đặt AI",
       );
       applyAISettings(settings);
       setAiSettingsLoadError(null);
       return true;
     } catch (error) {
       const message =
-        "Không thể tải AI Settings: " +
+        "Không thể tải cài đặt AI: " +
         (error instanceof Error ? error.message : "Lỗi không xác định");
       setAiSettingsLoadError(message);
       toast({ variant: "error", message });
@@ -565,10 +565,10 @@ export default function SettingsPage() {
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
     setPendingAction({
-      title: "Reset dữ liệu demo?",
+      title: "Đặt lại dữ liệu mẫu?",
       description:
-        "Toàn bộ dữ liệu hiện tại (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm và Forex) sẽ bị xóa và thay bằng trạng thái demo mặc định.",
-      confirmText: "Reset",
+        "Toàn bộ dữ liệu hiện tại (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm và Ngoại hối) sẽ bị xóa và thay bằng trạng thái mẫu mặc định.",
+      confirmText: "Đặt lại",
       variant: "warning",
       onConfirm: async () => {
         if (recoveryInFlightRef.current) {
@@ -584,14 +584,14 @@ export default function SettingsPage() {
         if (error) {
           toast({
             variant: "error",
-            message: "Lỗi reset dữ liệu demo: " + error,
+            message: "Lỗi đặt lại dữ liệu mẫu: " + error,
           });
           return;
         }
         await runStatsReload();
         toast({
           variant: "success",
-          message: "Đã reset dữ liệu demo thành công.",
+          message: "Đã đặt lại dữ liệu mẫu thành công.",
         });
         } finally {
           recoveryInFlightRef.current = false;
@@ -604,7 +604,7 @@ export default function SettingsPage() {
     setPendingAction({
       title: "Xóa toàn bộ dữ liệu?",
       description:
-        "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex và lịch sử Net Worth) sẽ bị xóa vĩnh viễn.",
+        "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Ngoại hối và lịch sử Tài sản ròng) sẽ bị xóa vĩnh viễn.",
       confirmText: "Xóa tất cả",
       variant: "danger",
       onConfirm: async () => {
@@ -663,13 +663,13 @@ export default function SettingsPage() {
 
   function requestBackupRestore(backup: FinanceBackupV4, fileName: string) {
     setPendingAction({
-      title: "Khôi phục backup?",
+      title: "Khôi phục bản sao lưu?",
       description:
-        `File ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
+        `Tệp ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
         "(Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, " +
-        "Tiết kiệm, Forex và lịch sử Net Worth). Restore chạy trong một " +
-        "transaction server-authoritative; lỗi trước khi commit sẽ rollback " +
-        "toàn bộ, không để trạng thái half-restored.",
+        "Tiết kiệm, Ngoại hối và lịch sử Tài sản ròng). Quá trình khôi phục chạy trong một " +
+        "giao dịch nguyên tử trên máy chủ; nếu có lỗi trước khi hoàn tất, hệ thống sẽ hoàn tác " +
+        "toàn bộ, không để dữ liệu ở trạng thái khôi phục dở dang.",
       confirmText: "Khôi phục",
       variant: "warning",
       onConfirm: async () => {
@@ -694,7 +694,7 @@ export default function SettingsPage() {
         await runStatsReload();
         toast({
           variant: "success",
-          message: "Đã khôi phục backup thành công.",
+          message: "Đã khôi phục bản sao lưu thành công.",
         });
         } finally {
           recoveryInFlightRef.current = false;
@@ -729,13 +729,13 @@ export default function SettingsPage() {
 
         requestBackupRestore(validation.backup, file.name);
       } catch {
-        toast({ variant: "error", message: "File JSON không hợp lệ." });
+        toast({ variant: "error", message: "Tệp JSON không hợp lệ." });
       }
     };
     reader.onerror = () => {
       toast({
         variant: "error",
-        message: "Không thể đọc file backup. Vui lòng thử lại.",
+        message: "Không thể đọc tệp sao lưu. Vui lòng thử lại.",
       });
     };
     reader.readAsText(file);
@@ -821,10 +821,10 @@ export default function SettingsPage() {
     const temperature = Number(String(aiTemperature).trim());
     const maxTokens = Number(String(aiMaxTokens).trim());
     if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
-      return "Temperature phải nằm trong khoảng 0–2.";
+      return "Độ sáng tạo phải nằm trong khoảng 0–2.";
     }
     if (!Number.isInteger(maxTokens) || maxTokens < 512 || maxTokens > 8192) {
-      return "Max Tokens phải là số nguyên trong khoảng 512–8192.";
+      return "Số token tối đa phải là số nguyên trong khoảng 512–8192.";
     }
     return null;
   }
@@ -849,7 +849,7 @@ export default function SettingsPage() {
     if (aiProvider === "openai" && !nextApiKey && !aiHasStoredApiKey) {
       toast({
         variant: "error",
-        message: "Vui lòng nhập OpenAI API Key trước khi lưu lần đầu.",
+        message: "Vui lòng nhập khóa API OpenAI trước khi lưu lần đầu.",
       });
       return;
     }
@@ -857,7 +857,7 @@ export default function SettingsPage() {
     if (nextApiKey && !nextApiKey.startsWith("sk-")) {
       toast({
         variant: "error",
-        message: "API Key chưa đúng định dạng sk-...",
+        message: "Khóa API chưa đúng định dạng sk-...",
       });
       return;
     }
@@ -874,13 +874,13 @@ export default function SettingsPage() {
 
       toast({
         variant: "success",
-        message: "Đã lưu AI Settings an toàn qua server API.",
+        message: "Đã lưu cài đặt AI an toàn qua API máy chủ.",
       });
     } catch (error) {
       toast({
         variant: "error",
         message:
-          "Không thể lưu AI Settings: " +
+          "Không thể lưu cài đặt AI: " +
           (error instanceof Error ? error.message : "Lỗi không xác định"),
       });
     } finally {
@@ -901,16 +901,16 @@ export default function SettingsPage() {
     if (!aiHasStoredApiKey) {
       toast({
         variant: "error",
-        message: "Chưa có OpenAI API Key nào được lưu.",
+        message: "Chưa có khóa API OpenAI nào được lưu.",
       });
       return;
     }
 
     setPendingAction({
-      title: "Xóa OpenAI API Key đã lưu?",
+      title: "Xóa khóa API OpenAI đã lưu?",
       description:
-        "Hành động này sẽ xóa vĩnh viễn API key đã mã hóa khỏi tài khoản. Các cài đặt AI khác vẫn được giữ nguyên.",
-      confirmText: "Xóa API Key",
+        "Hành động này sẽ xóa vĩnh viễn khóa API đã mã hóa khỏi tài khoản. Các cài đặt AI khác vẫn được giữ nguyên.",
+      confirmText: "Xóa khóa API",
       variant: "danger",
       onConfirm: async () => {
         try {
@@ -919,13 +919,13 @@ export default function SettingsPage() {
           applyAISettings(settings);
           toast({
             variant: "success",
-            message: "Đã xóa OpenAI API Key.",
+            message: "Đã xóa khóa API OpenAI.",
           });
         } catch (error) {
           toast({
             variant: "error",
             message:
-              "Không thể xóa OpenAI API Key: " +
+              "Không thể xóa khóa API OpenAI: " +
               (error instanceof Error ? error.message : "Lỗi không xác định"),
           });
         } finally {
@@ -959,7 +959,7 @@ export default function SettingsPage() {
         variant: "error",
         message: nextApiKey
           ? "Hãy lưu cấu hình trước khi kiểm tra kết nối."
-          : "Vui lòng lưu OpenAI API Key trước khi kiểm tra kết nối.",
+          : "Vui lòng lưu khóa API OpenAI trước khi kiểm tra kết nối.",
       });
       return;
     }
@@ -968,7 +968,7 @@ export default function SettingsPage() {
       setAiTestStatus("error");
       toast({
         variant: "error",
-        message: "API Key chưa đúng định dạng sk-...",
+        message: "Khóa API chưa đúng định dạng sk-...",
       });
       return;
     }
@@ -993,7 +993,7 @@ export default function SettingsPage() {
         variant: "success",
         message:
           result.provider === "local"
-            ? "Local AI đã sẵn sàng."
+            ? "AI cục bộ đã sẵn sàng."
             : `Đã kết nối OpenAI${result.model ? ` bằng ${result.model}` : ""}.`,
       });
     } catch (error) {
@@ -1459,7 +1459,7 @@ export default function SettingsPage() {
             <SectionHeader
               icon={<Sparkles size={16} />}
               title="Trợ lý AI"
-              desc="AI-6.1 Provider Management, model và quy tắc an toàn"
+              desc="AI-6.1 Quản lý nhà cung cấp, mô hình và quy tắc an toàn"
             />
 
             {aiSettingsLoadError && (
@@ -1475,24 +1475,23 @@ export default function SettingsPage() {
                   <div className="max-w-2xl">
                     <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-sm shadow-blue-200">
                       <Bot size={13} />
-                      AI-6.5 DB Settings
+                      AI-6.5 Cài đặt cơ sở dữ liệu
                     </div>
                     <h3 className="mt-3 flex items-center gap-2 text-xl font-black text-slate-900">
-                      OpenAI Provider
+                      Nhà cung cấp OpenAI
                       <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-blue-600 shadow-sm">
-                        Powered by OpenAI
+                        Được cung cấp bởi OpenAI
                       </span>
                     </h3>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      Lưu API Key, model và fallback local vào Supabase DB theo
-                      từng user. Frontend chỉ hiển thị key đã che sau khi lưu.
+                      Lưu khóa API, mô hình và phương án dự phòng cục bộ vào cơ sở dữ liệu Supabase theo từng người dùng. Giao diện chỉ hiển thị khóa đã che sau khi lưu.
                     </p>
                   </div>
 
                   <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-110">
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Status
+                        Trạng thái
                       </p>
                       <div
                         className={
@@ -1532,7 +1531,7 @@ export default function SettingsPage() {
 
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Model
+                        Mô hình
                       </p>
                       <p className="mt-1 truncate text-sm font-black text-slate-800">
                         {aiModel}
@@ -1541,7 +1540,7 @@ export default function SettingsPage() {
 
                     <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        Latency
+                        Độ trễ
                       </p>
                       <p className="mt-1 text-sm font-black text-slate-800">
                         {aiTestLatencyMs ? `${aiTestLatencyMs} ms` : "—"}
@@ -1555,22 +1554,22 @@ export default function SettingsPage() {
                 <div className="space-y-5">
                   <div className="grid gap-4 md:grid-cols-2">
                     <SettingSelect
-                      label="Provider"
+                      label="Nhà cung cấp"
                       value={aiProvider}
                       onChange={setAiProvider}
                       options={[
                         { value: "openai", label: "OpenAI" },
-                        { value: "local", label: "Local AI only" },
+                        { value: "local", label: "Chỉ AI cục bộ" },
                       ]}
-                      desc="OpenAI là provider chính, Local AI dùng để fallback khi lỗi."
+                      desc="OpenAI là nhà cung cấp chính, AI cục bộ dùng làm phương án dự phòng khi lỗi."
                     />
 
                     <SettingSelect
-                      label="Model"
+                      label="Mô hình"
                       value={aiModel}
                       onChange={setAiModel}
                       options={AI_MODEL_OPTIONS}
-                      desc="Model mặc định cho AI Finance Chat."
+                      desc="Mô hình mặc định cho trò chuyện tài chính AI."
                     />
                   </div>
 
@@ -1578,11 +1577,10 @@ export default function SettingsPage() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <label className="block text-sm font-black text-slate-700">
-                          OpenAI API Key
+                          Khóa API OpenAI
                         </label>
                         <p className="mt-1 text-xs font-medium text-slate-400">
-                          API key được lưu theo tài khoản trong Supabase DB. Bạn
-                          có thể cập nhật hoặc xóa key đã lưu bất kỳ lúc nào.
+                          Khóa API được lưu theo tài khoản trong cơ sở dữ liệu Supabase. Bạn có thể cập nhật hoặc xóa khóa đã lưu bất kỳ lúc nào.
                         </p>
                       </div>
                       <div
@@ -1594,7 +1592,7 @@ export default function SettingsPage() {
                         }
                       >
                         <Shield size={12} />
-                        {aiHasStoredApiKey ? "Stored securely" : "Key missing"}
+                        {aiHasStoredApiKey ? "Đã lưu an toàn" : "Thiếu khóa"}
                       </div>
                     </div>
 
@@ -1606,7 +1604,7 @@ export default function SettingsPage() {
                         onChange={(e) => setAiApiKey(e.target.value)}
                         placeholder={
                           aiHasStoredApiKey
-                            ? "Nhập key mới để cập nhật"
+                            ? "Nhập khóa mới để cập nhật"
                             : "sk-..."
                         }
                         autoComplete="off"
@@ -1634,12 +1632,12 @@ export default function SettingsPage() {
                             }
                           />
                           {aiSettingsLoading
-                            ? "Đang tải settings..."
+                            ? "Đang tải cài đặt..."
                             : aiMaskedKeyText}
                         </span>
                         {aiLastTestedAt ? (
                           <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
-                            Last test {aiLastTestedAt}
+                            Lần kiểm tra gần nhất {aiLastTestedAt}
                           </span>
                         ) : null}
                       </div>
@@ -1651,7 +1649,7 @@ export default function SettingsPage() {
                           disabled={!aiApiKey.trim()}
                           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          Clear input
+                          Xóa nội dung
                         </button>
                         {aiHasStoredApiKey ? (
                           <button
@@ -1661,7 +1659,7 @@ export default function SettingsPage() {
                             className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 size={12} />
-                            Remove Key
+                            Xóa khóa
                           </button>
                         ) : null}
                       </div>
@@ -1673,7 +1671,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-black text-slate-700">
-                            Temperature
+                            Độ sáng tạo
                           </p>
                           <p className="mt-1 text-xs text-slate-400">
                             Thấp = chính xác, cao = sáng tạo hơn.
@@ -1697,8 +1695,8 @@ export default function SettingsPage() {
                         className="mt-4 w-full accent-blue-600"
                       />
                       <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <span>Precise</span>
-                        <span>Creative</span>
+                        <span>Chính xác</span>
+                        <span>Sáng tạo</span>
                       </div>
                     </div>
 
@@ -1706,7 +1704,7 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-black text-slate-700">
-                            Max Tokens
+                            Số token tối đa
                           </p>
                           <p className="mt-1 text-xs text-slate-400">
                             Giới hạn độ dài câu trả lời AI.
@@ -1730,8 +1728,8 @@ export default function SettingsPage() {
                         className="mt-4 w-full accent-cyan-600"
                       />
                       <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <span>Short</span>
-                        <span>Detailed</span>
+                        <span>Ngắn</span>
+                        <span>Chi tiết</span>
                       </div>
                     </div>
                   </div>
@@ -1753,7 +1751,7 @@ export default function SettingsPage() {
                       ) : (
                         <Sparkles size={15} />
                       )}
-                      {saveSuccess ? "Đã lưu!" : "Lưu AI Settings"}
+                      {saveSuccess ? "Đã lưu!" : "Lưu cài đặt AI"}
                     </button>
 
                     <button
@@ -1768,7 +1766,7 @@ export default function SettingsPage() {
                           aiTestStatus === "testing" ? "animate-spin" : ""
                         }
                       />
-                      Test Connection
+                      Kiểm tra kết nối
                     </button>
                   </div>
                 </div>
@@ -1778,14 +1776,14 @@ export default function SettingsPage() {
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div>
                         <h4 className="text-sm font-black text-slate-900">
-                          AI Features
+                          Tính năng AI
                         </h4>
                         <p className="mt-1 text-xs font-medium text-slate-400">
-                          Quy tắc an toàn và dữ liệu được gửi sang AI Adapter.
+                          Quy tắc an toàn và dữ liệu được gửi sang bộ kết nối AI.
                         </p>
                       </div>
                       <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500 shadow-sm">
-                        Safe mode
+                        Chế độ an toàn
                       </span>
                     </div>
 
@@ -1793,15 +1791,15 @@ export default function SettingsPage() {
                       <ToggleRow
                         icon={<Zap size={14} />}
                         iconBg="bg-emerald-100 text-emerald-600"
-                        label="Local Fallback"
-                        desc="Nếu OpenAI lỗi hoặc thiếu API key, dùng AI-5 Local Engine."
+                        label="Dự phòng cục bộ"
+                        desc="Nếu OpenAI lỗi hoặc thiếu khóa API, dùng bộ máy AI cục bộ AI-5."
                         checked={aiFallbackLocal}
                         onChange={() => setAiFallbackLocal((v) => !v)}
                       />
                       <ToggleRow
                         icon={<Shield size={14} />}
                         iconBg="bg-blue-100 text-blue-600"
-                        label="No Fabrication"
+                        label="Không bịa dữ liệu"
                         desc="AI chỉ được dùng dữ liệu tài chính hiện có."
                         checked={aiNoFabrication}
                         onChange={() => setAiNoFabrication((v) => !v)}
@@ -1809,15 +1807,15 @@ export default function SettingsPage() {
                       <ToggleRow
                         icon={<Database size={14} />}
                         iconBg="bg-cyan-100 text-cyan-600"
-                        label="Finance Context"
-                        desc="Cho phép gửi số liệu tổng hợp sang AI Adapter."
+                        label="Ngữ cảnh tài chính"
+                        desc="Cho phép gửi số liệu tổng hợp sang bộ kết nối AI."
                         checked={aiSendFinanceContext}
                         onChange={() => setAiSendFinanceContext((v) => !v)}
                       />
                       <ToggleRow
                         icon={<AlertTriangle size={14} />}
                         iconBg="bg-amber-100 text-amber-600"
-                        label="Rule Insights"
+                        label="Phân tích theo quy tắc"
                         desc="Đính kèm cảnh báo vượt ngân sách, dòng tiền và rủi ro."
                         checked={aiSendRuleInsights}
                         onChange={() => setAiSendRuleInsights((v) => !v)}
@@ -1827,29 +1825,27 @@ export default function SettingsPage() {
 
                   <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-4">
                     <h4 className="text-sm font-black text-emerald-900">
-                      Security
+                      Bảo mật
                     </h4>
                     <div className="mt-3 grid gap-2 text-xs font-bold text-emerald-700">
                       <div className="flex items-center gap-2">
-                        <Check size={13} /> Per-user Supabase row
+                        <Check size={13} /> Mỗi người dùng có bản ghi Supabase riêng
                       </div>
                       <div className="flex items-center gap-2">
-                        <Check size={13} /> API Key không lưu localStorage
+                        <Check size={13} /> Khóa API không lưu trong bộ nhớ trình duyệt
                       </div>
                       <div className="flex items-center gap-2">
-                        <Check size={13} /> Frontend chỉ hiển thị masked key
+                        <Check size={13} /> Giao diện chỉ hiển thị khóa đã che
                       </div>
                     </div>
                   </div>
 
                   <div className="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
                     <h4 className="text-sm font-black text-blue-900">
-                      Usage Preview
+                      Xem trước mức sử dụng
                     </h4>
                     <p className="mt-1 text-xs font-medium text-blue-700/70">
-                      AI-6.4 đã có token/latency metadata. Sang AI-6.6 có thể
-                      lưu usage vào DB để tính request, token và chi phí mỗi
-                      ngày.
+                      AI-6.4 đã có siêu dữ liệu token và độ trễ. Sang AI-6.6 có thể lưu mức sử dụng vào cơ sở dữ liệu để tính số yêu cầu, token và chi phí mỗi ngày.
                     </p>
                   </div>
                 </div>
@@ -1862,14 +1858,14 @@ export default function SettingsPage() {
                   Tính năng trợ lý AI
                 </h3>
                 <p className="mt-1 text-xs font-medium text-slate-400">
-                  Bật/tắt các module phân tích dùng chung cho AI Agent.
+                  Bật/tắt các phân hệ phân tích dùng chung cho trợ lý AI.
                 </p>
               </div>
               <div className="space-y-1">
                 <ToggleRow
                   icon={<Sparkles size={14} />}
                   iconBg="bg-blue-100 text-blue-600"
-                  label="AI Insights"
+                  label="Phân tích AI"
                   desc="Phân tích tài chính thông minh và gợi ý cải thiện"
                   checked={aiInsights}
                   onChange={() => setAiInsights((v) => !v)}
@@ -1877,7 +1873,7 @@ export default function SettingsPage() {
                 <ToggleRow
                   icon={<Zap size={14} />}
                   iconBg="bg-cyan-100 text-cyan-600"
-                  label="Forecast Engine"
+                  label="Bộ máy dự báo"
                   desc="Dự báo thu chi và dòng tiền tháng tới"
                   checked={aiForecast}
                   onChange={() => setAiForecast((v) => !v)}
@@ -1885,7 +1881,7 @@ export default function SettingsPage() {
                 <ToggleRow
                   icon={<AlertTriangle size={14} />}
                   iconBg="bg-amber-100 text-amber-600"
-                  label="Risk Analysis"
+                  label="Phân tích rủi ro"
                   desc="Phân tích rủi ro tài chính và cảnh báo"
                   checked={aiRisk}
                   onChange={() => setAiRisk((v) => !v)}
@@ -1893,7 +1889,7 @@ export default function SettingsPage() {
                 <ToggleRow
                   icon={<ChevronRight size={14} />}
                   iconBg="bg-emerald-100 text-emerald-600"
-                  label="Goal Coach"
+                  label="Cố vấn mục tiêu"
                   desc="Tư vấn chiến lược đạt mục tiêu tài chính"
                   checked={aiGoalCoach}
                   onChange={() => setAiGoalCoach((v) => !v)}
@@ -1901,7 +1897,7 @@ export default function SettingsPage() {
                 <ToggleRow
                   icon={<ChevronRight size={14} />}
                   iconBg="bg-indigo-100 text-indigo-600"
-                  label="Investment Coach"
+                  label="Cố vấn đầu tư"
                   desc="Phân tích và gợi ý danh mục đầu tư"
                   checked={aiInvestCoach}
                   onChange={() => setAiInvestCoach((v) => !v)}
@@ -1982,7 +1978,7 @@ export default function SettingsPage() {
             <SectionHeader
               icon={<Database size={16} />}
               title="Dữ liệu"
-              desc="Quản lý, backup và khôi phục dữ liệu"
+              desc="Quản lý, sao lưu và khôi phục dữ liệu"
             />
             <div className="mt-4 space-y-4">
               {/* Storage info */}
@@ -1993,10 +1989,10 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-black text-slate-900">
-                      Supabase Cloud Storage
+                      Lưu trữ đám mây Supabase
                     </p>
                     <p className="text-xs text-slate-500">
-                      Dữ liệu được lưu trữ và đồng bộ trên cloud
+                      Dữ liệu được lưu trữ và đồng bộ trên đám mây
                     </p>
                   </div>
                   <div className="ml-auto flex items-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
@@ -2027,17 +2023,17 @@ export default function SettingsPage() {
                     <Download size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
-                    Export JSON
+                    Xuất JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Tải snapshot MyFinance V{FINANCE_BACKUP_VERSION} đầy đủ cho Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Forex, lịch sử Balance Forex và lịch sử Net Worth.
+                    Tải bản sao MyFinance V{FINANCE_BACKUP_VERSION} đầy đủ cho Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Ngoại hối, lịch sử số dư ngoại hối và lịch sử Tài sản ròng.
                   </p>
                   <button
                     onClick={handleExportJson}
                     className="mt-4 flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
                   >
                     <Download size={13} />
-                    Tải backup
+                    Tải bản sao lưu
                   </button>
                 </div>
 
@@ -2047,14 +2043,14 @@ export default function SettingsPage() {
                     <Upload size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
-                    Import JSON
+                    Nhập JSON
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Khôi phục atomically từ backup MyFinance V{FINANCE_BACKUP_VERSION}. Backup V2/V3 hợp lệ vẫn được hỗ trợ; backup legacy thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn.
+                    Khôi phục nguyên tử từ bản sao lưu MyFinance V{FINANCE_BACKUP_VERSION}. Bản sao lưu V2/V3 hợp lệ vẫn được hỗ trợ; bản sao lưu cũ thiếu dữ liệu bắt buộc sẽ bị từ chối an toàn.
                   </p>
                   <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-[.98]">
                     <Upload size={13} />
-                    Chọn file JSON
+                    Chọn tệp JSON
                     <input
                       type="file"
                       accept="application/json"
@@ -2064,23 +2060,23 @@ export default function SettingsPage() {
                   </label>
                 </div>
 
-                {/* Reset demo */}
+                {/* Đặt lại dữ liệu mẫu */}
                 <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
                   <div className="flex size-10 items-center justify-center rounded-2xl bg-linear-to-br from-amber-400 to-orange-500 text-white shadow-sm">
                     <RefreshCcw size={16} />
                   </div>
                   <h3 className="mt-4 text-sm font-black text-slate-900">
-                    Reset demo
+                    Đặt lại dữ liệu mẫu
                   </h3>
                   <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                    Đưa toàn bộ domain tài chính về trạng thái demo mặc định, gồm Ngân sách, Đầu tư, Tiết kiệm và Forex.
+                    Đưa toàn bộ phân hệ tài chính về trạng thái mẫu mặc định, gồm Ngân sách, Đầu tư, Tiết kiệm và Ngoại hối.
                   </p>
                   <button
                     onClick={handleResetDemo}
                     className="mt-4 flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-amber-200 transition-all hover:bg-amber-600 active:scale-[.98]"
                   >
                     <RefreshCcw size={13} />
-                    Reset demo
+                    Đặt lại dữ liệu mẫu
                   </button>
                 </div>
               </div>
@@ -2184,7 +2180,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-base font-black text-slate-900">
-                    Supabase Realtime
+                    Supabase thời gian thực
                   </p>
                   <p className="text-xs text-slate-500">
                     Đồng bộ dữ liệu theo thời gian thực
@@ -2220,7 +2216,7 @@ export default function SettingsPage() {
                       (connected ? "text-emerald-600" : "text-amber-600")
                     }
                   >
-                    {connected ? "Connected" : "Connecting..."}
+                    {connected ? "Đã kết nối" : "Đang kết nối..."}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4">
@@ -2242,7 +2238,7 @@ export default function SettingsPage() {
                     Chế độ
                   </p>
                   <p className="mt-1.5 text-sm font-black text-slate-700">
-                    Cloud Sync
+                    Đồng bộ đám mây
                   </p>
                 </div>
               </div>
@@ -2268,28 +2264,28 @@ export default function SettingsPage() {
                   },
                   {
                     label: "Môi trường",
-                    value: "Production",
+                    value: "Môi trường thật",
                     statusCls:
                       "bg-emerald-50 text-emerald-700 border-emerald-200",
                   },
                   {
-                    label: "Database",
+                    label: "Cơ sở dữ liệu",
                     value: "Supabase",
                     statusCls:
                       "bg-emerald-50 text-emerald-700 border-emerald-200",
                   },
                   {
-                    label: "AI Services",
-                    value: "Active",
+                    label: "Dịch vụ AI",
+                    value: "Đang hoạt động",
                     statusCls: "bg-indigo-50 text-indigo-700 border-indigo-200",
                   },
                   {
-                    label: "Frontend",
+                    label: "Giao diện",
                     value: "Next.js 16",
                     statusCls: "bg-slate-100 text-slate-600 border-slate-200",
                   },
                   {
-                    label: "UI",
+                    label: "Giao diện người dùng",
                     value: "Tailwind v4",
                     statusCls: "bg-cyan-50 text-cyan-700 border-cyan-200",
                   },
@@ -2299,8 +2295,8 @@ export default function SettingsPage() {
                     statusCls: "bg-slate-100 text-slate-600 border-slate-200",
                   },
                   {
-                    label: "Realtime",
-                    value: connected ? "Online" : "Connecting",
+                    label: "Thời gian thực",
+                    value: connected ? "Trực tuyến" : "Đang kết nối",
                     statusCls: connected
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                       : "bg-amber-50 text-amber-700 border-amber-200",
@@ -2339,25 +2335,25 @@ export default function SettingsPage() {
             />
             <div className="mt-3 rounded-3xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="space-y-4">
-                {/* Reset demo */}
+                {/* Đặt lại dữ liệu mẫu */}
                 <div className="flex flex-col justify-between gap-4 rounded-2xl border border-rose-100 bg-white p-5 sm:flex-row sm:items-center">
                   <div>
                     <div className="flex items-center gap-2">
                       <RefreshCcw size={15} className="text-amber-500" />
                       <p className="text-sm font-black text-slate-900">
-                        Reset dữ liệu demo
+                        Đặt lại dữ liệu mẫu
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Đưa toàn bộ domain tài chính về trạng thái demo mặc định,
-                      gồm Ngân sách, Đầu tư, Tiết kiệm và Forex.
+                      Đưa toàn bộ phân hệ tài chính về trạng thái mẫu mặc định,
+                      gồm Ngân sách, Đầu tư, Tiết kiệm và Ngoại hối.
                     </p>
                   </div>
                   <button
                     onClick={handleResetDemo}
                     className="shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition-all hover:bg-amber-100 active:scale-[.98]"
                   >
-                    Reset demo
+                    Đặt lại dữ liệu mẫu
                   </button>
                 </div>
 
@@ -2371,7 +2367,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Xóa vĩnh viễn toàn bộ dữ liệu tài chính trong tài khoản này trên cloud. Không thể hoàn tác.
+                      Xóa vĩnh viễn toàn bộ dữ liệu tài chính trong tài khoản này trên đám mây. Không thể hoàn tác.
                     </p>
                   </div>
                   <button

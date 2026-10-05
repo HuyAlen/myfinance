@@ -19,14 +19,14 @@ describe("ACTIVITY-UI-POLISH-1", () => {
   it("strengthens the Activity hero hierarchy without changing read-only semantics", () => {
     expect(source).toContain('data-activity-hero="true"');
     expect(source).toContain("sm:text-3xl");
-    expect(source).toContain("Audit Center");
+    expect(source).toContain("Trung tâm nhật ký");
     expect(source).toContain("Chỉ đọc");
     expect(source).toContain("Lịch sử hoạt động");
   });
 
   it("keeps desktop filters compact and mobile filters separate", () => {
     expect(source).toContain('data-activity-desktop-filters="true"');
-    expect(source).toContain("Server-side · theo kỳ đang chọn");
+    expect(source).toContain("Xử lý trên máy chủ · theo kỳ đang chọn");
     expect(source).toContain("focus:ring-4 focus:ring-blue-100");
     expect(source).toContain('aria-labelledby="activity-filter-sheet-title"');
     expect(source).toContain("sm:hidden");

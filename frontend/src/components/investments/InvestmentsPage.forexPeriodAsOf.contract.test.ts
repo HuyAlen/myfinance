@@ -57,22 +57,22 @@ describe("FOREX-BALANCE-ASOF-1C — Period UI Adoption", () => {
     expect(page).toContain("tradingProfitLoss: metric?.profitLoss ?? null");
     expect(page).toContain('label="Nạp trong kỳ"');
     expect(page).toContain('label="Rút trong kỳ"');
-    expect(page).toContain('label="Profit as-of"');
+    expect(page).toContain('label="Lợi nhuận tại kỳ"');
   });
 
   it("fails closed in the UI when historical Balance is missing", () => {
     expect(page).toContain('data-ui="forex-historical-balance-missing"');
-    expect(page).toContain("Chưa có dữ liệu Balance lịch sử");
+    expect(page).toContain("Chưa có dữ liệu lịch sử số dư");
     expect(page).toContain("Balance tổng và");
     expect(page).toContain("Profit tổng được để trống thay vì suy đoán từ dòng tiền.");
     expect(page).toContain('"Chưa đủ dữ liệu"');
-    expect(page).toContain("Không suy đoán Profit khi thiếu Balance lịch sử");
+    expect(page).toContain("Không suy đoán lợi nhuận khi thiếu lịch sử số dư");
   });
 
   it("keeps the combined Portfolio headline explicitly current instead of mixing current Portfolio with historical Forex", () => {
     expect(page).toContain('label="Tổng giá trị hiện tại"');
     expect(page).toContain("currentExposure: currentForexPerformance.assetValue");
-    expect(page).toContain('note="Portfolio + Forex hiện tại · không theo bộ lọc kỳ"');
+    expect(page).toContain('note="Danh mục đầu tư + Ngoại hối hiện tại · không theo bộ lọc kỳ"');
   });
 
   it("keeps realtime refresh on the atomic account/cash write boundaries that also capture snapshots", () => {

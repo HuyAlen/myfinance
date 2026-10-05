@@ -25,15 +25,15 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: "sidebar",
     title: "Menu điều hướng",
-    desc: "Thanh bên trái chứa tất cả tính năng: Giao Dịch, Ví Tiền, Ngân Sách, Mục Tiêu, Đầu Tư và AI Advisor.",
+    desc: "Thanh bên trái chứa tất cả tính năng: Giao Dịch, Ví Tiền, Ngân Sách, Mục Tiêu, Đầu Tư và Cố vấn AI.",
     targetSelector: "[data-tour='sidebar']",
     position: "right",
     accentColor: "blue",
   },
   {
     id: "dashboard",
-    title: "Dashboard · Tổng quan",
-    desc: "Trang chủ hiển thị Financial Health Score, Net Worth, dòng tiền và tất cả tóm tắt tài chính trong một màn hình.",
+    title: "Tổng quan",
+    desc: "Trang chủ hiển thị Điểm sức khỏe tài chính, Tài sản ròng, dòng tiền và tất cả tóm tắt tài chính trong một màn hình.",
     targetSelector: "[data-tour='dashboard']",
     position: "bottom",
     accentColor: "blue",
@@ -61,7 +61,7 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "ai",
-    title: "AI Advisor · Tư vấn thông minh",
+    title: "Cố vấn AI · Tư vấn thông minh",
     desc: "Nhận phân tích và tư vấn tài chính cá nhân hoá từ AI dựa trên dữ liệu thực của bạn. Kiểm tra hàng tuần!",
     position: "center",
     accentColor: "fuchsia",

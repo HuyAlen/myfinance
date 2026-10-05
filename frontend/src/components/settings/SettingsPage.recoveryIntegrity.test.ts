@@ -43,9 +43,9 @@ describe("SETTINGS-RECOVERY-INTEGRITY-1 Settings orchestration", () => {
       "function handleImportJson(",
     );
 
-    expect(restore).toContain("transaction server-authoritative");
-    expect(restore).toContain("lỗi trước khi commit sẽ rollback ");
-    expect(restore).toContain("toàn bộ, không để trạng thái half-restored");
+    expect(restore).toContain("giao dịch nguyên tử trên máy chủ");
+    expect(restore).toContain("nếu có lỗi trước khi hoàn tất, hệ thống sẽ hoàn tác ");
+    expect(restore).toContain("toàn bộ, không để dữ liệu ở trạng thái khôi phục dở dang");
     expect(restore).not.toContain("Nếu bất kỳ bước nào thất bại");
   });
 });

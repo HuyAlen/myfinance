@@ -37,10 +37,10 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
 
   it("bounds Portfolio, wallets, Forex accounts, cash-ledger and Balance-history reads with a timeout", () => {
     expect(source).toContain("const INVESTMENT_DOMAIN_LOAD_TIMEOUT_MS = 10_000;");
-    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Danh mục Portfolio",\n      getInvestments(),');
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Danh mục đầu tư",\n      getInvestments(),');
     expect(source).toContain('withInvestmentDomainLoadTimeout("Danh sách ví", getWallets())');
-    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Tài khoản Forex"');
-    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Lịch sử nạp/rút Forex"');
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Tài khoản ngoại hối"');
+    expect(source).toContain('withInvestmentDomainLoadTimeout(\n      "Lịch sử nạp/rút ngoại hối"');
   });
 
   it("starts Portfolio, wallet, account, cash-ledger and Balance-history reads before awaiting the combined result", () => {

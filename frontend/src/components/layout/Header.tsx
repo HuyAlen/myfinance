@@ -138,14 +138,14 @@ const PAGE_META: Record<string, { title: string; desc: string }> = {
   },
   "/investments": {
     title: "Đầu Tư",
-    desc: "Portfolio, Forex & hiệu suất đầu tư",
+    desc: "Danh mục đầu tư, ngoại hối & hiệu suất đầu tư",
   },
   "/debts": {
     title: "Nợ & Khoản Vay",
     desc: "Theo dõi và lập kế hoạch trả nợ",
   },
   "/categories": { title: "Danh Mục", desc: "Phân loại thu chi" },
-  "/ai-insights": { title: "AI Advisor", desc: "Tư vấn tài chính thông minh" },
+  "/ai-insights": { title: "Cố vấn AI", desc: "Tư vấn tài chính thông minh" },
   "/settings": { title: "Cài Đặt", desc: "Tuỳ chỉnh ứng dụng" },
   "/activity": {
     title: "Hoạt động",
@@ -303,7 +303,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
       out.push({
         id: "in-" + i.id,
         label: i.name,
-        sub: i.symbol ? i.symbol + " · Portfolio" : "Portfolio",
+        sub: i.symbol ? i.symbol + " · Danh mục đầu tư" : "Danh mục đầu tư",
         href: buildInvestmentsHref({ investmentId: i.id }),
         kind: "investment",
       }),
@@ -321,7 +321,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
       out.push({
         id: "fx-" + account.id,
         label: account.name,
-        sub: `${account.broker} · Forex`,
+        sub: `${account.broker} · Ngoại hối`,
         href: buildInvestmentsHref({ forexAccountId: account.id }),
         kind: "investment",
       }),
@@ -532,7 +532,7 @@ function RealtimeStatusChip() {
         connected
           ? timeStr
             ? "Đã đồng bộ lúc " + timeStr
-            : "Realtime đang kết nối"
+            : "Đồng bộ thời gian thực đang kết nối"
           : "Đang kết nối..."
       }
     >
@@ -543,7 +543,7 @@ function RealtimeStatusChip() {
         ].join(" ")}
       />
       <span className="hidden sm:block">
-        {connected ? "Online" : "Sync..."}
+        {connected ? "Trực tuyến" : "Đang đồng bộ..."}
       </span>
     </div>
   );
@@ -1555,7 +1555,7 @@ export default function Header({
             )}
           </div>
 
-          {/* AI Advisor */}
+          {/* Cố vấn AI */}
           <button
             onClick={handleAIAdvisor}
             className="hidden h-11 items-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-cyan-500 px-3 text-xs font-black text-white shadow-lg shadow-blue-200/60 transition hover:opacity-90 active:scale-[.98] md:flex"

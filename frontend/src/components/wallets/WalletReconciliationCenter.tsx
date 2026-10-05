@@ -62,7 +62,7 @@ export default function WalletReconciliationCenter({
             </span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
-                Reconciliation Center
+                Trung tâm đối soát
               </p>
               <h2 className="mt-0.5 text-base font-black text-slate-900 sm:text-lg">
                 Đối soát số dư
@@ -71,7 +71,7 @@ export default function WalletReconciliationCenter({
           </div>
           <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">
             So khớp số dư MyFinance với số dư thực tế. Điều chỉnh chỉ cập nhật
-            snapshot số dư và lưu receipt đối soát, không tạo Thu/Chi giả.
+            bản ghi số dư và lưu biên nhận đối soát, không tạo Thu/Chi giả.
           </p>
         </div>
 
@@ -101,7 +101,7 @@ export default function WalletReconciliationCenter({
           <div className="flex items-center gap-1.5 text-slate-400">
             <WalletCards size={13} />
             <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wide">
-              Coverage
+              Mức độ đối soát
             </span>
           </div>
           <p className="mt-1.5 text-base font-black tabular-nums text-slate-900 sm:text-xl">
@@ -141,7 +141,7 @@ export default function WalletReconciliationCenter({
             {latestRecord
               ? wallets.find((wallet) => wallet.id === latestRecord.walletId)?.name ??
                 "Ví đã đối soát"
-              : "chưa có receipt"}
+              : "chưa có biên nhận"}
           </p>
         </div>
       </div>
@@ -159,7 +159,7 @@ export default function WalletReconciliationCenter({
               Lịch sử đối soát gần đây
             </p>
             <span className="text-[10px] font-bold text-slate-400">
-              {records.length} receipt
+              {records.length} biên nhận
             </span>
           </div>
           <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
@@ -203,7 +203,7 @@ export default function WalletReconciliationCenter({
         </div>
       ) : wallets.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 px-4 py-3 text-xs leading-5 text-slate-600">
-          Chưa có receipt đối soát. Bắt đầu với ví bạn có thể kiểm tra số dư thực
+          Chưa có biên nhận đối soát. Bắt đầu với ví bạn có thể kiểm tra số dư thực
           tế ngay lúc này.
         </div>
       ) : null}

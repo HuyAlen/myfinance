@@ -53,7 +53,7 @@ const STEPS: WizardStep[] = [
     icon: Rocket,
     iconBg: "bg-linear-to-br from-emerald-500 to-teal-500",
     isDemoStep: true,
-    tip: "Dữ liệu mẫu giúp bạn hiểu cách hoạt động của app mà không cần nhập thủ công.",
+    tip: "Dữ liệu mẫu giúp bạn hiểu cách hoạt động của ứng dụng mà không cần nhập thủ công.",
   },
   {
     id: "wallet",
@@ -81,7 +81,7 @@ const STEPS: WizardStep[] = [
     id: "budget",
     title: "Thiết lập ngân sách",
     subtitle: "Bước 4 / 5",
-    desc: "Đặt hạn mức chi tiêu theo danh mục mỗi tháng. App cảnh báo tự động khi bạn gần đạt giới hạn, giúp kiểm soát tài chính hiệu quả.",
+    desc: "Đặt hạn mức chi tiêu theo danh mục mỗi tháng. Ứng dụng cảnh báo tự động khi bạn gần đạt giới hạn, giúp kiểm soát tài chính hiệu quả.",
     icon: ChartPie,
     iconBg: "bg-linear-to-br from-violet-500 to-purple-600",
     actions: [{ label: "Tạo ngân sách", href: "/budgets", primary: true }],
@@ -99,16 +99,16 @@ const STEPS: WizardStep[] = [
   },
   {
     id: "explore",
-    title: "Khám phá Dashboard!",
+    title: "Khám phá Tổng quan!",
     subtitle: "Hoàn thành thiết lập",
-    desc: "Bạn đã sẵn sàng! Trang tổng quan cho thấy toàn bộ tình hình tài chính trong một màn hình. Kiểm tra Health Score và AI Insights mỗi ngày.",
+    desc: "Bạn đã sẵn sàng! Trang tổng quan cho thấy toàn bộ tình hình tài chính trong một màn hình. Kiểm tra Điểm sức khỏe tài chính và Phân tích AI mỗi ngày.",
     icon: BarChart3,
     iconBg: "bg-linear-to-br from-emerald-500 to-cyan-500",
     actions: [
-      { label: "Xem Dashboard", href: "/", primary: true },
-      { label: "AI Insights", href: "/ai-insights" },
+      { label: "Xem Tổng quan", href: "/", primary: true },
+      { label: "Phân tích AI", href: "/ai-insights" },
     ],
-    tip: "Kiểm tra Dashboard mỗi sáng chỉ 1 phút để nắm bắt tình hình tài chính.",
+    tip: "Kiểm tra Tổng quan mỗi sáng chỉ 1 phút để nắm bắt tình hình tài chính.",
   },
 ];
 

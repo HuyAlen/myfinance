@@ -164,7 +164,7 @@ describe("ReportsPage mobile first-viewport contract (REPORTS-MOBILE-POLISH-1 / 
     expect(kpiCard).toContain("whitespace-normal break-words");
     expect(kpiCard).not.toContain("line-clamp-1");
     expect(source).toContain('sub={"Phân bổ kỳ " + formatCompactVND(summary.savingAllocation)}');
-    expect(source).toContain('sub="Snapshot hiện tại · Tài sản − Nợ"');
+    expect(source).toContain('sub="Bản ghi hiện tại · Tài sản − Nợ"');
   });
   it("keeps REPORTS-CORRECTNESS-1 stock/flow and export semantics intact", () => {
     expect(normalized).toContain("cashFlowAfterExpense");
