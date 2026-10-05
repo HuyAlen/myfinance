@@ -59,6 +59,8 @@ type AppShellProps = {
 
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [aiAgentOpen, setAiAgentOpen] = useState(false);
   // Latches true the first time the user opens the AI drawer, so it can be
   // fetched/mounted on demand instead of on every page load. Once opened,
@@ -74,6 +76,8 @@ export default function AppShell({ children }: AppShellProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { wizardDone, tourDone } = useOnboarding();
+  const shellChromeOverlayOpen =
+    sidebarOpen || headerAccountOpen || moreMenuOpen;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -235,7 +239,7 @@ export default function AppShell({ children }: AppShellProps) {
           aria-hidden="true"
           onClick={() => setSidebarOpen(false)}
           className={[
-            "fixed inset-0 z-30 lg:hidden",
+            "fixed inset-0 z-60 lg:hidden",
             "bg-slate-950/40 backdrop-blur-sm",
             "transition-opacity duration-300 ease-in-out",
             sidebarOpen
@@ -248,18 +252,22 @@ export default function AppShell({ children }: AppShellProps) {
           <Header
             onMenuOpen={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
+            onAccountMenuOpenChange={setHeaderAccountOpen}
           />
 
-          <main className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6">
+          <main
+            data-mobile-chrome-overlay-open={shellChromeOverlayOpen ? "true" : undefined}
+            className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto data-[mobile-chrome-overlay-open=true]:overflow-y-hidden data-[mobile-chrome-overlay-open=true]:overscroll-none px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6"
+          >
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
               {children}
             </FabSuppressionProvider>
           </main>
         </div>
 
-        <BottomNav />
+        <BottomNav onMoreMenuOpenChange={setMoreMenuOpen} />
 
-        {SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && (
+        {SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && !shellChromeOverlayOpen && (
           <AIFloatingButton
             onClick={() => {
               if (!hasOpenedAI) markInstant("ai:click");
@@ -278,7 +286,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {!wizardDone && <WelcomeWizard />}
         {wizardDone && !tourDone && <ProductTour />}
-        {!aiAgentOpen && !isGlobalFabSuppressed && <QuickActionFab />}
+        {!aiAgentOpen && !isGlobalFabSuppressed && !shellChromeOverlayOpen && <QuickActionFab />}
         <AchievementToast />
       </div>
     </DateFilterProvider>

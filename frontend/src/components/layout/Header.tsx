@@ -552,11 +552,16 @@ function RealtimeStatusChip() {
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-type HeaderProps = { onMenuOpen: () => void; sidebarOpen?: boolean };
+type HeaderProps = {
+  onMenuOpen: () => void;
+  sidebarOpen?: boolean;
+  onAccountMenuOpenChange?: (open: boolean) => void;
+};
 
 export default function Header({
   onMenuOpen,
   sidebarOpen = false,
+  onAccountMenuOpenChange,
 }: HeaderProps) {
   const { user } = useAuth();
   const { context: householdContext } = useHousehold();
@@ -1042,6 +1047,56 @@ export default function Header({
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [dropdownOpen]);
+
+  useEffect(() => {
+    onAccountMenuOpenChange?.(dropdownOpen);
+    return () => {
+      onAccountMenuOpenChange?.(false);
+    };
+  }, [dropdownOpen, onAccountMenuOpenChange]);
+
+  useEffect(() => {
+    if (sidebarOpen) setDropdownOpen(false);
+  }, [sidebarOpen]);
+
+  // MOBILE-MORE-REAL-IPHONE-QA-1: the account popup is fixed on compact
+  // screens, so bind its available height/backdrop to the real visual viewport
+  // while it is open. This keeps Safari toolbar, landscape and PWA windows from
+  // clipping the last action or leaving a tappable strip behind the backdrop.
+  useEffect(() => {
+    if (!dropdownOpen || typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncHeaderAccountVisualViewport = () => {
+      const height = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      root.style.setProperty(
+        "--header-account-visual-viewport-height",
+        `${height}px`,
+      );
+      root.style.setProperty(
+        "--header-account-visual-viewport-offset-top",
+        `${offsetTop}px`,
+      );
+    };
+
+    syncHeaderAccountVisualViewport();
+    viewport?.addEventListener("resize", syncHeaderAccountVisualViewport);
+    viewport?.addEventListener("scroll", syncHeaderAccountVisualViewport);
+    window.addEventListener("resize", syncHeaderAccountVisualViewport);
+    window.addEventListener("orientationchange", syncHeaderAccountVisualViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncHeaderAccountVisualViewport);
+      viewport?.removeEventListener("scroll", syncHeaderAccountVisualViewport);
+      window.removeEventListener("resize", syncHeaderAccountVisualViewport);
+      window.removeEventListener("orientationchange", syncHeaderAccountVisualViewport);
+      root.style.removeProperty("--header-account-visual-viewport-height");
+      root.style.removeProperty("--header-account-visual-viewport-offset-top");
+    };
   }, [dropdownOpen]);
 
   function handleNotifClick(href: string, id: string) {
@@ -1795,14 +1850,23 @@ export default function Header({
             {dropdownOpen && (
               <>
                 <div
-                  className="fixed inset-0 z-40"
+                  data-header-account-backdrop="true"
+                  className="fixed inset-x-0 top-0 z-60 overscroll-none"
+                  style={{
+                    top: "var(--header-account-visual-viewport-offset-top, 0px)",
+                    height: "var(--header-account-visual-viewport-height, 100dvh)",
+                  }}
                   onClick={() => setDropdownOpen(false)}
                 />
                 <div
                   id="header-account-menu"
                   role="dialog"
                   aria-label="Menu tài khoản"
-                  className="fixed inset-x-3 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64 sm:pb-0"
+                  className="fixed inset-x-3 top-16 z-70 max-h-[calc(100dvh-5rem)] touch-pan-y overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-xl shadow-slate-200/60 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64 sm:pb-0"
+                  style={{
+                    maxHeight: "calc(var(--header-account-visual-viewport-height, 100dvh) - 5rem)",
+                    transform: "translateY(var(--header-account-visual-viewport-offset-top, 0px))",
+                  }}
                 >
                   {/* User info */}
                   <div className="border-b border-slate-100 bg-linear-to-br from-blue-50 to-cyan-50 px-4 py-4">

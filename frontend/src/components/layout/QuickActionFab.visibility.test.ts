@@ -113,22 +113,23 @@ describe("AppShell temporarily hides the floating AI launcher only", () => {
     "utf8",
   );
 
-  it("gates AIFloatingButton behind a named, easily-reversible flag rather than deleting or CSS-hiding it", () => {
+  it("keeps the named AI visibility flag while allowing shell chrome to suppress the launcher during modal interaction", () => {
     expect(source).toContain("const SHOW_AI_FLOATING_BUTTON = false;");
-    expect(source).toContain(
-      "{SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && (",
+    expect(source).toMatch(
+      /\{SHOW_AI_FLOATING_BUTTON\s*&&\s*!aiAgentOpen\s*&&\s*!isGlobalFabSuppressed\s*&&\s*!shellChromeOverlayOpen\s*&&\s*\(/,
     );
   });
 
-  it("does not touch the existing suppression conditions (!aiAgentOpen / !isGlobalFabSuppressed) — only adds to them", () => {
-    // Only one gated AIFloatingButton render site, and it's the same
-    // suppression logic as before, just with the new flag ANDed in front.
+  it("retains the existing AI/page suppression conditions and adds only the shell-chrome ownership guard", () => {
     expect(source.split("<AIFloatingButton").length - 1).toBe(1);
+    expect(source).toContain("!aiAgentOpen");
+    expect(source).toContain("!isGlobalFabSuppressed");
+    expect(source).toContain("!shellChromeOverlayOpen");
   });
 
-  it("the QuickActionFab render site is untouched by this ticket — the Quick Action FAB itself must remain visible", () => {
-    expect(source).toContain(
-      "{!aiAgentOpen && !isGlobalFabSuppressed && <QuickActionFab />}",
+  it("keeps QuickActionFab available when normal chrome is idle and suppresses it only while another shell surface owns interaction", () => {
+    expect(source).toMatch(
+      /\{!aiAgentOpen\s*&&\s*!isGlobalFabSuppressed\s*&&\s*!shellChromeOverlayOpen\s*&&\s*<QuickActionFab\s*\/>\}/,
     );
   });
 

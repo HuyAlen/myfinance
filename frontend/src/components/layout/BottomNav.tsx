@@ -94,7 +94,13 @@ function isMorePath(pathname: string) {
   return MORE_ROUTES.some((href) => pathname.startsWith(href));
 }
 
-export default function BottomNav() {
+type BottomNavProps = {
+  onMoreMenuOpenChange?: (open: boolean) => void;
+};
+
+export default function BottomNav({
+  onMoreMenuOpenChange,
+}: BottomNavProps) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRouteActive = isMorePath(pathname);
@@ -102,6 +108,13 @@ export default function BottomNav() {
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    onMoreMenuOpenChange?.(moreOpen);
+    return () => {
+      onMoreMenuOpenChange?.(false);
+    };
+  }, [moreOpen, onMoreMenuOpenChange]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -113,6 +126,45 @@ export default function BottomNav() {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreOpen]);
+
+  // MOBILE-MORE-REAL-IPHONE-QA-1: AppShell intentionally ignores
+  // visualViewport scroll events during ordinary page scrolling for smoothness.
+  // The modal More surface is different: while open it must follow the actually
+  // visible iPhone viewport (Safari toolbar, landscape and standalone/PWA).
+  useEffect(() => {
+    if (!moreOpen || typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncMobileMoreVisualViewport = () => {
+      const height = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      root.style.setProperty(
+        "--mobile-more-visual-viewport-height",
+        `${height}px`,
+      );
+      root.style.setProperty(
+        "--mobile-more-visual-viewport-offset-top",
+        `${offsetTop}px`,
+      );
+    };
+
+    syncMobileMoreVisualViewport();
+    viewport?.addEventListener("resize", syncMobileMoreVisualViewport);
+    viewport?.addEventListener("scroll", syncMobileMoreVisualViewport);
+    window.addEventListener("resize", syncMobileMoreVisualViewport);
+    window.addEventListener("orientationchange", syncMobileMoreVisualViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncMobileMoreVisualViewport);
+      viewport?.removeEventListener("scroll", syncMobileMoreVisualViewport);
+      window.removeEventListener("resize", syncMobileMoreVisualViewport);
+      window.removeEventListener("orientationchange", syncMobileMoreVisualViewport);
+      root.style.removeProperty("--mobile-more-visual-viewport-height");
+      root.style.removeProperty("--mobile-more-visual-viewport-offset-top");
     };
   }, [moreOpen]);
 
@@ -189,13 +241,17 @@ export default function BottomNav() {
       {moreOpen ? (
         <div
           data-mobile-more-sheet="true"
-          className="fixed inset-0 z-80 lg:hidden"
+          className="fixed inset-0 z-80 lg:hidden overscroll-none"
+          style={{
+            top: "var(--mobile-more-visual-viewport-offset-top, 0px)",
+            height: "var(--mobile-more-visual-viewport-height, 100dvh)",
+          }}
         >
           <button
             type="button"
             aria-label="Đóng menu Thêm"
             onClick={() => setMoreOpen(false)}
-            className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px]"
+            className="absolute inset-0 touch-none bg-slate-950/35 backdrop-blur-[1px]"
           />
 
           <section
@@ -204,6 +260,9 @@ export default function BottomNav() {
             aria-modal="true"
             aria-labelledby="mobile-more-title"
             className="absolute inset-x-0 bottom-0 flex max-h-[min(78dvh,42rem)] flex-col overflow-hidden rounded-t-[30px] border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)]"
+            style={{
+              maxHeight: "min(calc(var(--mobile-more-visual-viewport-height, 100dvh) - 0.75rem), 42rem)",
+            }}
           >
             <div className="mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-slate-200" />
 
@@ -233,7 +292,7 @@ export default function BottomNav() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
               <div className="space-y-5">
                 {MORE_GROUPS.map((group) => (
                   <section key={group.label}>
