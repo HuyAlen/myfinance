@@ -12,12 +12,13 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
     expect(source).toContain("buildSafeToSpend({");
   });
 
-  it("uses one normalized recurring occurrence stream for upcoming, runway and Có thể chi an toàn", () => {
+  it("uses one normalized recurring occurrence stream for upcoming, forecast and Có thể chi an toàn", () => {
     expect(source).toContain("const recurringSchedules = useMemo(() => {");
-    expect(source).toContain("expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90)");
+    expect(source).toContain("expandRecurringScheduleOccurrences(");
     expect(source).toContain("const recurringOccurrences = useMemo(");
-    expect(source).toContain("buildCashRunwayForecast({");
-    expect(source).toContain("occurrences: recurringOccurrences");
+    expect(source).toContain("buildCashFlowForecast({");
+    expect(source).toContain("events: recurringOccurrences");
+    expect(source).toContain("checkpointDays: [7, 30, 90]");
   });
 
   it("renders the four requested decision surfaces", () => {
@@ -37,6 +38,7 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
     expect(source.split("getTransactionsInRange(").length - 1).toBe(2);
     expect(source.split("getBudgets(").length - 1).toBe(1);
     expect(source).not.toContain("getRecurringForecast");
+    expect(source).not.toContain("getCashFlowForecast");
     expect(source).not.toContain("saveMonthEndCloseout");
     expect(source).toContain("readMonthEndReviewHistory()");
     expect(source).toContain("persistMonthEndReviewHistory(nextHistory)");

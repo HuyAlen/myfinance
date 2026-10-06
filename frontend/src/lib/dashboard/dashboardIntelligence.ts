@@ -1,3 +1,4 @@
+import { buildCashFlowForecast } from "@/src/lib/finance/cashFlowForecast";
 import type {
   Category,
   Investment,
@@ -231,17 +232,14 @@ export function buildRecurringCashForecast(
     return { eventCount30: 0, income7: 0, expense7: 0, net7: 0, income30: 0, expense30: 0, net30: 0 };
   }
 
-  const end7 = new Date(today);
-  end7.setDate(end7.getDate() + 7);
   const end30 = new Date(today);
   end30.setDate(end30.getDate() + 30);
-
   const deduped = new Map<string, RecurringForecastEvent>();
   for (const event of events) {
     const date = atStartOfDay(event.date);
     if (!date || date < today || date > end30) continue;
     const key = [
-      date.toISOString().slice(0, 10),
+      localDayKey(date),
       event.type,
       Math.round(Math.abs(Number(event.amount) || 0)),
       normalizeReviewText(event.categoryName),
@@ -249,34 +247,26 @@ export function buildRecurringCashForecast(
     if (!deduped.has(key)) deduped.set(key, event);
   }
 
-  let income7 = 0;
-  let expense7 = 0;
-  let income30 = 0;
-  let expense30 = 0;
-
-  for (const event of deduped.values()) {
-    const date = atStartOfDay(event.date)!;
-    const amount = Math.abs(Number(event.amount) || 0);
-    if (event.type === "income") income30 += amount;
-    else expense30 += amount;
-
-    if (date <= end7) {
-      if (event.type === "income") income7 += amount;
-      else expense7 += amount;
-    }
-  }
+  const forecast = buildCashFlowForecast({
+    startingBalance: 0,
+    events: [...deduped.values()],
+    today,
+    horizonDays: 30,
+    checkpointDays: [7, 30],
+  });
+  const point7 = forecast.checkpoints.find((point) => point.days === 7);
+  const point30 = forecast.checkpoints.find((point) => point.days === 30);
 
   return {
-    eventCount30: deduped.size,
-    income7,
-    expense7,
-    net7: income7 - expense7,
-    income30,
-    expense30,
-    net30: income30 - expense30,
+    eventCount30: forecast.eventCount,
+    income7: point7?.scheduledIncome ?? 0,
+    expense7: point7?.scheduledExpense ?? 0,
+    net7: point7?.netScheduled ?? 0,
+    income30: point30?.scheduledIncome ?? 0,
+    expense30: point30?.scheduledExpense ?? 0,
+    net30: point30?.netScheduled ?? 0,
   };
 }
-
 const INVESTMENT_LABELS: Record<InvestmentType | "forex", string> = {
   stock: "Cổ phiếu",
   crypto: "Crypto",
@@ -638,48 +628,26 @@ export function buildCashRunwayForecast(input: {
   occurrences: RecurringOccurrence[];
   today: string | Date;
 }): CashRunwayForecast {
-  const today = atStartOfDay(input.today) ?? new Date(0);
-  const startingBalance = Number(input.startingBalance) || 0;
-  const end90 = new Date(today);
-  end90.setDate(end90.getDate() + 90);
-  const eligible = input.occurrences
-    .filter((occurrence) => occurrence.date >= today && occurrence.date <= end90)
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  let running = startingBalance;
-  let lowPointBalance = startingBalance;
-  let lowPointDate = localDayKey(today);
-  for (const occurrence of eligible) {
-    running += occurrence.type === "income" ? occurrence.amount : -occurrence.amount;
-    if (running < lowPointBalance) {
-      lowPointBalance = running;
-      lowPointDate = localDayKey(occurrence.date);
-    }
-  }
-
-  const points = ([30, 60, 90] as const).map((days) => {
-    const checkpoint = new Date(today);
-    checkpoint.setDate(checkpoint.getDate() + days);
-    const projectedBalance = eligible
-      .filter((occurrence) => occurrence.date <= checkpoint)
-      .reduce(
-        (balance, occurrence) =>
-          balance +
-          (occurrence.type === "income" ? occurrence.amount : -occurrence.amount),
-        startingBalance,
-      );
-    return { days, date: localDayKey(checkpoint), projectedBalance };
+  const forecast = buildCashFlowForecast({
+    startingBalance: input.startingBalance,
+    events: input.occurrences,
+    today: input.today,
+    horizonDays: 90,
+    checkpointDays: [30, 60, 90],
   });
 
   return {
-    startingBalance,
-    eventCount90: eligible.length,
-    points,
-    lowPointBalance,
-    lowPointDate,
+    startingBalance: forecast.startingBalance,
+    eventCount90: forecast.eventCount,
+    points: forecast.checkpoints.map((point) => ({
+      days: point.days as CashRunwayPoint["days"],
+      date: point.date,
+      projectedBalance: point.projectedBalance,
+    })),
+    lowPointBalance: forecast.lowPointBalance,
+    lowPointDate: forecast.lowPointDate,
   };
 }
-
 export function countInvalidRecurringSchedules(input: {
   categories: Category[];
   transactions: Transaction[];

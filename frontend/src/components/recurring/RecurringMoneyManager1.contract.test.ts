@@ -46,7 +46,13 @@ describe("RECURRING-MONEY-MANAGER-1 product wiring", () => {
   it("makes Dashboard consume the same canonical recurring read model", () => {
     expect(dashboard).toContain("buildRecurringMoneySchedules({");
     expect(dashboard).toContain("toRecurringScheduleInputs(");
-    expect(dashboard).toContain("expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90)");
+    expect(dashboard).toContain(
+      "const recurringReferenceDate = toLocalDateKey(new Date());",
+    );
+    const normalizedDashboard = dashboard.replace(/\s+/g, " ");
+    expect(normalizedDashboard).toContain(
+      "expandRecurringScheduleOccurrences( recurringSchedules, recurringReferenceDate, 90, )",
+    );
     expect(dashboard).toContain('router.push("/recurring")');
   });
 

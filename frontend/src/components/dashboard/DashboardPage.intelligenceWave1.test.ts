@@ -19,7 +19,16 @@ describe("DASHBOARD-INTELLIGENCE-WAVE-1 cross-feature adoption", () => {
 
   it("adopts RECURRING-CASH-FORECAST-1 from all recurring events before UI slicing", () => {
     expect(source).toContain("const allUpcomingMoneyEvents = useMemo(() => {");
-    expect(source).toContain("buildRecurringCashForecast(allUpcomingMoneyEvents, new Date())");
+    const recurringForecastSource = source
+      .slice(
+        source.indexOf("const recurringCashForecast = useMemo("),
+        source.indexOf("const safeToSpend", source.indexOf("const recurringCashForecast = useMemo(")),
+      )
+      .replace(/\s+/g, " ");
+    expect(recurringForecastSource).toContain(
+      "buildRecurringCashForecast( allUpcomingMoneyEvents, recurringReferenceDate, )",
+    );
+    expect(recurringForecastSource).not.toContain("new Date()");
     expect(source).toContain('data-dashboard-intelligence="recurring-cash-forecast"');
   });
 

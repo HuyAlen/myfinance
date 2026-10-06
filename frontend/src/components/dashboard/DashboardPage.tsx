@@ -41,7 +41,6 @@ import {
   resolveMonthComparisonWindow,
 } from "@/src/lib/dashboard/dashboardPeriodComparison";
 import {
-  buildCashRunwayForecast,
   buildFinanceDataHealth,
   buildFinanceReviewInbox,
   buildMonthEndCloseout,
@@ -54,6 +53,7 @@ import {
   buildRecurringCashForecast,
   type FinanceReviewReason,
 } from "@/src/lib/dashboard/dashboardIntelligence";
+import { buildCashFlowForecast } from "@/src/lib/finance/cashFlowForecast";
 import {
   buildRecurringMoneySchedules,
   toRecurringScheduleInputs,
@@ -2804,9 +2804,17 @@ export default function DashboardPage() {
   // deduplicates exact mirrors and excludes invalid/paused schedules before
   // Safe-to-Spend, Runway, upcoming cash projections and the Action Center
   // consume them.
+  const recurringReferenceDate = toLocalDateKey(new Date());
   const recurringMoneySchedules = useMemo(
     () => buildRecurringMoneySchedules({ categories, transactions, wallets }),
     [categories, transactions, wallets],
+  );
+  const forecastExcludedRecurringCount = useMemo(
+    () =>
+      recurringMoneySchedules.filter(
+        (schedule) => schedule.enabled && schedule.issues.length > 0,
+      ).length,
+    [recurringMoneySchedules],
   );
   const recurringSchedules = useMemo(() => {
     return toRecurringScheduleInputs(recurringMoneySchedules);
@@ -2818,7 +2826,7 @@ export default function DashboardPage() {
         buildRecurringDueActions({
           schedules: recurringMoneySchedules,
           transactions,
-          referenceDate: toLocalDateKey(new Date()),
+          referenceDate: recurringReferenceDate,
           upcomingDays: 3,
         }),
       ),
@@ -2826,8 +2834,13 @@ export default function DashboardPage() {
   );
 
   const recurringOccurrences = useMemo(
-    () => expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90),
-    [recurringSchedules],
+    () =>
+      expandRecurringScheduleOccurrences(
+        recurringSchedules,
+        recurringReferenceDate,
+        90,
+      ),
+    [recurringReferenceDate, recurringSchedules],
   );
 
   const allUpcomingMoneyEvents = useMemo(() => {
@@ -2855,8 +2868,12 @@ export default function DashboardPage() {
   );
 
   const recurringCashForecast = useMemo(
-    () => buildRecurringCashForecast(allUpcomingMoneyEvents, new Date()),
-    [allUpcomingMoneyEvents],
+    () =>
+      buildRecurringCashForecast(
+        allUpcomingMoneyEvents,
+        recurringReferenceDate,
+      ),
+    [allUpcomingMoneyEvents, recurringReferenceDate],
   );
 
   const safeToSpend = useMemo(
@@ -2880,15 +2897,18 @@ export default function DashboardPage() {
     ],
   );
 
-  const cashRunwayForecast = useMemo(
+  const cashFlowForecast = useMemo(
     () =>
-      buildCashRunwayForecast({
+      buildCashFlowForecast({
         startingBalance: summary.liquidBalance,
-        occurrences: recurringOccurrences,
-        today: new Date(),
+        events: recurringOccurrences,
+        today: recurringReferenceDate,
+        horizonDays: 90,
+        checkpointDays: [7, 30, 90],
       }),
-    [recurringOccurrences, summary.liquidBalance],
+    [recurringOccurrences, recurringReferenceDate, summary.liquidBalance],
   );
+  const cashFlowForecastReady = isDashboardReady && cashFlowReady;
 
   const invalidRecurringScheduleCount = useMemo(
     () => countInvalidRecurringSchedules({ categories, transactions }),
@@ -3942,45 +3962,150 @@ export default function DashboardPage() {
         </Panel>
 
         <Panel
-          title="Dự báo thanh khoản 90 ngày"
-          subtitle="Khả năng duy trì dòng tiền từ tiền trong ví + lịch định kỳ đã cấu hình; không giả định chi tiêu tự do"
+          title="Dự báo dòng tiền 90 ngày"
+          subtitle="Số dư dự kiến từ tiền trong ví và lịch định kỳ hợp lệ; không tự suy đoán các khoản chưa có lịch"
         >
-          {!isDashboardReady ? (
-            <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
+          {!cashFlowForecastReady ? (
+            <div className="mt-4 h-52 animate-pulse rounded-2xl bg-slate-100" />
           ) : (
-            <div data-dashboard-decision="cash-runway" className="mt-4">
-              <div className="grid grid-cols-3 gap-2">
-                {cashRunwayForecast.points.map((point) => (
-                  <MiniStat
+            <div
+              data-dashboard-decision="cash-runway"
+              data-cashflow-forecast="true"
+              className="mt-4"
+            >
+              {cashFlowForecast.firstNegativeDate ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <ArrowDownRight size={18} className="mt-0.5 shrink-0 text-rose-600" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-rose-700">
+                        {cashFlowForecast.daysUntilNegative === 0
+                          ? "Thanh khoản đang âm"
+                          : `Có nguy cơ âm thanh khoản trong ${cashFlowForecast.daysUntilNegative} ngày`}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
+                        Số dư dự kiến lần đầu xuống dưới 0 vào {new Date(`${cashFlowForecast.firstNegativeDate}T00:00:00`).toLocaleDateString("vi-VN")} nếu các khoản định kỳ diễn ra đúng lịch.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-emerald-100 bg-[#F6FCF9] p-3.5">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-emerald-700">
+                        Chưa dự kiến âm thanh khoản trong 90 ngày
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
+                        {cashFlowForecast.eventCount > 0
+                          ? `${cashFlowForecast.eventCount} lần phát sinh định kỳ hợp lệ đã được đưa vào dự báo.`
+                          : "Chưa có lịch định kỳ hợp lệ; số dư dự kiến giữ nguyên theo dữ liệu hiện có."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {cashFlowForecast.checkpoints.map((point) => (
+                  <div
                     key={point.days}
-                    label={`${point.days} ngày`}
-                    value={formatVND(point.projectedBalance)}
-                    color={point.projectedBalance >= 0 ? "text-[#2F80ED]" : "text-rose-500"}
-                  />
+                    className="min-w-0 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-2.5 py-3 sm:px-3"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[#71879A]">
+                      {point.days} ngày
+                    </p>
+                    <p
+                      className={`mt-1 whitespace-nowrap text-[clamp(11px,3vw,15px)] font-black tracking-[-0.035em] tabular-nums ${
+                        point.projectedBalance >= 0 ? "text-[#2F80ED]" : "text-rose-500"
+                      }`}
+                      title={formatVND(point.projectedBalance)}
+                    >
+                      {formatVND(point.projectedBalance)}
+                    </p>
+                    <p className="mt-1 truncate text-[9px] font-semibold text-[#71879A] sm:text-[10px]">
+                      Thu {formatCompactVND(point.scheduledIncome)} · Chi {formatCompactVND(point.scheduledExpense)}
+                    </p>
+                  </div>
                 ))}
               </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <MiniStat
+                  label="Thu định kỳ · 90 ngày"
+                  value={formatVND(cashFlowForecast.scheduledIncome)}
+                  color="text-emerald-600"
+                />
+                <MiniStat
+                  label="Chi định kỳ · 90 ngày"
+                  value={formatVND(cashFlowForecast.scheduledExpense)}
+                  color="text-rose-500"
+                />
+              </div>
+
               <div className="mt-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">Điểm thấp nhất</p>
-                    <p className={`mt-1 text-lg font-black tabular-nums ${cashRunwayForecast.lowPointBalance >= 0 ? "text-[#31536F]" : "text-rose-500"}`}>
-                      {formatVND(cashRunwayForecast.lowPointBalance)}
+                    <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">
+                      Điểm thấp nhất
+                    </p>
+                    <p
+                      className={`mt-1 text-lg font-black tabular-nums ${
+                        cashFlowForecast.lowPointBalance >= 0
+                          ? "text-[#31536F]"
+                          : "text-rose-500"
+                      }`}
+                    >
+                      {formatVND(cashFlowForecast.lowPointBalance)}
                     </p>
                   </div>
                   <p className="text-right text-[11px] font-semibold text-[#71879A]">
-                    {new Date(cashRunwayForecast.lowPointDate).toLocaleDateString("vi-VN")}
+                    {new Date(`${cashFlowForecast.lowPointDate}T00:00:00`).toLocaleDateString("vi-VN")}
                   </p>
                 </div>
                 <p className="mt-2 text-[11px] leading-4 text-[#60778D]">
-                  {cashRunwayForecast.eventCount90 > 0
-                    ? `${cashRunwayForecast.eventCount90} lần phát sinh định kỳ được dự báo trong 90 ngày.`
-                    : "Chưa có khoản định kỳ nào để dự báo; số dư giữ nguyên theo dữ liệu hiện có."}
+                  Dòng tiền theo lịch trong 90 ngày: {cashFlowForecast.netScheduled >= 0 ? "+" : ""}{formatVND(cashFlowForecast.netScheduled)}.
                 </p>
               </div>
+
+              {forecastExcludedRecurringCount > 0 ? (
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5">
+                  <p className="text-xs font-black text-amber-700">
+                    {forecastExcludedRecurringCount} lịch định kỳ chưa đủ cấu hình
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
+                    Các lịch này không được đưa vào dự báo cho đến khi có đủ số tiền, ví, tần suất và ngày chạy tiếp theo hợp lệ.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/recurring")}
+                    className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 text-xs font-black text-amber-700 transition hover:bg-amber-100"
+                  >
+                    Hoàn tất cấu hình
+                    <ArrowUpRight size={13} />
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#DCE8F1] bg-white/80 px-3 py-2.5 text-[11px] leading-4 text-[#60778D]">
+                <Info size={14} className="mt-0.5 shrink-0 text-[#2F80ED]" />
+                <span>
+                  Chỉ dùng số dư ví hiện tại và lịch định kỳ hợp lệ. Khoản nợ, mục tiêu hoặc khoản tiết kiệm chưa có lịch thanh toán không được tự suy đoán.
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push("/recurring")}
+                className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+              >
+                Quản lý lịch định kỳ
+                <ArrowUpRight size={15} />
+              </button>
             </div>
           )}
-        </Panel>
-      </section>
+        </Panel>      </section>
 
       {/* UI-DASH-2: Budget Attention — closes the Dashboard's only P0
           information gap identified in the audit ("which budget is

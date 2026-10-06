@@ -5,7 +5,7 @@ export const DASHBOARD_CUSTOMIZATION_SECTIONS = [
   {
     id: "decision",
     label: "Quyết định chi tiêu",
-    description: "Safe to Spend và dự báo thanh khoản 90 ngày",
+    description: "Mức có thể chi an toàn và dự báo dòng tiền 90 ngày",
   },
   {
     id: "budget",
