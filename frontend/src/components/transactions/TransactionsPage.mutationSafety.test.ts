@@ -37,9 +37,15 @@ describe("TransactionsPage form-session mutation safety wiring (TXN-FLOW-1)", ()
     expect(fnSource).toContain("setFormSessionState(next);");
   });
 
-  it("both openCreateForm and openEditForm begin a new form session (F-5's session-token bump)", () => {
-    const createStart = source.indexOf("function openCreateForm() {");
-    const createEnd = source.indexOf("useQuickActionCreateIntent(openCreateForm);");
+  it("mode-aware create and edit flows begin a new form session (F-5's session-token bump)", () => {
+    const createStart = source.indexOf(
+      "function openCreateFormWithMode(",
+    );
+    const createEnd = source.indexOf(
+      "useQuickActionCreateIntent(openQuickActionCreateForm);",
+      createStart,
+    );
+
     expect(createStart).toBeGreaterThan(-1);
     expect(createEnd).toBeGreaterThan(createStart);
     expect(source.slice(createStart, createEnd)).toContain(
@@ -48,6 +54,7 @@ describe("TransactionsPage form-session mutation safety wiring (TXN-FLOW-1)", ()
 
     const editStart = source.indexOf("function openEditForm(t: Transaction) {");
     const editEnd = source.indexOf("function handleTypeChange(");
+
     expect(editStart).toBeGreaterThan(-1);
     expect(editEnd).toBeGreaterThan(editStart);
     expect(source.slice(editStart, editEnd)).toContain(

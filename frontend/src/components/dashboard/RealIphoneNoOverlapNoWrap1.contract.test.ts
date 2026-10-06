@@ -23,11 +23,18 @@ const reconciliation = readFileSync(
 ).replace(/\r\n/g, "\n");
 
 describe("REAL-IPHONE-NO-OVERLAP-NOWRAP-1", () => {
-  it("keeps the draggable quick-action FAB desktop-only so it cannot cover mobile finance content", () => {
+  it("keeps the restored quick-action FAB inside the real iPhone mobile safe region", () => {
     expect(quickAction).toContain(
-      "z-100 hidden flex-col items-end gap-2 lg:bottom-6 lg:flex",
+      'bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)]',
     );
     expect(quickAction).toContain(
+      'className="fixed left-0 top-0 z-100"',
+    );
+
+    expect(quickAction).not.toContain(
+      "z-100 hidden flex-col items-end gap-2 lg:bottom-6 lg:flex",
+    );
+    expect(quickAction).not.toContain(
       'className="fixed left-0 top-0 z-100 hidden lg:block"',
     );
   });

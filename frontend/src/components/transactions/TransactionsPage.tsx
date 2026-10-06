@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
-import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
+import {
+  useQuickActionCreateIntent,
+  type QuickActionCreateMode,
+} from "@/src/lib/navigation/quickActionIntent";
 import {
   hasTransactionsContext,
   parseTransactionsContext,
@@ -1328,26 +1331,45 @@ export default function TransactionsPage() {
     return [];
   }, [categories, form.formMode]);
 
-  function openCreateForm() {
-    const defaultMode: TransactionFormMode = "expense";
+  function openCreateFormWithMode(defaultMode: TransactionFormMode) {
+    const defaultCategoryId =
+      defaultMode === "transfer"
+        ? ""
+        : (categories.find((category) => {
+            if (defaultMode === "income") {
+              return (
+                category.type === "income" &&
+                getCategoryPlanningGroup(category) === "income"
+              );
+            }
+
+            if (category.type !== "expense") return false;
+            const group = getCategoryPlanningGroup(category);
+            return group === "fixed" || group === "variable";
+          })?.id ?? "");
+
     setForm({
       ...createEmptyForm(),
       formMode: defaultMode,
       type: getTransactionTypeFromFormMode(defaultMode),
-      categoryId:
-        categories.find((category) => {
-          if (category.type !== "expense") return false;
-          const group = getCategoryPlanningGroup(category);
-          return group === "fixed" || group === "variable";
-        })?.id ?? "",
+      categoryId: defaultCategoryId,
       walletId: wallets[0]?.id ?? "",
+      transferToWalletId: "",
     });
     setSaveError(null);
     beginNewFormSession();
     setIsFormOpen(true);
   }
 
-  useQuickActionCreateIntent(openCreateForm);
+  function openCreateForm() {
+    openCreateFormWithMode("expense");
+  }
+
+  function openQuickActionCreateForm(mode?: QuickActionCreateMode) {
+    openCreateFormWithMode(mode === "transfer" ? "transfer" : "expense");
+  }
+
+  useQuickActionCreateIntent(openQuickActionCreateForm);
   useSuppressGlobalFabsWhileOpen(isFormOpen || isCsvImportOpen || isRulesOpen || !!pendingAction);
 
   // TXN-UX-1: minimal keyboard/focus support for the Create/Edit dialog —

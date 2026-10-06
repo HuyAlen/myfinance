@@ -21,6 +21,7 @@ describe("QuickActionFab temporary action visibility", () => {
 
   it("defines a stable id for every action, independent of its display label", () => {
     expect(source).toContain('id: "transaction",');
+    expect(source).toContain('id: "transfer",');
     expect(source).toContain('id: "wallet",');
     expect(source).toContain('id: "goal",');
     expect(source).toContain('id: "budget",');
@@ -46,9 +47,10 @@ describe("QuickActionFab temporary action visibility", () => {
     return source.slice(start, end);
   }
 
-  it("only 'transaction' is enabled — wallet/goal/budget are hidden via the visibility map, not deleted", () => {
+  it("keeps transaction and transfer enabled while wallet/goal/budget remain hidden", () => {
     const mapSource = extractVisibilityMapSource();
     expect(mapSource).toContain("transaction: true");
+    expect(mapSource).toContain("transfer: true");
     expect(mapSource).toContain("wallet: false");
     expect(mapSource).toContain("goal: false");
     expect(mapSource).toContain("budget: false");

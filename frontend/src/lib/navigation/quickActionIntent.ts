@@ -6,33 +6,45 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 /**
  * Shared deep-link contract for Quick Action: `?action=create` tells a page
  * to open its own canonical create form instead of just navigating there.
- * One param name/value pair, reused by every page instead of one-off
- * query-string literals.
+ * `quickActionMode` is an optional, one-shot refinement for create flows that
+ * already support a meaningful sub-mode (currently transaction transfer).
  */
 export const QUICK_ACTION_PARAM = "action";
 export const QUICK_ACTION_CREATE = "create";
+export const QUICK_ACTION_MODE_PARAM = "quickActionMode";
 
-export function buildQuickActionCreateHref(pathname: string) {
-  return `${pathname}?${QUICK_ACTION_PARAM}=${QUICK_ACTION_CREATE}`;
+export type QuickActionCreateMode = "transfer";
+
+export function buildQuickActionCreateHref(
+  pathname: string,
+  mode?: QuickActionCreateMode,
+) {
+  const modeQuery = mode
+    ? `&${QUICK_ACTION_MODE_PARAM}=${encodeURIComponent(mode)}`
+    : "";
+  return `${pathname}?${QUICK_ACTION_PARAM}=${QUICK_ACTION_CREATE}${modeQuery}`;
 }
 
 /**
  * Consumes a one-shot `?action=create` intent: calls `onCreate` once when
- * the param is present, then strips it from the URL so a refresh, back
- * navigation, or later closing the form never re-arms it. `onCreate` is read
- * through a ref (not a dependency) so this effect only re-runs when the URL
- * itself changes — passing the page's latest `openCreateForm` closure every
- * render can't cause the effect to loop or re-open the form spuriously.
+ * the param is present, then strips both the action and optional mode from
+ * the URL so refresh/back navigation cannot re-arm it. The callback is read
+ * through a ref so changes to page-local create closures do not re-run the
+ * URL-driven effect by themselves.
  *
- * Also fires again after a same-page re-tap of the Quick Action button:
- * `useSearchParams()` reflects the new query string without the page
- * remounting, so the effect's `actionParam` dependency changes and reruns.
+ * Same-page re-taps still work because `useSearchParams()` observes the new
+ * query string, then the intent is consumed back to the clean pathname.
  */
-export function useQuickActionCreateIntent(onCreate: () => void) {
+export function useQuickActionCreateIntent(
+  onCreate: (mode?: QuickActionCreateMode) => void,
+) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const actionParam = searchParams.get(QUICK_ACTION_PARAM);
+  const modeParam = searchParams.get(QUICK_ACTION_MODE_PARAM);
+  const createMode: QuickActionCreateMode | undefined =
+    modeParam === "transfer" ? "transfer" : undefined;
 
   const onCreateRef = useRef(onCreate);
   useEffect(() => {
@@ -42,13 +54,14 @@ export function useQuickActionCreateIntent(onCreate: () => void) {
   useEffect(() => {
     if (actionParam !== QUICK_ACTION_CREATE) return;
 
-    onCreateRef.current();
+    onCreateRef.current(createMode);
 
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete(QUICK_ACTION_PARAM);
+    nextParams.delete(QUICK_ACTION_MODE_PARAM);
     const query = nextParams.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
     });
-  }, [actionParam, pathname, router, searchParams]);
+  }, [actionParam, createMode, pathname, router, searchParams]);
 }

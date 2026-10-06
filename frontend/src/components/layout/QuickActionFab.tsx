@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
   ChartPie,
   ReceiptText,
   Target,
@@ -48,17 +49,10 @@ const QUICK_ACTIONS = [
     mobileIconColor: "text-emerald-600",
   },
   {
-    // Distinct from "wallet" above ("Tạo ví tiền" — opens the create-wallet
-    // form via ?action=create) — this one is a plain navigation to the
-    // Wallets page itself, so it deliberately does NOT use
-    // buildQuickActionCreateHref. Same icon as Sidebar's own "Ví Tiền" link
-    // (Wallet, from lucide-react) for semantic consistency; indigo keeps it
-    // visually distinct from both "Thêm giao dịch" (blue) and the hidden
-    // "Tạo ví tiền" (emerald).
-    id: "open-wallets",
-    label: "Mở Ví Tiền",
-    href: "/wallets",
-    icon: Wallet,
+    id: "transfer",
+    label: "Chuyển tiền",
+    href: buildQuickActionCreateHref("/transactions", "transfer"),
+    icon: ArrowLeftRight,
     cls: "bg-indigo-600 shadow-indigo-200/60 hover:bg-indigo-700",
     mobileIconBg: "bg-indigo-100",
     mobileIconColor: "text-indigo-600",
@@ -91,7 +85,7 @@ const QUICK_ACTIONS = [
 // copy/wording change can never silently re-show or re-hide an action.
 const QUICK_ACTION_VISIBILITY: Record<string, boolean> = {
   transaction: true,
-  "open-wallets": true,
+  transfer: true,
   wallet: false,
   goal: false,
   budget: false,
@@ -153,13 +147,23 @@ const EFFECTIVE_MOBILE_PANEL_HEIGHT = IS_SINGLE_MOBILE_ACTION
     : MOBILE_PANEL_HEIGHT;
 
 function getViewportBounds() {
+  const visualViewport = window.visualViewport;
+  const viewportWidth = Math.max(
+    1,
+    Math.round(visualViewport?.width ?? window.innerWidth),
+  );
+  const viewportHeight = Math.max(
+    1,
+    Math.round(visualViewport?.height ?? window.innerHeight),
+  );
+
   return {
-    viewportWidth: window.innerWidth,
-    viewportHeight: window.innerHeight,
+    viewportWidth,
+    viewportHeight,
     fabSize: FAB_SIZE,
     marginX: 12,
-    marginTop: window.innerWidth < 1024 ? 216 : 76,
-    marginBottom: window.innerWidth >= 1024 ? 16 : 104,
+    marginTop: viewportWidth < 1024 ? 216 : 76,
+    marginBottom: viewportWidth >= 1024 ? 16 : 104,
   };
 }
 
@@ -319,6 +323,37 @@ export default function QuickActionFab() {
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
   }, [isQuickActionOpen]);
 
+  // Keyboard dismissal mirrors the visible close toggle without turning this
+  // lightweight popover into a modal focus trap. Returning focus to the FAB
+  // keeps keyboard users anchored to the disclosure they just closed.
+  useEffect(() => {
+    if (!isQuickActionOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setIsQuickActionOpen(false);
+      fabButtonRef.current?.focus({ preventScroll: true });
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isQuickActionOpen]);
+
+  // On mobile, move keyboard focus into the action group after it is painted.
+  // preventScroll avoids a fixed-popover focus change from nudging the page.
+  useEffect(() => {
+    if (!isQuickActionOpen || window.innerWidth >= 1024) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      mobilePanelRef.current
+        ?.querySelector<HTMLButtonElement>("button")
+        ?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isQuickActionOpen]);
+
   // Follows the FAB's CURRENT on-screen rect — default anchor, restored, or
   // freshly dragged — rather than a fixed canonical spot above BottomNav.
   // useLayoutEffect (not useEffect) so the measurement + recompute happens
@@ -359,12 +394,30 @@ export default function QuickActionFab() {
       );
     }
 
+    const visualViewport = window.visualViewport;
+    let repositionFrameId: number | null = null;
+
+    function scheduleReposition() {
+      if (repositionFrameId !== null) return;
+      repositionFrameId = window.requestAnimationFrame(() => {
+        repositionFrameId = null;
+        reposition();
+      });
+    }
+
     reposition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("orientationchange", reposition);
+    visualViewport?.addEventListener("resize", scheduleReposition);
+    visualViewport?.addEventListener("scroll", scheduleReposition);
+    window.addEventListener("resize", scheduleReposition);
+    window.addEventListener("orientationchange", scheduleReposition);
     return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("orientationchange", reposition);
+      visualViewport?.removeEventListener("resize", scheduleReposition);
+      visualViewport?.removeEventListener("scroll", scheduleReposition);
+      window.removeEventListener("resize", scheduleReposition);
+      window.removeEventListener("orientationchange", scheduleReposition);
+      if (repositionFrameId !== null) {
+        window.cancelAnimationFrame(repositionFrameId);
+      }
     };
   }, [isQuickActionOpen, position]);
 
@@ -509,7 +562,7 @@ export default function QuickActionFab() {
     // and the open/close rotate), which lives on a different element than
     // the drag-position transform below, so the two can never fight over
     // the same animated property.
-    "flex size-12 touch-none select-none items-center justify-center rounded-2xl shadow-[0_6px_18px_rgba(47,128,237,0.20)] transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing",
+    "flex size-12 touch-none select-none items-center justify-center rounded-2xl shadow-[0_6px_18px_rgba(47,128,237,0.20)] transition-transform duration-150 active:scale-95 cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2",
     isQuickActionOpen
       ? "bg-[#6F8AA3] hover:bg-[#617D96] rotate-45"
       : "bg-[#2F80ED] hover:bg-[#2676DE] hover:scale-105",
@@ -528,6 +581,7 @@ export default function QuickActionFab() {
         aria-label={
           isQuickActionOpen ? "Đóng thao tác nhanh" : "Mở thao tác nhanh"
         }
+        aria-expanded={isQuickActionOpen}
         className={fabButtonClassName}
       >
         {isQuickActionOpen ? (
@@ -548,7 +602,7 @@ export default function QuickActionFab() {
           type="button"
           onClick={() => selectAction(action.href)}
           className={[
-            "flex items-center gap-2.5 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95",
+            "flex items-center gap-2.5 rounded-2xl px-4 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2",
             action.cls,
           ].join(" ")}
         >
@@ -605,7 +659,7 @@ export default function QuickActionFab() {
               key={action.href}
               type="button"
               onClick={() => selectAction(action.href)}
-              className="flex min-h-12 items-center gap-2 rounded-2xl px-2.5 py-1.5 active:bg-slate-100"
+              className="flex min-h-12 touch-manipulation items-center gap-2 rounded-2xl px-2.5 py-1.5 text-left transition-[background-color,transform] duration-150 active:scale-[0.98] active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-1"
             >
               <span
                 className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${action.mobileIconBg}`}

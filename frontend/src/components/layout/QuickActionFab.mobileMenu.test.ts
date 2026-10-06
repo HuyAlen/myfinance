@@ -136,13 +136,19 @@ describe("QuickActionFab mobile panel follows the draggable FAB", () => {
     expect(source).toContain("}, [isQuickActionOpen, position]);");
   });
 
-  it("the reposition effect updates on resize/orientation change while open, and cleans up its listeners", () => {
+  it("the reposition effect follows Safari visualViewport changes, coalesces them with rAF, and cleans up every listener", () => {
     const effectSource = extractRepositionEffectSource();
-    expect(effectSource).toContain('window.addEventListener("resize", reposition)');
+    expect(effectSource).toContain("const visualViewport = window.visualViewport;");
+    expect(effectSource).toContain('visualViewport?.addEventListener("resize", scheduleReposition)');
+    expect(effectSource).toContain('visualViewport?.addEventListener("scroll", scheduleReposition)');
+    expect(effectSource).toContain('window.addEventListener("resize", scheduleReposition)');
     expect(effectSource).toContain(
-      'window.addEventListener("orientationchange", reposition)',
+      'window.addEventListener("orientationchange", scheduleReposition)',
     );
-    expect(effectSource).toContain('window.removeEventListener("resize"');
+    expect(effectSource).toContain("window.requestAnimationFrame(() => {");
+    expect(effectSource).toContain('visualViewport?.removeEventListener("resize", scheduleReposition)');
+    expect(effectSource).toContain('visualViewport?.removeEventListener("scroll", scheduleReposition)');
+    expect(effectSource).toContain("window.cancelAnimationFrame(repositionFrameId)");
   });
 
   it("positioning uses useLayoutEffect (not useEffect) to avoid a visible flash at a stale position when the menu opens", () => {

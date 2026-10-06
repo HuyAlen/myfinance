@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
  * convention.
  *
  * Root cause being fixed: with exactly 2 visible actions
- * ("Thêm giao dịch", "Mở Ví Tiền"), the panel previously used
+ * ("Thêm giao dịch", "Chuyển tiền"), the panel previously used
  * `grid-cols-2` at the full 272px grid width, splitting the two labels
  * into ~120px-wide cells — too narrow for either Vietnamese label, forcing
  * `truncate` to ellipsize both ("Thêm ...", "Mở Ví ..."). This patch
@@ -41,9 +41,9 @@ describe("QuickActionFab mobile two-action polish (full labels, compact panel)",
     expect(panelSource).toContain("whitespace-nowrap");
   });
 
-  it('both full labels ("Thêm giao dịch", "Mở Ví Tiền") are still defined verbatim — this is a presentation-only patch', () => {
+  it('both full labels ("Thêm giao dịch", "Chuyển tiền") are still defined verbatim — this is a presentation-only patch', () => {
     expect(source).toContain('label: "Thêm giao dịch",');
-    expect(source).toContain('label: "Mở Ví Tiền",');
+    expect(source).toContain('label: "Chuyển tiền",');
   });
 
   it("exactly 2 visible actions render as a vertical two-row stack (flex-col), not a 2-column grid", () => {
@@ -111,7 +111,7 @@ describe("QuickActionFab mobile two-action polish (full labels, compact panel)",
     const mapSource = source.slice(start, end);
 
     expect(mapSource).toContain("transaction: true");
-    expect(mapSource).toContain('"open-wallets": true');
+    expect(mapSource).toContain('transfer: true');
     expect(mapSource).toContain("wallet: false");
     expect(mapSource).toContain("goal: false");
     expect(mapSource).toContain("budget: false");
