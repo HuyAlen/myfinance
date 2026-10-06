@@ -51,11 +51,13 @@ describe("DASHBOARD-NETWORTH-MONTH-KEY-INTEGRITY-1", () => {
 
   it("adds no Net Worth query and keeps the existing year-bounded history reads", () => {
     expect(dashboard.split("getNetWorthSnapshotsInRange(").length - 1).toBe(2);
+    expect(
+      dashboard.split(
+        'getNetWorthSnapshotsInRange(`${selectedPeriodEndYear}-01-01`, `${selectedPeriodEndYear}-12-01`)',
+      ).length - 1,
+    ).toBe(1);
     expect(dashboard).toMatch(
-      /getNetWorthSnapshotsInRange\(\s*`\$\{selectedYear\}-01-01`,\s*`\$\{selectedYear\}-12-01`,?\s*\)/,
-    );
-    expect(dashboard).toMatch(
-      /getNetWorthSnapshotsInRange\(\s*`\$\{year\}-01-01`,\s*`\$\{year\}-12-01`,?\s*\)/,
+      /getNetWorthSnapshotsInRange\(\s*`\$\{selectedPeriodEndYear\}-01-01`,\s*`\$\{selectedPeriodEndYear\}-12-01`,?\s*\)/,
     );
   });
 });

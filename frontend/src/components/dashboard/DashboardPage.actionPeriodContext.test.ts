@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 /**
  * The Action Center was intentionally removed, so its historical
  * `generateDashboardActions({ monthKey })` contract is no longer applicable.
- * Preserve the selected-month key for the Dashboard surfaces that still use it.
+ * Preserve one selected-month key for month-only surfaces while range-aware
+ * drill-downs keep the active global period in non-month modes.
  */
 describe("DashboardPage period context after Action Center removal", () => {
   const source = readFileSync(
@@ -46,12 +47,17 @@ describe("DashboardPage period context after Action Center removal", () => {
     expect(source).toContain("const monthKey = dashboardMonthKey;");
   });
 
-  it("Transactions 'Xem tất cả' still preserves the selected month", () => {
+  it("Transactions drill-down preserves month mode or the exact selected range", () => {
+    expect(source).toContain("const dashboardTransactionPeriodNavigation = useMemo(");
+    expect(source).toContain("? { month: dashboardMonthKey }");
+    expect(source).toContain(
+      ": { dateFrom: dateRange.startDate, dateTo: dateRange.endDate }",
+    );
     const ctaIndex = source.indexOf("Xem tất cả giao dịch");
     expect(ctaIndex).toBeGreaterThan(-1);
-    const before = source.slice(Math.max(0, ctaIndex - 500), ctaIndex);
+    const before = source.slice(Math.max(0, ctaIndex - 700), ctaIndex);
     expect(before).toContain(
-      "router.push(buildTransactionsHref({ month: dashboardMonthKey }))",
+      "buildTransactionsHref(dashboardTransactionPeriodNavigation)",
     );
   });
 

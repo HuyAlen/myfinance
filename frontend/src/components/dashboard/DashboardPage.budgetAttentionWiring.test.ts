@@ -179,9 +179,10 @@ describe("DashboardPage Budget Attention wiring (UI-DASH-2)", () => {
     );
     expect(budgetsFetchStart).toBeGreaterThan(-1);
     const budgetsFetchEnd = source.indexOf(
-      "}, [selectedYear, invalidatePeriodReadinessForNewContext]);",
+      "// PERF-3 + NETWORTH-HISTORY-1:",
       budgetsFetchStart,
     );
+    expect(budgetsFetchEnd).toBeGreaterThan(budgetsFetchStart);
     const budgetsFetchSource = source.slice(budgetsFetchStart, budgetsFetchEnd);
 
     expect(budgetsFetchSource).toContain("setBudgetsLoaded(true)");

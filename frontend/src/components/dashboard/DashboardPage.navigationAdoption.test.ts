@@ -90,9 +90,13 @@ describe("DashboardPage contextual navigation after Action Center removal", () =
   it("Transactions 'Xem tất cả' preserves the selected Dashboard period", () => {
     const ctaIndex = source.indexOf("Xem tất cả giao dịch");
     expect(ctaIndex).toBeGreaterThan(-1);
-    const before = source.slice(Math.max(0, ctaIndex - 500), ctaIndex);
+    const before = source.slice(Math.max(0, ctaIndex - 700), ctaIndex);
     expect(before).toContain(
-      "router.push(buildTransactionsHref({ month: dashboardMonthKey }))",
+      "buildTransactionsHref(dashboardTransactionPeriodNavigation)",
+    );
+    expect(source).toContain("? { month: dashboardMonthKey }");
+    expect(source).toContain(
+      ": { dateFrom: dateRange.startDate, dateTo: dateRange.endDate }",
     );
     expect(before).not.toMatch(/router\.push\(\s*"\/transactions"\s*\)/);
   });

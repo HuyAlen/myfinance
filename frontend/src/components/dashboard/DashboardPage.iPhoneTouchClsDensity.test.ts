@@ -157,13 +157,13 @@ describe("DASH-MOBILE-POLISH-4 — iPhone ergonomics and layout stability", () =
     expect(miniStatSource).toContain("${className}");
   });
 
-  it("cleans up month-context copy without changing the underlying monthlyPulse or selected-period semantics", () => {
+  it("keeps month-only progress copy while range-aware spending copy follows the selected period", () => {
     expect(source).toContain("Theo thời gian");
     expect(source).toContain("Tiến độ tháng {monthlyPulse.month}");
     expect(source).toContain(
-      'subtitle="Các danh mục chi tiêu lớn nhất trong tháng đang xem để nhận diện nơi cần tối ưu"',
+      'subtitle="Các danh mục chi tiêu lớn nhất trong kỳ đang xem để nhận diện nơi cần tối ưu"',
     );
-    expect(source).toContain("Chưa có chi tiêu trong tháng đang xem.");
+    expect(source).toContain("Chưa có chi tiêu trong kỳ đang xem.");
     expect(source).not.toContain("Top danh mục trong tháng hiện tại");
   });
 

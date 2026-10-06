@@ -53,7 +53,9 @@ describe("Dashboard canonical Net Worth history (NETWORTH-HISTORY-1)", () => {
     expect(transactionStart).toBeGreaterThanOrEqual(0);
     expect(historyStart).toBeGreaterThan(transactionStart);
     expect(awaitBoth).toBeGreaterThan(historyStart);
-    expect(body).toContain('getNetWorthSnapshotsInRange(`${year}-01-01`, `${year}-12-01`)');
+    expect(body).toContain(
+      'getNetWorthSnapshotsInRange(`${selectedPeriodEndYear}-01-01`, `${selectedPeriodEndYear}-12-01`)',
+    );
   });
 
   it("shares one period generation guard so a stale year cannot overwrite the newest year", () => {

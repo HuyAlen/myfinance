@@ -532,19 +532,19 @@ function toLocalDateKey(value: string | Date) {
 }
 
 /**
- * Every Dashboard figure that reads from raw transactions only ever needs
- * two windows: the selected year (monthly pulse, net worth trend, cash flow
- * trend all walk month-by-month through `selectedYear`) and the real
- * current year (the "today" snapshot always reflects the actual current
- * date, regardless of which month/year is selected). This covers both in
- * one contiguous range instead of fetching the user's entire history.
+ * Dashboard transaction reads must cover the full selected period envelope
+ * plus the real current year used by Today/Action Center. For a cross-year
+ * custom range, `selectedYear` is the start year while `selectedEndYear` is
+ * the end year; both must be loaded or the visible period would be partial.
+ * One prior year remains included for completed-month emergency-fund evidence.
  */
-function getDashboardFetchRange(selectedYear: number) {
+function getDashboardFetchRange(
+  selectedYear: number,
+  selectedEndYear: number = selectedYear,
+) {
   const currentYear = new Date().getFullYear();
-  // DASH-EMERGENCY-FUND-BASELINE-1: include one year before the
-  // earliest selected/current year so January still has completed-month evidence.
-  const minYear = Math.min(selectedYear, currentYear) - 1;
-  const maxYear = Math.max(selectedYear, currentYear);
+  const minYear = Math.min(selectedYear, selectedEndYear, currentYear) - 1;
+  const maxYear = Math.max(selectedYear, selectedEndYear, currentYear);
   return {
     startDate: `${minYear}-01-01`,
     endDate: `${maxYear}-12-31`,
@@ -718,9 +718,15 @@ export default function DashboardPage() {
   // Current-state datasets (wallets/investments/Forex/debts/goals/savings/
   // budgets) remain year-independent and are not refetched on a year switch.
   const loadedPeriodYearRef = useRef<number | null>(null);
+  const loadedPeriodEndYearRef = useRef<number | null>(null);
   const loadedNetWorthHistoryYearRef = useRef<number | null>(null);
   const periodRequestIdRef = useRef(0);
-  const { dateRange, selectedYear } = useDateFilter();
+  const { dateRange, selectedYear, filterMode } = useDateFilter();
+  const selectedPeriodEndYear = useMemo(
+    () => getYearFromDate(dateRange.endDate) ?? selectedYear,
+    [dateRange.endDate, selectedYear],
+  );
+  const isDashboardMonthMode = filterMode === "month";
 
   // PERF-4 Hero Milestone Operation Semantics patch: dashboard_hero_ready
   // is emitted operation-locally (inside reloadData/reloadPeriod, right
@@ -761,6 +767,7 @@ export default function DashboardPage() {
     hasLoadedEmergencyFundRef.current = false;
     hasLoadedSavingInvestmentRef.current = false;
     hasLoadedNetWorthHistoryRef.current = false;
+    loadedPeriodEndYearRef.current = null;
     loadedNetWorthHistoryYearRef.current = null;
     setCashFlowReady(false);
     setGoalsReady(false);
@@ -886,7 +893,7 @@ export default function DashboardPage() {
 
   const reloadData = useCallback(async (trigger: DashboardOperationTrigger) => {
     markInstant("dashboard:reload:start");
-    const fetchRange = getDashboardFetchRange(selectedYear);
+    const fetchRange = getDashboardFetchRange(selectedYear, selectedPeriodEndYear);
 
     // PERF-4: this logical operation's id/trigger, shared via closure by
     // every query wrapper and milestone emission below — one operation id
@@ -1081,8 +1088,8 @@ export default function DashboardPage() {
       ctx,
       () =>
         getNetWorthSnapshotsInRange(
-          `${selectedYear}-01-01`,
-          `${selectedYear}-12-01`,
+          `${selectedPeriodEndYear}-01-01`,
+          `${selectedPeriodEndYear}-12-01`,
         ),
       {
         isStale: () =>
@@ -1192,7 +1199,7 @@ export default function DashboardPage() {
         if (isStalePeriodGeneration(periodRequestIdRef, periodGeneration)) return;
 
         setNetWorthSnapshots(history ?? []);
-        loadedNetWorthHistoryYearRef.current = selectedYear;
+        loadedNetWorthHistoryYearRef.current = selectedPeriodEndYear;
         hasLoadedNetWorthHistoryRef.current = true;
         setNetWorthHistoryReady(true);
       } catch (error) {
@@ -1201,7 +1208,7 @@ export default function DashboardPage() {
 
         if (
           hasLoadedNetWorthHistoryRef.current &&
-          loadedNetWorthHistoryYearRef.current === selectedYear
+          loadedNetWorthHistoryYearRef.current === selectedPeriodEndYear
         ) {
           setNetWorthHistoryReady(true);
         }
@@ -1223,6 +1230,7 @@ export default function DashboardPage() {
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        loadedPeriodEndYearRef.current = selectedPeriodEndYear;
         markPeriodReadyOnce();
         setCashFlowReady(true);
         hasLoadedCashFlowRef.current = true;
@@ -1298,6 +1306,7 @@ export default function DashboardPage() {
         setTransactions(txn ?? []);
         setCategories(cat ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        loadedPeriodEndYearRef.current = selectedPeriodEndYear;
         markPeriodReadyOnce();
         if (shouldMarkReady(savingsOk, hasLoadedEmergencyFundRef.current)) {
           setEmergencyFundReady(true);
@@ -1332,6 +1341,7 @@ export default function DashboardPage() {
         setCategories(cat ?? []);
         setForexCashTransactions(forexTxn ?? []);
         loadedPeriodYearRef.current = selectedYear;
+        loadedPeriodEndYearRef.current = selectedPeriodEndYear;
         markPeriodReadyOnce();
         const savingsOk = applySavingsResult(
           savingRows as { data: unknown; error: { message: string } | null },
@@ -1582,7 +1592,7 @@ export default function DashboardPage() {
     // retry cycles (e.g. Cash Flow succeeds while Net Worth times out, then
     // vice versa), and that is still a valid complete last-known-good Hero.
     return hasLoadedNetWorthRef.current && hasLoadedCashFlowRef.current;
-  }, [selectedYear, invalidatePeriodReadinessForNewContext]);
+  }, [selectedYear, selectedPeriodEndYear, invalidatePeriodReadinessForNewContext]);
 
   // PERF-3 + NETWORTH-HISTORY-1: a year switch reloads exactly the two
   // year-dependent datasets: transactions and persisted Net Worth snapshots.
@@ -1597,11 +1607,14 @@ export default function DashboardPage() {
     logDashboardOperationStart(ctx, year);
 
     const periodGeneration = beginPeriodGeneration(periodRequestIdRef);
-    if (isNewPeriodContext(loadedPeriodYearRef.current, year)) {
+    if (
+      isNewPeriodContext(loadedPeriodYearRef.current, year) ||
+      loadedPeriodEndYearRef.current !== selectedPeriodEndYear
+    ) {
       invalidatePeriodReadinessForNewContext();
     }
 
-    const fetchRange = getDashboardFetchRange(year);
+    const fetchRange = getDashboardFetchRange(year, selectedPeriodEndYear);
     const transactionsRequest = withDashboardTimeout(
       measureDashboardQuery(
         "transactions",
@@ -1619,7 +1632,7 @@ export default function DashboardPage() {
         "net_worth_history",
         ctx,
         () =>
-          getNetWorthSnapshotsInRange(`${year}-01-01`, `${year}-12-01`),
+          getNetWorthSnapshotsInRange(`${selectedPeriodEndYear}-01-01`, `${selectedPeriodEndYear}-12-01`),
         {
           isStale: () =>
             isStalePeriodGeneration(periodRequestIdRef, periodGeneration),
@@ -1640,6 +1653,7 @@ export default function DashboardPage() {
     if (transactionsResult.status === "fulfilled") {
       setTransactions(transactionsResult.value ?? []);
       loadedPeriodYearRef.current = year;
+      loadedPeriodEndYearRef.current = selectedPeriodEndYear;
       emitDashboardMilestone(
         ctx,
         "dashboard_period_ready",
@@ -1695,7 +1709,7 @@ export default function DashboardPage() {
 
     if (historyResult.status === "fulfilled") {
       setNetWorthSnapshots(historyResult.value ?? []);
-      loadedNetWorthHistoryYearRef.current = year;
+      loadedNetWorthHistoryYearRef.current = selectedPeriodEndYear;
       hasLoadedNetWorthHistoryRef.current = true;
       setNetWorthHistoryReady(true);
     } else {
@@ -1705,12 +1719,12 @@ export default function DashboardPage() {
       );
       if (
         hasLoadedNetWorthHistoryRef.current &&
-        loadedNetWorthHistoryYearRef.current === year
+        loadedNetWorthHistoryYearRef.current === selectedPeriodEndYear
       ) {
         setNetWorthHistoryReady(true);
       }
     }
-  }, [invalidatePeriodReadinessForNewContext]);
+  }, [invalidatePeriodReadinessForNewContext, selectedPeriodEndYear]);
 
   // Guards against overlapping Dashboard reloads. Realtime writes that land
   // during an active cycle still request exactly one trailing reload, but an
@@ -2086,15 +2100,23 @@ export default function DashboardPage() {
     const now = new Date();
     return now.getFullYear() === selectedYear ? now.getMonth() + 1 : 12;
   }, [dateRange.startDate, selectedYear]);
+  const selectedPeriodEndMonth = useMemo(
+    () => getMonthIndexFromDate(dateRange.endDate) ?? selectedMonth,
+    [dateRange.endDate, selectedMonth],
+  );
 
   const netWorthTrend = useMemo(
     () =>
       buildCanonicalNetWorthTrend({
         snapshots: netWorthSnapshots,
-        selectedYear,
-        selectedMonth,
+        selectedYear: selectedPeriodEndYear,
+        selectedMonth: selectedPeriodEndMonth,
       }),
-    [netWorthSnapshots, selectedMonth, selectedYear],
+    [
+      netWorthSnapshots,
+      selectedPeriodEndMonth,
+      selectedPeriodEndYear,
+    ],
   );
 
   const netWorthHistorySummary = useMemo(
@@ -2472,12 +2494,24 @@ export default function DashboardPage() {
     }, []);
   }, [recentTxns]);
 
-  // UI-DASH-2: shared selected-month key for the remaining period-aware
-  // Dashboard surfaces so KPI navigation, Budget Attention, Monthly Progress,
-  // and Recent Transactions cannot drift onto different months.
+  // Month-only Dashboard surfaces keep one canonical month key. In quarter,
+  // year and custom modes this key must never silently stand in for the full
+  // selected range; those surfaces are gated below instead.
   const dashboardMonthKey = useMemo(
     () => `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`,
     [selectedYear, selectedMonth],
+  );
+  const dashboardTransactionPeriodNavigation = useMemo(
+    () =>
+      isDashboardMonthMode
+        ? { month: dashboardMonthKey }
+        : { dateFrom: dateRange.startDate, dateTo: dateRange.endDate },
+    [
+      dashboardMonthKey,
+      dateRange.endDate,
+      dateRange.startDate,
+      isDashboardMonthMode,
+    ],
   );
 
   // PERF-4B: the Hero is no longer one all-or-nothing gate. Each visible
@@ -2918,25 +2952,17 @@ export default function DashboardPage() {
     [categories, transactions],
   );
 
-  const topSpendingCategories = useMemo(() => {
-    const monthTransactions = transactions.filter((transaction) => {
-      if (isInternalTransferTransaction(transaction)) return false;
-      const date = new Date(transaction.date);
-      return (
-        !Number.isNaN(date.getTime()) &&
-        date.getFullYear() === selectedYear &&
-        date.getMonth() === selectedMonth - 1
-      );
-    });
-
-    return buildCategorySpendingData(monthTransactions, categories)
-      .map((item) => ({
-        categoryId: item.id,
-        name: item.name,
-        amount: item.value,
-      }))
-      .slice(0, 4);
-  }, [transactions, categories, selectedMonth, selectedYear]);
+  const topSpendingCategories = useMemo(
+    () =>
+      buildCategorySpendingData(nonTransferFilteredTransactions, categories)
+        .map((item) => ({
+          categoryId: item.id,
+          name: item.name,
+          amount: item.value,
+        }))
+        .slice(0, 4),
+    [categories, nonTransferFilteredTransactions],
+  );
 
   const [transactionReviewAcknowledgements, setTransactionReviewAcknowledgements] =
     useState<Set<string>>(new Set());
@@ -3080,13 +3106,14 @@ export default function DashboardPage() {
     () =>
       buildNetWorthAttribution({
         snapshots: netWorthSnapshots,
-        selectedYear,
-        selectedMonth,
+        selectedYear: selectedPeriodEndYear,
+        selectedMonth: selectedPeriodEndMonth,
       }),
-    [netWorthSnapshots, selectedMonth, selectedYear],
+    [netWorthSnapshots, selectedPeriodEndMonth, selectedPeriodEndYear],
   );
 
   const periodComparison = useMemo(() => {
+    if (!isDashboardMonthMode) return null;
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
     const fullCurrentRange = {
       startDate: `${dashboardMonthKey}-01`,
@@ -3131,6 +3158,7 @@ export default function DashboardPage() {
     categories,
     dashboardMonthKey,
     forexCashTransactions,
+    isDashboardMonthMode,
     savingTransactions,
     selectedMonth,
     selectedYear,
@@ -3226,7 +3254,7 @@ export default function DashboardPage() {
   );
 
   function handleSaveMonthEndReviewHistory() {
-    if (!monthEndCloseout.visible) return;
+    if (!isDashboardMonthMode || !monthEndCloseout.visible) return;
 
     const record = createMonthEndReviewHistoryRecord({
       monthKey: monthEndCloseout.monthKey,
@@ -3510,7 +3538,7 @@ export default function DashboardPage() {
                   data-dashboard-ink="history-copy"
                   className="mt-1 text-[11px] font-medium leading-4 text-[#5C7388] sm:text-xs"
                 >
-                  Bản ghi Tài sản ròng đã ghi nhận đến kỳ đang xem trong năm {selectedYear}.
+                  Bản ghi Tài sản ròng đã ghi nhận đến kỳ đang xem trong năm {selectedPeriodEndYear}.
                 </p>
               </div>
 
@@ -3568,7 +3596,7 @@ export default function DashboardPage() {
                       data-dashboard-ink="snapshot-copy"
                       className="mt-1 text-[11px] font-semibold text-[#5C7388] sm:text-xs"
                     >
-                      Tháng {String(netWorthHistorySummary.latestPoint!.month).padStart(2, "0")}/{selectedYear}
+                      Tháng {String(netWorthHistorySummary.latestPoint!.month).padStart(2, "0")}/{selectedPeriodEndYear}
                     </p>
                   </div>
                   <div className="sm:max-w-56 sm:text-right">
@@ -3584,7 +3612,7 @@ export default function DashboardPage() {
                   data-dashboard-ink="snapshot-copy"
                   className="mt-2.5 border-t border-[#C9DCEB] pt-2.5 text-[10px] font-medium leading-4 text-[#5C7388] sm:text-[11px]"
                 >
-                  Lịch sử bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedYear}; tháng chưa ghi nhận vẫn là dữ liệu chưa biết.
+                  Lịch sử bắt đầu từ tháng {String(netWorthHistorySummary.firstPoint!.month).padStart(2, "0")}/{selectedPeriodEndYear}; tháng chưa ghi nhận vẫn là dữ liệu chưa biết.
                 </p>
               </div>
             ) : (
@@ -3925,7 +3953,12 @@ export default function DashboardPage() {
           title="Có thể chi an toàn"
           subtitle="Giới hạn chi thêm trong tháng hiện tại, không tính trước thu nhập chưa nhận"
         >
-          {!isDashboardReady || !budgetAttentionReady ? (
+          {!isDashboardMonthMode ? (
+            <div data-dashboard-period-scope="month-only" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
+              <p className="text-sm font-black text-[#294A66]">Chỉ khả dụng khi xem theo tháng</p>
+              <p className="mt-1 text-xs leading-5 text-[#71879A]">Mức có thể chi an toàn dùng ngân sách còn lại của một tháng lịch, nên không suy diễn từ Quý, Năm hoặc khoảng ngày tùy chỉnh.</p>
+            </div>
+          ) : !isDashboardReady || !budgetAttentionReady ? (
             <div className="mt-4 h-36 animate-pulse rounded-2xl bg-slate-100" />
           ) : !safeToSpend.available ? (
             <div data-dashboard-decision="safe-to-spend" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4">
@@ -4135,9 +4168,11 @@ export default function DashboardPage() {
         data-dashboard-section="budget"
         style={{
           order: getDashboardSectionOrder(dashboardCustomization, "budget"),
-          display: isDashboardSectionVisible(dashboardCustomization, "budget")
-            ? undefined
-            : "none",
+          display:
+            isDashboardSectionVisible(dashboardCustomization, "budget") &&
+            isDashboardMonthMode
+              ? undefined
+              : "none",
         }}
       >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:rounded-4xl sm:p-5">
@@ -4334,9 +4369,11 @@ export default function DashboardPage() {
         data-dashboard-section="month-progress"
         style={{
           order: getDashboardSectionOrder(dashboardCustomization, "month-progress"),
-          display: isDashboardSectionVisible(dashboardCustomization, "month-progress")
-            ? undefined
-            : "none",
+          display:
+            isDashboardSectionVisible(dashboardCustomization, "month-progress") &&
+            isDashboardMonthMode
+              ? undefined
+              : "none",
         }}
       >
         <div data-dashboard-depth-card="panel" data-dashboard-reveal="true" className="rounded-3xl sm:rounded-4xl border border-slate-200/80 bg-white/95 p-4 shadow-sm transition-all duration-200 hover:shadow-md sm:p-6">
@@ -4660,9 +4697,19 @@ export default function DashboardPage() {
       >
         <Panel
           title="So với kỳ trước"
-          subtitle={periodComparison?.isComplete ? "So sánh toàn tháng với tháng liền trước" : "So sánh cùng số ngày đã trôi qua với tháng trước"}
+          subtitle={
+            !isDashboardMonthMode
+              ? "So sánh tháng chỉ áp dụng khi bộ lọc đang ở chế độ Tháng"
+              : periodComparison?.isComplete
+                ? "So sánh toàn tháng với tháng liền trước"
+                : "So sánh cùng số ngày đã trôi qua với tháng trước"
+          }
         >
-          {!cashMovementReady ? (
+          {!isDashboardMonthMode ? (
+            <div data-dashboard-period-scope="month-only" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
+              Chuyển bộ lọc sang Tháng để có so sánh cùng kỳ chính xác.
+            </div>
+          ) : !cashMovementReady ? (
             <div className="mt-4 space-y-2">
               <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
               <div className="h-16 animate-pulse rounded-2xl bg-slate-100" />
@@ -4716,7 +4763,7 @@ export default function DashboardPage() {
                     onClick={() =>
                       router.push(
                         buildTransactionsHref({
-                          month: dashboardMonthKey,
+                          ...dashboardTransactionPeriodNavigation,
                           review: true,
                           transactionId: item.transactionId,
                         }),
@@ -4739,7 +4786,7 @@ export default function DashboardPage() {
                 onClick={() =>
                   router.push(
                     buildTransactionsHref({
-                      month: dashboardMonthKey,
+                      ...dashboardTransactionPeriodNavigation,
                       review: true,
                     }),
                   )
@@ -4762,13 +4809,17 @@ export default function DashboardPage() {
             ? undefined
             : "none",
         }}
-        className={`grid items-start gap-4 sm:gap-5 ${monthEndCloseout.visible ? "xl:grid-cols-2" : ""}`}
+        className={`grid items-start gap-4 sm:gap-5 ${isDashboardMonthMode && monthEndCloseout.visible ? "xl:grid-cols-2" : ""}`}
       >
         <Panel
           title="Sức khỏe dữ liệu"
           subtitle="Chỉ cảnh báo những vấn đề có bằng chứng từ dữ liệu hiện tại"
         >
-          {!cashFlowReady || !netWorthHistoryReady ? (
+          {!isDashboardMonthMode ? (
+            <div data-dashboard-decision="data-health" data-dashboard-period-scope="month-only" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
+              Sức khỏe dữ liệu được đánh giá theo một tháng lịch. Chuyển bộ lọc sang Tháng để kiểm tra.
+            </div>
+          ) : !cashFlowReady || !netWorthHistoryReady ? (
             <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-100" />
           ) : !financeDataHealth.available ? (
             <div data-dashboard-decision="data-health" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
@@ -4799,7 +4850,7 @@ export default function DashboardPage() {
           )}
         </Panel>
 
-        {monthEndCloseout.visible ? (
+        {isDashboardMonthMode && monthEndCloseout.visible ? (
           <Panel
             title={monthEndCloseout.mode === "closing" ? "Chốt tháng" : "Rà soát tháng trước"}
             subtitle={monthEndCloseout.mode === "closing" ? "Checklist cuối tháng trước khi bước sang kỳ mới" : "Cửa sổ 3 ngày đầu tháng để xử lý nốt kỳ vừa qua"}
@@ -4891,7 +4942,7 @@ export default function DashboardPage() {
                   key={record.monthKey}
                   className={[
                     "rounded-2xl border px-3.5 py-3",
-                    record.monthKey === dashboardMonthKey
+                    isDashboardMonthMode && record.monthKey === dashboardMonthKey
                       ? "border-blue-200 bg-blue-50/60"
                       : "border-[#DCE8F1] bg-[#F8FBFE]",
                   ].join(" ")}
@@ -5032,7 +5083,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Danh mục chi tiêu lớn nhất"
-          subtitle="Các danh mục chi tiêu lớn nhất trong tháng đang xem để nhận diện nơi cần tối ưu"
+          subtitle="Các danh mục chi tiêu lớn nhất trong kỳ đang xem để nhận diện nơi cần tối ưu"
         >
           <div className="mt-4 space-y-3">
             {!cashFlowReady ? (
@@ -5043,7 +5094,7 @@ export default function DashboardPage() {
               </>
             ) : topSpendingCategories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center text-sm text-slate-500">
-                Chưa có chi tiêu trong tháng đang xem.
+                Chưa có chi tiêu trong kỳ đang xem.
               </div>
             ) : (
               topSpendingCategories.map((item, index) => {
@@ -5377,7 +5428,9 @@ export default function DashboardPage() {
           <button
             type="button"
             onClick={() =>
-              router.push(buildTransactionsHref({ month: dashboardMonthKey }))
+              router.push(
+                buildTransactionsHref(dashboardTransactionPeriodNavigation),
+              )
             }
             className="mt-5 flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-center text-sm font-black leading-5 text-blue-700 transition-all duration-200 hover:border-blue-300 hover:bg-blue-100 sm:px-4"
           >

@@ -18,7 +18,7 @@ describe("DASH-EMERGENCY-FUND-BASELINE-1 Dashboard contract", () => {
 
   it("loads one year before the earliest selected/current year for January evidence", () => {
     expect(dashboard).toContain(
-      "const minYear = Math.min(selectedYear, currentYear) - 1;",
+      "const minYear = Math.min(selectedYear, selectedEndYear, currentYear) - 1;",
     );
   });
 

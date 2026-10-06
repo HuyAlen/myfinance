@@ -70,7 +70,7 @@ describe("MYFINANCE-VIETNAMESE-UI-SSOT-1 rendered-copy completion", () => {
       "So với bản ghi trước",
       "Cần ít nhất 2 bản ghi ở các tháng khác nhau.",
       "Dòng tiền ròng",
-      "Các danh mục chi tiêu lớn nhất trong tháng đang xem",
+      "Các danh mục chi tiêu lớn nhất trong kỳ đang xem",
       "Đóng góp giữa hai bản ghi Tài sản ròng gần nhất đã được lưu",
       "Tài khoản ngoại hối",
       "Số dư hiện tại",

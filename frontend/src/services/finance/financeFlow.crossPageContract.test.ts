@@ -15,7 +15,7 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(dashboard).toContain(
       "investmentAmount: periodFinanceFlow.investmentAllocation",
     );
-    expect(dashboard).toContain("buildCategorySpendingData(monthTransactions, categories)");
+    expect(dashboard).toContain("buildCategorySpendingData(nonTransferFilteredTransactions, categories)");
     expect(dashboard).toContain(
       'from "@/src/lib/transactions/transactionClassification"',
     );
