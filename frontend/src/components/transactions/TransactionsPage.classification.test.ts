@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  getInvestmentCapitalMovementInvestmentId,
+  getInvestmentCapitalMovementKind,
   getSavingTransferKind,
   isInternalTransferTransaction,
+  isInvestmentManagedTransaction,
   isSavingsManagedTransaction,
 } from "@/src/lib/transactions/transactionClassification";
 import type { Transaction } from "@/src/types/finance";
@@ -222,5 +225,45 @@ describe("CROSS-DOMAIN-INTEGRITY-1: Savings-owned ledger detection", () => {
 
     expect(isSavingsManagedTransaction(withdrawal)).toBe(true);
     expect(isSavingsManagedTransaction(deposit)).toBe(true);
+  });
+});
+
+describe("INVESTMENT-CAPITAL-FLOW-SSOT-1 transaction ownership", () => {
+  it("recognizes Wallet -> Investment as a managed capital deposit", () => {
+    const txn = makeTransaction({
+      type: "transfer",
+      transferReference: "investment-1",
+      transferReferenceType: "investment",
+      sourceType: "wallet",
+      destinationType: "investment",
+    });
+
+    expect(isInvestmentManagedTransaction(txn)).toBe(true);
+    expect(getInvestmentCapitalMovementKind(txn)).toBe("deposit");
+    expect(getInvestmentCapitalMovementInvestmentId(txn)).toBe("investment-1");
+  });
+
+  it("recognizes Investment -> Wallet as a managed capital withdrawal", () => {
+    const txn = makeTransaction({
+      type: "transfer",
+      transferReference: "investment-1",
+      transferReferenceType: "investment",
+      sourceType: "investment",
+      destinationType: "wallet",
+    });
+
+    expect(isInvestmentManagedTransaction(txn)).toBe(true);
+    expect(getInvestmentCapitalMovementKind(txn)).toBe("withdraw");
+  });
+
+  it("does not infer Investment ownership from note text", () => {
+    const txn = makeTransaction({
+      type: "transfer",
+      transferToWalletId: "wallet-2",
+      note: "Nạp vốn đầu tư",
+    });
+
+    expect(isInvestmentManagedTransaction(txn)).toBe(false);
+    expect(getInvestmentCapitalMovementKind(txn)).toBeNull();
   });
 });

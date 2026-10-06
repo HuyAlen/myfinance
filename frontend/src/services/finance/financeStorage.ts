@@ -5,6 +5,9 @@ import { getCachedFinanceOwnerUserId } from "@/src/services/finance/householdSer
 import { buildDemoFinanceData } from "@/src/data/demoFinanceData";
 
 import { inferCategoryPlanningGroup } from "@/src/services/finance/financeCalculations";
+import {
+  isInvestmentManagedTransaction,
+} from "@/src/lib/transactions/transactionClassification";
 
 import type {
   Budget,
@@ -1295,6 +1298,35 @@ export async function getInvestments(): Promise<Investment[]> {
   return (data ?? []) as Investment[];
 }
 
+export async function getInvestmentCapitalMovements(): Promise<Transaction[]> {
+  if (LOCAL_UI_MODE) {
+    return getLocalUiDemoData().transactions.filter(
+      isInvestmentManagedTransaction,
+    );
+  }
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("transfer_reference_type", "investment")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(
+      "[financeStorage] getInvestmentCapitalMovements:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as TransactionDbRow[]).map(fromTransactionRow);
+}
+
 type ForexBalanceSnapshotDbRow = {
   id: string;
   forex_account_id: string;
@@ -1675,6 +1707,8 @@ function normalizeEngineText(value: string | null | undefined) {
 
 const SAVINGS_MANAGED_TRANSACTION_ERROR =
   "Giao dịch tiết kiệm là bút toán hệ thống do module Tiết kiệm quản lý. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm thay vì sửa/xóa từ Giao dịch.";
+const INVESTMENT_MANAGED_TRANSACTION_ERROR =
+  "Dòng vốn đầu tư là bút toán hệ thống do module Đầu tư quản lý. Hãy nạp/rút vốn tại trang Đầu tư thay vì sửa/xóa từ Giao dịch.";
 
 function isSavingsManagedFinanceTransaction(transaction: Transaction) {
   if (transaction.type !== "transfer") return false;
@@ -1821,6 +1855,9 @@ export async function addTransaction(
   if (isSavingsManagedFinanceTransaction(transaction)) {
     return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
   }
+  if (isInvestmentManagedTransaction(transaction)) {
+    return { error: INVESTMENT_MANAGED_TRANSACTION_ERROR };
+  }
 
   if (
     transaction.type === "transfer" &&
@@ -1914,6 +1951,12 @@ export async function updateTransaction(
     isSavingsManagedFinanceTransaction(updatedTransaction)
   ) {
     return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
+  }
+  if (
+    isInvestmentManagedTransaction(oldTransaction) ||
+    isInvestmentManagedTransaction(updatedTransaction)
+  ) {
+    return { error: INVESTMENT_MANAGED_TRANSACTION_ERROR };
   }
 
   if (
@@ -2055,6 +2098,9 @@ export async function deleteTransaction(
   // Fail closed at the storage boundary even if a caller bypasses page UX.
   if (isSavingsManagedFinanceTransaction(transaction)) {
     return { error: SAVINGS_MANAGED_TRANSACTION_ERROR };
+  }
+  if (isInvestmentManagedTransaction(transaction)) {
+    return { error: INVESTMENT_MANAGED_TRANSACTION_ERROR };
   }
 
   const effects = getTransactionEffects(transaction);
@@ -3108,15 +3154,97 @@ export async function updateInvestment(
 ): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
-    .from("investments")
-    .update(toInvestmentRow(updatedInvestment, userId))
-    .eq("id", updatedInvestment.id)
-    .eq("user_id", userId);
+
+  const { error } = await supabase.rpc("update_investment_snapshot_atomic", {
+    p_investment_id: updatedInvestment.id,
+    p_name: updatedInvestment.name,
+    p_type: updatedInvestment.type,
+    p_symbol: updatedInvestment.symbol ?? null,
+    p_invested_amount: updatedInvestment.investedAmount,
+    p_current_value: updatedInvestment.currentValue,
+    p_purchase_date: updatedInvestment.purchaseDate ?? null,
+    p_notes: updatedInvestment.notes ?? null,
+  });
+
   if (error) {
     console.error("[financeStorage] updateInvestment:", error.message);
-    return { error: error.message };
+    return { error: mapInvestmentCapitalFlowError(error) };
   }
+  return { error: null };
+}
+
+function mapInvestmentCapitalFlowError(error: {
+  code?: string;
+  message: string;
+}) {
+  switch (error.code) {
+    case "MFI01":
+      return ERR_NO_AUTH;
+    case "MFI02":
+      return "Không tìm thấy khoản đầu tư.";
+    case "MFI03":
+      return "Không tìm thấy ví nguồn/đích.";
+    case "MFI04":
+      return "Dữ liệu nạp/rút vốn đầu tư không hợp lệ.";
+    case "MFI05":
+    case "23514":
+      return "Số dư ví không đủ để nạp vốn đầu tư.";
+    case "MFI06":
+      return "Vốn hoặc giá trị hiện tại của khoản đầu tư không đủ để rút số tiền này.";
+    case "MFI07":
+      return "Không thể xóa khoản đầu tư đã có lịch sử nạp/rút vốn. Hãy giữ khoản đầu tư để bảo toàn lịch sử tài chính.";
+    case "MFI08":
+      return "Vốn đầu tư đã được quản lý bởi lịch sử nạp/rút vốn. Hãy dùng Nạp vốn hoặc Rút vốn để điều chỉnh.";
+    case "PGRST202":
+      return "Máy chủ chưa có chức năng dòng vốn đầu tư. Vui lòng áp dụng migration INVESTMENT-CAPITAL-FLOW-SSOT-1.";
+    default:
+      return error.message;
+  }
+}
+
+export async function createInvestmentCapitalMovement(input: {
+  transactionId: string;
+  investmentId: string;
+  walletId: string;
+  type: "deposit" | "withdraw";
+  amount: number;
+  date: string;
+  note?: string | null;
+}): Promise<{ error: string | null }> {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: ERR_NO_AUTH };
+
+  const amount = Number(input.amount);
+  if (
+    !input.transactionId ||
+    !input.investmentId ||
+    !input.walletId ||
+    (input.type !== "deposit" && input.type !== "withdraw") ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(input.date)
+  ) {
+    return { error: "Dữ liệu nạp/rút vốn đầu tư không hợp lệ." };
+  }
+
+  const { error } = await supabase.rpc("create_investment_capital_movement", {
+    p_transaction_id: input.transactionId,
+    p_investment_id: input.investmentId,
+    p_wallet_id: input.walletId,
+    p_type: input.type,
+    p_amount: amount,
+    p_transaction_date: input.date,
+    p_note: input.note?.trim() || null,
+  });
+
+  if (error) {
+    console.error(
+      "[financeStorage] createInvestmentCapitalMovement:",
+      error.message,
+    );
+    return { error: mapInvestmentCapitalFlowError(error) };
+  }
+
   return { error: null };
 }
 
@@ -3125,14 +3253,13 @@ export async function deleteInvestment(
 ): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
-    .from("investments")
-    .delete()
-    .eq("id", investmentId)
-    .eq("user_id", userId);
+
+  const { error } = await supabase.rpc("delete_investment_atomic", {
+    p_investment_id: investmentId,
+  });
   if (error) {
     console.error("[financeStorage] deleteInvestment:", error.message);
-    return { error: error.message };
+    return { error: mapInvestmentCapitalFlowError(error) };
   }
   return { error: null };
 }

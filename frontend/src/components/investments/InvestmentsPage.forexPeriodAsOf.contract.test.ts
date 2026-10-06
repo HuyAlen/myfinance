@@ -75,9 +75,10 @@ describe("FOREX-BALANCE-ASOF-1C — Period UI Adoption", () => {
     expect(page).toContain('note="Danh mục đầu tư + Ngoại hối hiện tại · không theo bộ lọc kỳ"');
   });
 
-  it("keeps realtime refresh on the atomic account/cash write boundaries that also capture snapshots", () => {
-    expect(page).toContain(
-      '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
+  it("keeps realtime refresh on Forex atomic writes plus the Portfolio capital-ledger boundary", () => {
+    const normalizedPage = page.replace(/\s+/g, " ");
+    expect(normalizedPage).toContain(
+      '"investments", "transactions", "forex_accounts", "forex_cash_transactions", "wallets"',
     );
   });
 });

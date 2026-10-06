@@ -22,6 +22,8 @@ const requiredRpcs = [
   "create_finance_transaction", "update_finance_transaction",
   "delete_finance_transaction", "delete_wallet_atomic", "create_saving_account",
   "create_saving_movement", "delete_saving_account",
+  "create_investment_capital_movement", "update_investment_snapshot_atomic",
+  "delete_investment_atomic",
   "create_forex_cash_transaction", "update_forex_cash_transaction",
   "delete_forex_cash_transaction", "export_finance_backup",
   "restore_finance_backup", "seed_finance_demo_data",
@@ -108,6 +110,9 @@ describe("DB-SSOT-1 canonical Supabase schema", () => {
     expect(normalized).not.toContain(
       'constraint budgets_category_owner_fk foreign key (user_id, "categoryid") references public.categories(user_id, id) on delete cascade',
     );
+
+    expect(normalized).toContain('constraint investments_invested_nonnegative check ("investedamount" >= 0)');
+    expect(normalized).not.toContain('constraint investments_invested_positive check ("investedamount" > 0)');
 
     expect(normalized).toContain("constraint savings_wallet_id_fkey foreign key (wallet_id) references public.wallets(id)");
     expect(normalized).toContain("constraint saving_transactions_wallet_id_fkey foreign key (wallet_id) references public.wallets(id)");

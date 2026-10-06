@@ -15,6 +15,7 @@ import {
 import {
   getSavingTransferKind,
   isInternalTransferTransaction,
+  isInvestmentManagedTransaction,
   isSavingsManagedTransaction,
   normalizeTransactionNote,
 } from "@/src/lib/transactions/transactionClassification";
@@ -1223,15 +1224,18 @@ export default function TransactionsPage() {
     // first independently-committed delete. A Savings-owned mirror can only
     // be reconciled by the hệ thống Tiết kiệm; allowing earlier rows to commit
     // before discovering one would create an avoidable partial batch.
-    const savingsManagedCount = Array.from(idsToDelete).filter((id) => {
+    const systemManagedCount = Array.from(idsToDelete).filter((id) => {
       const transaction = transactions.find((item) => item.id === id);
-      return transaction ? isSavingsManagedTransaction(transaction) : false;
+      return transaction
+        ? isSavingsManagedTransaction(transaction) ||
+            isInvestmentManagedTransaction(transaction)
+        : false;
     }).length;
-    if (savingsManagedCount > 0) {
+    if (systemManagedCount > 0) {
       toast({
         variant: "warning",
         message:
-          "Không thể xóa hàng loạt vì lựa chọn có bút toán Tiết kiệm do hệ thống quản lý. Hãy bỏ chọn các bút toán này và tạo giao dịch bù tại trang Tiết kiệm nếu cần điều chỉnh.",
+          "Không thể xóa hàng loạt vì lựa chọn có bút toán Tiết kiệm/Đầu tư do hệ thống quản lý. Hãy bỏ chọn các bút toán này và điều chỉnh tại module sở hữu.",
       });
       return;
     }
@@ -1637,7 +1641,13 @@ export default function TransactionsPage() {
     transaction: Transaction,
     categoryId: string,
   ) {
-    if (!categoryId || isSavingsManagedTransaction(transaction)) return;
+    if (
+      !categoryId ||
+      isSavingsManagedTransaction(transaction) ||
+      isInvestmentManagedTransaction(transaction)
+    ) {
+      return;
+    }
     const category = categories.find((item) => item.id === categoryId);
     if (!category || category.type !== transaction.type) {
       toast({
@@ -1688,7 +1698,12 @@ export default function TransactionsPage() {
 
   async function handleApplyReviewRuleSuggestion() {
     if (!activeReviewTransaction || !activeReviewRuleSuggestion) return;
-    if (isSavingsManagedTransaction(activeReviewTransaction)) return;
+    if (
+      isSavingsManagedTransaction(activeReviewTransaction) ||
+      isInvestmentManagedTransaction(activeReviewTransaction)
+    ) {
+      return;
+    }
 
     const { error } = await persistTransactionUpdate({
       ...activeReviewTransaction,
@@ -1711,6 +1726,14 @@ export default function TransactionsPage() {
   }
 
   function openEditForm(t: Transaction) {
+    if (isInvestmentManagedTransaction(t)) {
+      toast({
+        variant: "info",
+        message:
+          "Bút toán này thuộc hệ thống Đầu tư và không thể sửa riêng từ Giao dịch. Hãy dùng Nạp vốn hoặc Rút vốn tại trang Đầu tư.",
+      });
+      return;
+    }
     if (isSavingsManagedTransaction(t)) {
       toast({
         variant: "info",
@@ -1742,6 +1765,14 @@ export default function TransactionsPage() {
   }
 
   function openDuplicateForm(t: Transaction) {
+    if (isInvestmentManagedTransaction(t)) {
+      toast({
+        variant: "info",
+        message:
+          "Bút toán dòng vốn Đầu tư được quản lý tại trang Đầu tư và không thể nhân bản từ Giao dịch.",
+      });
+      return;
+    }
     if (isSavingsManagedTransaction(t)) {
       toast({
         variant: "info",
@@ -2047,14 +2078,20 @@ export default function TransactionsPage() {
   }
 
   function handleDelete(id: string) {
-    const savingsManagedTransaction = transactions.find(
-      (item) => item.id === id && isSavingsManagedTransaction(item),
+    const managedTransaction = transactions.find(
+      (item) =>
+        item.id === id &&
+        (isSavingsManagedTransaction(item) ||
+          isInvestmentManagedTransaction(item)),
     );
-    if (savingsManagedTransaction) {
+    if (managedTransaction) {
+      const isInvestment =
+        isInvestmentManagedTransaction(managedTransaction);
       toast({
         variant: "warning",
-        message:
-          "Không thể xóa riêng bút toán Tiết kiệm từ Giao dịch vì sẽ làm lệch số dư Tiết kiệm. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
+        message: isInvestment
+          ? "Không thể xóa riêng dòng vốn Đầu tư từ Giao dịch vì sẽ làm lệch ví và vốn đầu tư. Hãy điều chỉnh tại trang Đầu tư."
+          : "Không thể xóa riêng bút toán Tiết kiệm từ Giao dịch vì sẽ làm lệch số dư Tiết kiệm. Hãy tạo giao dịch bù hoặc tất toán tại trang Tiết kiệm.",
       });
       return;
     }

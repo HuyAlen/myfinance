@@ -36,6 +36,21 @@ const savingsMirror = {
   destinationType: "saving",
 };
 
+const investmentMirror = {
+  id: "tx-investment-1",
+  type: "transfer" as const,
+  amount: 1_500_000,
+  categoryId: "",
+  walletId: "wallet-1",
+  note: "Nạp vốn ETF",
+  date: "2026-10-06",
+  transferToWalletId: undefined,
+  transferReference: "investment-1",
+  transferReferenceType: "investment",
+  sourceType: "wallet",
+  destinationType: "investment",
+};
+
 function mockTransactionFetch(row = savingsMirror) {
   const query = {
     select: vi.fn(),
@@ -82,6 +97,43 @@ describe("CROSS-DOMAIN-INTEGRITY-1 storage ownership guards", () => {
     const result = await deleteTransaction(savingsMirror.id);
 
     expect(result.error).toMatch(/Tiết kiệm/);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("INVESTMENT-CAPITAL-FLOW-SSOT-1 generic transaction ownership guards", () => {
+  beforeEach(() => {
+    mockGetSession.mockReset().mockResolvedValue(AUTH_SESSION);
+    mockRpc.mockReset();
+    mockFrom.mockReset();
+  });
+
+  it("refuses to create an Investment-owned capital row through generic transaction CRUD", async () => {
+    const result = await addTransaction(investmentMirror);
+
+    expect(result.error).toMatch(/Đầu tư|đầu tư/);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("refuses to edit an Investment-owned capital row through generic transaction CRUD", async () => {
+    mockTransactionFetch(investmentMirror);
+
+    const result = await updateTransaction({
+      ...investmentMirror,
+      amount: 1_750_000,
+    });
+
+    expect(result.error).toMatch(/Đầu tư|đầu tư/);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete an Investment-owned capital row through generic transaction CRUD", async () => {
+    mockTransactionFetch(investmentMirror);
+
+    const result = await deleteTransaction(investmentMirror.id);
+
+    expect(result.error).toMatch(/Đầu tư|đầu tư/);
     expect(mockRpc).not.toHaveBeenCalled();
   });
 });

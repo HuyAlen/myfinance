@@ -20,13 +20,13 @@ describe("REALTIME-NAV-INTEGRITY-1 cross-page contract", () => {
     );
   });
 
-  it("Investments uses the shared realtime owner for Portfolio, Forex and wallet dependencies", () => {
+  it("Investments uses the shared realtime owner for Portfolio capital, Forex and wallet dependencies", () => {
     const source = read("components/investments/InvestmentsPage.tsx");
-    expect(source).toContain(
-      '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
+    const normalized = source.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      '"investments", "transactions", "forex_accounts", "forex_cash_transactions", "wallets"',
     );
     expect(source).not.toContain('supabase.channel("investments-domain-page")');
-
   });
 
   it("Wallet and Saving builders remain entity-focus links, not page-local filter contracts", () => {

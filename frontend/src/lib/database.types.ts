@@ -976,6 +976,35 @@ export type Database = {
         Returns: { saving: SavingRow; wallet: WalletRow; saving_transaction: SavingTransactionRow }[];
       };
       delete_saving_account: { Args: { p_saving_id: string }; Returns: string };
+      create_investment_capital_movement: {
+        Args: {
+          p_transaction_id: string;
+          p_investment_id: string;
+          p_wallet_id: string;
+          p_type: string;
+          p_amount: number;
+          p_transaction_date: string;
+          p_note?: string | null;
+        };
+        Returns: TransactionRow;
+      };
+      update_investment_snapshot_atomic: {
+        Args: {
+          p_investment_id: string;
+          p_name: string;
+          p_type: string;
+          p_symbol: string | null;
+          p_invested_amount: number;
+          p_current_value: number;
+          p_purchase_date: string | null;
+          p_notes: string | null;
+        };
+        Returns: InvestmentRow;
+      };
+      delete_investment_atomic: {
+        Args: { p_investment_id: string };
+        Returns: undefined;
+      };
       create_forex_account_atomic: {
         Args: { p_id: string; p_name: string; p_broker: string; p_account_number: string | null; p_currency: string; p_status: string; p_opened_at: string | null; p_notes: string | null; p_current_equity: number | null };
         Returns: ForexAccountRow;

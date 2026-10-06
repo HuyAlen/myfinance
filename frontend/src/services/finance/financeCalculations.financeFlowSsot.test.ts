@@ -9,6 +9,7 @@ import {
   getForexFeesFromLedger,
   getNetInvestmentAllocationFromLedger,
   getNetSavingAllocationFromLedger,
+  getPortfolioInvestmentCapitalMovementSnapshot,
   getRealExpenseTransactions,
   type SavingAllocationMovement,
 } from "./financeCalculations";
@@ -176,6 +177,64 @@ describe("FINANCE-FLOW-SSOT-1 canonical flow snapshot", () => {
       1_500_000,
     );
     expect(getForexFeesFromLedger(forexTransactions, range)).toBe(150_000);
+  });
+
+  it("includes atomic Portfolio capital movements in investment allocation and Wallet cash movement", () => {
+    const portfolioMovements: Transaction[] = [
+      {
+        id: "portfolio-deposit",
+        type: "transfer",
+        amount: 2_000_000,
+        categoryId: "",
+        walletId: "wallet-1",
+        note: "Nạp vốn ETF",
+        date: "2026-08-12",
+        transferReference: "investment-etf",
+        transferReferenceType: "investment",
+        sourceType: "wallet",
+        destinationType: "investment",
+      },
+      {
+        id: "portfolio-withdraw",
+        type: "transfer",
+        amount: 500_000,
+        categoryId: "",
+        walletId: "wallet-1",
+        note: "Rút vốn ETF",
+        date: "2026-08-20",
+        transferReference: "investment-etf",
+        transferReferenceType: "investment",
+        sourceType: "investment",
+        destinationType: "wallet",
+      },
+    ];
+
+    expect(
+      getPortfolioInvestmentCapitalMovementSnapshot(portfolioMovements),
+    ).toEqual({
+      deposits: 2_000_000,
+      withdrawals: 500_000,
+      net: 1_500_000,
+      cashIn: 500_000,
+      cashOut: 2_000_000,
+    });
+
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: portfolioMovements,
+      categories,
+    });
+
+    expect(flow.forexInvestmentLedgerNet).toBe(0);
+    expect(flow.portfolioInvestmentLedgerNet).toBe(1_500_000);
+    expect(flow.investmentLedgerNet).toBe(1_500_000);
+    expect(flow.investmentAllocation).toBe(1_500_000);
+    expect(flow.portfolioInvestmentCashIn).toBe(500_000);
+    expect(flow.portfolioInvestmentCashOut).toBe(2_000_000);
+    expect(flow.capitalMovementIn).toBe(500_000);
+    expect(flow.capitalMovementOut).toBe(2_000_000);
+    expect(flow.cashIn).toBe(500_000);
+    expect(flow.cashOut).toBe(2_000_000);
+    expect(flow.operatingNetCashFlow).toBe(0);
   });
 
   it("clamps a net de-allocation to zero without hiding its signed ledger movement", () => {

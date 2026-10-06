@@ -34,6 +34,8 @@ const budgetCloneSql = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 const normalizedStorage = storage.replace(/\s+/g, " ");
+const normalizedInvestments = investments.replace(/\s+/g, " ");
+const normalizedTransactions = transactions.replace(/\s+/g, " ");
 
 describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () => {
   it("keeps Savings money movement owned by Savings Engine and makes its mirrors read-only in Transactions", () => {
@@ -45,11 +47,16 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
     );
 
     expect(transactions).toContain("isSavingsManagedTransaction");
-    expect(transactions).toContain("const savingsManagedCount =");
+    expect(transactions).toContain("isInvestmentManagedTransaction");
+    expect(transactions).toContain("const systemManagedCount =");
+    expect(normalizedTransactions).toContain(
+      "isSavingsManagedTransaction(transaction) || isInvestmentManagedTransaction(transaction)",
+    );
     expect(transactions).toContain("if (isSavingsManagedTransaction(t))");
-    expect(transactions).toContain("const savingsManagedTransaction =");
+    expect(transactions).toContain("const managedTransaction = transactions.find(");
 
     expect(storage).toContain("SAVINGS_MANAGED_TRANSACTION_ERROR");
+    expect(storage).toContain("INVESTMENT_MANAGED_TRANSACTION_ERROR");
     expect(
       storage.match(/isSavingsManagedFinanceTransaction\(/g)?.length ?? 0,
     ).toBeGreaterThanOrEqual(4);
@@ -66,8 +73,8 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
     expect(investments).toContain("calculateForexPerformanceSnapshot(accounts, transactions)");
     expect(investments).toContain("currentExposure: currentForexPerformance.assetValue");
     expect(investments).not.toContain("account.currentEquity - netCashFlow");
-    expect(investments).toContain(
-      '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
+    expect(normalizedInvestments).toContain(
+      '"investments", "transactions", "forex_accounts", "forex_cash_transactions", "wallets"',
     );
     expect(investments).not.toContain('from("forex_accounts")');
     expect(investments).not.toContain('from("forex_cash_transactions")');

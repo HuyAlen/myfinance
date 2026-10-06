@@ -31,6 +31,17 @@ export function normalizeTransactionNote(note: string) {
     .replace(/đ/g, "d");
 }
 
+function getTransactionTransferReference(transaction: Transaction) {
+  const metadata = transaction as Transaction & {
+    transferReference?: string;
+    transfer_reference?: string;
+  };
+
+  return String(
+    metadata.transferReference ?? metadata.transfer_reference ?? "",
+  ).trim();
+}
+
 function getTransactionTransferReferenceType(transaction: Transaction) {
   const metadata = transaction as Transaction & {
     transferReferenceType?: string;
@@ -85,6 +96,59 @@ export function isSavingsManagedTransaction(transaction: Transaction) {
     sourceType === "saving" ||
     destinationType === "saving"
   );
+}
+
+export type InvestmentCapitalMovementKind = "deposit" | "withdraw";
+
+/**
+ * INVESTMENT-CAPITAL-FLOW-SSOT-1
+ *
+ * Portfolio capital movement rows live in the existing main transactions
+ * ledger. Metadata, never note text, is the ownership boundary so generic
+ * transaction CRUD cannot silently mutate Wallet without reconciling the
+ * Investment snapshot.
+ */
+export function isInvestmentManagedTransaction(transaction: Transaction) {
+  if (transaction.type !== "transfer") return false;
+
+  const referenceType = getTransactionTransferReferenceType(transaction);
+  const sourceType = getTransactionSourceType(transaction);
+  const destinationType = getTransactionDestinationType(transaction);
+
+  return (
+    referenceType === "investment" ||
+    sourceType === "investment" ||
+    destinationType === "investment"
+  );
+}
+
+export function getInvestmentCapitalMovementKind(
+  transaction: Transaction,
+): InvestmentCapitalMovementKind | null {
+  if (
+    transaction.type !== "transfer" ||
+    getTransactionTransferReferenceType(transaction) !== "investment"
+  ) {
+    return null;
+  }
+
+  const sourceType = getTransactionSourceType(transaction);
+  const destinationType = getTransactionDestinationType(transaction);
+
+  if (sourceType === "wallet" && destinationType === "investment") {
+    return "deposit";
+  }
+  if (sourceType === "investment" && destinationType === "wallet") {
+    return "withdraw";
+  }
+  return null;
+}
+
+export function getInvestmentCapitalMovementInvestmentId(
+  transaction: Transaction,
+) {
+  if (!isInvestmentManagedTransaction(transaction)) return null;
+  return getTransactionTransferReference(transaction) || null;
 }
 
 /**

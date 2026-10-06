@@ -18,6 +18,7 @@ import {
   buildGoalsHref,
 } from "@/src/lib/navigation/financeNavigation";
 import { formatLocalISODate } from "@/src/lib/date/calendarDate";
+import { getInvestmentCapitalMovementKind } from "@/src/lib/transactions/transactionClassification";
 
 export function formatVND(value: number) {
   const rounded = Math.round(Number.isFinite(value) ? value : 0);
@@ -1388,7 +1389,7 @@ export type SavingAllocationMovement = {
 };
 
 export type FinanceFlowSnapshot = {
-  /** Personal-finance semantics. Never includes Savings/Forex principal movement. */
+  /** Personal-finance semantics. Never includes Savings/Portfolio/Forex principal movement. */
   income: number;
   realExpense: number;
   realExpenseCount: number;
@@ -1399,7 +1400,7 @@ export type FinanceFlowSnapshot = {
   operatingCashOut: number;
   operatingNetCashFlow: number;
 
-  /** Principal moved between spendable Wallets and Savings/Forex. */
+  /** Principal moved between spendable Wallets and Savings/Portfolio/Forex. */
   capitalMovementIn: number;
   capitalMovementOut: number;
   netCapitalMovement: number;
@@ -1426,7 +1427,15 @@ export type FinanceFlowSnapshot = {
   /** Forex transfer fees are real cash expenses, not invested capital. */
   forexFees: number;
   /** Signed gross Forex funding movement (deposits - withdrawals), excluding fees. */
+  forexInvestmentLedgerNet: number;
+  /** Signed Portfolio capital movement from the main transaction ledger. */
+  portfolioInvestmentLedgerNet: number;
+  /** Combined signed Portfolio + Forex investment funding movement. */
   investmentLedgerNet: number;
+  /** Portfolio capital returned to spendable Wallets. */
+  portfolioInvestmentCashIn: number;
+  /** Portfolio capital moved out of spendable Wallets. */
+  portfolioInvestmentCashOut: number;
   /** Positive net investment capital allocated in the period. */
   investmentAllocation: number;
   futureAllocation: number;
@@ -1501,6 +1510,44 @@ export function getNetInvestmentAllocationFromLedger(
     },
     0,
   );
+}
+
+export type PortfolioInvestmentCapitalMovementSnapshot = {
+  deposits: number;
+  withdrawals: number;
+  net: number;
+  cashIn: number;
+  cashOut: number;
+};
+
+/**
+ * Portfolio capital SSOT reuses the main transaction ledger. Only transfer rows
+ * with explicit investment ownership + valid wallet<->investment direction
+ * participate; legacy manual investment allocations remain a separate additive
+ * compatibility source.
+ */
+export function getPortfolioInvestmentCapitalMovementSnapshot(
+  transactions: Transaction[],
+  dateRange?: DateRangeInput,
+): PortfolioInvestmentCapitalMovementSnapshot {
+  let deposits = 0;
+  let withdrawals = 0;
+
+  for (const transaction of scopeFlowTransactions(transactions, dateRange)) {
+    const kind = getInvestmentCapitalMovementKind(transaction);
+    const amount = Math.max(0, Number(transaction.amount) || 0);
+    if (!kind || amount <= 0) continue;
+    if (kind === "deposit") deposits += amount;
+    else withdrawals += amount;
+  }
+
+  return {
+    deposits,
+    withdrawals,
+    net: deposits - withdrawals,
+    cashIn: withdrawals,
+    cashOut: deposits,
+  };
 }
 
 export function getForexFeesFromLedger(
@@ -1673,9 +1720,14 @@ export function calculateFinanceFlowSnapshot(input: {
     transactions,
     categories,
   );
-  const investmentLedgerNet = getNetInvestmentAllocationFromLedger(
+  const forexInvestmentLedgerNet = getNetInvestmentAllocationFromLedger(
     scopedForexCashTransactions,
   );
+  const portfolioInvestmentCapital =
+    getPortfolioInvestmentCapitalMovementSnapshot(transactions);
+  const portfolioInvestmentLedgerNet = portfolioInvestmentCapital.net;
+  const investmentLedgerNet =
+    forexInvestmentLedgerNet + portfolioInvestmentLedgerNet;
   const investmentAllocation = Math.max(
     0,
     transactionInvestmentAllocation + investmentLedgerNet,
@@ -1683,7 +1735,7 @@ export function calculateFinanceFlowSnapshot(input: {
   const futureAllocation = savingAllocation + investmentAllocation;
 
   // CASH-MOVEMENT-SSOT-1: liquidity is deliberately parallel to personal-
-  // finance semantics. Savings/Forex principal movement changes spendable
+  // finance semantics. Savings/Portfolio/Forex principal movement changes spendable
   // cash, but never becomes income/realExpense. Legacy/manual allocation
   // transactions are wallet outflows and therefore participate in cashOut.
   const ordinaryCashIn = income;
@@ -1695,23 +1747,30 @@ export function calculateFinanceFlowSnapshot(input: {
   const savingCashOut = savingCashMovement.cashOut;
   const forexCashIn = forexCashMovement.cashIn;
   const forexCashOut = forexCashMovement.cashOut;
-  const cashIn = ordinaryCashIn + savingCashIn + forexCashIn;
-  const cashOut = ordinaryCashOut + savingCashOut + forexCashOut;
+  const portfolioInvestmentCashIn = portfolioInvestmentCapital.cashIn;
+  const portfolioInvestmentCashOut = portfolioInvestmentCapital.cashOut;
+  const cashIn =
+    ordinaryCashIn + savingCashIn + forexCashIn + portfolioInvestmentCashIn;
+  const cashOut =
+    ordinaryCashOut + savingCashOut + forexCashOut + portfolioInvestmentCashOut;
   const netCashMovement = cashIn - cashOut;
 
   // DASHBOARD-CASHFLOW-SEMANTICS-2: primary cash-flow UI is operating flow.
-  // Savings/Forex principal is a capital movement, not income or real expense.
+  // Savings/Portfolio/Forex principal is a capital movement, not income or real expense.
   // Forex fees remain realExpense; principal stays in the capital bucket.
   const operatingCashIn = income;
   const operatingCashOut = realExpense;
   const operatingNetCashFlow = operatingCashIn - operatingCashOut;
   const capitalMovementIn =
-    savingCashMovement.cashIn + forexCashMovement.withdrawals;
+    savingCashMovement.cashIn +
+    forexCashMovement.withdrawals +
+    portfolioInvestmentCashIn;
   const capitalMovementOut =
     transactionSavingAllocation +
     transactionInvestmentAllocation +
     savingCashMovement.cashOut +
-    forexCashMovement.deposits;
+    forexCashMovement.deposits +
+    portfolioInvestmentCashOut;
   const netCapitalMovement = capitalMovementIn - capitalMovementOut;
 
   return {
@@ -1739,7 +1798,11 @@ export function calculateFinanceFlowSnapshot(input: {
     savingAllocation,
     transactionInvestmentAllocation,
     forexFees,
+    forexInvestmentLedgerNet,
+    portfolioInvestmentLedgerNet,
     investmentLedgerNet,
+    portfolioInvestmentCashIn,
+    portfolioInvestmentCashOut,
     investmentAllocation,
     futureAllocation,
     futureAllocationRate:

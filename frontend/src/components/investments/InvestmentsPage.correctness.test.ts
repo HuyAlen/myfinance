@@ -135,10 +135,10 @@ describe("InvestmentsPage correctness hardening (INVESTMENTS-CORRECTNESS-1)", ()
     expect(source).toContain("currentExposure: currentForexPerformance.assetValue");
   });
 
-  it("subscribes Portfolio, Forex and wallet dependencies through the shared owner channel", () => {
+  it("subscribes Portfolio, capital-ledger, Forex and wallet dependencies through the shared owner channel", () => {
     expect(source).toContain("useRealtimeTable(");
-    expect(source).toContain(
-      '["investments", "forex_accounts", "forex_cash_transactions", "wallets"]',
+    expect(normalized).toContain(
+      '"investments", "transactions", "forex_accounts", "forex_cash_transactions", "wallets"',
     );
     expect(source).not.toContain('supabase.channel("investments-domain-page")');
   });

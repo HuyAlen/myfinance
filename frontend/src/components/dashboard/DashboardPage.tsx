@@ -95,7 +95,10 @@ import {
   buildSavingsHref,
   buildTransactionsHref,
 } from "@/src/lib/navigation/financeNavigation";
-import { isInternalTransferTransaction } from "@/src/lib/transactions/transactionClassification";
+import {
+  isInternalTransferTransaction,
+  isInvestmentManagedTransaction,
+} from "@/src/lib/transactions/transactionClassification";
 import {
   DASHBOARD_CUSTOMIZATION_SECTIONS,
   DASHBOARD_CUSTOMIZATION_STORAGE_KEY,
@@ -802,7 +805,9 @@ export default function DashboardPage() {
   const nonTransferFilteredTransactions = useMemo(
     () =>
       filteredTransactions.filter(
-        (transaction) => !isInternalTransferTransaction(transaction),
+        (transaction) =>
+          !isInternalTransferTransaction(transaction) ||
+          isInvestmentManagedTransaction(transaction),
       ),
     [filteredTransactions],
   );

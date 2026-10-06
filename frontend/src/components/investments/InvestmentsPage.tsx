@@ -11,6 +11,8 @@ import {
 } from "react";
 import {
   Activity,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   BriefcaseBusiness,
   Edit3,
   Landmark,
@@ -35,15 +37,21 @@ import {
 import { getEndOfISODateInTimeZone } from "@/src/lib/date/calendarDate";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
 import {
+  getInvestmentCapitalMovementInvestmentId,
+  getInvestmentCapitalMovementKind,
+} from "@/src/lib/transactions/transactionClassification";
+import {
   addForexAccount,
   addForexCashTransaction,
   addInvestment,
+  createInvestmentCapitalMovement,
   deleteForexAccount,
   deleteForexCashTransaction,
   deleteInvestment,
   getForexAccounts,
   getForexBalanceSnapshotsUpTo,
   getForexCashTransactions,
+  getInvestmentCapitalMovements,
   getInvestments,
   getWallets,
   updateForexAccount,
@@ -58,6 +66,7 @@ import type {
   ForexCashTransactionType,
   Investment,
   InvestmentType,
+  Transaction,
   Wallet as FinanceWallet,
 } from "@/src/types/finance";
 
@@ -95,6 +104,15 @@ type PortfolioFormState = {
   notes: string;
 };
 
+type PortfolioCapitalFormState = {
+  investmentId: string;
+  walletId: string;
+  type: "deposit" | "withdraw";
+  amount: string;
+  transactionDate: string;
+  note: string;
+};
+
 type AccountCashMetric = ForexAccount & {
   deposits: number;
   withdrawals: number;
@@ -107,6 +125,7 @@ type AccountCashMetric = ForexAccount & {
 
 type InvestmentPageData = {
   investments: Investment[];
+  capitalMovements: Transaction[];
   accounts: ForexAccount[];
   transactions: ForexCashTransaction[];
   balanceSnapshots: ForexBalanceSnapshot[];
@@ -207,6 +226,21 @@ function createEmptyPortfolioForm(): PortfolioFormState {
   };
 }
 
+function createEmptyPortfolioCapitalForm(
+  investmentId = "",
+  walletId = "",
+  type: "deposit" | "withdraw" = "deposit",
+): PortfolioCapitalFormState {
+  return {
+    investmentId,
+    walletId,
+    type,
+    amount: "",
+    transactionDate: today(),
+    note: "",
+  };
+}
+
 function getInvestmentTypeLabel(type: InvestmentType): string {
   if (type === "stock") return "Cổ phiếu";
   if (type === "crypto") return "Tài sản mã hóa";
@@ -257,6 +291,19 @@ function validatePortfolioForm(form: PortfolioFormState): string | null {
   if (!Number.isFinite(currentValue) || currentValue < 0) {
     return "Giá trị hiện tại phải là số không âm.";
   }
+  return null;
+}
+
+function validatePortfolioCapitalForm(
+  form: PortfolioCapitalFormState,
+): string | null {
+  if (!form.investmentId) return "Không tìm thấy khoản đầu tư.";
+  if (!form.walletId) return "Vui lòng chọn ví nguồn hoặc ví nhận.";
+  const amount = Number(form.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return "Số tiền phải lớn hơn 0.";
+  }
+  if (!form.transactionDate) return "Vui lòng chọn ngày giao dịch.";
   return null;
 }
 
@@ -314,6 +361,7 @@ export default function InvestmentsPage() {
   );
   const periodKey = `${dateRange.startDate}:${dateRange.endDate}:${periodCutoffAt}`;
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [capitalMovements, setCapitalMovements] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<ForexAccount[]>([]);
   const [transactions, setTransactions] = useState<ForexCashTransaction[]>([]);
   const [balanceSnapshots, setBalanceSnapshots] = useState<ForexBalanceSnapshot[]>([]);
@@ -325,6 +373,8 @@ export default function InvestmentsPage() {
   const [portfolioForm, setPortfolioForm] = useState<PortfolioFormState>(
     createEmptyPortfolioForm,
   );
+  const [portfolioCapitalForm, setPortfolioCapitalForm] =
+    useState<PortfolioCapitalFormState>(() => createEmptyPortfolioCapitalForm());
   const [accountForm, setAccountForm] = useState<AccountFormState>(
     createEmptyAccountForm,
   );
@@ -332,6 +382,8 @@ export default function InvestmentsPage() {
     () => createEmptyTransactionForm(),
   );
   const [portfolioModalOpen, setPortfolioModalOpen] = useState(false);
+  const [portfolioCapitalModalOpen, setPortfolioCapitalModalOpen] =
+    useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -357,6 +409,7 @@ export default function InvestmentsPage() {
     if (!isSupabaseConfigured) {
       return {
         investments: [],
+        capitalMovements: [],
         accounts: [],
         transactions: [],
         balanceSnapshots: [],
@@ -369,6 +422,10 @@ export default function InvestmentsPage() {
     const investmentsRequest = withInvestmentDomainLoadTimeout(
       "Danh mục đầu tư",
       getInvestments(),
+    );
+    const capitalMovementsRequest = withInvestmentDomainLoadTimeout(
+      "Lịch sử nạp/rút vốn đầu tư",
+      getInvestmentCapitalMovements(),
     );
     const walletsRequest = withInvestmentDomainLoadTimeout("Danh sách ví", getWallets());
     const accountsRequest = withInvestmentDomainLoadTimeout(
@@ -386,12 +443,14 @@ export default function InvestmentsPage() {
 
     const [
       loadedInvestments,
+      loadedCapitalMovements,
       loadedWallets,
       loadedAccounts,
       loadedTransactions,
       loadedBalanceSnapshots,
     ] = await Promise.all([
       investmentsRequest,
+      capitalMovementsRequest,
       walletsRequest,
       accountsRequest,
       transactionsRequest,
@@ -400,6 +459,7 @@ export default function InvestmentsPage() {
 
     return {
       investments: loadedInvestments,
+      capitalMovements: loadedCapitalMovements,
       accounts: loadedAccounts,
       transactions: loadedTransactions,
       balanceSnapshots: loadedBalanceSnapshots,
@@ -411,6 +471,7 @@ export default function InvestmentsPage() {
 
   const applyInvestmentPageData = useCallback((data: InvestmentPageData) => {
     setInvestments(data.investments);
+    setCapitalMovements(data.capitalMovements);
     setAccounts(data.accounts);
     setTransactions(data.transactions);
     setBalanceSnapshots(data.balanceSnapshots);
@@ -520,7 +581,13 @@ export default function InvestmentsPage() {
     void reload();
   }, [reload]);
   useRealtimeTable(
-    ["investments", "forex_accounts", "forex_cash_transactions", "wallets"],
+    [
+      "investments",
+      "transactions",
+      "forex_accounts",
+      "forex_cash_transactions",
+      "wallets",
+    ],
     requestInvestmentRealtimeRefresh,
   );
 
@@ -565,6 +632,65 @@ export default function InvestmentsPage() {
       roi,
     };
   }, [investments]);
+
+  const periodPortfolioCapitalMovements = useMemo(
+    () =>
+      capitalMovements.filter(
+        (movement) =>
+          movement.date >= dateRange.startDate &&
+          movement.date <= dateRange.endDate,
+      ),
+    [capitalMovements, dateRange.endDate, dateRange.startDate],
+  );
+
+  const portfolioCapitalByInvestmentId = useMemo(() => {
+    const metrics = new Map<
+      string,
+      { deposits: number; withdrawals: number; count: number }
+    >();
+
+    for (const movement of periodPortfolioCapitalMovements) {
+      const investmentId =
+        getInvestmentCapitalMovementInvestmentId(movement);
+      const kind = getInvestmentCapitalMovementKind(movement);
+      if (!investmentId || !kind) continue;
+      const current = metrics.get(investmentId) ?? {
+        deposits: 0,
+        withdrawals: 0,
+        count: 0,
+      };
+      if (kind === "deposit") current.deposits += movement.amount;
+      else current.withdrawals += movement.amount;
+      current.count += 1;
+      metrics.set(investmentId, current);
+    }
+
+    return metrics;
+  }, [periodPortfolioCapitalMovements]);
+
+  const portfolioCapitalHistoryByInvestmentId = useMemo(() => {
+    const history = new Map<string, Transaction[]>();
+    for (const movement of capitalMovements) {
+      const investmentId =
+        getInvestmentCapitalMovementInvestmentId(movement);
+      if (!investmentId) continue;
+      const rows = history.get(investmentId) ?? [];
+      rows.push(movement);
+      history.set(investmentId, rows);
+    }
+    return history;
+  }, [capitalMovements]);
+
+  const portfolioFormHasCapitalHistory = Boolean(
+    portfolioForm.id &&
+      (portfolioCapitalHistoryByInvestmentId.get(portfolioForm.id)?.length ??
+        0) > 0,
+  );
+
+  const activePortfolioCapitalInvestment =
+    investments.find(
+      (investment) => investment.id === portfolioCapitalForm.investmentId,
+    ) ?? null;
 
   // FOREX-BALANCE-ASOF-1C: the combined investment headline remains an
   // explicitly current value because Portfolio has no historical snapshot
@@ -729,6 +855,102 @@ export default function InvestmentsPage() {
         error instanceof Error
           ? error.message
           : "Không thể lưu khoản đầu tư.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function openPortfolioCapitalMovement(
+    investment: Investment,
+    type: "deposit" | "withdraw",
+  ) {
+    setPortfolioCapitalForm(
+      createEmptyPortfolioCapitalForm(
+        investment.id,
+        wallets[0]?.id ?? "",
+        type,
+      ),
+    );
+    setSaveError(null);
+    setPortfolioCapitalModalOpen(true);
+  }
+
+  async function submitPortfolioCapitalMovement(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (isSaving) return;
+
+    const validationError =
+      validatePortfolioCapitalForm(portfolioCapitalForm);
+    if (validationError) {
+      setSaveError(validationError);
+      return;
+    }
+
+    const investment = investments.find(
+      (item) => item.id === portfolioCapitalForm.investmentId,
+    );
+    const wallet = wallets.find(
+      (item) => item.id === portfolioCapitalForm.walletId,
+    );
+    if (!investment) {
+      setSaveError("Không tìm thấy khoản đầu tư.");
+      return;
+    }
+    if (!wallet) {
+      setSaveError("Không tìm thấy ví nguồn hoặc ví nhận.");
+      return;
+    }
+
+    const amount = Number(portfolioCapitalForm.amount);
+    if (
+      portfolioCapitalForm.type === "deposit" &&
+      wallet.balance < amount
+    ) {
+      setSaveError("Số dư ví không đủ để nạp vốn đầu tư.");
+      return;
+    }
+    if (
+      portfolioCapitalForm.type === "withdraw" &&
+      (investment.investedAmount < amount ||
+        investment.currentValue < amount)
+    ) {
+      setSaveError(
+        "Vốn hoặc giá trị hiện tại của khoản đầu tư không đủ để rút số tiền này.",
+      );
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const result = await createInvestmentCapitalMovement({
+        transactionId: crypto.randomUUID(),
+        investmentId: investment.id,
+        walletId: wallet.id,
+        type: portfolioCapitalForm.type,
+        amount,
+        date: portfolioCapitalForm.transactionDate,
+        note: portfolioCapitalForm.note.trim() || null,
+      });
+      if (result.error) throw new Error(result.error);
+
+      await reload();
+      setPortfolioCapitalModalOpen(false);
+      toast({
+        variant: "success",
+        message:
+          portfolioCapitalForm.type === "deposit"
+            ? "Đã nạp vốn đầu tư và cập nhật số dư ví."
+            : "Đã rút vốn đầu tư và cập nhật số dư ví.",
+      });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Không thể ghi nhận dòng vốn đầu tư.",
       );
     } finally {
       setIsSaving(false);
@@ -1172,6 +1394,14 @@ export default function InvestmentsPage() {
                 investment.investedAmount > 0
                   ? (profitLoss / investment.investedAmount) * 100
                   : null;
+              const periodCapital =
+                portfolioCapitalByInvestmentId.get(investment.id) ?? {
+                  deposits: 0,
+                  withdrawals: 0,
+                  count: 0,
+                };
+              const capitalHistory =
+                portfolioCapitalHistoryByInvestmentId.get(investment.id) ?? [];
 
               return (
                 <article
@@ -1246,6 +1476,92 @@ export default function InvestmentsPage() {
                       value={formatPercent(roi)}
                       tone={roi === null || roi >= 0 ? "emerald" : "rose"}
                     />
+                  </div>
+
+                  <div
+                    data-ui={`portfolio-capital-flow-${investment.id}`}
+                    className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/40 p-3"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-sky-700">
+                        Dòng vốn {filterLabel}
+                      </p>
+                      <p className="text-xs font-black tabular-nums text-[#36536B]">
+                        Nạp {formatMoney(periodCapital.deposits)} · Rút{" "}
+                        {formatMoney(periodCapital.withdrawals)}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openPortfolioCapitalMovement(investment, "deposit")
+                        }
+                        disabled={wallets.length === 0}
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 text-sm font-black text-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <ArrowDownToLine size={15} />
+                        Nạp vốn
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openPortfolioCapitalMovement(investment, "withdraw")
+                        }
+                        disabled={
+                          wallets.length === 0 ||
+                          investment.investedAmount <= 0 ||
+                          investment.currentValue <= 0
+                        }
+                        className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-50 px-3 text-sm font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <ArrowUpFromLine size={15} />
+                        Rút vốn
+                      </button>
+                    </div>
+
+                    {capitalHistory.length > 0 ? (
+                      <div className="mt-3 border-t border-sky-100 pt-2.5">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                          Lịch sử gần đây
+                        </p>
+                        <div className="mt-1.5 space-y-1.5">
+                          {capitalHistory.slice(0, 3).map((movement) => {
+                            const kind =
+                              getInvestmentCapitalMovementKind(movement);
+                            const walletName =
+                              wallets.find(
+                                (wallet) => wallet.id === movement.walletId,
+                              )?.name ?? "Ví";
+                            return (
+                              <div
+                                key={movement.id}
+                                className="flex items-center justify-between gap-3 text-xs"
+                              >
+                                <span className="min-w-0 truncate font-semibold text-slate-500">
+                                  {movement.date} · {walletName}
+                                </span>
+                                <span
+                                  className={`shrink-0 font-black tabular-nums ${
+                                    kind === "deposit"
+                                      ? "text-emerald-700"
+                                      : "text-blue-700"
+                                  }`}
+                                >
+                                  {kind === "deposit" ? "+" : "-"}
+                                  {formatMoney(movement.amount)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2.5 text-[11px] font-semibold leading-5 text-slate-500">
+                        Chưa có lịch sử nạp/rút vốn. Vốn hiện tại được xem là số dư mở đầu; các thay đổi mới nên dùng Nạp vốn hoặc Rút vốn.
+                      </p>
+                    )}
                   </div>
 
                   {investment.notes ? (
@@ -1661,16 +1977,30 @@ export default function InvestmentsPage() {
                   className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold sm:text-sm"
                 />
               </label>
-              <CurrencyField
-                label="Vốn đầu tư *"
-                value={portfolioForm.investedAmount}
-                onChange={(value) =>
-                  setPortfolioForm((current) => ({
-                    ...current,
-                    investedAmount: value,
-                  }))
-                }
-              />
+              {portfolioFormHasCapitalHistory ? (
+                <label>
+                  <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                    Vốn đầu tư
+                  </span>
+                  <div className="flex min-h-11 items-center rounded-2xl border border-slate-200 bg-slate-100 px-4 text-base font-black tabular-nums text-slate-600 sm:text-sm">
+                    {formatMoney(Number(portfolioForm.investedAmount) || 0)}
+                  </div>
+                  <span className="mt-1 block text-[10px] font-semibold leading-4 text-slate-500">
+                    Được quản lý bởi lịch sử Nạp vốn / Rút vốn và không thể sửa trực tiếp.
+                  </span>
+                </label>
+              ) : (
+                <CurrencyField
+                  label={portfolioForm.id ? "Vốn đầu tư *" : "Vốn mở đầu *"}
+                  value={portfolioForm.investedAmount}
+                  onChange={(value) =>
+                    setPortfolioForm((current) => ({
+                      ...current,
+                      investedAmount: value,
+                    }))
+                  }
+                />
+              )}
               <CurrencyField
                 label="Giá trị hiện tại *"
                 value={portfolioForm.currentValue}
@@ -1699,11 +2029,145 @@ export default function InvestmentsPage() {
               </label>
             </div>
 
+            {!portfolioFormHasCapitalHistory ? (
+              <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[11px] font-semibold leading-5 text-amber-800">
+                Vốn mở đầu dùng để nhập tài sản đã có trước khi theo dõi dòng vốn. Sau lần Nạp vốn / Rút vốn đầu tiên, vốn gốc sẽ được quản lý tự động từ lịch sử giao dịch.
+              </p>
+            ) : null}
+
             <FormActions
               isSaving={isSaving}
               saveError={saveError}
               onDismissError={() => setSaveError(null)}
               onCancel={() => setPortfolioModalOpen(false)}
+            />
+          </form>
+        </Modal>
+      ) : null}
+
+      {portfolioCapitalModalOpen && activePortfolioCapitalInvestment ? (
+        <Modal
+          title={
+            portfolioCapitalForm.type === "deposit"
+              ? "Nạp vốn đầu tư"
+              : "Rút vốn đầu tư"
+          }
+          description="Dòng vốn sẽ đồng bộ số dư ví, vốn đầu tư và lịch sử giao dịch trong cùng một thao tác."
+          onClose={() => !isSaving && setPortfolioCapitalModalOpen(false)}
+        >
+          <form
+            onSubmit={submitPortfolioCapitalMovement}
+            className="space-y-4"
+          >
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-800">
+              <span className="font-black">
+                {activePortfolioCapitalInvestment.name}
+              </span>
+              {" · "}Vốn {formatMoney(activePortfolioCapitalInvestment.investedAmount)}
+              {" · "}Giá trị hiện tại{" "}
+              {formatMoney(activePortfolioCapitalInvestment.currentValue)}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="md:col-span-2">
+                <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                  Loại dòng vốn
+                </span>
+                <div className="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                  {(["deposit", "withdraw"] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() =>
+                        setPortfolioCapitalForm((current) => ({
+                          ...current,
+                          type,
+                        }))
+                      }
+                      className={`min-h-12 rounded-xl text-sm font-black ${
+                        portfolioCapitalForm.type === type
+                          ? type === "deposit"
+                            ? "bg-emerald-500 text-white"
+                            : "bg-blue-600 text-white"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {type === "deposit" ? "Nạp từ ví" : "Rút về ví"}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <SelectField
+                label={
+                  portfolioCapitalForm.type === "deposit"
+                    ? "Ví dùng để nạp *"
+                    : "Ví nhận tiền rút *"
+                }
+                value={portfolioCapitalForm.walletId}
+                onChange={(value) =>
+                  setPortfolioCapitalForm((current) => ({
+                    ...current,
+                    walletId: value,
+                  }))
+                }
+                options={wallets.map((wallet) => ({
+                  value: wallet.id,
+                  label: `${wallet.name} · ${formatMoney(wallet.balance)}`,
+                }))}
+              />
+
+              <CurrencyField
+                label="Số tiền (VND) *"
+                value={portfolioCapitalForm.amount}
+                onChange={(value) =>
+                  setPortfolioCapitalForm((current) => ({
+                    ...current,
+                    amount: value,
+                  }))
+                }
+              />
+
+              <label>
+                <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                  Ngày giao dịch *
+                </span>
+                <input
+                  type="date"
+                  value={portfolioCapitalForm.transactionDate}
+                  onChange={(event) =>
+                    setPortfolioCapitalForm((current) => ({
+                      ...current,
+                      transactionDate: event.target.value,
+                    }))
+                  }
+                  className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold sm:text-sm"
+                />
+              </label>
+
+              <label className="md:col-span-2">
+                <span className="mb-1.5 block text-[13px] font-black text-slate-700">
+                  Ghi chú
+                </span>
+                <textarea
+                  value={portfolioCapitalForm.note}
+                  onChange={(event) =>
+                    setPortfolioCapitalForm((current) => ({
+                      ...current,
+                      note: event.target.value,
+                    }))
+                  }
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold sm:text-sm"
+                />
+              </label>
+            </div>
+
+            <FormActions
+              isSaving={isSaving}
+              saveError={saveError}
+              onDismissError={() => setSaveError(null)}
+              onCancel={() => setPortfolioCapitalModalOpen(false)}
             />
           </form>
         </Modal>

@@ -23,7 +23,12 @@ describe("CASH-MOVEMENT-SSOT-1 cross-page adoption", () => {
     expect(normalizedFinance).toContain(
       "const realExpense = realExpenses.reduce((sum, item) => sum + item.amount, 0) + forexFees;",
     );
-    expect(finance).toContain("const cashOut = ordinaryCashOut + savingCashOut + forexCashOut;");
+    expect(normalizedFinance).toContain(
+      "const cashIn = ordinaryCashIn + savingCashIn + forexCashIn + portfolioInvestmentCashIn;",
+    );
+    expect(normalizedFinance).toContain(
+      "const cashOut = ordinaryCashOut + savingCashOut + forexCashOut + portfolioInvestmentCashOut;",
+    );
     expect(finance).toContain("// ─── Canonical Budget Spending Engine");
   });
 

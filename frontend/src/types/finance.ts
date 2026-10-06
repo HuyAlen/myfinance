@@ -94,6 +94,9 @@ export type Transaction = {
   transferFee?: number;
   exchangeRate?: number;
   transferReference?: string;
+  transferReferenceType?: string;
+  sourceType?: string;
+  destinationType?: string;
   // Phase 2 — recurring transactions
   isRecurring?: boolean;
   recurrence?: RecurrenceFrequency;
