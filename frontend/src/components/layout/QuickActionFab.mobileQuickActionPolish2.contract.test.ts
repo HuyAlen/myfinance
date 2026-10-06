@@ -47,10 +47,33 @@ describe("MOBILE-QUICK-ACTION-POLISH-2", () => {
     expect(quickActionIntent).toContain("nextParams.delete(QUICK_ACTION_MODE_PARAM);");
   });
 
-  it("opens the canonical transaction modal directly in transfer mode without duplicating save logic", () => {
-    expect(transactions).toContain("function openCreateFormWithMode(defaultMode: TransactionFormMode)");
-    expect(transactions).toContain('defaultMode === "transfer"');
-    expect(transactions).toContain('transferToWalletId: "",');
+  it("opens the canonical transaction modal directly in transfer mode while preserving capture-speed defaults", () => {
+    expect(transactions).toContain(
+      "function openCreateFormWithMode(defaultMode: TransactionFormMode)",
+    );
+
+    const createStart = transactions.indexOf(
+      "function openCreateFormWithMode(defaultMode: TransactionFormMode)",
+    );
+    const createEnd = transactions.indexOf(
+      "function openCreateForm()",
+      createStart,
+    );
+    expect(createStart).toBeGreaterThan(-1);
+    expect(createEnd).toBeGreaterThan(createStart);
+
+    const createRegion = transactions.slice(createStart, createEnd);
+    expect(createRegion).toContain(
+      "resolveCreateCaptureDefaults(defaultMode)",
+    );
+    expect(createRegion).toContain("formMode: defaultMode");
+    expect(createRegion).toContain(
+      "type: getTransactionTypeFromFormMode(defaultMode)",
+    );
+    expect(createRegion).toContain(
+      "transferToWalletId: defaults.transferToWalletId",
+    );
+
     expect(transactions).toContain(
       'openCreateFormWithMode(mode === "transfer" ? "transfer" : "expense");',
     );

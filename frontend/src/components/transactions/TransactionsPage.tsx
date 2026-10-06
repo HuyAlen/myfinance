@@ -36,6 +36,14 @@ import {
   isSubmittingThisSession,
 } from "@/src/lib/transactions/mutationSession";
 import { matchesSearchQuery } from "@/src/lib/transactions/transactionSearch";
+import {
+  createDefaultTransactionCapturePreferences,
+  getRecentTransactionCaptureCategoryIds,
+  persistTransactionCapturePreferences,
+  readTransactionCapturePreferences,
+  rememberTransactionCaptureSuccess,
+  resolveTransactionCaptureDefaults,
+} from "@/src/lib/transactions/transactionCapturePreferences";
 import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
 import TransactionRulesManager from "@/src/components/transactions/TransactionRulesManager";
 import {
@@ -63,6 +71,7 @@ import {
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
+  CopyPlus,
   Download,
   Edit3,
   Upload,
@@ -596,6 +605,9 @@ export default function TransactionsPage() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [transactionRules, setTransactionRules] = useState<TransactionRule[]>([]);
   const [form, setForm] = useState<FormState>(() => createEmptyForm());
+  const [capturePreferences, setCapturePreferences] = useState(() =>
+    createDefaultTransactionCapturePreferences(),
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
@@ -1331,30 +1343,70 @@ export default function TransactionsPage() {
     return [];
   }, [categories, form.formMode]);
 
+  const recentCaptureCategories = useMemo(() => {
+    if (form.formMode === "transfer") return [];
+
+    return getRecentTransactionCaptureCategoryIds(
+      capturePreferences,
+      form.formMode,
+    ).flatMap((categoryId) => {
+      const category = categoryById.get(categoryId);
+      if (!category) return [];
+
+      if (form.formMode === "income") {
+        return category.type === "income" &&
+          getCategoryPlanningGroup(category) === "income"
+          ? [category]
+          : [];
+      }
+
+      if (category.type !== "expense") return [];
+      const group = getCategoryPlanningGroup(category);
+      return group === "fixed" || group === "variable" ? [category] : [];
+    });
+  }, [capturePreferences, categoryById, form.formMode]);
+
+  function getEligibleCategoryIdsForMode(mode: TransactionFormMode) {
+    if (mode === "transfer") return [];
+
+    return categories
+      .filter((category) => {
+        if (mode === "income") {
+          return (
+            category.type === "income" &&
+            getCategoryPlanningGroup(category) === "income"
+          );
+        }
+        if (category.type !== "expense") return false;
+        const group = getCategoryPlanningGroup(category);
+        return group === "fixed" || group === "variable";
+      })
+      .map((category) => category.id);
+  }
+
+  function resolveCreateCaptureDefaults(mode: TransactionFormMode) {
+    const preferences = readTransactionCapturePreferences();
+    return {
+      preferences,
+      defaults: resolveTransactionCaptureDefaults({
+        mode,
+        preferences,
+        walletIds: wallets.map((wallet) => wallet.id),
+        categoryIds: getEligibleCategoryIdsForMode(mode),
+      }),
+    };
+  }
+
   function openCreateFormWithMode(defaultMode: TransactionFormMode) {
-    const defaultCategoryId =
-      defaultMode === "transfer"
-        ? ""
-        : (categories.find((category) => {
-            if (defaultMode === "income") {
-              return (
-                category.type === "income" &&
-                getCategoryPlanningGroup(category) === "income"
-              );
-            }
-
-            if (category.type !== "expense") return false;
-            const group = getCategoryPlanningGroup(category);
-            return group === "fixed" || group === "variable";
-          })?.id ?? "");
-
+    const { preferences, defaults } = resolveCreateCaptureDefaults(defaultMode);
+    setCapturePreferences(preferences);
     setForm({
       ...createEmptyForm(),
       formMode: defaultMode,
       type: getTransactionTypeFromFormMode(defaultMode),
-      categoryId: defaultCategoryId,
-      walletId: wallets[0]?.id ?? "",
-      transferToWalletId: "",
+      categoryId: defaults.categoryId,
+      walletId: defaults.walletId,
+      transferToWalletId: defaults.transferToWalletId,
     });
     setSaveError(null);
     beginNewFormSession();
@@ -1594,31 +1646,74 @@ export default function TransactionsPage() {
     setIsFormOpen(true);
   }
 
+  function openDuplicateForm(t: Transaction) {
+    if (isSavingsManagedTransaction(t)) {
+      toast({
+        variant: "info",
+        message:
+          "Bút toán Tiết kiệm được quản lý tại trang Tiết kiệm và không thể nhân bản từ Giao dịch.",
+      });
+      return;
+    }
+
+    const formMode = getTransactionFormMode(t, categories);
+    const { preferences, defaults } = resolveCreateCaptureDefaults(formMode);
+    const eligibleCategoryIds = new Set(getEligibleCategoryIdsForMode(formMode));
+    const walletId = wallets.some((wallet) => wallet.id === t.walletId)
+      ? t.walletId
+      : defaults.walletId;
+    const transferToWalletId =
+      formMode === "transfer" &&
+      t.transferToWalletId &&
+      t.transferToWalletId !== walletId &&
+      wallets.some((wallet) => wallet.id === t.transferToWalletId)
+        ? t.transferToWalletId
+        : defaults.transferToWalletId;
+
+    setCapturePreferences(preferences);
+    setForm({
+      ...createEmptyForm(),
+      formMode,
+      type: getTransactionTypeFromFormMode(formMode),
+      amount: String(t.amount),
+      categoryId:
+        formMode === "transfer"
+          ? ""
+          : eligibleCategoryIds.has(t.categoryId)
+            ? t.categoryId
+            : defaults.categoryId,
+      walletId,
+      transferToWalletId,
+      note: t.note,
+      date: getLocalDateInputValue(),
+      isRecurring: false,
+      recurrence: "monthly",
+      nextRunDate: "",
+    });
+    setSaveError(null);
+    beginNewFormSession();
+    setIsFormOpen(true);
+  }
+
   function handleTypeChange(mode: TransactionFormMode) {
     const nextType = getTransactionTypeFromFormMode(mode);
+    const { preferences, defaults } = resolveCreateCaptureDefaults(mode);
 
-    const nextCategoryId =
-      mode === "transfer"
-        ? ""
-        : (categories.find((category) => {
-            if (mode === "income") {
-              return (
-                category.type === "income" &&
-                getCategoryPlanningGroup(category) === "income"
-              );
-            }
-
-            if (category.type !== "expense") return false;
-            const group = getCategoryPlanningGroup(category);
-            return group === "fixed" || group === "variable";
-          })?.id ?? "");
-
+    if (!form.id) setCapturePreferences(preferences);
     setForm((prev) => ({
       ...prev,
       formMode: mode,
       type: nextType,
-      categoryId: nextCategoryId,
-      transferToWalletId: mode === "transfer" ? prev.transferToWalletId : "",
+      categoryId: defaults.categoryId,
+      walletId: prev.id ? prev.walletId : defaults.walletId,
+      transferToWalletId:
+        mode === "transfer"
+          ? prev.id
+            ? prev.transferToWalletId === prev.walletId
+              ? ""
+              : prev.transferToWalletId
+            : defaults.transferToWalletId
+          : "",
     }));
     setSaveError(null);
   }
@@ -1814,6 +1909,20 @@ export default function TransactionsPage() {
         // Stale success: a newer form is open now. Do not touch its UI or
         // show a success toast that could be misread as describing it.
         return;
+      }
+
+      if (!form.id) {
+        const nextCapturePreferences = rememberTransactionCaptureSuccess(
+          readTransactionCapturePreferences(),
+          {
+            mode: form.formMode,
+            walletId: form.walletId,
+            categoryId: form.categoryId,
+            transferToWalletId: form.transferToWalletId,
+          },
+        );
+        persistTransactionCapturePreferences(nextCapturePreferences);
+        setCapturePreferences(nextCapturePreferences);
       }
 
       // A newly created transaction sorts to the top only under the default
@@ -3095,6 +3204,16 @@ export default function TransactionsPage() {
                             >
                               <button
                                 onClick={() => {
+                                  openDuplicateForm(t);
+                                  setSwipedId(null);
+                                }}
+                                aria-label="Nhân bản giao dịch"
+                                className="flex size-10 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700 transition-all active:scale-90"
+                              >
+                                <CopyPlus size={15} />
+                              </button>
+                              <button
+                                onClick={() => {
                                   openEditForm(t);
                                   setSwipedId(null);
                                 }}
@@ -3123,7 +3242,7 @@ export default function TransactionsPage() {
                                 (isSelected ? "bg-blue-50" : "bg-white") +
                                 " " +
                                 (isSwiped
-                                  ? "-translate-x-24 lg:translate-x-0"
+                                  ? "-translate-x-[10.5rem] lg:translate-x-0"
                                   : "")
                               }
                               onTouchStart={(e) => {
@@ -3437,6 +3556,13 @@ export default function TransactionsPage() {
                         </span>
                         <div className="flex shrink-0 gap-1">
                           <button
+                            onClick={() => openDuplicateForm(t)}
+                            aria-label="Nhân bản giao dịch"
+                            className="flex size-7 items-center justify-center rounded-xl border border-transparent text-slate-300 transition-all hover:border-cyan-100 hover:text-cyan-700"
+                          >
+                            <CopyPlus size={12} />
+                          </button>
+                          <button
                             onClick={() => openEditForm(t)}
                             aria-label="Sửa giao dịch"
                             className="flex size-7 items-center justify-center rounded-xl border border-transparent text-slate-300 transition-all hover:border-slate-200 hover:text-blue-600"
@@ -3613,55 +3739,6 @@ export default function TransactionsPage() {
               onSubmit={handleSubmit}
               className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-2.5 sm:px-6 sm:py-4 sm:pb-5"
             >
-              {/* Type selector — premium segmented control */}
-              <div className="mb-2">
-                <p className="mb-2 text-sm font-black text-slate-700">
-                  Loại giao dịch
-                </p>
-                <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                  {[
-                    {
-                      mode: "income" as TransactionFormMode,
-                      icon: "↑",
-                      label: "Thu",
-                      active: "bg-emerald-500",
-                    },
-                    {
-                      mode: "expense" as TransactionFormMode,
-                      icon: "↓",
-                      label: "Chi",
-                      active: "bg-rose-500",
-                    },
-                    {
-                      mode: "transfer" as TransactionFormMode,
-                      icon: "⇄",
-                      label: "Chuyển",
-                      active: "bg-blue-600",
-                    },
-                  ].map((item) => {
-                    const active = form.formMode === item.mode;
-                    return (
-                      <button
-                        key={item.mode}
-                        type="button"
-                        onClick={() => handleTypeChange(item.mode)}
-                        className={
-                          "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[11px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
-                          (active
-                            ? item.active + " text-white shadow-lg"
-                            : "text-slate-500 hover:bg-white hover:text-slate-800")
-                        }
-                      >
-                        <span className="text-base leading-none">
-                          {item.icon}
-                        </span>
-                        <span className="leading-tight">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Amount — hero input */}
               <div className="mb-2.5">
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -3716,6 +3793,91 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              {/* Type selector — premium segmented control */}
+              <div className="mb-2">
+                <p className="mb-2 text-sm font-black text-slate-700">
+                  Loại giao dịch
+                </p>
+                <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                  {[
+                    {
+                      mode: "income" as TransactionFormMode,
+                      icon: "↑",
+                      label: "Thu",
+                      active: "bg-emerald-500",
+                    },
+                    {
+                      mode: "expense" as TransactionFormMode,
+                      icon: "↓",
+                      label: "Chi",
+                      active: "bg-rose-500",
+                    },
+                    {
+                      mode: "transfer" as TransactionFormMode,
+                      icon: "⇄",
+                      label: "Chuyển",
+                      active: "bg-blue-600",
+                    },
+                  ].map((item) => {
+                    const active = form.formMode === item.mode;
+                    return (
+                      <button
+                        key={item.mode}
+                        type="button"
+                        onClick={() => handleTypeChange(item.mode)}
+                        className={
+                          "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-center text-[11px] font-black transition-all active:scale-[.98] sm:min-h-14 sm:text-xs " +
+                          (active
+                            ? item.active + " text-white shadow-lg"
+                            : "text-slate-500 hover:bg-white hover:text-slate-800")
+                        }
+                      >
+                        <span className="text-base leading-none">
+                          {item.icon}
+                        </span>
+                        <span className="leading-tight">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {!form.id &&
+              form.formMode !== "transfer" &&
+              recentCaptureCategories.length > 0 ? (
+                <div
+                  data-transaction-capture-speed="recent-categories"
+                  className="mb-2.5 rounded-2xl border border-blue-100 bg-blue-50/50 px-3 py-2.5"
+                >
+                  <p className="text-[11px] font-black text-[#506A82]">
+                    Danh mục gần đây
+                  </p>
+                  <div className="mt-2 flex max-w-full gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                    {recentCaptureCategories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        aria-pressed={form.categoryId === category.id}
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            categoryId: category.id,
+                          }))
+                        }
+                        className={
+                          "min-h-9 shrink-0 rounded-full border px-3 text-xs font-black transition active:scale-[0.98] " +
+                          (form.categoryId === category.id
+                            ? "border-blue-300 bg-blue-600 text-white"
+                            : "border-blue-100 bg-white text-[#3977C3]")
+                        }
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {/* TRANSACTION-RULES-1-UX-POLISH: suggestion-before-category */}
               <div className="grid gap-2 md:grid-cols-2">
                 <FormInput
@@ -3729,7 +3891,14 @@ export default function TransactionsPage() {
                   <FormSelect
                     label="Ví nguồn"
                     value={form.walletId}
-                    onChange={(v) => setForm((p) => ({ ...p, walletId: v }))}
+                    onChange={(v) =>
+                      setForm((p) => ({
+                        ...p,
+                        walletId: v,
+                        transferToWalletId:
+                          p.transferToWalletId === v ? "" : p.transferToWalletId,
+                      }))
+                    }
                     options={wallets.map((w) => ({
                       label: w.name,
                       value: w.id,
@@ -3748,16 +3917,33 @@ export default function TransactionsPage() {
                 )}
 
                 {form.type === "transfer" ? (
-                  <FormSelect
-                    label="Ví đích"
-                    value={form.transferToWalletId}
-                    onChange={(v) =>
-                      setForm((p) => ({ ...p, transferToWalletId: v }))
-                    }
-                    options={wallets
-                      .filter((w) => w.id !== form.walletId)
-                      .map((w) => ({ label: w.name, value: w.id }))}
-                  />
+                  <div className="space-y-1.5">
+                    <FormSelect
+                      label="Ví đích"
+                      value={form.transferToWalletId}
+                      onChange={(v) =>
+                        setForm((p) => ({ ...p, transferToWalletId: v }))
+                      }
+                      options={wallets
+                        .filter((w) => w.id !== form.walletId)
+                        .map((w) => ({ label: w.name, value: w.id }))}
+                    />
+                    <button
+                      type="button"
+                      data-transaction-capture-speed="swap-transfer-wallets"
+                      disabled={!form.walletId || !form.transferToWalletId}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          walletId: p.transferToWalletId,
+                          transferToWalletId: p.walletId,
+                        }))
+                      }
+                      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 text-xs font-black text-blue-700 transition hover:bg-blue-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ArrowLeftRight size={14} /> Đổi chiều ví
+                    </button>
+                  </div>
                 ) : (
                   <div className="md:col-span-2">
                     <FormInput

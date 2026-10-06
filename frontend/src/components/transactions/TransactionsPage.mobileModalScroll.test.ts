@@ -66,11 +66,17 @@ describe("TransactionsPage Create/Edit modal body scrolls on mobile (TXN-MOBILE-
     expect(footerStart).toBeGreaterThan(formTagEnd);
   });
 
-  it("keeps all three transaction-type buttons at a 44px mobile touch target", () => {
+  it("keeps amount first while all three transaction-type buttons retain a 44px mobile touch target", () => {
+    const amountStart = source.indexOf("{/* Amount — hero input */}");
     const selectorStart = source.indexOf("{/* Type selector — premium segmented control */}");
-    const selectorEnd = source.indexOf("{/* Amount — hero input */}", selectorStart);
+    const selectorEnd = source.indexOf(
+      "{/* TRANSACTION-RULES-1-UX-POLISH: suggestion-before-category */}",
+      selectorStart,
+    );
     const selectorRegion = source.slice(selectorStart, selectorEnd);
-    expect(selectorStart).toBeGreaterThan(-1);
+    expect(amountStart).toBeGreaterThan(-1);
+    expect(selectorStart).toBeGreaterThan(amountStart);
+    expect(selectorEnd).toBeGreaterThan(selectorStart);
     expect(selectorRegion).toContain("min-h-11");
     expect(selectorRegion).not.toContain("min-h-10 flex-col");
   });
