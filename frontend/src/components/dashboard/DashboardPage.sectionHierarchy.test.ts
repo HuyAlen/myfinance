@@ -3,13 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Dashboard hierarchy after intentionally removing the Financial Priority /
- * Action Center block from the Dashboard.
- *
- * Source-inspection, not component mounting — consistent with this repo's
- * existing DashboardPage tests.
+ * Dashboard hierarchy after FINANCE-ACTION-CENTER-1.
+ * Hero, operating KPIs and the current-work Action Center are pinned decision
+ * surfaces. The user-customizable supporting sections remain below them.
  */
-describe("DashboardPage section hierarchy after Action Center removal", () => {
+describe("DashboardPage section hierarchy with Action Center", () => {
   const source = readFileSync(
     path.resolve(__dirname, "DashboardPage.tsx"),
     "utf8",
@@ -18,6 +16,7 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
   const markers = {
     hero: 'data-dashboard-surface="hero-shell"',
     operatingKpis: "{/* Operating KPIs */}",
+    actionCenter: 'data-dashboard-action-center="true"',
     budgetAttention: "{/* Budget attention */}",
     monthlyProgress: "{/* Monthly progress */}",
     cashFlowAndStructure: "{/* Cash flow and structure */}",
@@ -32,13 +31,7 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
     return index;
   }
 
-  it("removes the Action Center / Financial Priority section completely", () => {
-    expect(source).not.toContain("Ưu tiên tài chính");
-    expect(source).not.toContain("{/* Action center */}");
-    expect(source).not.toContain("priorityActions.length > 0");
-  });
-
-  it("every remaining major section marker appears exactly once", () => {
+  it("renders every major section marker exactly once", () => {
     for (const [name, marker] of Object.entries(markers)) {
       const firstIndex = source.indexOf(marker);
       const lastIndex = source.lastIndexOf(marker);
@@ -49,30 +42,32 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
     }
   });
 
-  it("Hero remains the first major Dashboard section", () => {
-    const heroIndex = indexOfMarker(markers.hero);
-    for (const [name, marker] of Object.entries(markers)) {
-      if (name === "hero") continue;
-      expect(heroIndex, `Hero must appear before ${name}`).toBeLessThan(
-        indexOfMarker(marker),
+  it("keeps Hero first, then operating KPIs, then the pinned Action Center", () => {
+    const hero = indexOfMarker(markers.hero);
+    const kpis = indexOfMarker(markers.operatingKpis);
+    const actionCenter = indexOfMarker(markers.actionCenter);
+
+    expect(hero).toBeLessThan(kpis);
+    expect(kpis).toBeLessThan(actionCenter);
+  });
+
+  it("keeps the Action Center above every customizable supporting section", () => {
+    const actionCenter = indexOfMarker(markers.actionCenter);
+    for (const name of [
+      "budgetAttention",
+      "monthlyProgress",
+      "cashFlowAndStructure",
+      "upcomingAndTopSpending",
+      "forexGoalsRecent",
+      "todaySummary",
+    ] as const) {
+      expect(actionCenter, `Action Center must appear before ${name}`).toBeLessThan(
+        indexOfMarker(markers[name]),
       );
     }
   });
 
-  it("Operating KPIs follow Hero, then Budget Attention, then Monthly Progress", () => {
-    expect(indexOfMarker(markers.hero)).toBeLessThan(
-      indexOfMarker(markers.operatingKpis),
-    );
-    expect(indexOfMarker(markers.operatingKpis)).toBeLessThan(
-      indexOfMarker(markers.budgetAttention),
-    );
-    expect(indexOfMarker(markers.budgetAttention)).toBeLessThan(
-      indexOfMarker(markers.monthlyProgress),
-    );
-  });
-
-  it("high-priority operating sections stay above medium/low supporting sections", () => {
-    const kpisIndex = indexOfMarker(markers.operatingKpis);
+  it("high-priority supporting sections stay above medium/low supporting sections", () => {
     const budgetAttentionIndex = indexOfMarker(markers.budgetAttention);
     const monthlyProgressIndex = indexOfMarker(markers.monthlyProgress);
     const cashFlowIndex = indexOfMarker(markers.cashFlowAndStructure);
@@ -83,7 +78,6 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
       "todaySummary",
     ] as const) {
       const target = indexOfMarker(markers[name]);
-      expect(kpisIndex).toBeLessThan(target);
       expect(budgetAttentionIndex).toBeLessThan(target);
       expect(monthlyProgressIndex).toBeLessThan(target);
       expect(cashFlowIndex).toBeLessThan(target);
@@ -94,9 +88,10 @@ describe("DashboardPage section hierarchy after Action Center removal", () => {
     const todayIndex = indexOfMarker(markers.todaySummary);
     for (const [name, marker] of Object.entries(markers)) {
       if (name === "todaySummary") continue;
-      expect(indexOfMarker(marker), `${name} must appear before Today's Summary`).toBeLessThan(
-        todayIndex,
-      );
+      expect(
+        indexOfMarker(marker),
+        `${name} must appear before Today's Summary`,
+      ).toBeLessThan(todayIndex);
     }
   });
 });

@@ -59,6 +59,19 @@ import {
   toRecurringScheduleInputs,
 } from "@/src/lib/recurring/recurringMoney";
 import {
+  buildRecurringDueActions,
+  summarizeRecurringDueActions,
+} from "@/src/lib/recurring/recurringDueAction";
+import {
+  buildFinanceNotifications,
+  getCurrentLocalMonthKey,
+} from "@/src/lib/notifications/financeNotifications";
+import {
+  buildActionableFinanceAlerts,
+  getActionableAlertPriorityLabel,
+} from "@/src/lib/notifications/actionableFinanceAlerts";
+import { buildFinanceActionCenter } from "@/src/lib/dashboard/financeActionCenter";
+import {
   applyTransactionReviewAcknowledgements,
   readTransactionReviewAcknowledgements,
 } from "@/src/lib/transactions/transactionReviewWorkflow";
@@ -2789,12 +2802,28 @@ export default function DashboardPage() {
   // RECURRING-MONEY-MANAGER-1: Dashboard no longer assembles category and
   // legacy transaction schedules independently. One canonical read model
   // deduplicates exact mirrors and excludes invalid/paused schedules before
-  // Safe-to-Spend, Runway and upcoming cash projections consume them.
+  // Safe-to-Spend, Runway, upcoming cash projections and the Action Center
+  // consume them.
+  const recurringMoneySchedules = useMemo(
+    () => buildRecurringMoneySchedules({ categories, transactions, wallets }),
+    [categories, transactions, wallets],
+  );
   const recurringSchedules = useMemo(() => {
-    return toRecurringScheduleInputs(
-      buildRecurringMoneySchedules({ categories, transactions, wallets }),
-    );
-  }, [categories, transactions, wallets]);
+    return toRecurringScheduleInputs(recurringMoneySchedules);
+  }, [recurringMoneySchedules]);
+
+  const recurringDueSummary = useMemo(
+    () =>
+      summarizeRecurringDueActions(
+        buildRecurringDueActions({
+          schedules: recurringMoneySchedules,
+          transactions,
+          referenceDate: toLocalDateKey(new Date()),
+          upcomingDays: 3,
+        }),
+      ),
+    [recurringMoneySchedules, transactions],
+  );
 
   const recurringOccurrences = useMemo(
     () => expandRecurringScheduleOccurrences(recurringSchedules, new Date(), 90),
@@ -2934,6 +2963,86 @@ export default function DashboardPage() {
       transactionReviewAcknowledgements,
     ],
   );
+
+  // FINANCE-ACTION-CENTER-1: the command center is about what needs action
+  // today, independent of whichever historical period the Dashboard picker is
+  // currently displaying. getDashboardFetchRange already includes the real
+  // current year, so this reuses the accepted in-memory snapshot and adds zero
+  // data-fetch call sites.
+  const actionCenterMonthKey = getCurrentLocalMonthKey();
+  const actionCenterTransactions = useMemo(
+    () =>
+      transactions.filter((transaction) =>
+        transaction.date.startsWith(actionCenterMonthKey),
+      ),
+    [actionCenterMonthKey, transactions],
+  );
+  const rawActionCenterReviewInbox = useMemo(
+    () =>
+      buildFinanceReviewInbox({
+        transactions: actionCenterTransactions,
+        categories,
+        limit: Number.MAX_SAFE_INTEGER,
+      }),
+    [actionCenterTransactions, categories],
+  );
+  const actionCenterReviewInbox = useMemo(
+    () =>
+      applyTransactionReviewAcknowledgements(
+        rawActionCenterReviewInbox,
+        actionCenterTransactions,
+        transactionReviewAcknowledgements,
+      ),
+    [
+      actionCenterTransactions,
+      rawActionCenterReviewInbox,
+      transactionReviewAcknowledgements,
+    ],
+  );
+  const actionCenterBaseNotifications = useMemo(
+    () =>
+      buildFinanceNotifications({
+        budgets,
+        transactions,
+        categories,
+        // Goal notifications currently represent completion/near-completion
+        // information, not a truthful "off-track" condition (Goal has no
+        // target date/pace contract yet), so they stay out of work-to-do.
+        goals: [],
+        debts,
+        currentMonth: actionCenterMonthKey,
+      }),
+    [actionCenterMonthKey, budgets, categories, debts, transactions],
+  );
+  const actionCenterAlerts = useMemo(
+    () =>
+      buildActionableFinanceAlerts({
+        baseNotifications: actionCenterBaseNotifications,
+        reviewInbox: actionCenterReviewInbox,
+        invalidRecurringScheduleCount,
+        recurringDueSummary: {
+          total: recurringDueSummary.total,
+          dueTodayCount: recurringDueSummary.dueTodayCount,
+          upcomingCount: recurringDueSummary.upcomingCount,
+        },
+        currentMonth: actionCenterMonthKey,
+      }),
+    [
+      actionCenterBaseNotifications,
+      actionCenterMonthKey,
+      actionCenterReviewInbox,
+      invalidRecurringScheduleCount,
+      recurringDueSummary.dueTodayCount,
+      recurringDueSummary.total,
+      recurringDueSummary.upcomingCount,
+    ],
+  );
+  const financeActionCenter = useMemo(
+    () => buildFinanceActionCenter(actionCenterAlerts, 3),
+    [actionCenterAlerts],
+  );
+  const financeActionCenterReady =
+    isDashboardReady && cashFlowReady && budgetsLoaded;
 
   const investmentAllocationOverview = useMemo(
     () =>
@@ -3490,6 +3599,142 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* Finance action center — pinned decision surface, not a customizable
+          supporting section. It consumes the same canonical finance rules as
+          Header notifications and only selects/ranks work-to-do for display. */}
+      <section
+        data-dashboard-action-center="true"
+        aria-labelledby="finance-action-center-title"
+      >
+        <div className="relative overflow-hidden rounded-3xl border border-[#CFE0ED] bg-linear-to-br from-white via-[#F9FCFF] to-[#F2F8FD] p-4 shadow-[0_8px_24px_rgba(45,76,102,0.08)] sm:rounded-4xl sm:p-5">
+          <div className="pointer-events-none absolute -right-16 -top-20 hidden size-44 rounded-full bg-blue-100/45 blur-3xl sm:block" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#2F80ED]">
+                Hôm nay
+              </p>
+              <h2
+                id="finance-action-center-title"
+                className="mt-1 text-xl font-black tracking-tight text-[#23466F]"
+              >
+                Việc cần làm
+              </h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-[#60778D] sm:text-sm">
+                Tối đa 3 việc tài chính cần xử lý trước, lấy từ cùng quy tắc với thông báo của MyFinance.
+              </p>
+            </div>
+            {financeActionCenterReady ? (
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  financeActionCenter.actionRequiredCount > 0
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {financeActionCenter.actionRequiredCount > 0
+                  ? `${financeActionCenter.actionRequiredCount} cần xử lý`
+                  : "Đang ổn"}
+              </span>
+            ) : (
+              <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+            )}
+          </div>
+
+          {!financeActionCenterReady ? (
+            <div className="relative mt-4 grid gap-2.5 md:grid-cols-3">
+              <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+            </div>
+          ) : financeActionCenter.items.length === 0 ? (
+            <div className="relative mt-4 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-[#F6FCF9] p-4">
+              <ShieldCheck size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+              <div>
+                <p className="text-sm font-black text-emerald-700">
+                  Không có việc tài chính cần xử lý ngay
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[#60778D]">
+                  Không có cảnh báo mức cần xử lý về rà soát giao dịch, lịch định kỳ, ngân sách, dòng tiền hoặc nợ theo dữ liệu hiện tại.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="relative mt-4 grid gap-2.5 md:grid-cols-3">
+                {financeActionCenter.items.map((item) => {
+                  const ActionIcon =
+                    item.kind === "transaction-review"
+                      ? ReceiptText
+                      : item.kind === "recurring-config" ||
+                          item.kind === "recurring-due"
+                        ? CalendarClock
+                        : item.kind === "budget"
+                          ? Wallet
+                          : item.kind === "debt"
+                            ? CreditCard
+                            : item.kind === "cash-flow"
+                              ? ArrowDownRight
+                              : Info;
+                  const urgent = item.priority === "urgent";
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => router.push(item.href)}
+                      data-dashboard-action-kind={item.kind}
+                      data-dashboard-action-priority={item.priority}
+                      className={`group flex min-h-32 min-w-0 flex-col rounded-2xl border p-3.5 text-left transition-[transform,border-color,box-shadow] duration-150 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
+                        urgent
+                          ? "border-rose-200 bg-rose-50/55 hover:border-rose-300 hover:shadow-sm"
+                          : "border-amber-200 bg-amber-50/45 hover:border-amber-300 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span
+                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+                            urgent
+                              ? "bg-rose-100 text-rose-600"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          <ActionIcon size={17} aria-hidden="true" />
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                            urgent
+                              ? "bg-white/85 text-rose-700"
+                              : "bg-white/85 text-amber-700"
+                          }`}
+                        >
+                          {getActionableAlertPriorityLabel(item.priority)}
+                        </span>
+                      </div>
+                      <p className="mt-3 line-clamp-2 text-sm font-black leading-5 text-[#294A66]">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#60778D]">
+                        {item.body}
+                      </p>
+                      <span className="mt-auto inline-flex items-center gap-1.5 pt-3 text-xs font-black text-[#1F6FCA]">
+                        {item.actionLabel}
+                        <ArrowUpRight size={14} aria-hidden="true" />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {financeActionCenter.hiddenCount > 0 ? (
+                <p className="relative mt-3 text-[11px] font-semibold text-[#71879A]">
+                  +{financeActionCenter.hiddenCount} việc khác vẫn được giữ trong thông báo; khu vực Việc cần làm chỉ ghim 3 việc ưu tiên nhất.
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
+      </section>
+
       <div
         data-dashboard-customization-toolbar="true"
         className="flex items-center justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 sm:px-4"
@@ -3536,7 +3781,7 @@ export default function DashboardPage() {
                   Tùy chỉnh Tổng quan
                 </h2>
                 <p className="mt-1 max-w-xl text-xs leading-5 text-[#60778D]">
-                  Tài sản ròng và các KPI vận hành luôn được ghim ở đầu để giữ thứ tự ưu tiên tài chính. Bạn có thể ẩn hoặc sắp xếp các mục hỗ trợ bên dưới.
+                  Tài sản ròng và các KPI vận hành luôn được ghim ở đầu để giữ thứ tự ưu tiên tài chính. Mục Việc cần làm cũng được ghim để bạn không bỏ sót việc quan trọng. Bạn có thể ẩn hoặc sắp xếp các mục hỗ trợ bên dưới.
                 </p>
               </div>
               <button
