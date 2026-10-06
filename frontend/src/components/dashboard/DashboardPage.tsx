@@ -25,7 +25,11 @@ import {
 import {
   beginPeriodGeneration,
   isBudgetAttentionReady,
+  isDataHealthReady,
+  isMonthEndCloseoutReady,
   isMonthlyProgressReady,
+  isRecentActivityReady,
+  isRecurringSupportReady,
   isNewPeriodContext,
   isStalePeriodGeneration,
   shouldMarkReady,
@@ -2374,6 +2378,16 @@ export default function DashboardPage() {
   // introducing duplicate fetches. This gate is a correctness superset for
   // cash movement: transactions/categories + saving_transactions + Forex ledger.
   const cashMovementReady = cashFlowReady && savingInvestmentReady;
+  const recurringPanelReady = isRecurringSupportReady(
+    isDashboardReady,
+    cashFlowReady,
+  );
+  const recentActivityReady = isRecentActivityReady(
+    isDashboardReady,
+    cashFlowReady,
+    savingInvestmentReady,
+    forexReady,
+  );
 
   // ── Goal rows: use the same source-of-truth logic as GoalsPage ───────────
   const goalRows = useMemo(() => goalMeta, [goalMeta]);
@@ -2857,6 +2871,16 @@ export default function DashboardPage() {
     budgetsLoaded,
     cashFlowReady,
   );
+  const dataHealthReady = isDataHealthReady(
+    isDashboardReady,
+    cashFlowReady,
+    netWorthHistoryReady,
+  );
+  const monthEndCloseoutReady = isMonthEndCloseoutReady(
+    cashMovementReady,
+    budgetAttentionReady,
+    netWorthHistoryReady,
+  );
 
   // RECURRING-MONEY-MANAGER-1: Dashboard no longer assembles category and
   // legacy transaction schedules independently. One canonical read model
@@ -3276,7 +3300,13 @@ export default function DashboardPage() {
   );
 
   function handleSaveMonthEndReviewHistory() {
-    if (!isDashboardMonthMode || !monthEndCloseout.visible) return;
+    if (
+      !isDashboardMonthMode ||
+      !monthEndCloseoutReady ||
+      !monthEndCloseout.visible
+    ) {
+      return;
+    }
 
     const record = createMonthEndReviewHistoryRecord({
       monthKey: monthEndCloseout.monthKey,
@@ -4841,7 +4871,7 @@ export default function DashboardPage() {
             <div data-dashboard-decision="data-health" data-dashboard-period-scope="month-only" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
               Sức khỏe dữ liệu được đánh giá theo một tháng lịch. Chuyển bộ lọc sang Tháng để kiểm tra.
             </div>
-          ) : !cashFlowReady || !netWorthHistoryReady ? (
+          ) : !dataHealthReady ? (
             <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-100" />
           ) : !financeDataHealth.available ? (
             <div data-dashboard-decision="data-health" className="mt-4 rounded-2xl border border-dashed border-[#DCE8F1] bg-[#F8FBFE] p-4 text-sm text-[#60778D]">
@@ -4877,6 +4907,13 @@ export default function DashboardPage() {
             title={monthEndCloseout.mode === "closing" ? "Chốt tháng" : "Rà soát tháng trước"}
             subtitle={monthEndCloseout.mode === "closing" ? "Checklist cuối tháng trước khi bước sang kỳ mới" : "Cửa sổ 3 ngày đầu tháng để xử lý nốt kỳ vừa qua"}
           >
+            {!monthEndCloseoutReady ? (
+              <div
+                data-dashboard-supporting-loading="month-end-closeout"
+                className="mt-4 h-52 animate-pulse rounded-2xl bg-slate-100"
+                aria-label="Đang tải dữ liệu chốt tháng"
+              />
+            ) : (
             <div data-dashboard-decision="month-end-closeout" className="mt-4">
               <div className="grid grid-cols-3 gap-2">
                 <MiniStat
@@ -4944,6 +4981,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
+            )}
           </Panel>
         ) : null}
       </section>
@@ -5050,7 +5088,7 @@ export default function DashboardPage() {
           title="Sắp đến hạn trong 30 ngày"
           subtitle="Thu nhập và chi phí định kỳ dựa trên ngày chạy tiếp theo"
         >
-          {recurringCashForecast.eventCount30 > 0 ? (
+          {recurringPanelReady && recurringCashForecast.eventCount30 > 0 ? (
             <div data-dashboard-intelligence="recurring-cash-forecast" className="mt-4 grid grid-cols-3 gap-2">
               <MiniStat label="7 ngày ròng" value={`${recurringCashForecast.net7 >= 0 ? "+" : ""}${formatVND(recurringCashForecast.net7)}`} color={recurringCashForecast.net7 >= 0 ? "text-emerald-600" : "text-rose-500"} />
               <MiniStat label="30 ngày thu" value={formatVND(recurringCashForecast.income30)} color="text-emerald-600" />
@@ -5058,7 +5096,17 @@ export default function DashboardPage() {
             </div>
           ) : null}
           <div className="mt-4 space-y-2">
-            {upcomingMoneyEvents.length === 0 ? (
+            {!recurringPanelReady ? (
+              <div
+                data-dashboard-supporting-loading="recurring"
+                className="space-y-2"
+                aria-label="Đang tải lịch định kỳ"
+              >
+                <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+                <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+              </div>
+            ) : upcomingMoneyEvents.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <ReceiptText className="mx-auto text-slate-300" size={24} />
                 <p className="mt-2 text-sm font-black text-slate-700">
@@ -5246,6 +5294,14 @@ export default function DashboardPage() {
           subtitle="Vốn đã nạp, số dư hiện tại và hiệu suất giao dịch"
         >
           <div className="mt-5 flex min-h-0 flex-1 flex-col gap-3">
+            {!forexReady ? (
+              <div
+                data-dashboard-supporting-loading="forex"
+                className="h-44 animate-pulse rounded-2xl bg-slate-100"
+                aria-label="Đang tải dữ liệu ngoại hối"
+              />
+            ) : (
+              <>
             <div className="grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2">
               <MiniStat
                 label="Vốn ròng"
@@ -5313,6 +5369,8 @@ export default function DashboardPage() {
                   : ""}
               </p>
             </div>
+              </>
+            )}
           </div>
           <button
             type="button"
@@ -5327,10 +5385,20 @@ export default function DashboardPage() {
 
         <Panel
           title="Mục tiêu tài chính"
-          subtitle={`${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`}
+          subtitle={
+            goalsReady
+              ? `${goalSnapshot.trackedCount} mục tiêu · tiến độ trung bình ${summary.goalScore}%`
+              : "Đang tải dữ liệu mục tiêu"
+          }
         >
           <div className="mt-5 min-h-0 min-w-0 flex-1 space-y-3">
-            {goalRows.length === 0 ? (
+            {!goalsReady ? (
+              <div
+                data-dashboard-supporting-loading="goals"
+                className="h-40 animate-pulse rounded-2xl bg-slate-100"
+                aria-label="Đang tải mục tiêu tài chính"
+              />
+            ) : goalRows.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
                   Chưa có mục tiêu
@@ -5387,7 +5455,13 @@ export default function DashboardPage() {
           subtitle="5 hoạt động mới nhất, đã loại chuyển nội bộ"
         >
           <div className="mt-5 min-h-0 flex-1 space-y-3">
-            {recentTxnGroups.length === 0 ? (
+            {!recentActivityReady ? (
+              <div
+                data-dashboard-supporting-loading="recent-activity"
+                className="h-44 animate-pulse rounded-2xl bg-slate-100"
+                aria-label="Đang tải giao dịch gần đây"
+              />
+            ) : recentTxnGroups.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 sm:p-5 text-center">
                 <p className="text-sm font-black text-slate-700">
                   Chưa có giao dịch trong kỳ

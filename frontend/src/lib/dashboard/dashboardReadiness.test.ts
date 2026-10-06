@@ -8,6 +8,10 @@ import {
   isNetWorthTrendReady,
   isNewPeriodContext,
   isPeriodSnapshotCurrent,
+  isRecurringSupportReady,
+  isRecentActivityReady,
+  isDataHealthReady,
+  isMonthEndCloseoutReady,
   isStalePeriodGeneration,
   shouldMarkReady,
 } from "./dashboardReadiness";
@@ -306,6 +310,58 @@ describe("isActionCenterReady", () => {
   });
 });
 
+describe("DASHBOARD-SUPPORTING-READINESS-INTEGRITY-1", () => {
+  it("Recurring support requires both wallet snapshot and current-period cash-flow inputs", () => {
+    expect(isRecurringSupportReady(false, false)).toBe(false);
+    expect(isRecurringSupportReady(true, false)).toBe(false);
+    expect(isRecurringSupportReady(false, true)).toBe(false);
+    expect(isRecurringSupportReady(true, true)).toBe(true);
+  });
+
+  it("Recent Activity waits for every contributing domain", () => {
+    expect(isRecentActivityReady(true, true, true, true)).toBe(true);
+    expect(isRecentActivityReady(false, true, true, true)).toBe(false);
+    expect(isRecentActivityReady(true, false, true, true)).toBe(false);
+    expect(isRecentActivityReady(true, true, false, true)).toBe(false);
+    expect(isRecentActivityReady(true, true, true, false)).toBe(false);
+  });
+
+  it("Recent Activity accepts genuine empty snapshots once all domains resolved", () => {
+    const netWorthReady = shouldMarkReady(true, false);
+    const cashFlowReady = shouldMarkReady(true, false);
+    const savingInvestmentReady = shouldMarkReady(true, false);
+    const forexReady = shouldMarkReady(true, false);
+    expect(
+      isRecentActivityReady(
+        netWorthReady,
+        cashFlowReady,
+        savingInvestmentReady,
+        forexReady,
+      ),
+    ).toBe(true);
+  });
+
+  it("Data Health cannot certify a clean state before assets, period evidence and Net Worth history resolve", () => {
+    expect(isDataHealthReady(true, true, true)).toBe(true);
+    expect(isDataHealthReady(false, true, true)).toBe(false);
+    expect(isDataHealthReady(true, false, true)).toBe(false);
+    expect(isDataHealthReady(true, true, false)).toBe(false);
+  });
+
+  it("Month-End Closeout requires cash movement, budget/review and Net Worth history readiness", () => {
+    expect(isMonthEndCloseoutReady(true, true, true)).toBe(true);
+    expect(isMonthEndCloseoutReady(false, true, true)).toBe(false);
+    expect(isMonthEndCloseoutReady(true, false, true)).toBe(false);
+    expect(isMonthEndCloseoutReady(true, true, false)).toBe(false);
+  });
+
+  it("same-context last-known-good semantics keep a supporting surface ready after a later transient failure", () => {
+    const retained = shouldMarkReady(false, true);
+    expect(isRecurringSupportReady(retained, retained)).toBe(true);
+    expect(isDataHealthReady(retained, retained, retained)).toBe(true);
+    expect(isMonthEndCloseoutReady(retained, retained, retained)).toBe(true);
+  });
+});
 /**
  * PERF-3 Snapshot vs Period Data Loading: locks in exactly which
  * loaded-year/requested-year combinations count as "a different period

@@ -217,6 +217,68 @@ export function isActionCenterReady(
 }
 
 /**
+ * DASHBOARD-SUPPORTING-READINESS-INTEGRITY-1
+ *
+ * The recurring panel reads wallets plus the selected period's
+ * transactions/categories. `netWorthReady` is the existing proof that the
+ * wallet snapshot has loaded; there is intentionally no duplicate wallet-only
+ * readiness state. `cashFlowReady` proves the period transaction/category
+ * snapshot is current.
+ */
+export function isRecurringSupportReady(
+  netWorthReady: boolean,
+  cashFlowReady: boolean,
+): boolean {
+  return netWorthReady && cashFlowReady;
+}
+
+/**
+ * Recent Activity merges three independently loaded domains: finance
+ * transactions/categories/wallets, Savings interest, and Forex cash activity.
+ * A legitimate empty list may render only after every contributing domain has
+ * produced a trustworthy snapshot.
+ */
+export function isRecentActivityReady(
+  netWorthReady: boolean,
+  cashFlowReady: boolean,
+  savingInvestmentReady: boolean,
+  forexReady: boolean,
+): boolean {
+  return (
+    netWorthReady &&
+    cashFlowReady &&
+    savingInvestmentReady &&
+    forexReady
+  );
+}
+
+/**
+ * Data Health reads current asset presence, selected-period review/recurring
+ * evidence, and persisted Net Worth history. Do not let unresolved snapshots
+ * masquerade as "no issue" or "no financial data".
+ */
+export function isDataHealthReady(
+  netWorthReady: boolean,
+  cashFlowReady: boolean,
+  netWorthHistoryReady: boolean,
+): boolean {
+  return netWorthReady && cashFlowReady && netWorthHistoryReady;
+}
+
+/**
+ * Month-End Closeout combines budget/review state, full cash movement, and the
+ * optional Net Worth attribution line. The panel is presented as one saved
+ * review snapshot, so it waits for the union of those dependencies before its
+ * values or save action are exposed.
+ */
+export function isMonthEndCloseoutReady(
+  cashMovementReady: boolean,
+  budgetAttentionReady: boolean,
+  netWorthHistoryReady: boolean,
+): boolean {
+  return cashMovementReady && budgetAttentionReady && netWorthHistoryReady;
+}
+/**
  * PERF-3: classifies whether a period (year-scoped) reload targets a
  * different context than the one currently reflected in state.
  *

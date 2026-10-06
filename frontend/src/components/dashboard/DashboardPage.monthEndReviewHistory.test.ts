@@ -24,7 +24,9 @@ describe("MONTH-END-REVIEW-HISTORY-1 Dashboard wiring", () => {
     expect(end).toBeGreaterThan(start);
     const handlerSource = source.slice(start, end);
 
-    expect(handlerSource).toContain("if (!isDashboardMonthMode || !monthEndCloseout.visible) return;");
+    expect(handlerSource).toContain("!isDashboardMonthMode ||");
+    expect(handlerSource).toContain("!monthEndCloseoutReady ||");
+    expect(handlerSource).toContain("!monthEndCloseout.visible");
     expect(handlerSource).toContain("createMonthEndReviewHistoryRecord({");
     expect(handlerSource).toContain("persistMonthEndReviewHistory(nextHistory)");
 
