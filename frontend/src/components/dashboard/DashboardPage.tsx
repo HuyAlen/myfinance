@@ -2311,13 +2311,15 @@ export default function DashboardPage() {
             : Math.min(financialStructureAdjusted.variableCostRatio, 100),
       },
       {
-        title: "Tiết kiệm & Đầu tư",
+        title: "Phân bổ tiết kiệm & đầu tư",
         value: `${financialStructureAdjusted.futureAllocationRate}%`,
         amount: `${formatVND(financialStructureAdjusted.futureAllocationAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
           financialStructureAdjusted.income <= 0
             ? "Chưa đủ dữ liệu thu nhập"
-            : `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
+            : financialStructureAdjusted.futureAllocationAmount <= 0
+              ? "Chưa ghi nhận phân bổ tiết kiệm hoặc đầu tư trong kỳ"
+              : `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
         tone:
           financialStructureAdjusted.income <= 0
             ? "neutral"
@@ -2332,19 +2334,21 @@ export default function DashboardPage() {
             : Math.min(financialStructureAdjusted.futureAllocationRate, 100),
       },
       {
-        title: "Tỷ trọng đầu tư",
+        title: "Phân bổ đầu tư",
         value: `${financialStructureAdjusted.investmentRate}%`,
         amount: `${formatVND(financialStructureAdjusted.investmentAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
         note:
           financialStructureAdjusted.income <= 0
             ? "Chưa đủ dữ liệu thu nhập"
-            : financialStructureAdjusted.investmentRate >= 15
-              ? "Tích cực xây tài sản"
-              : financialStructureAdjusted.investmentRate >= 5
-                ? "Đang bắt đầu"
-                : financialStructureAdjusted.futureAllocationRate >= 20
-                  ? "Phân bổ kỳ này đang tập trung vào tiết kiệm"
-                  : "Chưa ghi nhận phân bổ đầu tư",
+            : financialStructureAdjusted.investmentAmount <= 0
+              ? financialStructureAdjusted.savingAmount > 0
+                ? "Kỳ này chỉ ghi nhận phân bổ vào tiết kiệm"
+                : "Chưa ghi nhận phân bổ đầu tư trong kỳ"
+              : financialStructureAdjusted.investmentRate >= 15
+                ? "Tích cực xây tài sản trong kỳ"
+                : financialStructureAdjusted.investmentRate >= 5
+                  ? "Đang bắt đầu phân bổ đầu tư trong kỳ"
+                  : "Đã ghi nhận phân bổ đầu tư trong kỳ",
         tone:
           financialStructureAdjusted.income <= 0
             ? "neutral"
@@ -2366,7 +2370,7 @@ export default function DashboardPage() {
   // dependency subsets — "Chi phí cố định"/"Chi phí biến đổi" only need
   // transactions+categories (financialStructure, post-fix now on the same
   // accepted transaction set as cashFlowReady's own dependency), while
-  // "Tiết kiệm & Đầu tư"/"Tỷ trọng đầu tư" additionally read
+  // "Phân bổ tiết kiệm & đầu tư"/"Phân bổ đầu tư" additionally read
   // periodFutureAllocation's savingAmount/investmentAmount, which is
   // gated by savingInvestmentReady. Rather than splitting the panel into
   // 2 ready + 2 loading cards simultaneously, this gates the whole panel
@@ -4669,7 +4673,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Cấu trúc tài chính"
-          subtitle="4 chỉ số cốt lõi giúp kiểm soát chất lượng dòng tiền"
+          subtitle="Tỷ lệ chi tiêu và phân bổ vốn trên thu nhập của kỳ đang chọn"
         >
           {/* DASH-POLISH-1: gated on financialStructureReady (union of
               cashFlowReady + savingInvestmentReady — see that memo's own
@@ -4678,6 +4682,12 @@ export default function DashboardPage() {
               or stale-period transaction/allocation set. */}
           {financialStructureReady ? (
             <div className="mt-4 min-w-0 space-y-3">
+              <div
+                data-dashboard-financial-structure-scope="period"
+                className="rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#60778D]"
+              >
+                Các tỷ lệ dùng thu nhập và dòng tiền phát sinh trong kỳ đang chọn; không phải số dư Tiết kiệm hoặc giá trị danh mục Đầu tư hiện tại.
+              </div>
               {financialStructureCards.map((item) => (
                 <div
                   key={item.title}
