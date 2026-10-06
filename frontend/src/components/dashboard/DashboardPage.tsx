@@ -2595,6 +2595,9 @@ export default function DashboardPage() {
   ] as const;
 
   // ── MyFinance v2 daily command center ───────────────────────────────────
+  // DASHBOARD-TODAY-SUMMARY-SEMANTICS-1: Today follows the same operating-vs-
+  // capital split as the period cash-flow panel. Savings and Forex principal can
+  // change Wallet liquidity, but it is not income or real spending.
   const todaySnapshot = useMemo(() => {
     const todayKey = toLocalDateKey(new Date());
     const flow = calculateFinanceFlowSnapshot({
@@ -2608,12 +2611,12 @@ export default function DashboardPage() {
     });
 
     return {
-      income: flow.income,
-      expense: flow.realExpense,
+      operatingCashIn: flow.operatingCashIn,
+      operatingCashOut: flow.operatingCashOut,
       allocation: flow.futureAllocation,
-      cashIn: flow.cashIn,
-      cashOut: flow.cashOut,
-      net: flow.netCashMovement,
+      operatingNetCashFlow: flow.operatingNetCashFlow,
+      capitalMovementIn: flow.capitalMovementIn,
+      capitalMovementOut: flow.capitalMovementOut,
     };
   }, [categories, forexCashTransactions, savingTransactions, transactions]);
 
@@ -5416,28 +5419,78 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <DailyMetric
-              label="Thu vào hôm nay"
-              value={formatVND(todaySnapshot.cashIn)}
-              tone="good"
-            />
-            <DailyMetric
-              label="Chi ra hôm nay"
-              value={formatVND(todaySnapshot.cashOut)}
-              tone="danger"
-            />
-            <DailyMetric
-              label="Đã phân bổ"
-              value={formatVND(todaySnapshot.allocation)}
-              tone="saving"
-            />
-            <DailyMetric
-              label="Ròng hôm nay"
-              value={`${todaySnapshot.net >= 0 ? "+" : ""}${formatVND(todaySnapshot.net)}`}
-              tone={todaySnapshot.net >= 0 ? "good" : "danger"}
-            />
-          </div>
+          {cashMovementReady ? (
+            <>
+              <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <DailyMetric
+                  label="Thu vào hôm nay"
+                  value={formatVND(todaySnapshot.operatingCashIn)}
+                  tone="good"
+                />
+                <DailyMetric
+                  label="Chi ra hôm nay"
+                  value={formatVND(todaySnapshot.operatingCashOut)}
+                  tone="danger"
+                />
+                <DailyMetric
+                  label="Đã phân bổ"
+                  value={formatVND(todaySnapshot.allocation)}
+                  tone="saving"
+                />
+                <DailyMetric
+                  label="Ròng hôm nay"
+                  value={`${todaySnapshot.operatingNetCashFlow >= 0 ? "+" : ""}${formatVND(todaySnapshot.operatingNetCashFlow)}`}
+                  tone={todaySnapshot.operatingNetCashFlow >= 0 ? "good" : "danger"}
+                />
+              </div>
+
+              {todaySnapshot.capitalMovementIn > 0 ||
+              todaySnapshot.capitalMovementOut > 0 ? (
+                <div
+                  data-dashboard-today-capital-movement="true"
+                  className="relative mt-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-black text-[#23466F]">
+                      Dịch chuyển tài sản hôm nay
+                    </p>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Không tính vào Thu vào / Chi ra
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2.5">
+                    <div className="rounded-xl bg-white px-3 py-2.5">
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Từ Tiết kiệm/Ngoại hối về ví
+                      </p>
+                      <p className="mt-1 text-sm font-black text-cyan-700">
+                        {formatVND(todaySnapshot.capitalMovementIn)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2.5">
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Từ ví sang Tiết kiệm/Ngoại hối
+                      </p>
+                      <p className="mt-1 text-sm font-black text-indigo-700">
+                        {formatVND(todaySnapshot.capitalMovementOut)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div
+              data-dashboard-today-loading="true"
+              className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
+              aria-label="Đang tải tổng quan hôm nay"
+            >
+              <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+              <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+            </div>
+          )}
         </div>
       </section>
       </div>

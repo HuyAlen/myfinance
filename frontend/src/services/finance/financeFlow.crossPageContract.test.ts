@@ -36,7 +36,11 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     const pulse = dashboard.slice(pulseStart, pulseEnd);
 
     expect(today).toContain("calculateFinanceFlowSnapshot({");
-    expect(today).toContain("expense: flow.realExpense");
+    expect(today).toContain("operatingCashIn: flow.operatingCashIn");
+    expect(today).toContain("operatingCashOut: flow.operatingCashOut");
+    expect(today).toContain(
+      "operatingNetCashFlow: flow.operatingNetCashFlow",
+    );
     expect(pulse).toContain("calculateFinanceFlowSnapshot({");
     expect(pulse).toContain("const expense = monthFlow.realExpense;");
     expect(today).not.toContain('transaction.type === "expense"');
