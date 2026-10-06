@@ -1416,6 +1416,25 @@ export type FinanceFlowSnapshot = {
   forexCashIn: number;
   forexCashOut: number;
 
+  /** Gross principal moved from spendable Wallets into Savings in the period. */
+  savingContribution: number;
+  /** Gross principal returned from Savings to spendable Wallets in the period. */
+  savingWithdrawal: number;
+  /** Signed external Savings allocation: contribution - withdrawal. */
+  savingNetAllocation: number;
+  /** Gross principal moved from spendable Wallets into Portfolio/Forex investments. */
+  investmentContribution: number;
+  /** Gross principal returned from Portfolio/Forex investments to Wallets. */
+  investmentWithdrawal: number;
+  /** Signed investment allocation: contribution - withdrawal. */
+  investmentNetAllocation: number;
+  /** Gross Savings + Investment contributions in the period. */
+  futureContribution: number;
+  /** Gross Savings + Investment withdrawals in the period. */
+  futureWithdrawal: number;
+  /** Signed Savings + Investment allocation: contribution - withdrawal. */
+  futureNetAllocation: number;
+
   /** Manual/legacy saving allocations recorded in the main transactions ledger. */
   transactionSavingAllocation: number;
   /** Signed net movement from saving_transactions (deposit - withdraw - settlement). */
@@ -1712,6 +1731,14 @@ export function calculateFinanceFlowSnapshot(input: {
   const savingLedgerNet = getNetSavingAllocationFromLedger(
     scopedSavingMovements,
   );
+  // Financial Structure needs gross period activity, not only a positive
+  // clamped net. Use wallet-backed Savings rows so Savings-to-Savings internal
+  // transfers (wallet_id = null) never inflate contribution/withdrawal totals.
+  const savingContribution =
+    transactionSavingAllocation + savingCashMovement.deposits;
+  const savingWithdrawal =
+    savingCashMovement.withdrawals + savingCashMovement.settlements;
+  const savingNetAllocation = savingContribution - savingWithdrawal;
   const savingAllocation = Math.max(
     0,
     transactionSavingAllocation + savingLedgerNet,
@@ -1728,11 +1755,22 @@ export function calculateFinanceFlowSnapshot(input: {
   const portfolioInvestmentLedgerNet = portfolioInvestmentCapital.net;
   const investmentLedgerNet =
     forexInvestmentLedgerNet + portfolioInvestmentLedgerNet;
+  const investmentContribution =
+    transactionInvestmentAllocation +
+    forexCashMovement.deposits +
+    portfolioInvestmentCapital.deposits;
+  const investmentWithdrawal =
+    forexCashMovement.withdrawals + portfolioInvestmentCapital.withdrawals;
+  const investmentNetAllocation =
+    investmentContribution - investmentWithdrawal;
   const investmentAllocation = Math.max(
     0,
     transactionInvestmentAllocation + investmentLedgerNet,
   );
   const futureAllocation = savingAllocation + investmentAllocation;
+  const futureContribution = savingContribution + investmentContribution;
+  const futureWithdrawal = savingWithdrawal + investmentWithdrawal;
+  const futureNetAllocation = futureContribution - futureWithdrawal;
 
   // CASH-MOVEMENT-SSOT-1: liquidity is deliberately parallel to personal-
   // finance semantics. Savings/Portfolio/Forex principal movement changes spendable
@@ -1761,16 +1799,8 @@ export function calculateFinanceFlowSnapshot(input: {
   const operatingCashIn = income;
   const operatingCashOut = realExpense;
   const operatingNetCashFlow = operatingCashIn - operatingCashOut;
-  const capitalMovementIn =
-    savingCashMovement.cashIn +
-    forexCashMovement.withdrawals +
-    portfolioInvestmentCashIn;
-  const capitalMovementOut =
-    transactionSavingAllocation +
-    transactionInvestmentAllocation +
-    savingCashMovement.cashOut +
-    forexCashMovement.deposits +
-    portfolioInvestmentCashOut;
+  const capitalMovementIn = futureWithdrawal;
+  const capitalMovementOut = futureContribution;
   const netCapitalMovement = capitalMovementIn - capitalMovementOut;
 
   return {
@@ -1793,6 +1823,15 @@ export function calculateFinanceFlowSnapshot(input: {
     savingCashOut,
     forexCashIn,
     forexCashOut,
+    savingContribution,
+    savingWithdrawal,
+    savingNetAllocation,
+    investmentContribution,
+    investmentWithdrawal,
+    investmentNetAllocation,
+    futureContribution,
+    futureWithdrawal,
+    futureNetAllocation,
     transactionSavingAllocation,
     savingLedgerNet,
     savingAllocation,

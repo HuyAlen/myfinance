@@ -12,7 +12,9 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
     expect(source).toContain("calculateGoalFundingSnapshot({");
     expect(source).toContain("calculateForexPerformanceSnapshot(");
     expect(source).toContain("periodFinanceFlow.realExpense");
-    expect(source).toContain("periodFinanceFlow.futureAllocation");
+    expect(source).toContain("periodFinanceFlow.futureContribution");
+    expect(source).toContain("periodFinanceFlow.futureWithdrawal");
+    expect(source).toContain("periodFinanceFlow.futureNetAllocation");
   });
 
   it("keeps Transactions and Wallets on canonical real-expense semantics", () => {

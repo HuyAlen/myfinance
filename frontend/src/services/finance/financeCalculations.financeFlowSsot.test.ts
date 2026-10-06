@@ -265,4 +265,83 @@ describe("FINANCE-FLOW-SSOT-1 canonical flow snapshot", () => {
     expect(flow.investmentAllocation).toBe(0);
     expect(flow.futureAllocation).toBe(0);
   });
+
+  it("keeps gross Savings and Forex period activity visible when the signed allocation is negative", () => {
+    const flow = calculateFinanceFlowSnapshot({
+      transactions: [],
+      categories,
+      savingMovements: [
+        {
+          type: "deposit",
+          amount: 11_189_116,
+          date: "2026-10-06",
+          walletId: "wallet-a",
+        },
+        {
+          type: "withdraw",
+          amount: 11_969_402,
+          date: "2026-10-05",
+          walletId: "wallet-b",
+        },
+        // Internal Savings-to-Savings rows must never inflate gross period activity.
+        {
+          type: "withdraw",
+          amount: 500_000,
+          date: "2026-10-02",
+          walletId: null,
+        },
+        {
+          type: "deposit",
+          amount: 500_000,
+          date: "2026-10-02",
+          walletId: null,
+        },
+      ],
+      forexCashTransactions: [
+        {
+          id: "fx-withdraw-1",
+          forexAccountId: "fx-1",
+          walletId: "wallet-a",
+          type: "withdrawal",
+          amount: 593_848,
+          fee: 0,
+          currency: "VND",
+          transactionDate: "2026-10-02",
+          transactionTime: "04:21",
+        },
+        {
+          id: "fx-withdraw-2",
+          forexAccountId: "fx-1",
+          walletId: "wallet-a",
+          type: "withdrawal",
+          amount: 1_107_265,
+          fee: 0,
+          currency: "VND",
+          transactionDate: "2026-10-01",
+          transactionTime: "09:14",
+        },
+      ],
+      dateRange: { startDate: "2026-10-01", endDate: "2026-10-31" },
+    });
+
+    // Existing positive-net compatibility fields remain clamped at zero.
+    expect(flow.savingAllocation).toBe(0);
+    expect(flow.investmentAllocation).toBe(0);
+    expect(flow.futureAllocation).toBe(0);
+
+    // Financial Structure consumes gross period activity plus signed net.
+    expect(flow.savingContribution).toBe(11_189_116);
+    expect(flow.savingWithdrawal).toBe(11_969_402);
+    expect(flow.savingNetAllocation).toBe(-780_286);
+    expect(flow.investmentContribution).toBe(0);
+    expect(flow.investmentWithdrawal).toBe(1_701_113);
+    expect(flow.investmentNetAllocation).toBe(-1_701_113);
+    expect(flow.futureContribution).toBe(11_189_116);
+    expect(flow.futureWithdrawal).toBe(13_670_515);
+    expect(flow.futureNetAllocation).toBe(-2_481_399);
+
+    expect(flow.capitalMovementOut).toBe(flow.futureContribution);
+    expect(flow.capitalMovementIn).toBe(flow.futureWithdrawal);
+    expect(flow.netCapitalMovement).toBe(-flow.futureNetAllocation);
+  });
 });

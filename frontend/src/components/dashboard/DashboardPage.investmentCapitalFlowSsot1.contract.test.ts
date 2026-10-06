@@ -16,12 +16,21 @@ describe("INVESTMENT-CAPITAL-FLOW-SSOT-1 Dashboard adoption", () => {
     expect(source).toContain("isInvestmentManagedTransaction(transaction)");
   });
 
-  it("continues deriving Financial Structure allocations from periodFinanceFlow", () => {
+  it("continues deriving Financial Structure period activity from periodFinanceFlow", () => {
     expect(source).toContain(
-      "investmentAmount: periodFinanceFlow.investmentAllocation",
+      "investmentAmount: periodFinanceFlow.investmentContribution",
     );
     expect(source).toContain(
-      "totalAmount: periodFinanceFlow.futureAllocation",
+      "investmentWithdrawal: periodFinanceFlow.investmentWithdrawal",
+    );
+    expect(source).toContain(
+      "totalAmount: periodFinanceFlow.futureContribution",
+    );
+    expect(source).toContain(
+      "totalWithdrawal: periodFinanceFlow.futureWithdrawal",
+    );
+    expect(source).toContain(
+      "netAmount: periodFinanceFlow.futureNetAllocation",
     );
   });
 });

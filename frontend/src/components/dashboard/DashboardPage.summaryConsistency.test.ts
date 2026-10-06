@@ -40,9 +40,26 @@ describe("DashboardPage canonical Financial Structure consistency (DASH-POLISH-1
     expect(body).toContain("forexCashTransactions");
     expect(body).toContain("dateRange");
     expect(source).toContain("expense: periodFinanceFlow.realExpense");
-    expect(source).toContain("savingAmount: periodFinanceFlow.savingAllocation");
     expect(source).toContain(
-      "investmentAmount: periodFinanceFlow.investmentAllocation",
+      "savingAmount: periodFinanceFlow.savingContribution",
+    );
+    expect(source).toContain(
+      "savingWithdrawal: periodFinanceFlow.savingWithdrawal",
+    );
+    expect(source).toContain(
+      "investmentAmount: periodFinanceFlow.investmentContribution",
+    );
+    expect(source).toContain(
+      "investmentWithdrawal: periodFinanceFlow.investmentWithdrawal",
+    );
+    expect(source).toContain(
+      "totalAmount: periodFinanceFlow.futureContribution",
+    );
+    expect(source).toContain(
+      "totalWithdrawal: periodFinanceFlow.futureWithdrawal",
+    );
+    expect(source).toContain(
+      "netAmount: periodFinanceFlow.futureNetAllocation",
     );
   });
 

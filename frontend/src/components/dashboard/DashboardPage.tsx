@@ -873,14 +873,26 @@ export default function DashboardPage() {
 
   const periodFutureAllocation = useMemo(
     () => ({
-      savingAmount: periodFinanceFlow.savingAllocation,
-      investmentAmount: periodFinanceFlow.investmentAllocation,
-      totalAmount: periodFinanceFlow.futureAllocation,
+      savingAmount: periodFinanceFlow.savingContribution,
+      savingWithdrawal: periodFinanceFlow.savingWithdrawal,
+      savingNet: periodFinanceFlow.savingNetAllocation,
+      investmentAmount: periodFinanceFlow.investmentContribution,
+      investmentWithdrawal: periodFinanceFlow.investmentWithdrawal,
+      investmentNet: periodFinanceFlow.investmentNetAllocation,
+      totalAmount: periodFinanceFlow.futureContribution,
+      totalWithdrawal: periodFinanceFlow.futureWithdrawal,
+      netAmount: periodFinanceFlow.futureNetAllocation,
     }),
     [
-      periodFinanceFlow.futureAllocation,
-      periodFinanceFlow.investmentAllocation,
-      periodFinanceFlow.savingAllocation,
+      periodFinanceFlow.futureContribution,
+      periodFinanceFlow.futureNetAllocation,
+      periodFinanceFlow.futureWithdrawal,
+      periodFinanceFlow.investmentContribution,
+      periodFinanceFlow.investmentNetAllocation,
+      periodFinanceFlow.investmentWithdrawal,
+      periodFinanceFlow.savingContribution,
+      periodFinanceFlow.savingNetAllocation,
+      periodFinanceFlow.savingWithdrawal,
     ],
   );
 
@@ -2236,8 +2248,14 @@ export default function DashboardPage() {
   const financialStructureAdjusted = useMemo(() => {
     const income = financialStructure.income || summary.income;
     const savingAmount = periodFutureAllocation.savingAmount;
+    const savingWithdrawal = periodFutureAllocation.savingWithdrawal;
+    const savingNet = periodFutureAllocation.savingNet;
     const investmentAmount = periodFutureAllocation.investmentAmount;
-    const futureAllocationAmount = savingAmount + investmentAmount;
+    const investmentWithdrawal = periodFutureAllocation.investmentWithdrawal;
+    const investmentNet = periodFutureAllocation.investmentNet;
+    const futureAllocationAmount = periodFutureAllocation.totalAmount;
+    const futureAllocationWithdrawal = periodFutureAllocation.totalWithdrawal;
+    const futureAllocationNet = periodFutureAllocation.netAmount;
 
     const savingRate =
       income > 0 ? clampScore((savingAmount / income) * 100) : 0;
@@ -2250,8 +2268,14 @@ export default function DashboardPage() {
       ...financialStructure,
       income,
       savingAmount,
+      savingWithdrawal,
+      savingNet,
       investmentAmount,
+      investmentWithdrawal,
+      investmentNet,
       futureAllocationAmount,
+      futureAllocationWithdrawal,
+      futureAllocationNet,
       savingRate,
       investmentRate,
       futureAllocationRate,
@@ -2259,7 +2283,14 @@ export default function DashboardPage() {
   }, [
     financialStructure,
     periodFutureAllocation.investmentAmount,
+    periodFutureAllocation.investmentNet,
+    periodFutureAllocation.investmentWithdrawal,
+    periodFutureAllocation.netAmount,
     periodFutureAllocation.savingAmount,
+    periodFutureAllocation.savingNet,
+    periodFutureAllocation.savingWithdrawal,
+    periodFutureAllocation.totalAmount,
+    periodFutureAllocation.totalWithdrawal,
     summary.income,
   ]);
 
@@ -2340,16 +2371,20 @@ export default function DashboardPage() {
       {
         title: "Phân bổ tiết kiệm & đầu tư",
         value: `${financialStructureAdjusted.futureAllocationRate}%`,
-        amount: `${formatVND(financialStructureAdjusted.futureAllocationAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
+        amount: `Nạp ${formatVND(financialStructureAdjusted.futureAllocationAmount)} / Thu nhập ${formatVND(financialStructureAdjusted.income)}`,
         note:
           financialStructureAdjusted.income <= 0
             ? "Chưa đủ dữ liệu thu nhập"
-            : financialStructureAdjusted.futureAllocationAmount <= 0
+            : financialStructureAdjusted.futureAllocationAmount <= 0 &&
+                financialStructureAdjusted.futureAllocationWithdrawal <= 0
               ? "Chưa ghi nhận phân bổ tiết kiệm hoặc đầu tư trong kỳ"
-              : `Tiết kiệm ${financialStructureAdjusted.savingRate}% · Đầu tư ${financialStructureAdjusted.investmentRate}%`,
+              : `Tiết kiệm ${formatVND(financialStructureAdjusted.savingAmount)} · Đầu tư ${formatVND(financialStructureAdjusted.investmentAmount)} · Rút ra ${formatVND(financialStructureAdjusted.futureAllocationWithdrawal)} · Ròng ${financialStructureAdjusted.futureAllocationNet >= 0 ? "+" : "−"}${formatVND(Math.abs(financialStructureAdjusted.futureAllocationNet))}`,
         tone:
           financialStructureAdjusted.income <= 0
             ? "neutral"
+            : financialStructureAdjusted.futureAllocationAmount <= 0 &&
+                financialStructureAdjusted.futureAllocationWithdrawal > 0
+              ? "neutral"
             : financialStructureAdjusted.futureAllocationRate >= 20
               ? "good"
               : financialStructureAdjusted.futureAllocationRate >= 10
@@ -2373,22 +2408,22 @@ export default function DashboardPage() {
       {
         title: "Phân bổ đầu tư",
         value: `${financialStructureAdjusted.investmentRate}%`,
-        amount: `${formatVND(financialStructureAdjusted.investmentAmount)} / ${formatVND(financialStructureAdjusted.income)}`,
+        amount: `Nạp ${formatVND(financialStructureAdjusted.investmentAmount)} / Thu nhập ${formatVND(financialStructureAdjusted.income)}`,
         note:
           financialStructureAdjusted.income <= 0
             ? "Chưa đủ dữ liệu thu nhập"
-            : financialStructureAdjusted.investmentAmount <= 0
+            : financialStructureAdjusted.investmentAmount <= 0 &&
+                financialStructureAdjusted.investmentWithdrawal <= 0
               ? financialStructureAdjusted.savingAmount > 0
                 ? "Kỳ này chỉ ghi nhận phân bổ vào tiết kiệm"
                 : "Chưa ghi nhận phân bổ đầu tư trong kỳ"
-              : financialStructureAdjusted.investmentRate >= 15
-                ? "Tích cực xây tài sản trong kỳ"
-                : financialStructureAdjusted.investmentRate >= 5
-                  ? "Đang bắt đầu phân bổ đầu tư trong kỳ"
-                  : "Đã ghi nhận phân bổ đầu tư trong kỳ",
+              : `Rút ra ${formatVND(financialStructureAdjusted.investmentWithdrawal)} · Ròng ${financialStructureAdjusted.investmentNet >= 0 ? "+" : "−"}${formatVND(Math.abs(financialStructureAdjusted.investmentNet))}`,
         tone:
           financialStructureAdjusted.income <= 0
             ? "neutral"
+            : financialStructureAdjusted.investmentAmount <= 0 &&
+                financialStructureAdjusted.investmentWithdrawal > 0
+              ? "neutral"
             : financialStructureAdjusted.investmentRate >= 15
               ? "good"
               : financialStructureAdjusted.investmentRate >= 5

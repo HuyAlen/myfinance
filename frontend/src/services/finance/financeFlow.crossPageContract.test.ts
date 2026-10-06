@@ -11,9 +11,26 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(dashboard).toContain("calculateFinanceFlowSnapshot({");
     expect(dashboard).toContain("const periodFinanceFlow = useMemo(");
     expect(dashboard).toContain("expense: periodFinanceFlow.realExpense");
-    expect(dashboard).toContain("savingAmount: periodFinanceFlow.savingAllocation");
     expect(dashboard).toContain(
-      "investmentAmount: periodFinanceFlow.investmentAllocation",
+      "savingAmount: periodFinanceFlow.savingContribution",
+    );
+    expect(dashboard).toContain(
+      "savingWithdrawal: periodFinanceFlow.savingWithdrawal",
+    );
+    expect(dashboard).toContain(
+      "investmentAmount: periodFinanceFlow.investmentContribution",
+    );
+    expect(dashboard).toContain(
+      "investmentWithdrawal: periodFinanceFlow.investmentWithdrawal",
+    );
+    expect(dashboard).toContain(
+      "totalAmount: periodFinanceFlow.futureContribution",
+    );
+    expect(dashboard).toContain(
+      "totalWithdrawal: periodFinanceFlow.futureWithdrawal",
+    );
+    expect(dashboard).toContain(
+      "netAmount: periodFinanceFlow.futureNetAllocation",
     );
     expect(dashboard).toContain("buildCategorySpendingData(nonTransferFilteredTransactions, categories)");
     expect(dashboard).toContain(
