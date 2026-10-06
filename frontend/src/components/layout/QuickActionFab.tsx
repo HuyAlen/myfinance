@@ -632,7 +632,7 @@ export default function QuickActionFab() {
         {isQuickActionOpen &&
           panelPosition &&
           renderMobileActionPanel(panelPosition)}
-        <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 hidden flex-col items-end gap-2 lg:bottom-6 lg:flex">
+        <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+0.75rem)] right-4 z-100 flex flex-col items-end gap-2 lg:bottom-6">
           {isQuickActionOpen && (
             <div className="hidden flex-col items-end gap-2 lg:flex">
               {renderActionButtons()}
@@ -676,7 +676,7 @@ export default function QuickActionFab() {
           {renderActionButtons()}
         </div>
       )}
-      <div ref={wrapperRef} className="fixed left-0 top-0 z-100 hidden lg:block" style={wrapperStyle}>
+      <div ref={wrapperRef} className="fixed left-0 top-0 z-100" style={wrapperStyle}>
         {renderFabButton()}
       </div>
     </>
