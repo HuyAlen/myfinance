@@ -1,4 +1,5 @@
 import { buildCashFlowForecast } from "@/src/lib/finance/cashFlowForecast";
+import { getNetWorthSnapshotMonthKey } from "@/src/lib/dashboard/netWorthHistory";
 import type {
   Category,
   Investment,
@@ -330,15 +331,31 @@ export type NetWorthAttribution =
       items: NetWorthAttributionItem[];
     };
 
-function dedupeNetWorthSnapshots(snapshots: NetWorthSnapshot[]) {
-  const byMonth = new Map<string, NetWorthSnapshot>();
+type NormalizedNetWorthSnapshot = {
+  monthKey: string;
+  snapshot: NetWorthSnapshot;
+};
+
+function dedupeNetWorthSnapshots(
+  snapshots: NetWorthSnapshot[],
+): NormalizedNetWorthSnapshot[] {
+  const byMonth = new Map<string, NormalizedNetWorthSnapshot>();
   for (const snapshot of snapshots) {
-    const existing = byMonth.get(snapshot.snapshotMonth);
-    if (!existing || new Date(snapshot.capturedAt).getTime() >= new Date(existing.capturedAt).getTime()) {
-      byMonth.set(snapshot.snapshotMonth, snapshot);
+    const monthKey = getNetWorthSnapshotMonthKey(snapshot.snapshotMonth);
+    if (!monthKey) continue;
+
+    const existing = byMonth.get(monthKey);
+    if (
+      !existing ||
+      new Date(snapshot.capturedAt).getTime() >=
+        new Date(existing.snapshot.capturedAt).getTime()
+    ) {
+      byMonth.set(monthKey, { monthKey, snapshot });
     }
   }
-  return [...byMonth.values()].sort((a, b) => a.snapshotMonth.localeCompare(b.snapshotMonth));
+  return [...byMonth.values()].sort((a, b) =>
+    a.monthKey.localeCompare(b.monthKey),
+  );
 }
 
 export function buildNetWorthAttribution(input: {
@@ -348,21 +365,41 @@ export function buildNetWorthAttribution(input: {
 }): NetWorthAttribution {
   const maxMonth = `${input.selectedYear}-${String(input.selectedMonth).padStart(2, "0")}`;
   const eligible = dedupeNetWorthSnapshots(input.snapshots).filter(
-    (snapshot) => snapshot.snapshotMonth <= maxMonth,
+    (item) => item.monthKey <= maxMonth,
   );
   if (eligible.length < 2) return { available: false };
 
   const current = eligible[eligible.length - 1];
   const previous = eligible[eligible.length - 2];
   const items: NetWorthAttributionItem[] = [
-    { key: "cash", label: "Thanh khoản", delta: current.cashAndWallets - previous.cashAndWallets },
-    { key: "savings", label: "Tiết kiệm", delta: current.savings - previous.savings },
-    { key: "investments", label: "Đầu tư", delta: current.investments - previous.investments },
-    { key: "forex", label: "Forex", delta: current.forex - previous.forex },
-    { key: "debt", label: "Nợ phải trả", delta: previous.totalDebt - current.totalDebt },
+    {
+      key: "cash",
+      label: "Thanh khoản",
+      delta: current.snapshot.cashAndWallets - previous.snapshot.cashAndWallets,
+    },
+    {
+      key: "savings",
+      label: "Tiết kiệm",
+      delta: current.snapshot.savings - previous.snapshot.savings,
+    },
+    {
+      key: "investments",
+      label: "Đầu tư",
+      delta: current.snapshot.investments - previous.snapshot.investments,
+    },
+    {
+      key: "forex",
+      label: "Forex",
+      delta: current.snapshot.forex - previous.snapshot.forex,
+    },
+    {
+      key: "debt",
+      label: "Nợ phải trả",
+      delta: previous.snapshot.totalDebt - current.snapshot.totalDebt,
+    },
   ];
 
-  const netWorthDelta = current.netWorth - previous.netWorth;
+  const netWorthDelta = current.snapshot.netWorth - previous.snapshot.netWorth;
   const explained = items.reduce((sum, item) => sum + item.delta, 0);
   const residual = netWorthDelta - explained;
   if (Math.abs(residual) >= 1) {
@@ -371,10 +408,12 @@ export function buildNetWorthAttribution(input: {
 
   return {
     available: true,
-    fromMonth: previous.snapshotMonth,
-    toMonth: current.snapshotMonth,
+    fromMonth: previous.monthKey,
+    toMonth: current.monthKey,
     netWorthDelta,
-    items: items.filter((item) => Math.abs(item.delta) >= 1).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
+    items: items
+      .filter((item) => Math.abs(item.delta) >= 1)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
   };
 }
 
@@ -723,7 +762,9 @@ export function buildFinanceDataHealth(input: {
   }
 
   const hasCurrentSnapshot = input.netWorthSnapshots.some(
-    (snapshot) => snapshot.snapshotMonth === input.selectedMonthKey,
+    (snapshot) =>
+      getNetWorthSnapshotMonthKey(snapshot.snapshotMonth) ===
+      input.selectedMonthKey,
   );
   if (input.hasFinancialData && today.getDate() >= 3 && !hasCurrentSnapshot) {
     issues.push({

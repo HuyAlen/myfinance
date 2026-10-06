@@ -120,6 +120,31 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 pure decision helpers", () => {
     ]);
   });
 
+  it("recognizes a canonical current-month Net Worth DATE snapshot as present", () => {
+    const health = buildFinanceDataHealth({
+      selectedMonthKey: "2026-10",
+      today: "2026-10-05",
+      reviewInbox: { total: 0, uncategorizedCount: 0, duplicateCount: 0, unusualExpenseCount: 0, items: [] },
+      netWorthSnapshots: [{
+        id: "nw-2026-10",
+        snapshotMonth: "2026-10-01",
+        cashAndWallets: 10,
+        savings: 20,
+        investments: 30,
+        forex: 40,
+        totalAssets: 100,
+        totalDebt: 10,
+        netWorth: 90,
+        capturedAt: "2026-10-05T00:00:00.000Z",
+      }],
+      invalidRecurringScheduleCount: 0,
+      hasFinancialData: true,
+    });
+    expect(health.available).toBe(true);
+    if (!health.available) return;
+    expect(health.issues.map((item) => item.key)).not.toContain("net-worth-snapshot");
+  });
+
   it("shows closeout only in the final five days or first three days of the following month", () => {
     expect(buildMonthEndCloseout({ selectedMonthKey: "2026-10", today: "2026-10-27", budgetConfigured: true, budgetUsage: 80, reviewPending: 0, overBudgetCount: 0, netCashMovement: 1, netWorthDelta: null }).visible).toBe(true);
     const review = buildMonthEndCloseout({ selectedMonthKey: "2026-10", today: "2026-11-02", budgetConfigured: true, budgetUsage: 80, reviewPending: 0, overBudgetCount: 0, netCashMovement: 1, netWorthDelta: null });

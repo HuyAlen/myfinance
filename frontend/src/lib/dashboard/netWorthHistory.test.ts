@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NetWorthSnapshot } from "@/src/types/finance";
 import {
   buildCanonicalNetWorthTrend,
+  getNetWorthSnapshotMonthKey,
   summarizeCanonicalNetWorthHistory,
 } from "./netWorthHistory";
 
@@ -19,6 +20,21 @@ function snapshot(month: string, netWorth: number): NetWorthSnapshot {
     capturedAt: `${month}T00:00:00.000Z`,
   };
 }
+
+describe("NETWORTH-MONTH-KEY-INTEGRITY-1 canonical month key", () => {
+  it("normalizes the Postgres DATE shape to the Dashboard YYYY-MM key", () => {
+    expect(getNetWorthSnapshotMonthKey("2026-10-01")).toBe("2026-10");
+  });
+
+  it("rejects the old ambiguous YYYY-MM fixture shape instead of hiding storage-contract drift", () => {
+    expect(getNetWorthSnapshotMonthKey("2026-10")).toBeNull();
+  });
+
+  it("rejects impossible calendar dates", () => {
+    expect(getNetWorthSnapshotMonthKey("2026-02-30")).toBeNull();
+    expect(getNetWorthSnapshotMonthKey("2026-13-01")).toBeNull();
+  });
+});
 
 describe("NETWORTH-HISTORY-1 canonical Dashboard trend", () => {
   const now = new Date("2026-08-26T12:00:00.000Z");

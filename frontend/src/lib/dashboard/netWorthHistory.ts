@@ -17,6 +17,37 @@ export type NetWorthHistorySummary = {
   changeFromPrevious: number | null;
 };
 
+const NET_WORTH_SNAPSHOT_MONTH_SHAPE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * NETWORTH-MONTH-KEY-INTEGRITY-1
+ *
+ * `net_worth_snapshots.snapshot_month` is a Postgres DATE and therefore
+ * reaches the client as YYYY-MM-DD. Dashboard period state, however, uses the
+ * canonical YYYY-MM month key. Normalize that boundary once here so History,
+ * Attribution, Data Health and Month-End Closeout never compare incompatible
+ * string shapes or invent a missing current-month snapshot.
+ */
+export function getNetWorthSnapshotMonthKey(value: string): string | null {
+  const match = NET_WORTH_SNAPSHOT_MONTH_SHAPE.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}`;
+}
+
 export function buildCanonicalNetWorthTrend(input: {
   snapshots: NetWorthSnapshot[];
   selectedYear: number;
@@ -44,11 +75,11 @@ export function buildCanonicalNetWorthTrend(input: {
 
   const snapshotsByMonth = new Map<number, NetWorthSnapshot>();
   for (const snapshot of input.snapshots) {
-    const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(snapshot.snapshotMonth);
-    if (!match) continue;
+    const monthKey = getNetWorthSnapshotMonthKey(snapshot.snapshotMonth);
+    if (!monthKey) continue;
 
-    const year = Number(match[1]);
-    const month = Number(match[2]);
+    const year = Number(monthKey.slice(0, 4));
+    const month = Number(monthKey.slice(5, 7));
     if (
       year !== input.selectedYear ||
       month < 1 ||

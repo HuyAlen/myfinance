@@ -95,14 +95,16 @@ describe("INVESTMENT-ALLOCATION-OVERVIEW-1", () => {
 });
 
 describe("NET-WORTH-ATTRIBUTION-1", () => {
-  it("explains canonical snapshot delta by asset and debt components", () => {
+  it("normalizes canonical DB snapshot dates before explaining the selected-month delta", () => {
     const snapshots: NetWorthSnapshot[] = [
-      { id: "1", snapshotMonth: "2026-09", cashAndWallets: 10, savings: 20, investments: 30, forex: 40, totalAssets: 100, totalDebt: 10, netWorth: 90, capturedAt: "2026-09-30T00:00:00Z" },
-      { id: "2", snapshotMonth: "2026-10", cashAndWallets: 12, savings: 25, investments: 29, forex: 50, totalAssets: 116, totalDebt: 6, netWorth: 110, capturedAt: "2026-10-31T00:00:00Z" },
+      { id: "1", snapshotMonth: "2026-09-01", cashAndWallets: 10, savings: 20, investments: 30, forex: 40, totalAssets: 100, totalDebt: 10, netWorth: 90, capturedAt: "2026-09-30T00:00:00Z" },
+      { id: "2", snapshotMonth: "2026-10-01", cashAndWallets: 12, savings: 25, investments: 29, forex: 50, totalAssets: 116, totalDebt: 6, netWorth: 110, capturedAt: "2026-10-31T00:00:00Z" },
     ];
     const result = buildNetWorthAttribution({ snapshots, selectedYear: 2026, selectedMonth: 10 });
     expect(result.available).toBe(true);
     if (!result.available) return;
+    expect(result.fromMonth).toBe("2026-09");
+    expect(result.toMonth).toBe("2026-10");
     expect(result.netWorthDelta).toBe(20);
     expect(result.items.find((item) => item.key === "debt")?.delta).toBe(4);
     expect(result.items.reduce((sum, item) => sum + item.delta, 0)).toBe(20);
