@@ -153,6 +153,7 @@ import {
   calculateFinancialStructureSummary,
   calculateGoalFundingSnapshot,
   deriveBudgetSpendingStatus,
+  filterByDateRange,
   filterTransactionsByDateRange,
   formatVND,
   calculateForexPerformanceSnapshot,
@@ -2378,6 +2379,29 @@ export default function DashboardPage() {
   const goalRows = useMemo(() => goalMeta, [goalMeta]);
 
   // ── Recent activity ───────────────────────────────────────────────────────
+  // Recent Activity is a selected-period surface. Main finance rows are already
+  // scoped by `filteredTransactions`; Savings interest and Forex cash movement
+  // must use the same inclusive dateRange before the three ledgers are merged.
+  const recentSavingInterestTransactionsInPeriod = useMemo(
+    () =>
+      filterByDateRange(
+        savingTransactions,
+        dateRange,
+        (transaction) => transaction.date,
+      ).filter((transaction) => transaction.type === "interest"),
+    [dateRange.endDate, dateRange.startDate, savingTransactions],
+  );
+
+  const recentForexCashTransactionsInPeriod = useMemo(
+    () =>
+      filterByDateRange(
+        forexCashTransactions,
+        dateRange,
+        (transaction) => transaction.transactionDate,
+      ),
+    [dateRange.endDate, dateRange.startDate, forexCashTransactions],
+  );
+
   const recentTxns = useMemo<RecentActivityItem[]>(() => {
     const financeTxns = filteredTransactions
       .filter((transaction) => !isInternalTransferTransaction(transaction))
@@ -2407,11 +2431,8 @@ export default function DashboardPage() {
         };
       });
 
-    const savingTxns = savingTransactions
-      // Deposit/withdraw/settlement are internal money movement between cash and savings.
-      // Keep only interest because it is a real financial gain and should appear in Recent Activity.
-      .filter((transaction) => transaction.type === "interest")
-      .map((transaction) => {
+    const savingTxns = recentSavingInterestTransactionsInPeriod.map(
+      (transaction) => {
         const savingName =
           savings.find((saving) => saving.id === transaction.savingId)?.name ??
           "Tiết kiệm";
@@ -2433,9 +2454,10 @@ export default function DashboardPage() {
           timeLabel: getRecentTimeLabel(displayDateTime),
           kind: "income" as const,
         };
-      });
+      },
+    );
 
-    const forexTxns = forexCashTransactions.map((transaction) => {
+    const forexTxns = recentForexCashTransactionsInPeriod.map((transaction) => {
       const accountName =
         forexAccounts.find(
           (account) => account.id === transaction.forexAccountId,
@@ -2472,10 +2494,10 @@ export default function DashboardPage() {
     filteredTransactions,
     categories,
     wallets,
-    savingTransactions,
+    recentSavingInterestTransactionsInPeriod,
     savings,
     forexAccounts,
-    forexCashTransactions,
+    recentForexCashTransactionsInPeriod,
   ]);
 
   const recentTxnGroups = useMemo(() => {
