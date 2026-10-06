@@ -45,6 +45,7 @@ import {
   resolveTransactionCaptureDefaults,
 } from "@/src/lib/transactions/transactionCapturePreferences";
 import { buildTransactionQuickRepeatCandidates } from "@/src/lib/transactions/transactionQuickRepeat";
+import { buildTransactionSmartDefaultsSuggestion } from "@/src/lib/transactions/transactionSmartDefaults";
 import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
 import TransactionRulesManager from "@/src/components/transactions/TransactionRulesManager";
 import {
@@ -1366,6 +1367,52 @@ export default function TransactionsPage() {
       return group === "fixed" || group === "variable" ? [category] : [];
     });
   }, [capturePreferences, categoryById, form.formMode]);
+
+  const activeSmartDefaultsSuggestion = useMemo(() => {
+    if (form.id || form.formMode === "transfer" || activeRuleSuggestion) {
+      return null;
+    }
+    if (!form.note.trim()) return null;
+
+    const suggestion = buildTransactionSmartDefaultsSuggestion({
+      transactions,
+      mode: form.formMode,
+      note: form.note,
+      categoryId: form.categoryId,
+      validCategoryIds: filteredCategories.map((category) => category.id),
+      validWalletIds: wallets.map((wallet) => wallet.id),
+    });
+    if (!suggestion) return null;
+
+    const alreadyApplied =
+      Number(form.amount) === suggestion.amount &&
+      form.categoryId === suggestion.categoryId &&
+      form.walletId === suggestion.walletId;
+    return alreadyApplied ? null : suggestion;
+  }, [
+    activeRuleSuggestion,
+    filteredCategories,
+    form.amount,
+    form.categoryId,
+    form.formMode,
+    form.id,
+    form.note,
+    form.walletId,
+    transactions,
+    wallets,
+  ]);
+
+  function applyActiveSmartDefaultsSuggestion() {
+    if (!activeSmartDefaultsSuggestion) return;
+
+    setForm((current) => ({
+      ...current,
+      amount: String(activeSmartDefaultsSuggestion.amount),
+      categoryId: activeSmartDefaultsSuggestion.categoryId,
+      walletId: activeSmartDefaultsSuggestion.walletId,
+    }));
+    setSaveError(null);
+  }
 
   const quickRepeatCandidates = useMemo(
     () => buildTransactionQuickRepeatCandidates(transactions, 3),
@@ -4045,6 +4092,48 @@ export default function TransactionsPage() {
                   />
                 ) : null}
               </div>
+
+              {activeSmartDefaultsSuggestion ? (
+                <div
+                  data-transaction-smart-defaults="true"
+                  className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                      <Sparkles size={15} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-600">
+                        Gợi ý từ lịch sử
+                      </p>
+                      <p className="mt-0.5 text-sm font-black text-slate-800">
+                        {activeSmartDefaultsSuggestion.matchKind === "note"
+                          ? `Khớp ${activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.`
+                          : `Dựa trên ${activeSmartDefaultsSuggestion.matchCount} giao dịch cùng danh mục.`}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                        {categoryById.get(activeSmartDefaultsSuggestion.categoryId)
+                          ?.name ?? "Danh mục"}
+                        {" · "}
+                        {walletById.get(activeSmartDefaultsSuggestion.walletId)
+                          ?.name ?? "Ví"}
+                        {" · "}
+                        {formatVND(activeSmartDefaultsSuggestion.amount)}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                        Bạn vẫn kiểm tra trước khi lưu.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyActiveSmartDefaultsSuggestion}
+                      className="min-h-10 shrink-0 rounded-xl bg-sky-600 px-3 py-2 text-xs font-black text-white transition hover:bg-sky-700 active:scale-[0.98]"
+                    >
+                      Dùng gợi ý
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               {activeRuleSuggestion ? (
                 <div
