@@ -44,6 +44,7 @@ import {
   rememberTransactionCaptureSuccess,
   resolveTransactionCaptureDefaults,
 } from "@/src/lib/transactions/transactionCapturePreferences";
+import { buildTransactionQuickRepeatCandidates } from "@/src/lib/transactions/transactionQuickRepeat";
 import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
 import TransactionRulesManager from "@/src/components/transactions/TransactionRulesManager";
 import {
@@ -1366,6 +1367,11 @@ export default function TransactionsPage() {
     });
   }, [capturePreferences, categoryById, form.formMode]);
 
+  const quickRepeatCandidates = useMemo(
+    () => buildTransactionQuickRepeatCandidates(transactions, 3),
+    [transactions],
+  );
+
   function getEligibleCategoryIdsForMode(mode: TransactionFormMode) {
     if (mode === "transfer") return [];
 
@@ -2151,6 +2157,81 @@ export default function TransactionsPage() {
             Thêm giao dịch
           </button>
         </div>
+
+        {!reviewMode &&
+        !isLoadingTransactions &&
+        !transactionsLoadError &&
+        quickRepeatCandidates.length > 0 ? (
+          <div
+            data-transaction-quick-repeat="true"
+            className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/55 p-2.5 sm:mt-4 sm:p-3"
+          >
+            <div className="flex items-center justify-between gap-3 px-0.5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black text-cyan-800 sm:text-xs">
+                  Ghi lại nhanh
+                </p>
+                <p className="mt-0.5 truncate text-[10px] font-medium text-cyan-700/70 sm:text-[11px]">
+                  Các giao dịch xuất hiện ít nhất 2 lần trong kỳ này.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-cyan-700 ring-1 ring-cyan-100">
+                {quickRepeatCandidates.length} gợi ý
+              </span>
+            </div>
+
+            <div className="mt-2 flex max-w-full gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+              {quickRepeatCandidates.map((candidate) => {
+                const transaction = candidate.transaction;
+                const displayType = getTransactionDisplayType(transaction);
+                const category = categoryById.get(transaction.categoryId);
+                const wallet = walletById.get(transaction.walletId);
+                const destinationWallet = transaction.transferToWalletId
+                  ? walletById.get(transaction.transferToWalletId)
+                  : undefined;
+                const detail =
+                  displayType === "transfer"
+                    ? getTransferWalletLabel(
+                        transaction,
+                        wallet?.name,
+                        destinationWallet?.name,
+                      ).title
+                    : `${category?.name ?? "—"} · ${wallet?.name ?? "—"}`;
+                const note = getTransactionDisplayNote(transaction);
+
+                return (
+                  <button
+                    key={candidate.key}
+                    type="button"
+                    onClick={() => openDuplicateForm(transaction)}
+                    aria-label={`Ghi lại ${note} hôm nay`}
+                    className="min-h-16 w-60 shrink-0 rounded-2xl border border-cyan-100 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  >
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <span className="truncate text-xs font-black text-slate-800">
+                        {note}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-700">
+                        {candidate.occurrences} lần
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-[10px] font-semibold text-slate-400">
+                      {detail}
+                    </p>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span className="whitespace-nowrap text-xs font-black text-slate-700">
+                        {formatVND(transaction.amount)}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-cyan-700">
+                        <CopyPlus size={12} /> Ghi hôm nay
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-3 sm:mt-4">
           <LiquidityHeroCard
