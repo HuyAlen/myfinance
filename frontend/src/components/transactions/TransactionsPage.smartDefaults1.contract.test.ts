@@ -53,7 +53,7 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
 
   it("only applies amount/category/wallet and leaves date, note, recurrence and save flow untouched", () => {
     const start = page.indexOf("function applyActiveSmartDefaultsSuggestion() {");
-    const end = page.indexOf("const quickRepeatCandidates", start);
+    const end = page.indexOf("const activeEntryConfidenceWarnings", start);
     const region = page.slice(start, end);
 
     expect(region).toContain("amount: String(activeSmartDefaultsSuggestion.amount)");

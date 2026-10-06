@@ -46,6 +46,7 @@ import {
 } from "@/src/lib/transactions/transactionCapturePreferences";
 import { buildTransactionQuickRepeatCandidates } from "@/src/lib/transactions/transactionQuickRepeat";
 import { buildTransactionSmartDefaultsSuggestion } from "@/src/lib/transactions/transactionSmartDefaults";
+import { buildTransactionEntryConfidenceWarnings } from "@/src/lib/transactions/transactionEntryConfidence";
 import TransactionCsvImportModal from "@/src/components/transactions/TransactionCsvImportModal";
 import TransactionRulesManager from "@/src/components/transactions/TransactionRulesManager";
 import {
@@ -1413,6 +1414,47 @@ export default function TransactionsPage() {
     }));
     setSaveError(null);
   }
+
+  const activeEntryConfidenceWarnings = useMemo(() => {
+    const mode = form.formMode;
+    if (form.id || mode === "transfer" || form.isRecurring) return [];
+
+    const amount = Number(form.amount);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !form.categoryId ||
+      !form.walletId
+    ) {
+      return [];
+    }
+
+    return buildTransactionEntryConfidenceWarnings({
+      transactions,
+      draft: {
+        mode,
+        amount,
+        categoryId: form.categoryId,
+        walletId: form.walletId,
+        note: form.note,
+        date: form.date,
+      },
+      validCategoryIds: filteredCategories.map((category) => category.id),
+      validWalletIds: wallets.map((wallet) => wallet.id),
+    });
+  }, [
+    filteredCategories,
+    form.amount,
+    form.categoryId,
+    form.date,
+    form.formMode,
+    form.id,
+    form.isRecurring,
+    form.note,
+    form.walletId,
+    transactions,
+    wallets,
+  ]);
 
   const quickRepeatCandidates = useMemo(
     () => buildTransactionQuickRepeatCandidates(transactions, 3),
@@ -4186,6 +4228,67 @@ export default function TransactionsPage() {
                       value: c.id,
                     }))}
                   />
+                </div>
+              ) : null}
+
+              {activeEntryConfidenceWarnings.length > 0 ? (
+                <div
+                  data-transaction-entry-confidence="true"
+                  aria-label="Cảnh báo độ tin cậy trước khi lưu"
+                  className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/75 p-3"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xs font-black text-amber-700">
+                      !
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">
+                        Kiểm tra trước khi lưu
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-semibold leading-4 text-amber-800/75">
+                        Chỉ là cảnh báo, bạn vẫn có thể lưu giao dịch.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 space-y-1.5">
+                    {activeEntryConfidenceWarnings.map((warning) => {
+                      const key =
+                        warning.kind === "possible-duplicate"
+                          ? `${warning.kind}:${warning.peerTransactionId}`
+                          : warning.kind === "wallet-context-mismatch"
+                            ? `${warning.kind}:${warning.expectedWalletId}`
+                            : `${warning.kind}:${warning.direction}`;
+                      const title =
+                        warning.kind === "possible-duplicate"
+                          ? "Có giao dịch rất giống trong cùng ngày."
+                          : warning.kind === "wallet-context-mismatch"
+                            ? "Ví đang chọn khác thói quen gần đây."
+                            : warning.direction === "high"
+                              ? "Số tiền cao hơn nhiều so với lịch sử."
+                              : "Số tiền thấp hơn nhiều so với lịch sử.";
+                      const detail =
+                        warning.kind === "possible-duplicate"
+                          ? "Trùng số tiền, danh mục, ví, ngày và ghi chú với một giao dịch đã có."
+                          : warning.kind === "wallet-context-mismatch"
+                            ? `Trong ${warning.contextCount} giao dịch cùng ghi chú, ${warning.expectedWalletCount} lần dùng ${walletById.get(warning.expectedWalletId)?.name ?? "ví khác"}.`
+                            : `Mức thường thấy với ghi chú này khoảng ${formatVND(warning.baselineAmount)} từ ${warning.contextCount} giao dịch trước.`;
+
+                      return (
+                        <div
+                          key={key}
+                          className="rounded-xl border border-amber-100 bg-white/75 px-3 py-2"
+                        >
+                          <p className="text-xs font-black text-slate-800">
+                            {title}
+                          </p>
+                          <p className="mt-0.5 text-[10px] font-semibold leading-4 text-slate-500">
+                            {detail}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
               {/* Wallet preview */}
