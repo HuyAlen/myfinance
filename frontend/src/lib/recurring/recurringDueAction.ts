@@ -1,5 +1,8 @@
 import type { Transaction } from "@/src/types/finance";
-import type { RecurringMoneySchedule } from "./recurringMoney";
+import {
+  isRecordedRecurringOccurrence,
+  type RecurringMoneySchedule,
+} from "./recurringMoney";
 
 export type RecurringDueStatus = "due-today" | "upcoming";
 
@@ -28,20 +31,6 @@ function parseLocalDateOrdinal(value: string): number | undefined {
   return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
-function sameRecordedOccurrence(
-  schedule: RecurringMoneySchedule,
-  dueDate: string,
-  transaction: Transaction,
-) {
-  return (
-    transaction.date === dueDate &&
-    transaction.type === schedule.type &&
-    transaction.categoryId === schedule.categoryId &&
-    transaction.walletId === schedule.walletId &&
-    Math.round(Math.abs(Number(transaction.amount) || 0)) ===
-      Math.round(Math.abs(Number(schedule.amount) || 0))
-  );
-}
 
 /**
  * RECURRING-DUE-ACTION-1
@@ -82,7 +71,7 @@ export function buildRecurringDueActions(input: {
       if (daysUntilDue < 0 || daysUntilDue > upcomingDays) return [];
 
       const recorded = input.transactions.some((transaction) =>
-        sameRecordedOccurrence(schedule, dueDate, transaction),
+        isRecordedRecurringOccurrence(schedule, dueDate, transaction),
       );
       if (recorded) return [];
 

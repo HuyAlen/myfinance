@@ -21,6 +21,19 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 Dashboard wiring", () => {
     expect(source).toContain("checkpointDays: [7, 30, 90]");
   });
 
+  it("passes the current calendar date into the canonical recurring read model so realized occurrences roll forward before forecast", () => {
+    const start = source.indexOf("const recurringMoneySchedules = useMemo(");
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf("const forecastExcludedRecurringCount", start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
+
+    expect(block).toContain("referenceDate: recurringReferenceDate");
+    expect(block).toContain(
+      "[categories, recurringReferenceDate, transactions, wallets]",
+    );
+  });
+
   it("renders the four requested decision surfaces", () => {
     expect(source).toContain('data-dashboard-decision="safe-to-spend"');
     expect(source).toContain('data-dashboard-decision="cash-runway"');

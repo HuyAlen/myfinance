@@ -114,6 +114,76 @@ function calendarOrdinal(parts: CalendarParts) {
   );
 }
 
+function nextCalendarDateKey(value: string): string | undefined {
+  const parts = parseCalendarDate(value);
+  if (!parts) return undefined;
+  const next = new Date((calendarOrdinal(parts) + 1) * 86_400_000);
+  return calendarDateKey({
+    year: next.getUTCFullYear(),
+    month: next.getUTCMonth() + 1,
+    day: next.getUTCDate(),
+  });
+}
+
+export function isRecordedRecurringOccurrence(
+  schedule: Pick<
+    RecurringMoneySchedule,
+    "type" | "amount" | "categoryId" | "walletId"
+  >,
+  dueDate: string,
+  transaction: Transaction,
+) {
+  return (
+    transaction.date === dueDate &&
+    transaction.type === schedule.type &&
+    transaction.categoryId === schedule.categoryId &&
+    transaction.walletId === schedule.walletId &&
+    Math.round(Math.abs(Number(transaction.amount) || 0)) ===
+      Math.round(Math.abs(Number(schedule.amount) || 0))
+  );
+}
+
+function resolveEffectiveNextUnrecordedRunDate(input: {
+  nextRunDate?: string;
+  recurrence?: RecurrenceFrequency;
+  referenceDate: string;
+  type: "income" | "expense";
+  amount: number;
+  categoryId: string;
+  walletId: string;
+  transactions: Transaction[];
+}) {
+  let candidate = resolveEffectiveNextRunDate(
+    input.nextRunDate,
+    input.recurrence,
+    input.referenceDate,
+  );
+  if (!candidate || !input.recurrence) return candidate;
+
+  let guard = 0;
+  while (
+    guard < 500 &&
+    input.transactions.some((transaction) =>
+      isRecordedRecurringOccurrence(input, candidate!, transaction),
+    )
+  ) {
+    const nextReference = nextCalendarDateKey(candidate);
+    if (!nextReference) return candidate;
+
+    const nextCandidate = resolveEffectiveNextRunDate(
+      input.nextRunDate,
+      input.recurrence,
+      nextReference,
+    );
+    if (!nextCandidate || nextCandidate <= candidate) return candidate;
+
+    candidate = nextCandidate;
+    guard += 1;
+  }
+
+  return candidate;
+}
+
 /**
  * RECURRING-NEXT-RUN-ROLLFORWARD-1
  *
@@ -240,11 +310,16 @@ export function buildRecurringMoneySchedules(input: {
         recurrence: category.recurrence,
         nextRunDate: category.nextRunDate,
         effectiveNextRunDate: input.referenceDate
-          ? resolveEffectiveNextRunDate(
-              category.nextRunDate,
-              category.recurrence,
-              input.referenceDate,
-            )
+          ? resolveEffectiveNextUnrecordedRunDate({
+              nextRunDate: category.nextRunDate,
+              recurrence: category.recurrence,
+              referenceDate: input.referenceDate,
+              type: category.type,
+              amount,
+              categoryId: category.id,
+              walletId,
+              transactions: input.transactions,
+            })
           : category.nextRunDate,
         enabled: category.isRecurring === true,
         legacy: false,
@@ -289,11 +364,16 @@ export function buildRecurringMoneySchedules(input: {
       recurrence: transaction.recurrence,
       nextRunDate: transaction.nextRunDate,
       effectiveNextRunDate: input.referenceDate
-        ? resolveEffectiveNextRunDate(
-            transaction.nextRunDate,
-            transaction.recurrence,
-            input.referenceDate,
-          )
+        ? resolveEffectiveNextUnrecordedRunDate({
+            nextRunDate: transaction.nextRunDate,
+            recurrence: transaction.recurrence,
+            referenceDate: input.referenceDate,
+            type: transaction.type,
+            amount,
+            categoryId: transaction.categoryId ?? "",
+            walletId,
+            transactions: input.transactions,
+          })
         : transaction.nextRunDate,
       enabled: transaction.isRecurring === true,
       legacy: true,
@@ -346,6 +426,7 @@ export function toRecurringScheduleInputs(schedules: RecurringMoneySchedule[]) {
       recurrence: schedule.recurrence,
       categoryId: schedule.categoryId,
       categoryName: schedule.categoryName,
+      walletId: schedule.walletId,
     }));
 }
 

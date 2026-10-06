@@ -4,7 +4,7 @@ import {
   resolveEffectiveNextRunDate,
   toRecurringScheduleInputs,
 } from "./recurringMoney";
-import type { Category, Wallet } from "@/src/types/finance";
+import type { Category, Transaction, Wallet } from "@/src/types/finance";
 
 describe("RECURRING-NEXT-RUN-ROLLFORWARD-1", () => {
   it("rolls a stale monthly schedule forward to the next real occurrence", () => {
@@ -64,6 +64,87 @@ describe("RECURRING-NEXT-RUN-ROLLFORWARD-1", () => {
     expect(schedules[0].nextRunDate).toBe("2026-08-05");
     expect(schedules[0].effectiveNextRunDate).toBe("2026-10-05");
     expect(toRecurringScheduleInputs(schedules)[0].nextRunDate).toBe("2026-10-05");
+  });
+
+  it("advances past an already-recorded due occurrence without rewriting the persisted anchor", () => {
+    const wallets: Wallet[] = [
+      { id: "bank", name: "Ngân hàng", type: "bank", balance: 10_000_000 },
+    ];
+    const categories: Category[] = [
+      {
+        id: "rent",
+        name: "Nhà ở",
+        type: "expense",
+        planningGroup: "fixed",
+        isRecurring: true,
+        recurrence: "monthly",
+        defaultAmount: 6_500_000,
+        defaultWalletId: "bank",
+        nextRunDate: "2026-08-31",
+      },
+    ];
+    const transactions: Transaction[] = [
+      {
+        id: "rent-october",
+        type: "expense",
+        amount: 6_500_000,
+        categoryId: "rent",
+        walletId: "bank",
+        note: "Nhà ở",
+        date: "2026-10-31",
+      },
+    ];
+
+    const schedules = buildRecurringMoneySchedules({
+      categories,
+      transactions,
+      wallets,
+      referenceDate: "2026-10-31",
+    });
+
+    expect(schedules[0].nextRunDate).toBe("2026-08-31");
+    expect(schedules[0].effectiveNextRunDate).toBe("2026-11-30");
+    expect(toRecurringScheduleInputs(schedules)[0].nextRunDate).toBe(
+      "2026-11-30",
+    );
+  });
+
+  it("skips consecutive realized daily occurrences until the first unrecorded date", () => {
+    const wallets: Wallet[] = [
+      { id: "bank", name: "Ngân hàng", type: "bank", balance: 10_000_000 },
+    ];
+    const categories: Category[] = [
+      {
+        id: "coffee",
+        name: "Cà phê",
+        type: "expense",
+        isRecurring: true,
+        recurrence: "daily",
+        defaultAmount: 50_000,
+        defaultWalletId: "bank",
+        nextRunDate: "2026-10-05",
+      },
+    ];
+    const transactions: Transaction[] = ["2026-10-05", "2026-10-06"].map(
+      (date, index) => ({
+        id: `coffee-${index}`,
+        type: "expense" as const,
+        amount: 50_000,
+        categoryId: "coffee",
+        walletId: "bank",
+        note: "Cà phê",
+        date,
+      }),
+    );
+
+    const schedules = buildRecurringMoneySchedules({
+      categories,
+      transactions,
+      wallets,
+      referenceDate: "2026-10-05",
+    });
+
+    expect(schedules[0].effectiveNextRunDate).toBe("2026-10-07");
   });
 
   it("sorts recurring cards by rolled effective next date, not stale stored anchor", () => {

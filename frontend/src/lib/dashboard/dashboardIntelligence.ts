@@ -430,6 +430,7 @@ export type RecurringScheduleInput = {
   recurrence?: "daily" | "weekly" | "monthly" | "yearly";
   categoryId?: string;
   categoryName?: string;
+  walletId?: string;
 };
 
 export type RecurringOccurrence = {
@@ -441,6 +442,7 @@ export type RecurringOccurrence = {
   date: Date;
   categoryId?: string;
   categoryName?: string;
+  walletId?: string;
 };
 
 function localDayKey(date: Date) {
@@ -516,6 +518,7 @@ export function expandRecurringScheduleOccurrences(
           date: occurrence,
           categoryId: schedule.categoryId,
           categoryName: schedule.categoryName,
+          walletId: schedule.walletId,
         });
       }
       continue;
@@ -541,6 +544,7 @@ export function expandRecurringScheduleOccurrences(
         date: new Date(occurrence),
         categoryId: schedule.categoryId,
         categoryName: schedule.categoryName,
+        walletId: schedule.walletId,
       });
       occurrence = nextRecurringDate(
         occurrence,
@@ -561,6 +565,7 @@ export function expandRecurringScheduleOccurrences(
       occurrence.type,
       Math.round(occurrence.amount),
       identity,
+      occurrence.walletId ?? "",
     ].join("|");
     if (!deduped.has(key)) deduped.set(key, occurrence);
   }

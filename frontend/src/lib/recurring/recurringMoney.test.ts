@@ -81,6 +81,43 @@ describe("RECURRING-MONEY-MANAGER-1 canonical read model", () => {
     expect(schedules.some((item) => item.source === "transaction")).toBe(true);
   });
 
+  it("keeps schedules on different wallets separate even when every other mirror field matches", () => {
+    const categories: Category[] = [
+      {
+        ...baseCategory,
+        isRecurring: true,
+        recurrence: "monthly",
+        defaultAmount: 500_000,
+        defaultWalletId: "bank",
+        nextRunDate: "2026-10-05",
+      },
+    ];
+    const transactions = [
+      tx({
+        id: "legacy-other-wallet",
+        walletId: "cash",
+        isRecurring: true,
+        recurrence: "monthly",
+        nextRunDate: "2026-10-05",
+      }),
+    ];
+    const twoWallets: Wallet[] = [
+      ...wallets,
+      { id: "cash", name: "Tiền mặt", type: "cash", balance: 1_000_000 },
+    ];
+
+    const schedules = buildRecurringMoneySchedules({
+      categories,
+      transactions,
+      wallets: twoWallets,
+    });
+    expect(schedules).toHaveLength(2);
+    expect(schedules.map((item) => item.walletId).sort()).toEqual([
+      "bank",
+      "cash",
+    ]);
+  });
+
   it("keeps a paused category schedule authoritative over an exact active legacy mirror", () => {
     const categories: Category[] = [
       {

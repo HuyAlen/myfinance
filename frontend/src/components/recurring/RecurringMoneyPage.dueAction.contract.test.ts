@@ -25,4 +25,17 @@ describe("RECURRING-DUE-ACTION-1 page wiring", () => {
     expect(source).toContain("date: dueAction.dueDate");
     expect(source).not.toContain("isRecurring: true");
   });
+
+  it("keeps the persisted schedule anchor immutable when recording and lets the canonical read model advance after reload", () => {
+    const start = source.indexOf("function requestRecordDueTransaction(");
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf("function requestClear(", start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
+
+    expect(block).toContain("await addTransaction(transaction)");
+    expect(block).toContain("await reloadData()");
+    expect(block).not.toContain("updateCategoryRecurringSchedule");
+    expect(block).not.toContain("updateTransactionRecurringSchedule");
+  });
 });

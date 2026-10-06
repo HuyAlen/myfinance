@@ -42,6 +42,22 @@ describe("DASHBOARD-DECISION-INTELLIGENCE-2 pure decision helpers", () => {
     expect(occurrences).toHaveLength(1);
   });
 
+  it("keeps same category/date/amount occurrences separate when their wallets differ", () => {
+    const occurrences = expandRecurringScheduleOccurrences(
+      [
+        { id: "rent-bank", title: "Rent", categoryId: "rent", categoryName: "Rent", walletId: "bank", amount: 2_000_000, type: "expense", nextRunDate: "2026-10-05" },
+        { id: "rent-cash", title: "Rent", categoryId: "rent", categoryName: "Rent", walletId: "cash", amount: 2_000_000, type: "expense", nextRunDate: "2026-10-05" },
+      ],
+      "2026-10-01",
+      30,
+    );
+    expect(occurrences).toHaveLength(2);
+    expect(occurrences.map((item) => item.walletId).sort()).toEqual([
+      "bank",
+      "cash",
+    ]);
+  });
+
   it("keeps Có thể chi an toàn conservative by reserving recurring expense and not pre-spending future income", () => {
     const occurrences = expandRecurringScheduleOccurrences(
       [

@@ -2889,8 +2889,14 @@ export default function DashboardPage() {
   // consume them.
   const recurringReferenceDate = toLocalDateKey(new Date());
   const recurringMoneySchedules = useMemo(
-    () => buildRecurringMoneySchedules({ categories, transactions, wallets }),
-    [categories, transactions, wallets],
+    () =>
+      buildRecurringMoneySchedules({
+        categories,
+        transactions,
+        wallets,
+        referenceDate: recurringReferenceDate,
+      }),
+    [categories, recurringReferenceDate, transactions, wallets],
   );
   const forecastExcludedRecurringCount = useMemo(
     () =>
