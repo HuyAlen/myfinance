@@ -15,6 +15,14 @@ function financialStructureRegion() {
   return source.slice(start, end);
 }
 
+function financialStructureRateRegion() {
+  const start = source.indexOf("const financialStructureAdjusted = useMemo(");
+  const end = source.indexOf("const currentSavingInvestmentSnapshot", start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
 function financialStructurePanel() {
   const start = source.indexOf('title="Cấu trúc tài chính"');
   const end = source.indexOf("</Panel>", start);
@@ -33,8 +41,8 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-PERIOD-SEMANTICS-1", () => {
     expect(region).not.toContain('title: "Tỷ trọng đầu tư"');
   });
 
-  it("keeps the values grounded in periodFutureAllocation rather than current Savings/Portfolio snapshots", () => {
-    const region = financialStructureRegion();
+  it("keeps period allocation rates grounded in periodFutureAllocation rather than current asset snapshots", () => {
+    const region = financialStructureRateRegion();
 
     expect(region).toContain(
       "const savingAmount = periodFutureAllocation.savingAmount;",
@@ -44,6 +52,7 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-PERIOD-SEMANTICS-1", () => {
     );
     expect(region).not.toContain("savingsSnapshot.totalSavings");
     expect(region).not.toContain("snapshotInvestments");
+    expect(region).not.toContain("forexSnapshot.assetValue");
   });
 
   it("explains a genuine zero combined allocation as no new allocation in the selected period", () => {
@@ -78,13 +87,13 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-PERIOD-SEMANTICS-1", () => {
     const panel = financialStructurePanel();
 
     expect(panel).toContain(
-      'subtitle="Tỷ lệ chi tiêu và phân bổ vốn trên thu nhập của kỳ đang chọn"',
+      'subtitle="Tỷ lệ phân bổ trong kỳ, kèm số dư tài sản hiện có để đối chiếu"',
     );
     expect(panel).toContain(
       'data-dashboard-financial-structure-scope="period"',
     );
     expect(panel).toContain(
-      "không phải số dư Tiết kiệm hoặc giá trị danh mục Đầu tư hiện tại",
+      "không tham gia vào tỷ lệ",
     );
   });
 
@@ -92,7 +101,7 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-PERIOD-SEMANTICS-1", () => {
     const panel = financialStructurePanel();
 
     expect(source).toContain(
-      "const financialStructureReady = cashFlowReady && savingInvestmentReady;",
+      "cashFlowReady && savingInvestmentReady && isDashboardReady;",
     );
     expect(panel).toContain("financialStructureReady ? (");
     expect(source.split("getTransactionsInRange(").length - 1).toBe(2);

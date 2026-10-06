@@ -204,9 +204,12 @@ describe("DashboardPage readiness gating for Monthly Progress and Financial Stru
     expect(beforeGate).toContain("monthlyPulse.progress");
   });
 
-  it("computes financialStructureReady as the union of cashFlowReady and savingInvestmentReady", () => {
+  it("computes financialStructureReady from period allocation readiness plus the current asset snapshot", () => {
     expect(source).toContain(
-      "const financialStructureReady = cashFlowReady && savingInvestmentReady;",
+      "const financialStructureReady =",
+    );
+    expect(source).toContain(
+      "cashFlowReady && savingInvestmentReady && isDashboardReady;",
     );
   });
 

@@ -2263,6 +2263,26 @@ export default function DashboardPage() {
     summary.income,
   ]);
 
+  const currentSavingInvestmentSnapshot = useMemo(() => {
+    const portfolioInvestments = snapshotInvestments.reduce(
+      (sum, investment) => sum + Math.max(0, Number(investment.currentValue) || 0),
+      0,
+    );
+    const forexInvestments = Math.max(0, Number(forexSnapshot.assetValue) || 0);
+    const investments = portfolioInvestments + forexInvestments;
+
+    return {
+      savings: Math.max(0, savingsSnapshot.totalSavings),
+      portfolioInvestments,
+      forexInvestments,
+      investments,
+    };
+  }, [
+    forexSnapshot.assetValue,
+    savingsSnapshot.totalSavings,
+    snapshotInvestments,
+  ]);
+
   const financialStructureCards = useMemo(
     () => [
       {
@@ -2289,6 +2309,7 @@ export default function DashboardPage() {
           financialStructureAdjusted.income <= 0
             ? 0
             : Math.min(financialStructureAdjusted.fixedCostRatio, 100),
+        currentAssets: [] as { label: string; value: number }[],
       },
       {
         title: "Chi phí biến đổi",
@@ -2314,6 +2335,7 @@ export default function DashboardPage() {
           financialStructureAdjusted.income <= 0
             ? 0
             : Math.min(financialStructureAdjusted.variableCostRatio, 100),
+        currentAssets: [] as { label: string; value: number }[],
       },
       {
         title: "Phân bổ tiết kiệm & đầu tư",
@@ -2337,6 +2359,16 @@ export default function DashboardPage() {
           financialStructureAdjusted.income <= 0
             ? 0
             : Math.min(financialStructureAdjusted.futureAllocationRate, 100),
+        currentAssets: [
+          {
+            label: "Tiết kiệm hiện có",
+            value: currentSavingInvestmentSnapshot.savings,
+          },
+          {
+            label: "Đầu tư hiện có",
+            value: currentSavingInvestmentSnapshot.investments,
+          },
+        ],
       },
       {
         title: "Phân bổ đầu tư",
@@ -2366,9 +2398,19 @@ export default function DashboardPage() {
           financialStructureAdjusted.income <= 0
             ? 0
             : Math.min(financialStructureAdjusted.investmentRate, 100),
+        currentAssets: [
+          {
+            label: "Danh mục đầu tư",
+            value: currentSavingInvestmentSnapshot.portfolioInvestments,
+          },
+          {
+            label: "Ngoại hối",
+            value: currentSavingInvestmentSnapshot.forexInvestments,
+          },
+        ],
       },
     ],
-    [financialStructureAdjusted],
+    [currentSavingInvestmentSnapshot, financialStructureAdjusted],
   );
 
   // DASH-POLISH-1: Financial Structure's 4 cards have two different real
@@ -2377,12 +2419,14 @@ export default function DashboardPage() {
   // accepted transaction set as cashFlowReady's own dependency), while
   // "Phân bổ tiết kiệm & đầu tư"/"Phân bổ đầu tư" additionally read
   // periodFutureAllocation's savingAmount/investmentAmount, which is
-  // gated by savingInvestmentReady. Rather than splitting the panel into
-  // 2 ready + 2 loading cards simultaneously, this gates the whole panel
-  // on the union of both — savingInvestmentReady never becomes true
-  // before cashFlowReady's own dependencies resolve, so this is a safe,
-  // no-premature-render superset, not a new independent readiness state.
-  const financialStructureReady = cashFlowReady && savingInvestmentReady;
+  // gated by savingInvestmentReady. Allocation cards now ALSO expose an
+  // explicitly separate "Hiện có" stock snapshot (Savings balance +
+  // Portfolio currentValue + current Forex asset value). The snapshot never
+  // enters the period rate formula; isDashboardReady is added only so these
+  // current balances cannot render before the canonical asset bundle has
+  // completed at least one successful load.
+  const financialStructureReady =
+    cashFlowReady && savingInvestmentReady && isDashboardReady;
   // Reuse the existing fully validated allocation dependencies instead of
   // introducing duplicate fetches. This gate is a correctness superset for
   // cash movement: transactions/categories + saving_transactions + Forex ledger.
@@ -4678,7 +4722,7 @@ export default function DashboardPage() {
 
         <Panel
           title="Cấu trúc tài chính"
-          subtitle="Tỷ lệ chi tiêu và phân bổ vốn trên thu nhập của kỳ đang chọn"
+          subtitle="Tỷ lệ phân bổ trong kỳ, kèm số dư tài sản hiện có để đối chiếu"
         >
           {/* DASH-POLISH-1: gated on financialStructureReady (union of
               cashFlowReady + savingInvestmentReady — see that memo's own
@@ -4691,7 +4735,7 @@ export default function DashboardPage() {
                 data-dashboard-financial-structure-scope="period"
                 className="rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#60778D]"
               >
-                Các tỷ lệ dùng thu nhập và dòng tiền phát sinh trong kỳ đang chọn; không phải số dư Tiết kiệm hoặc giá trị danh mục Đầu tư hiện tại.
+                Tỷ lệ và thanh tiến độ dùng thu nhập cùng dòng tiền phát sinh trong kỳ. Khối “Hiện có” bên dưới là số dư tài sản hiện tại để đối chiếu và không tham gia vào tỷ lệ.
               </div>
               {financialStructureCards.map((item) => (
                 <div
@@ -4743,6 +4787,31 @@ export default function DashboardPage() {
                   <p className="mt-2 text-xs font-semibold text-slate-600">
                     {item.note}
                   </p>
+                  {item.currentAssets.length > 0 ? (
+                    <div
+                      data-dashboard-financial-structure-current-assets={item.title}
+                      className="mt-3 border-t border-slate-200/80 pt-3"
+                    >
+                      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">
+                        Hiện có
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        {item.currentAssets.map((asset) => (
+                          <div
+                            key={asset.label}
+                            className="flex min-w-0 items-center justify-between gap-3 text-xs"
+                          >
+                            <span className="min-w-0 truncate font-semibold text-slate-500">
+                              {asset.label}
+                            </span>
+                            <span className="shrink-0 font-black tabular-nums text-[#31536F]">
+                              {formatVND(asset.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

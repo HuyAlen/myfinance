@@ -219,9 +219,15 @@ describe("Action Center removal / Financial Structure regression guard", () => {
     expect(source).not.toContain("<ActionCard");
   });
 
-  it("financialStructureReady keeps its existing formula — untouched by the Action Center removal", () => {
+  it("financialStructureReady stays independent of Action Center and also waits for the current asset snapshot", () => {
     expect(source).toContain(
-      "const financialStructureReady = cashFlowReady && savingInvestmentReady;",
+      "const financialStructureReady =",
+    );
+    expect(source).toContain(
+      "cashFlowReady && savingInvestmentReady && isDashboardReady;",
+    );
+    expect(source).not.toContain(
+      "const actionCenterReady = isActionCenterReady(",
     );
   });
 });
