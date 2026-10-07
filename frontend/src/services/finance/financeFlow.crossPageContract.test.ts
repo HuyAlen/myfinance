@@ -90,7 +90,7 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     const wallets = read("../../components/wallets/WalletsPage.tsx");
     expect(wallets).toContain("getCategories(),");
     expect(wallets).toContain("setCategories(loadedCategories)");
-    expect(wallets).toContain("getTotalExpense(currentMonthTxns, categories)");
+    expect(wallets).toContain("getTotalExpense(periodTxns, categories)");
     expect(wallets).toContain("expense: getTotalExpense(wt, categories)");
 
     const realtimeStart = wallets.indexOf("useRealtimeTable(");

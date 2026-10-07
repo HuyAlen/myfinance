@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { useQuickActionCreateIntent } from "@/src/lib/navigation/quickActionIntent";
 import {
   buildTransactionsHref,
@@ -142,21 +143,11 @@ function formatCompactWalletAmount(value: number) {
   return `${fullFormatter.format(Math.round(absolute))} đ`;
 }
 
-/**
- * [startDate, endDate] (inclusive, "YYYY-MM-DD") for the CURRENT local
- * calendar month — Wallets page analytics intentionally follow the actual
- * current month, not the app-wide DateFilterProvider selection. Uses local
- * Date components, never UTC, so the boundary can't shift near midnight.
- */
-function getCurrentMonthRange() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-
-  return { startDate, endDate };
+function getWalletPeriodRangeKey(range: {
+  startDate: string;
+  endDate: string;
+}) {
+  return `${range.startDate}:${range.endDate}`;
 }
 
 const createEmptyTransferForm = (): TransferFormState => ({
@@ -263,15 +254,17 @@ export default function WalletsPage() {
   // not a proven zero balance. Once a successful snapshot has loaded, later
   // transient refresh failures keep rendering that last-known-good snapshot.
   const [walletSnapshotReady, setWalletSnapshotReady] = useState(false);
-  const [currentMonthTransactions, setCurrentMonthTransactions] = useState<
+  const [periodTransactions, setPeriodTransactions] = useState<
     Transaction[]
   >([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoadingMonthAnalytics, setIsLoadingMonthAnalytics] = useState(true);
-  const [monthAnalyticsError, setMonthAnalyticsError] = useState<string | null>(
+  const [isLoadingPeriodAnalytics, setIsLoadingPeriodAnalytics] = useState(true);
+  const [periodAnalyticsError, setPeriodAnalyticsError] = useState<string | null>(
     null,
   );
-  const [monthlyAnalyticsReady, setMonthlyAnalyticsReady] = useState(false);
+  const [periodAnalyticsReady, setPeriodAnalyticsReady] = useState(false);
+  const [periodAnalyticsRangeKey, setPeriodAnalyticsRangeKey] =
+    useState<string | null>(null);
   // All-time per-wallet linked-record count, for the wallet card caption
   // only. Built from a narrow id-only projection (see
   // getTransactionWalletLinks/getForexCashWalletLinks) instead of full
@@ -307,6 +300,13 @@ export default function WalletsPage() {
   );
   const focusedWalletIdRef = useRef<string | null>(null);
   const { toast } = useToast();
+  const { dateRange, filterLabel } = useDateFilter();
+  const analyticsDateRangeRef = useRef(dateRange);
+  const selectedPeriodRangeKey = getWalletPeriodRangeKey(dateRange);
+
+  useEffect(() => {
+    analyticsDateRangeRef.current = dateRange;
+  }, [dateRange]);
 
   const isWalletOverlayOpen =
     isFormOpen || isTransferOpen || !!reconcileTarget || !!deleteTarget;
@@ -350,11 +350,17 @@ export default function WalletsPage() {
     };
   }, [isWalletOverlayOpen]);
 
-  // Stable identity: unlike Transactions/Dashboard, Wallets analytics always
-  // follow the actual current calendar month (not a user-selectable prop),
-  // so reloadData never needs to change identity across renders.
+  // WALLETS-PERIOD-SSOT-1: keep reloadData identity stable so the existing
+  // single-flight coordinator remains authoritative. The mutable range ref is
+  // synchronized before the reload effect below, so trailing realtime/period
+  // reloads always read the latest global reporting range.
   const reloadData = useCallback(async () => {
-    const { startDate, endDate } = getCurrentMonthRange();
+    const requestedDateRange = analyticsDateRangeRef.current;
+    const { startDate, endDate } = requestedDateRange;
+    const requestedPeriodRangeKey = getWalletPeriodRangeKey(requestedDateRange);
+    const isLatestPeriodRequest = () =>
+      requestedPeriodRangeKey ===
+      getWalletPeriodRangeKey(analyticsDateRangeRef.current);
 
     // WALLETS-CORRECTNESS-1: fire every domain concurrently, but apply each
     // result independently as soon as it settles. Wallet rows are critical;
@@ -376,24 +382,29 @@ export default function WalletsPage() {
         setIsLoadingWallets(false);
       });
 
-    const monthlyAnalyticsTask = Promise.all([
+    setPeriodAnalyticsRangeKey(requestedPeriodRangeKey);
+    const periodAnalyticsTask = Promise.all([
       getTransactionsInRange(startDate, endDate),
       getCategories(),
     ])
-      .then(([monthTransactions, loadedCategories]) => {
-        setCurrentMonthTransactions(monthTransactions);
+      .then(([periodTransactionsResult, loadedCategories]) => {
+        if (!isLatestPeriodRequest()) return;
+        setPeriodTransactions(periodTransactionsResult);
         setCategories(loadedCategories);
-        setMonthAnalyticsError(null);
-        setMonthlyAnalyticsReady(true);
+        setPeriodAnalyticsError(null);
+        setPeriodAnalyticsReady(true);
       })
       .catch((error) => {
+        if (!isLatestPeriodRequest()) return;
         console.error("[WalletsPage] monthly analytics reload failed:", error);
-        setMonthAnalyticsError(
-          "Không thể tải dữ liệu dòng tiền tháng này.",
+        setPeriodAnalyticsError(
+          "Không thể tải dữ liệu dòng tiền cho kỳ đã chọn.",
         );
       })
       .finally(() => {
-        setIsLoadingMonthAnalytics(false);
+        if (isLatestPeriodRequest()) {
+          setIsLoadingPeriodAnalytics(false);
+        }
       });
 
     const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })
@@ -440,7 +451,7 @@ export default function WalletsPage() {
 
     await Promise.all([
       walletTask,
-      monthlyAnalyticsTask,
+      periodAnalyticsTask,
       linkCountsTask,
       reconciliationHistoryTask,
     ]);
@@ -488,10 +499,15 @@ export default function WalletsPage() {
     };
   }, []);
 
-  // Initial load: immediate, no artificial delay.
+  // Initial load and every global reporting-period change are immediate.
+  // The range-ref synchronization effect is declared earlier, so this reload
+  // always observes the latest committed DateFilterProvider range.
   useEffect(() => {
+    setPeriodAnalyticsReady(false);
+    setIsLoadingPeriodAnalytics(true);
+    setPeriodAnalyticsError(null);
     void runReload();
-  }, [runReload]);
+  }, [dateRange.startDate, dateRange.endDate, runReload]);
 
   // Forex/savings writes go through server-side RPCs that also update
   // `wallets.balance` directly, so watching `wallets` already catches them —
@@ -570,66 +586,74 @@ export default function WalletsPage() {
     [spendableWallets],
   );
 
-  // ── New analytics ─────────────────────────────────────────────────────────
-  const now = new Date();
-  const currentMonth =
-    now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
-
-  // Monthly Wallet analytics need BOTH datasets: transactions and the Wallet
+  // ── Selected-period analytics ──────────────────────────────────────────────
+  // Wallet analytics use the same DateFilterProvider range as the rest of the
+  // reporting surfaces. Keep this defensive client-side range check even though
+  // getTransactionsInRange already scopes the database read.
+  // Selected-period Wallet analytics need BOTH datasets: transactions and the Wallet
   // snapshot that defines the accepted spendable id set. A successful
   // transaction query alone cannot prove a zero when getWallets() failed.
-  const walletAnalyticsReady = walletSnapshotReady && monthlyAnalyticsReady;
+  const walletAnalyticsReady =
+    walletSnapshotReady &&
+    periodAnalyticsReady &&
+    periodAnalyticsRangeKey === selectedPeriodRangeKey;
   const walletAnalyticsLoading =
-    !walletAnalyticsReady && (isLoadingWallets || isLoadingMonthAnalytics);
+    !walletAnalyticsReady &&
+    (isLoadingWallets ||
+      isLoadingPeriodAnalytics ||
+      periodAnalyticsRangeKey !== selectedPeriodRangeKey);
   const walletAnalyticsError = !walletSnapshotReady
     ? walletsLoadError
-    : monthAnalyticsError;
+    : periodAnalyticsError;
 
-  // currentMonthTransactions is already fetched scoped to the current month
-  // (see getCurrentMonthRange/getTransactionsInRange in reloadData); this
-  // filter is a cheap defensive re-check, not the primary scoping mechanism.
-  const currentMonthTxns = useMemo(
+  const periodTxns = useMemo(
     () =>
-      currentMonthTransactions.filter(
+      periodTransactions.filter(
         (transaction) =>
-          transaction.date.startsWith(currentMonth) &&
+          transaction.date >= dateRange.startDate &&
+          transaction.date <= dateRange.endDate &&
           isSpendableWalletTransaction(transaction, spendableWalletIds),
       ),
-    [currentMonthTransactions, currentMonth, spendableWalletIds],
+    [
+      periodTransactions,
+      dateRange.startDate,
+      dateRange.endDate,
+      spendableWalletIds,
+    ],
   );
-  const currentMonthNet = useMemo(
+  const periodNet = useMemo(
     () =>
-      getTotalIncome(currentMonthTxns) -
-      getTotalExpense(currentMonthTxns, categories),
-    [categories, currentMonthTxns],
+      getTotalIncome(periodTxns) -
+      getTotalExpense(periodTxns, categories),
+    [categories, periodTxns],
   );
 
-  const currentMonthTransfers = useMemo(
-    () => currentMonthTxns.filter(isWalletTransfer),
-    [currentMonthTxns],
+  const periodTransfers = useMemo(
+    () => periodTxns.filter(isWalletTransfer),
+    [periodTxns],
   );
 
-  const currentMonthTransferTotal = useMemo(
-    () => currentMonthTransfers.reduce((sum, t) => sum + t.amount, 0),
-    [currentMonthTransfers],
+  const periodTransferTotal = useMemo(
+    () => periodTransfers.reduce((sum, t) => sum + t.amount, 0),
+    [periodTransfers],
   );
 
-  // Per-wallet monthly flow — one pass over currentMonthTxns to bucket by
-  // wallet and one pass over currentMonthTransfers for transfer totals,
+  // Per-wallet selected-period flow — one pass over periodTxns to bucket by
+  // wallet and one pass over periodTransfers for transfer totals,
   // instead of re-filtering the shared arrays once per wallet. Income/expense
   // classification still goes through the canonical getTotalIncome/
   // getTotalExpense helpers (applied to each wallet's pre-bucketed slice),
   // so the actual amounts are identical to before.
   const walletFlow = useMemo(() => {
     const txnsByWallet = new Map<string, Transaction[]>();
-    for (const t of currentMonthTxns) {
+    for (const t of periodTxns) {
       if (!txnsByWallet.has(t.walletId)) txnsByWallet.set(t.walletId, []);
       txnsByWallet.get(t.walletId)!.push(t);
     }
 
     const transferInByWallet = new Map<string, number>();
     const transferOutByWallet = new Map<string, number>();
-    for (const t of currentMonthTransfers) {
+    for (const t of periodTransfers) {
       transferOutByWallet.set(
         t.walletId,
         (transferOutByWallet.get(t.walletId) ?? 0) + t.amount,
@@ -664,8 +688,8 @@ export default function WalletsPage() {
   }, [
     categories,
     spendableWallets,
-    currentMonthTxns,
-    currentMonthTransfers,
+    periodTxns,
+    periodTransfers,
   ]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -1077,33 +1101,33 @@ export default function WalletsPage() {
             isLoading={!walletSnapshotReady && isLoadingWallets}
           />
           <WalletSummaryCard
-            label="Tiền vào tháng này"
+            label="Tiền vào kỳ này"
             value={
               walletAnalyticsReady
-                ? formatVND(getTotalIncome(currentMonthTxns))
+                ? formatVND(getTotalIncome(periodTxns))
                 : "—"
             }
             note={
               walletAnalyticsReady
-                ? `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`
-                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
+                ? filterLabel
+                : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="emerald"
             isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
-            label="Chi tiêu tháng này"
+            label="Chi tiêu kỳ này"
             value={
               walletAnalyticsReady
-                ? formatVND(getTotalExpense(currentMonthTxns, categories))
+                ? formatVND(getTotalExpense(periodTxns, categories))
                 : "—"
             }
             note={
               walletAnalyticsReady
-                ? currentMonthNet >= 0
+                ? periodNet >= 0
                   ? "Dòng tiền đang dương"
                   : "Chi lớn hơn thu"
-                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
+                : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="rose"
             isLoading={walletAnalyticsLoading}
@@ -1112,13 +1136,13 @@ export default function WalletsPage() {
             label="Chuyển giữa ví"
             value={
               walletAnalyticsReady
-                ? formatVND(currentMonthTransferTotal)
+                ? formatVND(periodTransferTotal)
                 : "—"
             }
             note={
               walletAnalyticsReady
-                ? `${currentMonthTransfers.length} giao dịch`
-                : walletAnalyticsError ?? "Đang tải dữ liệu tháng"
+                ? `${periodTransfers.length} giao dịch`
+                : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="indigo"
             isLoading={walletAnalyticsLoading}
@@ -1342,7 +1366,7 @@ export default function WalletsPage() {
                   </p>
                 </div>
 
-                {/* Monthly flow */}
+                {/* Selected-period flow */}
                 {walletAnalyticsReady ? (
                   <>
                     <div className="mt-3 flex min-w-0 items-center justify-between gap-1 rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] sm:hidden">
@@ -1428,7 +1452,7 @@ export default function WalletsPage() {
                   </>
                 ) : (
                   <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-semibold text-slate-500 sm:mt-4">
-                    {walletAnalyticsError ?? "Chưa có dữ liệu dòng tiền tháng này."}
+                    {walletAnalyticsError ?? "Chưa có dữ liệu dòng tiền cho kỳ đã chọn."}
                   </div>
                 )}
 

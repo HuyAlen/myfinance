@@ -12,7 +12,7 @@ describe("WALLETS-CORRECTNESS-1 — Wallet domain correctness", () => {
     "utf8",
   );
 
-  it("scopes current-month analytics to spendable Wallet-domain ids", () => {
+  it("scopes selected-period analytics to spendable Wallet-domain ids", () => {
     expect(source).toContain("const spendableWalletIds = useMemo(");
     expect(source).toContain("isSpendableWalletTransaction(");
     expect(source).toContain(
@@ -37,9 +37,10 @@ describe("WALLETS-CORRECTNESS-1 — Wallet domain correctness", () => {
     );
   });
 
-  it("does not present monthly values or per-wallet flow as validated before monthly analytics succeeds", () => {
+  it("does not present selected-period values or per-wallet flow as validated before period analytics succeeds", () => {
+    expect(source).toContain("const walletAnalyticsReady =");
     expect(source).toContain(
-      "const walletAnalyticsReady = walletSnapshotReady && monthlyAnalyticsReady;",
+      "periodAnalyticsRangeKey === selectedPeriodRangeKey",
     );
     expect(source).toContain("isLoading={walletAnalyticsLoading}");
     expect(source).toContain("{walletAnalyticsReady ? (");

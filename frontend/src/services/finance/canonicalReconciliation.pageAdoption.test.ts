@@ -23,7 +23,7 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
 
     expect(transactions).toContain("getRealExpenseTransactions(");
     expect(transactions).toContain("realExpenseTransactions.reduce(");
-    expect(wallets).toContain("getTotalExpense(currentMonthTxns, categories)");
+    expect(wallets).toContain("getTotalExpense(periodTxns, categories)");
     expect(wallets).toContain("expense: getTotalExpense(wt, categories)");
   });
 

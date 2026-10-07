@@ -14,17 +14,18 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
   );
   const normalized = source.replace(/\s+/g, " ");
 
-  it("tracks explicit Wallet and monthly-analytics readiness instead of treating initial [] as zero", () => {
+  it("tracks explicit Wallet and period-analytics readiness instead of treating initial [] as zero", () => {
     expect(source).toContain("walletSnapshotReady");
-    expect(source).toContain("monthlyAnalyticsReady");
+    expect(source).toContain("periodAnalyticsReady");
+    expect(source).toContain("const walletAnalyticsReady =");
     expect(source).toContain(
-      "const walletAnalyticsReady = walletSnapshotReady && monthlyAnalyticsReady;",
+      "periodAnalyticsRangeKey === selectedPeriodRangeKey",
     );
-    expect(source).toContain("isLoadingMonthAnalytics");
-    expect(source).toContain("monthAnalyticsError");
+    expect(source).toContain("isLoadingPeriodAnalytics");
+    expect(source).toContain("periodAnalyticsError");
   });
 
-  it("applies Wallet, monthly analytics, link counts and reconciliation history independently", () => {
+  it("applies Wallet, period analytics, link counts and reconciliation history independently", () => {
     const start = source.indexOf("const reloadData = useCallback(async () => {");
     const end = source.indexOf("}, []);", start);
     expect(start).toBeGreaterThan(-1);
@@ -32,7 +33,7 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     const fnSource = source.slice(start, end);
 
     expect(fnSource).toContain("const walletTask = getWallets()");
-    expect(fnSource).toContain("const monthlyAnalyticsTask = Promise.all([");
+    expect(fnSource).toContain("const periodAnalyticsTask = Promise.all([");
     expect(fnSource).toContain("getTransactionsInRange(startDate, endDate)");
     expect(fnSource).toContain("getCategories()");
     expect(fnSource).toContain("setCategories(loadedCategories)");
@@ -48,7 +49,7 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(fnSource).toContain("getForexCashWalletLinks()");
 
     expect(fnSource).toMatch(
-      /await Promise\.all\(\[\s*walletTask,\s*monthlyAnalyticsTask,\s*linkCountsTask,\s*reconciliationHistoryTask,\s*\]\);/,
+      /await Promise\.all\(\[\s*walletTask,\s*periodAnalyticsTask,\s*linkCountsTask,\s*reconciliationHistoryTask,\s*\]\);/,
     );
 
     expect(fnSource).not.toContain(
