@@ -2943,6 +2943,9 @@ function mapBudgetCategoryIntegrityError(error: {
   if (error.code === "23503") {
     return "Danh mục của ngân sách không tồn tại hoặc không thuộc tài khoản hiện tại.";
   }
+  if (error.code === "23505") {
+    return "Danh mục này đã có ngân sách trong tháng đã chọn.";
+  }
   return error.message;
 }
 
@@ -3143,14 +3146,28 @@ export async function updateBudget(
 
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("budgets")
-    .update(toBudgetRow(updatedBudget, userId))
+    .update({
+      categoryId: updatedBudget.categoryId,
+      month: updatedBudget.month,
+      limitAmount: updatedBudget.limitAmount,
+    })
     .eq("id", updatedBudget.id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
   if (error) {
     console.error("[financeStorage] updateBudget:", error.message);
     return { error: mapBudgetCategoryIntegrityError(error) };
+  }
+  if (!data || data.id !== updatedBudget.id) {
+    console.error(
+      "[financeStorage] updateBudget: mutation receipt missing or mismatched",
+    );
+    return {
+      error: "Không thể xác nhận cập nhật ngân sách. Vui lòng tải lại và thử lại.",
+    };
   }
   return { error: null };
 }
@@ -3160,14 +3177,24 @@ export async function deleteBudget(
 ): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("budgets")
     .delete()
     .eq("id", budgetId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
   if (error) {
     console.error("[financeStorage] deleteBudget:", error.message);
     return { error: error.message };
+  }
+  if (!data || data.id !== budgetId) {
+    console.error(
+      "[financeStorage] deleteBudget: mutation receipt missing or mismatched",
+    );
+    return {
+      error: "Không thể xác nhận xóa ngân sách. Vui lòng tải lại và thử lại.",
+    };
   }
   return { error: null };
 }
