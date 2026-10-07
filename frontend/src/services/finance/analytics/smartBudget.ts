@@ -92,6 +92,18 @@ function fmtVND(value: number): string {
   return new Intl.NumberFormat("vi-VN").format(Math.round(value)) + " đ";
 }
 
+/**
+ * Returns N month keys newest-first, anchored to an explicit YYYY-MM month.
+ * This keeps historical Budget analytics independent from the wall clock.
+ */
+function lastNMonthsFromAnchor(anchorMonth: string, n: number): string[] {
+  const [year, month] = anchorMonth.split("-").map(Number);
+  return Array.from({ length: n }, (_, index) => {
+    const date = new Date(year, month - 1 - index, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
 // ─── Implementation ───────────────────────────────────────────────────────────
 
 /**
@@ -107,11 +119,17 @@ export function computeSmartBudget(
   categories: Category[],
   budgets: Budget[],
   lookbackMonths = 3,
+  selectedMonth?: string,
 ): SmartBudgetAnalysis {
   const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const months = lastNMonths(lookbackMonths + 1); // +1 so current month is always included
+  const currentMonth =
+    selectedMonth ??
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const months = selectedMonth
+    ? lastNMonthsFromAnchor(currentMonth, lookbackMonths + 1)
+    : lastNMonths(lookbackMonths + 1); // +1 so the analysis month is always included
   const expenseCategories = categories.filter((c) => c.type === "expense");
+
 
   // ── Per-category analysis ─────────────────────────────────────────────────
   const categoryAnalysis: CategoryBudgetAnalysis[] = expenseCategories.map(

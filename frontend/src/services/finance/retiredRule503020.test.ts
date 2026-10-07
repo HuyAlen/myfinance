@@ -73,7 +73,7 @@ describe("50/30/20 is retired from active MyFinance behavior", () => {
     expect(budgets).toContain("getCategories()");
     expect(budgets).toContain("getTransactions()");
     expect(budgets).toContain(
-      "computeSmartBudget(transactions, categories, budgets)",
+      "computeSmartBudget(transactions, categories, budgets, 3, activeMonth)",
     );
   });
 

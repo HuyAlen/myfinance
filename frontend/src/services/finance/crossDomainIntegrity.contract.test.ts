@@ -84,7 +84,7 @@ describe("CROSS-DOMAIN-INTEGRITY-1 ownership and reconciliation contracts", () =
     expect(budgets).toContain(
       'useRealtimeTable(["budgets", "transactions", "categories"], reloadData)',
     );
-    expect(budgets).toContain("computeSmartBudget(transactions, categories, budgets)");
+    expect(budgets).toContain("computeSmartBudget(transactions, categories, budgets, 3, activeMonth)");
     expect(budgets).toContain("clonePreviousMonthBudgets(activeMonth)");
     expect(budgets).not.toContain("for (const item of cloneItems)");
     expect(budgets).not.toContain("await addBudget(clonedBudget)");

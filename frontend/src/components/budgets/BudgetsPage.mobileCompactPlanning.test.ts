@@ -92,7 +92,7 @@ describe("BudgetsPage compacts planning hierarchy on mobile", () => {
     expect(source).not.toContain('from("saving_transactions")');
     expect(source).not.toContain('from("forex_cash_transactions")');
     expect(source).toContain(
-      "computeSmartBudget(transactions, categories, budgets)",
+      "computeSmartBudget(transactions, categories, budgets, 3, activeMonth)",
     );
   });
 

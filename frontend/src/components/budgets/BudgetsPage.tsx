@@ -355,26 +355,63 @@ export default function BudgetsPage() {
       categories,
     }).spent;
   }
-  // ── NEW: Smart Budget analytics ───────────────────────────────────────────
+  // BUDGET-PERIOD-AGGREGATION-1: monthly rows remain the storage/edit model,
+  // while every selected period gets one canonical category rollup. Build the
+  // rollup before Smart Budget signals so quarter/year/custom analytics can
+  // derive violations from the exact selected DateFilter period.
+  const periodBudgetRollups = useMemo(() => {
+    const startMonth = dateRange.startDate.slice(0, 7);
+    const endMonth = dateRange.endDate.slice(0, 7);
+    const periodBudgets = budgets.filter(
+      (budget) => budget.month >= startMonth && budget.month <= endMonth,
+    );
+    return buildBudgetPeriodRollups({
+      budgets: periodBudgets,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      getSpent,
+    });
+  }, [budgets, dateRange.endDate, dateRange.startDate, getSpent]);
+
+  // BUDGET-SELECTED-PERIOD-ANALYTICS-SSOT-1: monthly Smart Budget status and
+  // trend are anchored to DateFilter's selected month, never the wall clock.
   const smartBudget = useMemo(
-    () => computeSmartBudget(transactions, categories, budgets),
-    [transactions, categories, budgets],
+    () => computeSmartBudget(transactions, categories, budgets, 3, activeMonth),
+    [activeMonth, budgets, categories, transactions],
   );
 
-  const realExpenseViolations = useMemo(
-    () =>
-      smartBudget.violations.filter((item) =>
+  const selectedPeriodViolations = useMemo(() => {
+    if (filterMode === "month") {
+      return smartBudget.violations.filter((item) =>
         isRealExpenseGroup(item.categoryId),
-      ),
-    [isRealExpenseGroup, smartBudget.violations],
-  );
-  const realExpenseTrends = useMemo(
+      );
+    }
+    return periodBudgetRollups.filter(
+      (rollup) =>
+        isRealExpenseGroup(rollup.categoryId) &&
+        rollup.limit > 0 &&
+        rollup.spent > rollup.limit,
+    );
+  }, [
+    filterMode,
+    isRealExpenseGroup,
+    periodBudgetRollups,
+    smartBudget.violations,
+  ]);
+
+  // Trend is a month-over-month signal. Aggregate/custom periods already show
+  // actual selected-period utilization, so do not inject a synthetic trend
+  // penalty into their health score.
+  const selectedPeriodTrends = useMemo(
     () =>
-      smartBudget.overspendingTrend.filter((item) =>
-        isRealExpenseGroup(item.categoryId),
-      ),
-    [isRealExpenseGroup, smartBudget.overspendingTrend],
+      filterMode === "month"
+        ? smartBudget.overspendingTrend.filter((item) =>
+            isRealExpenseGroup(item.categoryId),
+          )
+        : [],
+    [filterMode, isRealExpenseGroup, smartBudget.overspendingTrend],
   );
+
   const filteredBudgets = useMemo(() => {
     const startMonth = dateRange.startDate.slice(0, 7);
     const endMonth = dateRange.endDate.slice(0, 7);
@@ -382,25 +419,6 @@ export default function BudgetsPage() {
       (budget) => budget.month >= startMonth && budget.month <= endMonth,
     );
   }, [budgets, dateRange.endDate, dateRange.startDate]);
-  // BUDGET-PERIOD-AGGREGATION-1: monthly rows remain the storage/edit model,
-  // while every selected period gets one canonical category rollup. Full
-  // months contribute 100% of their limit; custom boundary months contribute
-  // only the calendar-day share that intersects the selected date range.
-  const periodBudgetRollups = useMemo(
-    () =>
-      buildBudgetPeriodRollups({
-        budgets: filteredBudgets,
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-        getSpent,
-      }),
-    [
-      dateRange.endDate,
-      dateRange.startDate,
-      filteredBudgets,
-      getSpent,
-    ],
-  );
   const displayBudgets = useMemo<BudgetCardModel[]>(() => {
     if (filterMode === "month") return filteredBudgets;
     return periodBudgetRollups.map((rollup) => ({
@@ -666,8 +684,11 @@ export default function BudgetsPage() {
         ? 0
         : Math.min(28, (budgetForecast.projectedPercent - 100) * 0.7) *
           budgetForecast.confidenceWeight;
-    const violationPenalty = Math.min(18, realExpenseViolations.length * 5);
-    const trendPenalty = Math.min(10, realExpenseTrends.length * 3);
+    const violationPenalty = Math.min(
+      18,
+      selectedPeriodViolations.length * 5,
+    );
+    const trendPenalty = Math.min(10, selectedPeriodTrends.length * 3);
     const fixedCostPenalty =
       financialPlanning.fixedRatio <= 40
         ? 0
@@ -690,8 +711,8 @@ export default function BudgetsPage() {
     budgetForecast,
     filteredSummary,
     financialPlanning.fixedRatio,
-    realExpenseTrends.length,
-    realExpenseViolations.length,
+    selectedPeriodTrends.length,
+    selectedPeriodViolations.length,
   ]);
   // ── NEW: Category analysis lookup map ─────────────────────────────────────
   const categoryAnalysisMap = useMemo(
@@ -1053,7 +1074,7 @@ export default function BudgetsPage() {
               </div>
               <p className="mt-1.5 line-clamp-1 text-[10px] font-semibold leading-4 text-rose-600/80 sm:mt-2 sm:line-clamp-2 sm:text-[11px]">
                 {filteredSummary.remaining < 0
-                  ? `${realExpenseViolations.length} danh mục cần rà soát · ${healthGrade.label}`
+                  ? `${selectedPeriodViolations.length} danh mục cần rà soát · ${healthGrade.label}`
                   : `${healthGrade.label} · ngân sách đang được kiểm soát`}
               </p>
             </div>
