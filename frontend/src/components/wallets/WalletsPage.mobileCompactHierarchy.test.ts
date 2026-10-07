@@ -15,7 +15,7 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
 
   it("keeps the overview compact and places the two primary mobile actions on one row", () => {
     expect(source).toContain(
-      'className="space-y-3.5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0"',
+      'className="flex flex-col gap-3.5 overflow-x-hidden pb-24 md:gap-6 md:pb-0"',
     );
     expect(source).toContain(
       'className="grid grid-cols-2 gap-2 sm:flex sm:flex-row"',
@@ -27,7 +27,7 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
 
   it("renders wallet-type classification as a compact read-only 2+1 mobile summary", () => {
     const start = source.indexOf("{/* SECTION 2 · Wallet Types */}");
-    const end = source.indexOf("SECTION 3 · Wallet List", start);
+    const end = source.indexOf("Transfer Modal", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const section = source.slice(start, end);
@@ -72,7 +72,13 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
   });
 
   it("clarifies linked transaction metadata and preserves two 44px primary card actions", () => {
-    expect(source).toContain('· {txCount === null ? "—" : txCount} GD liên kết');
+    const normalized = source.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      '<span className="text-slate-400 sm:hidden"> · {txCount === null ? "—" : txCount} GD tổng </span>',
+    );
+    expect(normalized).toContain(
+      '<span className="hidden text-slate-400 sm:inline"> · {txCount === null ? "—" : txCount} GD liên kết tổng </span>',
+    );
     expect(source).toContain('<span className="sm:hidden">Chuyển</span>');
     expect(source).toContain('<span className="hidden sm:inline">Chuyển tiền</span>');
     expect(source).toContain("min-h-11");

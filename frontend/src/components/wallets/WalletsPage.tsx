@@ -1105,10 +1105,13 @@ export default function WalletsPage() {
 
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3.5 overflow-x-hidden pb-24 md:space-y-6 md:pb-0">
+    <div className="flex flex-col gap-3.5 overflow-x-hidden pb-24 md:gap-6 md:pb-0">
       {/* WALLETS-MOBILE-POLISH-1: mobile prioritizes balances + wallet list over chrome. */}
       {/* SECTION 1 · Wallet Overview */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6">
+      <section
+        data-wallets-section="overview"
+        className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-6"
+      >
         <div className="flex flex-col gap-3.5 sm:gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
@@ -1177,120 +1180,49 @@ export default function WalletsPage() {
             }
             note={
               walletAnalyticsReady
-                ? `Ròng ${
-                    periodWalletCashMovement.netCashMovement >= 0 ? "+" : "−"
-                  }${formatVND(
-                    Math.abs(periodWalletCashMovement.netCashMovement),
-                  )}`
+                ? filterLabel
                 : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="rose"
             isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
-            label="Chuyển giữa ví"
+            label="Ròng kỳ này"
             value={
               walletAnalyticsReady
-                ? formatVND(periodTransferTotal)
+                ? `${
+                    periodWalletCashMovement.netCashMovement > 0
+                      ? "+"
+                      : periodWalletCashMovement.netCashMovement < 0
+                        ? "−"
+                        : ""
+                  }${formatVND(
+                    Math.abs(periodWalletCashMovement.netCashMovement),
+                  )}`
                 : "—"
             }
             note={
               walletAnalyticsReady
-                ? `${periodTransfers.length} giao dịch`
+                ? filterLabel
                 : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="indigo"
             isLoading={walletAnalyticsLoading}
           />
         </div>
-      </section>
-      <WalletReconciliationCenter
-        wallets={spendableWallets}
-        records={reconciliationHistory}
-        isLoading={isLoadingReconciliationHistory}
-        error={reconciliationHistoryError}
-        onReconcile={openReconcileForm}
-      />
-
-      {/* SECTION 2 · Wallet Types */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-black text-slate-900 sm:text-base">
-              Phân loại ví
-            </h2>
-            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
-              Tổng số dư theo loại ví đang sử dụng.
-            </p>
+        {walletAnalyticsReady ? (
+          <div className="mt-2.5 flex items-center justify-between gap-2 rounded-2xl bg-indigo-50/70 px-3 py-2 text-[11px] font-bold text-indigo-700 sm:mt-3 sm:px-4 sm:text-xs">
+            <span className="shrink-0">Chuyển nội bộ</span>
+            <span className="min-w-0 truncate text-right tabular-nums text-indigo-600">
+              {formatVND(periodTransferTotal)} · {periodTransfers.length} giao dịch
+            </span>
           </div>
-          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 sm:px-3 sm:text-xs">
-            {walletSnapshotReady
-              ? `${spendableWallets.length} ví`
-              : isLoadingWallets
-                ? "Đang tải..."
-                : "—"}
-          </span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
-          {!walletSnapshotReady ? (
-            <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:col-span-3 sm:rounded-3xl sm:p-4 sm:text-sm">
-              {isLoadingWallets
-                ? "Đang tải phân loại ví..."
-                : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
-            </div>
-          ) : (
-            walletStats.map((stat, index) => {
-              const percentage =
-                totalAssets > 0
-                  ? Math.round((stat.total / totalAssets) * 100)
-                  : 0;
-
-              return (
-                <div
-                  key={stat.value}
-                  className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4 ${index === 2 ? "col-span-2 sm:col-span-1" : ""}`}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <WalletIcon type={stat.value} compact />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[11px] font-black leading-4 text-slate-900 sm:text-sm">
-                        {stat.label}
-                      </p>
-                      <p className="text-[10px] font-semibold text-slate-500 sm:mt-0.5 sm:text-xs">
-                        {stat.count} ví · {percentage}%
-                      </p>
-                    </div>
-                  </div>
-                  <p
-                    className="mt-2 truncate text-xs font-black tabular-nums text-slate-900 sm:mt-4 sm:text-xl"
-                    title={formatVND(stat.total)}
-                  >
-                    <span className="sm:hidden">
-                      {formatCompactWalletAmount(stat.total)}
-                    </span>
-                    <span className="hidden sm:inline">{formatVND(stat.total)}</span>
-                  </p>
-                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white sm:mt-3 sm:h-2">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(percentage, 100)}%`,
-                        background: TYPE_COLORS[stat.value],
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        ) : null}
       </section>
-
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 3 · Wallet List
           ══════════════════════════════════════════════════════════════════ */}
-      <section>
+      <section data-wallets-section="wallet-list">
         <div className="mb-3 flex items-center justify-between gap-3 px-1 sm:mb-4">
           <div className="flex items-center gap-2">
             <div className="size-1.5 rounded-full bg-blue-600" />
@@ -1518,8 +1450,11 @@ export default function WalletsPage() {
                     <span className="text-slate-500">Tỷ trọng tài sản</span>
                     <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                       <span className="font-black text-slate-700">{pct}%</span>
-                      <span className="text-slate-400">
-                        · {txCount === null ? "—" : txCount} GD liên kết
+                      <span className="text-slate-400 sm:hidden">
+                        · {txCount === null ? "—" : txCount} GD tổng
+                      </span>
+                      <span className="hidden text-slate-400 sm:inline">
+                        · {txCount === null ? "—" : txCount} GD liên kết tổng
                       </span>
                     </div>
                   </div>
@@ -1620,12 +1555,103 @@ export default function WalletsPage() {
         </div>
       </section>
 
+      <div data-wallets-section="reconciliation">
+        <WalletReconciliationCenter
+        wallets={spendableWallets}
+        records={reconciliationHistory}
+        isLoading={isLoadingReconciliationHistory}
+        error={reconciliationHistoryError}
+        onReconcile={openReconcileForm}
+        />
+      </div>
+
+      {/* SECTION 2 · Wallet Types */}
+      <section
+        data-wallets-section="wallet-types"
+        className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-black text-slate-900 sm:text-base">
+              Phân loại ví
+            </h2>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+              Tổng số dư theo loại ví đang sử dụng.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 sm:px-3 sm:text-xs">
+            {walletSnapshotReady
+              ? `${spendableWallets.length} ví`
+              : isLoadingWallets
+                ? "Đang tải..."
+                : "—"}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
+          {!walletSnapshotReady ? (
+            <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:col-span-3 sm:rounded-3xl sm:p-4 sm:text-sm">
+              {isLoadingWallets
+                ? "Đang tải phân loại ví..."
+                : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
+            </div>
+          ) : (
+            walletStats.map((stat, index) => {
+              const percentage =
+                totalAssets > 0
+                  ? Math.round((stat.total / totalAssets) * 100)
+                  : 0;
+
+              return (
+                <div
+                  key={stat.value}
+                  className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4 ${index === 2 ? "col-span-2 sm:col-span-1" : ""}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <WalletIcon type={stat.value} compact />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-black leading-4 text-slate-900 sm:text-sm">
+                        {stat.label}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-500 sm:mt-0.5 sm:text-xs">
+                        {stat.count} ví · {percentage}%
+                      </p>
+                    </div>
+                  </div>
+                  <p
+                    className="mt-2 truncate text-xs font-black tabular-nums text-slate-900 sm:mt-4 sm:text-xl"
+                    title={formatVND(stat.total)}
+                  >
+                    <span className="sm:hidden">
+                      {formatCompactWalletAmount(stat.total)}
+                    </span>
+                    <span className="hidden sm:inline">{formatVND(stat.total)}</span>
+                  </p>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white sm:mt-3 sm:h-2">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(percentage, 100)}%`,
+                        background: TYPE_COLORS[stat.value],
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
       {/* ══════════════════════════════════════════════════════════════════
           Transfer Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
         <div
           data-wallets-mobile-viewport="transfer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wallet-transfer-title"
           className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           style={{
             top: "var(--wallets-visual-viewport-offset-top, 0px)",
@@ -1638,7 +1664,7 @@ export default function WalletsPage() {
                 <div className="mb-1.5 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
                   <ArrowLeftRight size={18} />
                 </div>
-                <h2 className="text-[1.2rem] font-black leading-tight text-slate-900">
+                <h2 id="wallet-transfer-title" className="text-[1.2rem] font-black leading-tight text-slate-900">
                   Chuyển tiền giữa các ví
                 </h2>
                 <p className="mt-1 max-w-[16rem] text-[11px] leading-4 text-slate-400 sm:max-w-none sm:text-xs sm:leading-5">
@@ -1648,6 +1674,7 @@ export default function WalletsPage() {
               <button
                 type="button"
                 onClick={() => setIsTransferOpen(false)}
+                aria-label="Đóng chuyển tiền"
                 className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
               >
                 <X size={16} />
@@ -1772,6 +1799,9 @@ export default function WalletsPage() {
       {reconcileTarget ? (
         <div
           data-wallets-mobile-viewport="reconcile"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wallet-reconcile-title"
           className="fixed inset-0 overflow-x-hidden z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           style={{
             top: "var(--wallets-visual-viewport-offset-top, 0px)",
@@ -1787,7 +1817,7 @@ export default function WalletsPage() {
                 <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-blue-500">
                   Đối soát số dư
                 </p>
-                <h2 className="mt-1 truncate text-xl font-black text-slate-900">
+                <h2 id="wallet-reconcile-title" className="mt-1 truncate text-xl font-black text-slate-900">
                   Đối soát {reconcileTarget.name}
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -1943,6 +1973,9 @@ export default function WalletsPage() {
       {isFormOpen && (
         <div
           data-wallets-mobile-viewport="form"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wallet-form-title"
           className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           style={{
             top: "var(--wallets-visual-viewport-offset-top, 0px)",
@@ -1953,7 +1986,7 @@ export default function WalletsPage() {
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
-                <h2 className="text-xl font-black text-slate-900">
+                <h2 id="wallet-form-title" className="text-xl font-black text-slate-900">
                   {form.id ? "Sửa ví tiền" : "Thêm ví tiền"}
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-400">
@@ -1963,6 +1996,7 @@ export default function WalletsPage() {
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
+                aria-label="Đóng biểu mẫu ví"
                 className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition-all hover:bg-slate-200 active:scale-95"
               >
                 <X size={16} />
@@ -2091,6 +2125,9 @@ export default function WalletsPage() {
       {deleteTarget ? (
         <div
           data-wallets-mobile-viewport="delete"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wallet-delete-title"
           className="fixed inset-0 overflow-x-hidden z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
           style={{
             top: "var(--wallets-visual-viewport-offset-top, 0px)",
@@ -2127,7 +2164,7 @@ export default function WalletsPage() {
               <p className="mt-5 text-[11px] font-black uppercase tracking-[0.18em] text-rose-500">
                 Xác nhận xóa
               </p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              <h2 id="wallet-delete-title" className="mt-1 text-2xl font-black tracking-tight text-slate-950">
                 Xóa ví tiền?
               </h2>
               <p className="mt-2 text-sm font-medium leading-6 text-slate-500">

@@ -34,9 +34,15 @@ export default function WalletReconciliationCenter({
   error,
   onReconcile,
 }: Props) {
+  const reconciliationDataReady = !isLoading && !error;
   const latestByWallet = new Map<string, WalletReconciliationRecord>();
   for (const record of records) {
-    if (!latestByWallet.has(record.walletId)) {
+    const current = latestByWallet.get(record.walletId);
+    if (
+      !current ||
+      new Date(record.reconciledAt).getTime() >
+        new Date(current.reconciledAt).getTime()
+    ) {
       latestByWallet.set(record.walletId, record);
     }
   }
@@ -47,6 +53,21 @@ export default function WalletReconciliationCenter({
   const neverReconciled = wallets.filter(
     (wallet) => !latestByWallet.has(wallet.id),
   );
+  const oldestReconciledWallet =
+    neverReconciled.length === 0
+      ? wallets.reduce<SpendableWallet | null>((oldest, wallet) => {
+          if (!oldest) return wallet;
+          const walletTime = new Date(
+            latestByWallet.get(wallet.id)?.reconciledAt ?? 0,
+          ).getTime();
+          const oldestTime = new Date(
+            latestByWallet.get(oldest.id)?.reconciledAt ?? 0,
+          ).getTime();
+          return walletTime < oldestTime ? wallet : oldest;
+        }, null)
+      : null;
+  const reconciliationPriorityWallet =
+    neverReconciled[0] ?? oldestReconciledWallet;
   const latestRecord = records[0] ?? null;
 
   return (
@@ -69,29 +90,26 @@ export default function WalletReconciliationCenter({
               </h2>
             </div>
           </div>
-          <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">
+          <p className="mt-2 hidden max-w-2xl text-xs leading-5 text-slate-500 sm:block sm:text-sm">
             So khớp số dư MyFinance với số dư thực tế. Điều chỉnh chỉ cập nhật
             bản ghi số dư và lưu biên nhận đối soát, không tạo Thu/Chi giả.
           </p>
         </div>
 
-        {neverReconciled[0] ? (
+        {reconciliationDataReady && reconciliationPriorityWallet ? (
           <button
             type="button"
-            onClick={() => onReconcile(neverReconciled[0])}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700"
+            onClick={() => onReconcile(reconciliationPriorityWallet)}
+            className={
+              neverReconciled.length > 0
+                ? "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200/60 transition hover:bg-blue-700"
+                : "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+            }
           >
             <RefreshCcw size={15} />
-            Đối soát tiếp theo
-          </button>
-        ) : wallets[0] ? (
-          <button
-            type="button"
-            onClick={() => onReconcile(wallets[0])}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 transition hover:bg-blue-100"
-          >
-            <RefreshCcw size={15} />
-            Đối soát lại
+            {neverReconciled.length > 0
+              ? "Đối soát tiếp theo"
+              : "Đối soát lâu nhất"}
           </button>
         ) : null}
       </div>
@@ -105,7 +123,7 @@ export default function WalletReconciliationCenter({
             </span>
           </div>
           <p className="mt-1.5 text-base font-black tabular-nums text-slate-900 sm:text-xl">
-            {wallets.length > 0 ? `${reconciledCount}/${wallets.length}` : "—"}
+            {reconciliationDataReady && wallets.length > 0 ? `${reconciledCount}/${wallets.length}` : "—"}
           </p>
           <p className="mt-0.5 text-[10px] font-semibold text-slate-500 sm:text-xs">
             ví đã từng đối soát
@@ -120,7 +138,7 @@ export default function WalletReconciliationCenter({
             </span>
           </div>
           <p className="mt-1.5 text-base font-black tabular-nums text-amber-800 sm:text-xl">
-            {wallets.length > 0 ? neverReconciled.length : "—"}
+            {reconciliationDataReady && wallets.length > 0 ? neverReconciled.length : "—"}
           </p>
           <p className="mt-0.5 text-[10px] font-semibold text-amber-700/80 sm:text-xs">
             cần xác nhận số dư lần đầu
@@ -135,13 +153,15 @@ export default function WalletReconciliationCenter({
             </span>
           </div>
           <p className="mt-1.5 whitespace-nowrap text-[11px] font-black text-emerald-800 sm:text-sm">
-            {latestRecord ? formatDateTime(latestRecord.reconciledAt) : "Chưa có"}
+            {reconciliationDataReady && latestRecord ? formatDateTime(latestRecord.reconciledAt) : "—"}
           </p>
           <p className="mt-0.5 truncate text-[10px] font-semibold text-emerald-700/80 sm:text-xs">
-            {latestRecord
+            {reconciliationDataReady && latestRecord
               ? wallets.find((wallet) => wallet.id === latestRecord.walletId)?.name ??
                 "Ví đã đối soát"
-              : "chưa có biên nhận"}
+              : reconciliationDataReady
+                ? "chưa có biên nhận"
+                : "đang tải dữ liệu"}
           </p>
         </div>
       </div>
@@ -153,7 +173,7 @@ export default function WalletReconciliationCenter({
           {error}
         </div>
       ) : records.length > 0 ? (
-        <div className="mt-4">
+        <div className="mt-4 hidden sm:block">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-xs font-black text-slate-700">
               Lịch sử đối soát gần đây

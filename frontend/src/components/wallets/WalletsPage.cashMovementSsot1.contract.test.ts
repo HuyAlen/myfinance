@@ -56,6 +56,9 @@ describe("WALLETS-CASH-MOVEMENT-SSOT-1", () => {
   it("keeps wallet-to-wallet movement separate from aggregate external liquidity", () => {
     expect(source).toContain("const periodTransfers = useMemo(");
     expect(source).toContain("const periodTransferTotal = useMemo(");
-    expect(source).toContain('label="Chuy\u1ec3n gi\u1eefa v\u00ed"');
+    expect(source).toContain("Chuy\u1ec3n n\u1ed9i b\u1ed9");
+    expect(source).toContain("formatVND(periodTransferTotal)");
+    expect(source).toContain("periodTransfers.length");
+    expect(source).not.toContain('label="Chuy\u1ec3n gi\u1eefa v\u00ed"');
   });
 });
