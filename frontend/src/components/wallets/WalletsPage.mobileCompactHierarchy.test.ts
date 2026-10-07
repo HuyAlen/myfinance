@@ -40,9 +40,12 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
     expect(section).not.toContain("setIsFormOpen(true)");
   });
 
-  it("uses a single mobile overflow affordance for edit/delete while keeping desktop hover actions", () => {
-    expect(source).toContain('<details className="group/actions relative sm:hidden">');
+  it("uses one controlled mobile overflow menu while keeping desktop hover actions", () => {
+    expect(source).toContain("openWalletActionMenuId");
+    expect(source).toContain('aria-haspopup="menu"');
+    expect(source).toContain('role="menu"');
     expect(source).toContain("<MoreHorizontal size={17} />");
+    expect(source).not.toContain('<details className="group/actions relative sm:hidden">');
     expect(source).toContain(
       'className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity sm:flex sm:group-hover:opacity-100"',
     );

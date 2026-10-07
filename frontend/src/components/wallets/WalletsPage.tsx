@@ -316,6 +316,9 @@ export default function WalletsPage() {
   const [highlightedWalletId, setHighlightedWalletId] = useState<string | null>(
     null,
   );
+  const [openWalletActionMenuId, setOpenWalletActionMenuId] = useState<string | null>(null);
+  const walletActionMenuRefs = useRef(new Map<string, HTMLDivElement>());
+  const walletActionTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const focusedWalletIdRef = useRef<string | null>(null);
   const { toast } = useToast();
   const { dateRange, filterLabel } = useDateFilter();
@@ -328,6 +331,39 @@ export default function WalletsPage() {
 
   const isWalletOverlayOpen =
     isFormOpen || isTransferOpen || !!reconcileTarget || !!deleteTarget;
+
+  // WALLETS-MOBILE-ACTION-MENU-DISMISS-1: native <details> does not provide
+  // deterministic outside-dismiss or Escape focus restoration across mobile
+  // browsers. Keep one controlled Wallet menu open at a time and own dismissal.
+  useEffect(() => {
+    if (!openWalletActionMenuId) return;
+
+    const handleWalletActionPointerDown = (event: PointerEvent) => {
+      const menuRoot = walletActionMenuRefs.current.get(openWalletActionMenuId);
+      if (event.target instanceof Node && menuRoot?.contains(event.target)) {
+        return;
+      }
+      setOpenWalletActionMenuId(null);
+    };
+
+    const handleWalletActionKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      const menuId = openWalletActionMenuId;
+      setOpenWalletActionMenuId(null);
+      requestAnimationFrame(() => {
+        walletActionTriggerRefs.current.get(menuId)?.focus();
+      });
+    };
+
+    document.addEventListener("pointerdown", handleWalletActionPointerDown);
+    document.addEventListener("keydown", handleWalletActionKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleWalletActionPointerDown);
+      document.removeEventListener("keydown", handleWalletActionKeyDown);
+    };
+  }, [openWalletActionMenuId]);
 
   // WALLETS-MOBILE-VISUAL-VIEWPORT-1: iPhone Safari can keep the layout
   // viewport taller than the actually visible area while browser chrome or the
@@ -1312,39 +1348,73 @@ export default function WalletsPage() {
                   </div>
 
                   <div className="absolute right-3.5 top-3.5 z-20 sm:right-6 sm:top-6">
-                    <details className="group/actions relative sm:hidden">
-                      <summary
+                    <div
+                      ref={(node) => {
+                        if (node) {
+                          walletActionMenuRefs.current.set(wallet.id, node);
+                        } else {
+                          walletActionMenuRefs.current.delete(wallet.id);
+                        }
+                      }}
+                      className="relative sm:hidden"
+                    >
+                      <button
+                        ref={(node) => {
+                          if (node) {
+                            walletActionTriggerRefs.current.set(wallet.id, node);
+                          } else {
+                            walletActionTriggerRefs.current.delete(wallet.id);
+                          }
+                        }}
+                        type="button"
                         aria-label={`Tùy chọn ví ${wallet.name}`}
-                        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition active:scale-95 [&::-webkit-details-marker]:hidden"
+                        aria-expanded={openWalletActionMenuId === wallet.id}
+                        aria-haspopup="menu"
+                        aria-controls={`wallet-actions-${wallet.id}`}
+                        onClick={() =>
+                          setOpenWalletActionMenuId((currentId) =>
+                            currentId === wallet.id ? null : wallet.id,
+                          )
+                        }
+                        className="flex size-11 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition active:scale-95"
                       >
                         <MoreHorizontal size={17} />
-                      </summary>
-                      <div className="absolute right-0 mt-1.5 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.currentTarget.closest("details")?.removeAttribute("open");
-                            openEditForm(wallet);
-                          }}
-                          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                      </button>
+                      {openWalletActionMenuId === wallet.id ? (
+                        <div
+                          id={`wallet-actions-${wallet.id}`}
+                          role="menu"
+                          aria-label={`Tùy chọn ví ${wallet.name}`}
+                          className="absolute right-0 mt-1.5 w-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl"
                         >
-                          <Edit3 size={14} />
-                          Sửa ví
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.currentTarget.closest("details")?.removeAttribute("open");
-                            void handleDelete(wallet.id);
-                          }}
-                          disabled={isCheckingDelete}
-                          className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Trash2 size={14} />
-                          Xóa ví
-                        </button>
-                      </div>
-                    </details>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenWalletActionMenuId(null);
+                              openEditForm(wallet);
+                            }}
+                            className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <Edit3 size={14} />
+                            Sửa ví
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenWalletActionMenuId(null);
+                              void handleDelete(wallet.id);
+                            }}
+                            disabled={isCheckingDelete}
+                            className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-black text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 size={14} />
+                            Xóa ví
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
 
                     <div className="hidden shrink-0 gap-1.5 opacity-0 transition-opacity sm:flex sm:group-hover:opacity-100">
                       <button
