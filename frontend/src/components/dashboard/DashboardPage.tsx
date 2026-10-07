@@ -3,6 +3,7 @@
 import { calculateEmergencyCoverageSnapshot } from "@/src/services/finance/emergencyCoverage";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
@@ -116,12 +117,15 @@ import {
 import {
   ArrowDownLeft,
   ArrowDownRight,
+  ArrowLeft,
   ArrowUpRight,
   Briefcase,
   CalendarClock,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   CreditCard,
+  CircleAlert,
   Eye,
   EyeOff,
   Info,
@@ -3436,6 +3440,8 @@ export default function DashboardPage() {
     useState(false);
   const [dashboardCustomizationError, setDashboardCustomizationError] =
     useState<string | null>(null);
+  const [dashboardCustomizationSaveState, setDashboardCustomizationSaveState] =
+    useState<"ready" | "saved" | "error">("ready");
   useSuppressGlobalFabsWhileOpen(isDashboardCustomizationOpen);
 
   useEffect(() => {
@@ -3453,6 +3459,45 @@ export default function DashboardPage() {
       window.removeEventListener("storage", handleDashboardCustomizationStorage);
   }, []);
 
+  // DASHBOARD-MOBILE-CUSTOMIZATION-VIEWPORT-SAVE-1: Dashboard visual depth
+  // uses isolation:isolate. Portal the dialog to document.body so its z-index
+  // is no longer trapped below Header/BottomNav, then follow the real iPhone
+  // visual viewport while Safari browser chrome changes.
+  useEffect(() => {
+    if (!isDashboardCustomizationOpen || typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncDashboardCustomizationVisualViewport = () => {
+      const height = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      root.style.setProperty(
+        "--dashboard-customization-visual-viewport-height",
+        `${height}px`,
+      );
+      root.style.setProperty(
+        "--dashboard-customization-visual-viewport-offset-top",
+        `${offsetTop}px`,
+      );
+    };
+
+    syncDashboardCustomizationVisualViewport();
+    viewport?.addEventListener("resize", syncDashboardCustomizationVisualViewport);
+    viewport?.addEventListener("scroll", syncDashboardCustomizationVisualViewport);
+    window.addEventListener("resize", syncDashboardCustomizationVisualViewport);
+    window.addEventListener("orientationchange", syncDashboardCustomizationVisualViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncDashboardCustomizationVisualViewport);
+      viewport?.removeEventListener("scroll", syncDashboardCustomizationVisualViewport);
+      window.removeEventListener("resize", syncDashboardCustomizationVisualViewport);
+      window.removeEventListener("orientationchange", syncDashboardCustomizationVisualViewport);
+      root.style.removeProperty("--dashboard-customization-visual-viewport-height");
+      root.style.removeProperty("--dashboard-customization-visual-viewport-offset-top");
+    };
+  }, [isDashboardCustomizationOpen]);
+
   useEffect(() => {
     if (!isDashboardCustomizationOpen) return;
     function handleDashboardCustomizationKeyDown(event: KeyboardEvent) {
@@ -3467,8 +3512,10 @@ export default function DashboardPage() {
     setDashboardCustomization(nextCustomization);
     if (persistDashboardCustomization(nextCustomization)) {
       setDashboardCustomizationError(null);
+      setDashboardCustomizationSaveState("saved");
       return;
     }
+    setDashboardCustomizationSaveState("error");
     setDashboardCustomizationError(
       "Tùy chỉnh đã áp dụng cho phiên này nhưng trình duyệt không thể lưu lại.",
     );
@@ -3951,7 +3998,12 @@ export default function DashboardPage() {
         </div>
         <button
           type="button"
-          onClick={() => setIsDashboardCustomizationOpen(true)}
+          onClick={() => {
+            setDashboardCustomizationSaveState(
+              dashboardCustomizationError ? "error" : "ready",
+            );
+            setIsDashboardCustomizationOpen(true);
+          }}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white text-xs font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:w-auto sm:px-3"
           aria-haspopup="dialog"
           aria-label="Tùy chỉnh Tổng quan"
@@ -3962,10 +4014,19 @@ export default function DashboardPage() {
       </div>
 
       {isDashboardCustomizationOpen && (
-        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-end justify-center p-0 sm:items-center sm:p-5">
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
+                data-dashboard-customization-viewport="true"
+                className="fixed inset-0 z-100 flex overflow-hidden overflow-x-hidden overscroll-none bg-white sm:items-center sm:justify-center sm:bg-transparent sm:p-5"
+                style={{
+                  top: "var(--dashboard-customization-visual-viewport-offset-top, 0px)",
+                  height: "var(--dashboard-customization-visual-viewport-height, 100dvh)",
+                }}
+              >
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
+            className="absolute inset-0 hidden bg-slate-900/20 backdrop-blur-[2px] sm:block"
             aria-label="Đóng tùy chỉnh Tổng quan"
             onClick={() => setIsDashboardCustomizationOpen(false)}
           />
@@ -3973,10 +4034,19 @@ export default function DashboardPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="dashboard-customization-title"
-            className="relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#D5E3EE] bg-white shadow-2xl sm:max-w-2xl sm:rounded-3xl"
+            className="relative z-10 flex h-full min-h-0 w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[min(calc(var(--dashboard-customization-visual-viewport-height,100dvh)-2rem),44rem)] sm:max-w-2xl sm:rounded-3xl sm:border sm:border-[#D5E3EE] sm:shadow-2xl"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-[#E4EDF4] bg-[#F8FBFE] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
-              <div className="min-w-0">
+            <div className="flex shrink-0 items-center gap-2 border-b border-[#E4EDF4] bg-[#F8FBFE] px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:items-start sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
+              <button
+                type="button"
+                onClick={() => setIsDashboardCustomizationOpen(false)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[#60778D] transition active:bg-blue-50 active:text-blue-700 sm:hidden"
+                aria-label="Quay lại Tổng quan"
+              >
+                <ArrowLeft size={18} />
+                <span className="text-xs font-black">Tổng quan</span>
+              </button>
+              <div className="min-w-0 flex-1">
                 <p className="hidden text-[10px] font-black uppercase tracking-[0.14em] text-[#2F80ED] sm:block">
                   Cá nhân hóa
                 </p>
@@ -3993,14 +4063,14 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setIsDashboardCustomizationOpen(false)}
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700"
+                className="hidden size-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE8F1] bg-white text-[#60778D] transition hover:bg-blue-50 hover:text-blue-700 sm:flex"
                 aria-label="Đóng tùy chỉnh Tổng quan"
               >
                 <X size={17} />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2.5 py-2.5 sm:px-5 sm:py-4">
+            <div className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-2.5 py-2.5 sm:px-5 sm:py-4">
               <div className="space-y-1.5 sm:space-y-2">
                 {dashboardCustomization.order.map((sectionId, index) => {
                   const section = DASHBOARD_CUSTOMIZATION_SECTIONS.find(
@@ -4068,26 +4138,56 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-[#E4EDF4] bg-white px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-3">
-              <button
-                type="button"
-                onClick={handleResetDashboardCustomization}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-black text-[#60778D] transition hover:bg-slate-50 hover:text-[#31536F]"
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[#E4EDF4] bg-white px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-3 sm:px-5 sm:py-3">
+              <div
+                data-dashboard-customization-save-status={dashboardCustomizationSaveState}
+                aria-live="polite"
+                className={`flex min-w-0 items-center gap-1.5 text-[11px] font-black sm:text-xs ${
+                  dashboardCustomizationSaveState === "error"
+                    ? "text-rose-600"
+                    : dashboardCustomizationSaveState === "saved"
+                      ? "text-emerald-600"
+                      : "text-[#60778D]"
+                }`}
               >
-                <RotateCcw size={15} />
-                <span className="sm:hidden">Mặc định</span>
-                <span className="hidden sm:inline">Khôi phục mặc định</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDashboardCustomizationOpen(false)}
-                className="min-h-10 rounded-xl bg-[#2F80ED] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#246FD0]"
-              >
-                Xong
-              </button>
+                {dashboardCustomizationSaveState === "error" ? (
+                  <>
+                    <CircleAlert size={14} className="shrink-0" />
+                    <span className="truncate">Chưa lưu được</span>
+                  </>
+                ) : dashboardCustomizationSaveState === "saved" ? (
+                  <>
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span className="truncate">Đã lưu tự động</span>
+                  </>
+                ) : (
+                  <span className="truncate">Tự động lưu</span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetDashboardCustomization}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-[11px] font-black text-[#60778D] transition hover:bg-slate-50 hover:text-[#31536F] sm:gap-2 sm:text-xs"
+                >
+                  <RotateCcw size={15} />
+                  <span className="sm:hidden">Mặc định</span>
+                  <span className="hidden sm:inline">Khôi phục mặc định</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDashboardCustomizationOpen(false)}
+                  className="min-h-10 rounded-xl bg-[#2F80ED] px-3.5 text-xs font-black text-white shadow-sm transition hover:bg-[#246FD0] sm:px-4"
+                >
+                  Xong
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+              </div>,
+              document.body,
+            )
+          : null
       )}
 
       <div
