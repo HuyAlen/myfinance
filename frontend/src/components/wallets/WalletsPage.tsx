@@ -29,6 +29,7 @@ import {
 
 import type {
   Category,
+  ForexCashTransaction,
   Transaction,
   Wallet as WalletType,
   WalletType as FinanceWalletType,
@@ -39,7 +40,9 @@ import {
   addWallet,
   deleteWallet,
   getCategories,
+  getForexCashTransactionsInRange,
   getForexCashWalletLinks,
+  getSavingTransactionsInRange,
   getTransactionWalletLinks,
   getTransactionsInRange,
   getWalletReconciliations,
@@ -50,10 +53,10 @@ import {
 } from "@/src/services/finance/financeStorage";
 
 import {
+  calculateWalletCashMovementSnapshot,
   formatVND,
   getTotalAssets,
-  getTotalExpense,
-  getTotalIncome,
+  type SavingAllocationMovement,
 } from "@/src/services/finance/financeCalculations";
 import { CurrencyInput } from "@/src/components/ui/CurrencyInput";
 import { SaveError } from "@/src/components/ui/SaveError";
@@ -257,6 +260,11 @@ export default function WalletsPage() {
   const [periodTransactions, setPeriodTransactions] = useState<
     Transaction[]
   >([]);
+  const [periodSavingMovements, setPeriodSavingMovements] = useState<
+    SavingAllocationMovement[]
+  >([]);
+  const [periodForexCashTransactions, setPeriodForexCashTransactions] =
+    useState<ForexCashTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingPeriodAnalytics, setIsLoadingPeriodAnalytics] = useState(true);
   const [periodAnalyticsError, setPeriodAnalyticsError] = useState<string | null>(
@@ -386,14 +394,32 @@ export default function WalletsPage() {
     const periodAnalyticsTask = Promise.all([
       getTransactionsInRange(startDate, endDate),
       getCategories(),
+      getSavingTransactionsInRange(startDate, endDate),
+      getForexCashTransactionsInRange(startDate, endDate),
     ])
-      .then(([periodTransactionsResult, loadedCategories]) => {
-        if (!isLatestPeriodRequest()) return;
-        setPeriodTransactions(periodTransactionsResult);
-        setCategories(loadedCategories);
-        setPeriodAnalyticsError(null);
-        setPeriodAnalyticsReady(true);
-      })
+      .then(
+        ([
+          periodTransactionsResult,
+          loadedCategories,
+          savingTransactionRows,
+          forexCashTransactionsResult,
+        ]) => {
+          if (!isLatestPeriodRequest()) return;
+          setPeriodTransactions(periodTransactionsResult);
+          setCategories(loadedCategories);
+          setPeriodSavingMovements(
+            savingTransactionRows.map((row) => ({
+              type: row.type,
+              amount: Number(row.amount) || 0,
+              date: row.transaction_date,
+              walletId: row.wallet_id ?? null,
+            })),
+          );
+          setPeriodForexCashTransactions(forexCashTransactionsResult);
+          setPeriodAnalyticsError(null);
+          setPeriodAnalyticsReady(true);
+        },
+      )
       .catch((error) => {
         if (!isLatestPeriodRequest()) return;
         console.error("[WalletsPage] monthly analytics reload failed:", error);
@@ -509,11 +535,19 @@ export default function WalletsPage() {
     void runReload();
   }, [dateRange.startDate, dateRange.endDate, runReload]);
 
-  // Forex/savings writes go through server-side RPCs that also update
-  // `wallets.balance` directly, so watching `wallets` already catches them —
-  // no separate forex_cash_transactions subscription needed here.
+  // Wallet analytics consume Savings and Forex movement ledgers directly.
+  // Keep those tables explicit in the realtime dependency set: wallet balance
+  // changes usually accompany them, but the analytics snapshot must refresh
+  // from every table it actually reads.
   useRealtimeTable(
-    ["wallets", "transactions", "categories", "wallet_reconciliations"],
+    [
+      "wallets",
+      "transactions",
+      "categories",
+      "saving_transactions",
+      "forex_cash_transactions",
+      "wallet_reconciliations",
+    ],
     requestRealtimeRefresh,
   );
 
@@ -621,13 +655,6 @@ export default function WalletsPage() {
       spendableWalletIds,
     ],
   );
-  const periodNet = useMemo(
-    () =>
-      getTotalIncome(periodTxns) -
-      getTotalExpense(periodTxns, categories),
-    [categories, periodTxns],
-  );
-
   const periodTransfers = useMemo(
     () => periodTxns.filter(isWalletTransfer),
     [periodTxns],
@@ -638,12 +665,30 @@ export default function WalletsPage() {
     [periodTransfers],
   );
 
-  // Per-wallet selected-period flow — one pass over periodTxns to bucket by
-  // wallet and one pass over periodTransfers for transfer totals,
-  // instead of re-filtering the shared arrays once per wallet. Income/expense
-  // classification still goes through the canonical getTotalIncome/
-  // getTotalExpense helpers (applied to each wallet's pre-bucketed slice),
-  // so the actual amounts are identical to before.
+  // Whole-Wallet liquidity excludes wallet-to-wallet transfers because they
+  // only redistribute the same owned cash. Savings/Portfolio/Forex principal
+  // is included through the canonical CASH-MOVEMENT-SSOT-1 projection.
+  const periodWalletCashMovement = useMemo(
+    () =>
+      calculateWalletCashMovementSnapshot({
+        transactions: periodTxns,
+        categories,
+        savingMovements: periodSavingMovements,
+        forexCashTransactions: periodForexCashTransactions,
+        dateRange,
+      }),
+    [
+      categories,
+      dateRange,
+      periodForexCashTransactions,
+      periodSavingMovements,
+      periodTxns,
+    ],
+  );
+
+  // Per-wallet movement uses the same canonical liquidity projection, then
+  // adds wallet-to-wallet transfers because those DO change each individual
+  // Wallet balance even though they net to zero across the Wallet domain.
   const walletFlow = useMemo(() => {
     const txnsByWallet = new Map<string, Transaction[]>();
     for (const t of periodTxns) {
@@ -668,26 +713,34 @@ export default function WalletsPage() {
 
     const map = new Map<
       string,
-      {
-        income: number;
-        expense: number;
-        transferIn: number;
-        transferOut: number;
-      }
+      ReturnType<typeof calculateWalletCashMovementSnapshot>
     >();
     for (const w of spendableWallets) {
       const wt = txnsByWallet.get(w.id) ?? [];
-      map.set(w.id, {
-        income: getTotalIncome(wt),
-        expense: getTotalExpense(wt, categories),
-        transferIn: transferInByWallet.get(w.id) ?? 0,
-        transferOut: transferOutByWallet.get(w.id) ?? 0,
-      });
+      map.set(
+        w.id,
+        calculateWalletCashMovementSnapshot({
+          transactions: wt,
+          categories,
+          savingMovements: periodSavingMovements.filter(
+            (movement) => movement.walletId === w.id,
+          ),
+          forexCashTransactions: periodForexCashTransactions.filter(
+            (transaction) => transaction.walletId === w.id,
+          ),
+          dateRange,
+          transferIn: transferInByWallet.get(w.id) ?? 0,
+          transferOut: transferOutByWallet.get(w.id) ?? 0,
+        }),
+      );
     }
     return map;
   }, [
     categories,
+    dateRange,
     spendableWallets,
+    periodForexCashTransactions,
+    periodSavingMovements,
     periodTxns,
     periodTransfers,
   ]);
@@ -1104,7 +1157,7 @@ export default function WalletsPage() {
             label="Tiền vào kỳ này"
             value={
               walletAnalyticsReady
-                ? formatVND(getTotalIncome(periodTxns))
+                ? formatVND(periodWalletCashMovement.cashIn)
                 : "—"
             }
             note={
@@ -1116,17 +1169,19 @@ export default function WalletsPage() {
             isLoading={walletAnalyticsLoading}
           />
           <WalletSummaryCard
-            label="Chi tiêu kỳ này"
+            label="Tiền ra kỳ này"
             value={
               walletAnalyticsReady
-                ? formatVND(getTotalExpense(periodTxns, categories))
+                ? formatVND(periodWalletCashMovement.cashOut)
                 : "—"
             }
             note={
               walletAnalyticsReady
-                ? periodNet >= 0
-                  ? "Dòng tiền đang dương"
-                  : "Chi lớn hơn thu"
+                ? `Ròng ${
+                    periodWalletCashMovement.netCashMovement >= 0 ? "+" : "−"
+                  }${formatVND(
+                    Math.abs(periodWalletCashMovement.netCashMovement),
+                  )}`
                 : walletAnalyticsError ?? "Đang tải dữ liệu kỳ"
             }
             tone="rose"
@@ -1255,12 +1310,13 @@ export default function WalletsPage() {
                 ? Math.round((wallet.balance / totalAssets) * 100)
                 : 0;
             const flow = walletFlow.get(wallet.id) ?? {
-              income: 0,
-              expense: 0,
+              cashIn: 0,
+              cashOut: 0,
+              netCashMovement: 0,
               transferIn: 0,
               transferOut: 0,
             };
-            const net = flow.income - flow.expense;
+            const net = flow.netCashMovement;
             const txCount = walletLinkCountsReady
               ? (walletLinkCounts.get(wallet.id) ?? 0)
               : null;
@@ -1371,11 +1427,11 @@ export default function WalletsPage() {
                   <>
                     <div className="mt-3 flex min-w-0 items-center justify-between gap-1 rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] sm:hidden">
                       <span className="min-w-0 whitespace-nowrap font-bold text-emerald-600">
-                        Thu <strong className="font-black text-emerald-700">{flow.income > 0 ? formatCompactWalletAmount(flow.income) : "—"}</strong>
+                        Vào <strong className="font-black text-emerald-700">{flow.cashIn > 0 ? formatCompactWalletAmount(flow.cashIn) : "—"}</strong>
                       </span>
                       <span className="text-slate-300">·</span>
                       <span className="min-w-0 whitespace-nowrap font-bold text-rose-500">
-                        Chi <strong className="font-black text-rose-600">{flow.expense > 0 ? formatCompactWalletAmount(flow.expense) : "—"}</strong>
+                        Ra <strong className="font-black text-rose-600">{flow.cashOut > 0 ? formatCompactWalletAmount(flow.cashOut) : "—"}</strong>
                       </span>
                       <span className="text-slate-300">·</span>
                       <span
@@ -1391,21 +1447,21 @@ export default function WalletsPage() {
                     <div className="mt-4 hidden grid-cols-3 gap-2 sm:grid">
                       <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-center">
                         <p className="text-[9px] font-bold uppercase text-emerald-600">
-                          Thu
+                          Vào
                         </p>
                         <p className="mt-0.5 text-xs font-black text-emerald-700">
-                          {flow.income > 0
-                            ? formatCompactWalletAmount(flow.income)
+                          {flow.cashIn > 0
+                            ? formatCompactWalletAmount(flow.cashIn)
                             : "—"}
                         </p>
                       </div>
                       <div className="rounded-xl bg-rose-50 px-2.5 py-2 text-center">
                         <p className="text-[9px] font-bold uppercase text-rose-500">
-                          Chi
+                          Ra
                         </p>
                         <p className="mt-0.5 text-xs font-black text-rose-600">
-                          {flow.expense > 0
-                            ? formatCompactWalletAmount(flow.expense)
+                          {flow.cashOut > 0
+                            ? formatCompactWalletAmount(flow.cashOut)
                             : "—"}
                         </p>
                       </div>

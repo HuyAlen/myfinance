@@ -2543,6 +2543,40 @@ export type SavingTransactionRow = {
   created_at?: string;
 };
 
+export async function getSavingTransactionsInRange(
+  startDate: string,
+  endDate: string,
+): Promise<SavingTransactionRow[]> {
+  if (LOCAL_UI_MODE) return [];
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("saving_transactions")
+    .select("id,saving_id,type,amount,wallet_id,transaction_date,note,created_at")
+    .eq("user_id", userId)
+    .gte("transaction_date", startDate)
+    .lte("transaction_date", endDate)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(
+      "[financeStorage] getSavingTransactionsInRange:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as Array<Omit<SavingTransactionRow, "amount"> & {
+    amount: number | string | null;
+  }>).map((row) => ({
+    ...row,
+    amount: Number(row.amount ?? 0),
+  }));
+}
+
 export type SavingInternalTransferResult = {
   sourceSaving: SavingAccountRow;
   destinationSaving: SavingAccountRow;

@@ -17,14 +17,16 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
     expect(source).toContain("periodFinanceFlow.futureNetAllocation");
   });
 
-  it("keeps Transactions and Wallets on canonical real-expense semantics", () => {
+  it("keeps Transactions on canonical real expense and Wallets on canonical cash movement", () => {
     const transactions = read("components/transactions/TransactionsPage.tsx");
     const wallets = read("components/wallets/WalletsPage.tsx");
 
     expect(transactions).toContain("getRealExpenseTransactions(");
     expect(transactions).toContain("realExpenseTransactions.reduce(");
-    expect(wallets).toContain("getTotalExpense(periodTxns, categories)");
-    expect(wallets).toContain("expense: getTotalExpense(wt, categories)");
+    expect(wallets).toContain("calculateWalletCashMovementSnapshot({");
+    expect(wallets).toContain("periodWalletCashMovement.cashIn");
+    expect(wallets).toContain("periodWalletCashMovement.cashOut");
+    expect(wallets).not.toContain("getTotalExpense(periodTxns, categories)");
   });
 
   it("keeps Budgets and Goals delegated to their canonical calculators", () => {

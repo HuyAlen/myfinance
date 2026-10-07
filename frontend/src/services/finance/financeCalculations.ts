@@ -1849,6 +1849,52 @@ export function calculateFinanceFlowSnapshot(input: {
   };
 }
 
+export type WalletCashMovementSnapshot = {
+  cashIn: number;
+  cashOut: number;
+  netCashMovement: number;
+  transferIn: number;
+  transferOut: number;
+};
+
+/**
+ * WALLETS-CASH-MOVEMENT-SSOT-1
+ *
+ * Projects the canonical finance-flow liquidity fields onto one Wallet card.
+ * Wallet-to-wallet transfers are intentionally supplied separately: they are
+ * excluded from whole-Wallet-domain liquidity because they net to zero across
+ * owned Wallets, but they DO change the balance of each individual Wallet.
+ */
+export function calculateWalletCashMovementSnapshot(input: {
+  transactions: Transaction[];
+  categories?: Category[];
+  savingMovements?: SavingAllocationMovement[];
+  forexCashTransactions?: ForexCashTransaction[];
+  dateRange?: DateRangeInput;
+  transferIn?: number;
+  transferOut?: number;
+}): WalletCashMovementSnapshot {
+  const flow = calculateFinanceFlowSnapshot({
+    transactions: input.transactions,
+    categories: input.categories,
+    savingMovements: input.savingMovements,
+    forexCashTransactions: input.forexCashTransactions,
+    dateRange: input.dateRange,
+  });
+  const transferIn = Math.max(0, Number(input.transferIn) || 0);
+  const transferOut = Math.max(0, Number(input.transferOut) || 0);
+  const cashIn = flow.cashIn + transferIn;
+  const cashOut = flow.cashOut + transferOut;
+
+  return {
+    cashIn,
+    cashOut,
+    netCashMovement: cashIn - cashOut,
+    transferIn,
+    transferOut,
+  };
+}
+
 export function getDisposableCashFlow(
   transactions: Transaction[],
   categories: Category[] = [],

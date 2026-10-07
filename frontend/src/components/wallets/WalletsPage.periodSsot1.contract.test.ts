@@ -45,7 +45,7 @@ describe("WALLETS-PERIOD-SSOT-1", () => {
 
   it("labels summary analytics as the active reporting period rather than the physical current month", () => {
     expect(source).toContain('label="Ti\u1ec1n v\u00e0o k\u1ef3 n\u00e0y"');
-    expect(source).toContain('label="Chi ti\u00eau k\u1ef3 n\u00e0y"');
+    expect(source).toContain('label="Ti\u1ec1n ra k\u1ef3 n\u00e0y"');
     expect(source).toContain("? filterLabel");
     expect(source).not.toContain('label="Ti\u1ec1n v\u00e0o th\u00e1ng n\u00e0y"');
     expect(source).not.toContain('label="Chi ti\u00eau th\u00e1ng n\u00e0y"');
@@ -57,7 +57,7 @@ describe("WALLETS-PERIOD-SSOT-1", () => {
       "periodAnalyticsReady",
       "isLoadingPeriodAnalytics",
       "periodAnalyticsError",
-      "periodNet",
+      "periodWalletCashMovement",
       "periodTransfers",
       "periodTransferTotal",
     ]) {

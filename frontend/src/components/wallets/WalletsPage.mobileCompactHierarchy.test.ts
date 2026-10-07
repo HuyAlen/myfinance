@@ -50,15 +50,15 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
     expect(source).toContain("Xóa ví");
   });
 
-  it("collapses mobile monthly flow into one line and removes ambiguous N/K formatting", () => {
+  it("collapses selected-period wallet cash movement into one line and removes ambiguous N/K formatting", () => {
     expect(source).toContain(
       'className="mt-3 flex min-w-0 items-center justify-between gap-1 rounded-xl bg-slate-50 px-2.5 py-2 text-[10px] sm:hidden"',
     );
-    expect(source).toContain("formatCompactWalletAmount(flow.income)");
-    expect(source).toContain("formatCompactWalletAmount(flow.expense)");
+    expect(source).toContain("formatCompactWalletAmount(flow.cashIn)");
+    expect(source).toContain("formatCompactWalletAmount(flow.cashOut)");
     expect(source).toContain("formatCompactWalletAmount(net)");
-    expect(source).not.toContain('Math.round(flow.income / 1e3) + "K"');
-    expect(source).not.toContain('Math.round(flow.expense / 1e3) + "K"');
+    expect(source).not.toContain('Math.round(flow.cashIn / 1e3) + "K"');
+    expect(source).not.toContain('Math.round(flow.cashOut / 1e3) + "K"');
     expect(source).not.toContain(')}N`');
   });
 

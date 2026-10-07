@@ -37,6 +37,10 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(fnSource).toContain("getTransactionsInRange(startDate, endDate)");
     expect(fnSource).toContain("getCategories()");
     expect(fnSource).toContain("setCategories(loadedCategories)");
+    expect(fnSource).toContain("getSavingTransactionsInRange(startDate, endDate)");
+    expect(fnSource).toContain("getForexCashTransactionsInRange(startDate, endDate)");
+    expect(fnSource).toContain("setPeriodSavingMovements(");
+    expect(fnSource).toContain("setPeriodForexCashTransactions(");
 
     expect(fnSource).toContain(
       "const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })",

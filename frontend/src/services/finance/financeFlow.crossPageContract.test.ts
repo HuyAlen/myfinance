@@ -86,12 +86,14 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(transactions).not.toContain("function getCategoryPlanningGroup(");
   });
 
-  it("Wallet analytics load Categories as a required dependency and preserve reconciliation realtime refresh", () => {
+  it("Wallet analytics consume the canonical liquidity ledgers and preserve reconciliation realtime refresh", () => {
     const wallets = read("../../components/wallets/WalletsPage.tsx");
     expect(wallets).toContain("getCategories(),");
     expect(wallets).toContain("setCategories(loadedCategories)");
-    expect(wallets).toContain("getTotalExpense(periodTxns, categories)");
-    expect(wallets).toContain("expense: getTotalExpense(wt, categories)");
+    expect(wallets).toContain("getSavingTransactionsInRange(startDate, endDate)");
+    expect(wallets).toContain("getForexCashTransactionsInRange(startDate, endDate)");
+    expect(wallets).toContain("calculateWalletCashMovementSnapshot({");
+    expect(wallets).not.toContain("getTotalExpense(periodTxns, categories)");
 
     const realtimeStart = wallets.indexOf("useRealtimeTable(");
     const realtimeEnd = wallets.indexOf(");", realtimeStart);
@@ -101,6 +103,8 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(realtimeRegion).toContain('"wallets"');
     expect(realtimeRegion).toContain('"transactions"');
     expect(realtimeRegion).toContain('"categories"');
+    expect(realtimeRegion).toContain('"saving_transactions"');
+    expect(realtimeRegion).toContain('"forex_cash_transactions"');
     expect(realtimeRegion).toContain('"wallet_reconciliations"');
   });
 
