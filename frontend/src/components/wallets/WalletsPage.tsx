@@ -308,6 +308,48 @@ export default function WalletsPage() {
   const focusedWalletIdRef = useRef<string | null>(null);
   const { toast } = useToast();
 
+  const isWalletOverlayOpen =
+    isFormOpen || isTransferOpen || !!reconcileTarget || !!deleteTarget;
+
+  // WALLETS-MOBILE-VISUAL-VIEWPORT-1: iPhone Safari can keep the layout
+  // viewport taller than the actually visible area while browser chrome or the
+  // software keyboard is present. Bind every Wallet action surface to the real
+  // Visual Viewport so headers and action footers stay reachable.
+  useEffect(() => {
+    if (!isWalletOverlayOpen || typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncWalletsVisualViewport = () => {
+      const height = Math.max(1, Math.round(viewport?.height ?? window.innerHeight));
+      const offsetTop = Math.max(0, Math.round(viewport?.offsetTop ?? 0));
+      root.style.setProperty(
+        "--wallets-visual-viewport-height",
+        `${height}px`,
+      );
+      root.style.setProperty(
+        "--wallets-visual-viewport-offset-top",
+        `${offsetTop}px`,
+      );
+    };
+
+    syncWalletsVisualViewport();
+    viewport?.addEventListener("resize", syncWalletsVisualViewport);
+    viewport?.addEventListener("scroll", syncWalletsVisualViewport);
+    window.addEventListener("resize", syncWalletsVisualViewport);
+    window.addEventListener("orientationchange", syncWalletsVisualViewport);
+
+    return () => {
+      viewport?.removeEventListener("resize", syncWalletsVisualViewport);
+      viewport?.removeEventListener("scroll", syncWalletsVisualViewport);
+      window.removeEventListener("resize", syncWalletsVisualViewport);
+      window.removeEventListener("orientationchange", syncWalletsVisualViewport);
+      root.style.removeProperty("--wallets-visual-viewport-height");
+      root.style.removeProperty("--wallets-visual-viewport-offset-top");
+    };
+  }, [isWalletOverlayOpen]);
+
   // Stable identity: unlike Transactions/Dashboard, Wallets analytics always
   // follow the actual current calendar month (not a user-selectable prop),
   // so reloadData never needs to change identity across renders.
@@ -634,9 +676,7 @@ export default function WalletsPage() {
   }
 
   useQuickActionCreateIntent(openCreateForm);
-  useSuppressGlobalFabsWhileOpen(
-    isFormOpen || isTransferOpen || !!reconcileTarget || !!deleteTarget,
-  );
+  useSuppressGlobalFabsWhileOpen(isWalletOverlayOpen);
 
   function openEditForm(wallet: SpendableWallet) {
     setForm({
@@ -1504,8 +1544,15 @@ export default function WalletsPage() {
           Transfer Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isTransferOpen && (
-        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+        <div
+          data-wallets-mobile-viewport="transfer"
+          className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+          style={{
+            top: "var(--wallets-visual-viewport-offset-top, 0px)",
+            height: "var(--wallets-visual-viewport-height, 100dvh)",
+          }}
+        >
+          <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
                 <div className="mb-1.5 flex size-8 items-center justify-center rounded-xl bg-linear-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-100">
@@ -1643,8 +1690,15 @@ export default function WalletsPage() {
           Wallet reconciliation modal
           ══════════════════════════════════════════════════════════════════ */}
       {reconcileTarget ? (
-        <div className="fixed inset-0 overflow-x-hidden z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+        <div
+          data-wallets-mobile-viewport="reconcile"
+          className="fixed inset-0 overflow-x-hidden z-120 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+          style={{
+            top: "var(--wallets-visual-viewport-offset-top, 0px)",
+            height: "var(--wallets-visual-viewport-height, 100dvh)",
+          }}
+        >
+          <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div className="min-w-0">
                 <span className="flex size-9 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
@@ -1807,8 +1861,15 @@ export default function WalletsPage() {
           CRUD Modal
           ══════════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
+        <div
+          data-wallets-mobile-viewport="form"
+          className="fixed inset-0 overflow-x-hidden z-100 flex items-stretch justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+          style={{
+            top: "var(--wallets-visual-viewport-offset-top, 0px)",
+            height: "var(--wallets-visual-viewport-height, 100dvh)",
+          }}
+        >
+          <div className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-4xl">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-2.5 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:p-6 sm:pb-4">
               <div>
@@ -1948,7 +2009,14 @@ export default function WalletsPage() {
       )}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 overflow-x-hidden z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+        <div
+          data-wallets-mobile-viewport="delete"
+          className="fixed inset-0 overflow-x-hidden z-140 flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
+          style={{
+            top: "var(--wallets-visual-viewport-offset-top, 0px)",
+            height: "var(--wallets-visual-viewport-height, 100dvh)",
+          }}
+        >
           <button
             type="button"
             aria-label="Đóng xác nhận xóa ví"
