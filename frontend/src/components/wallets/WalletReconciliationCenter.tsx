@@ -12,6 +12,9 @@ type Props = {
   records: WalletReconciliationRecord[];
   isLoading: boolean;
   error: string | null;
+  historyRecords: WalletReconciliationRecord[];
+  isHistoryLoading: boolean;
+  historyError: string | null;
   onReconcile: (wallet: SpendableWallet) => void;
 };
 
@@ -32,6 +35,9 @@ export default function WalletReconciliationCenter({
   records,
   isLoading,
   error,
+  historyRecords,
+  isHistoryLoading,
+  historyError,
   onReconcile,
 }: Props) {
   const reconciliationDataReady = !isLoading && !error;
@@ -68,7 +74,16 @@ export default function WalletReconciliationCenter({
       : null;
   const reconciliationPriorityWallet =
     neverReconciled[0] ?? oldestReconciledWallet;
-  const latestRecord = records[0] ?? null;
+  const latestRecord = records.reduce<WalletReconciliationRecord | null>(
+    (latest, record) => {
+      if (!latest) return record;
+      return new Date(record.reconciledAt).getTime() >
+        new Date(latest.reconciledAt).getTime()
+        ? record
+        : latest;
+    },
+    null,
+  );
 
   return (
     <section
@@ -166,24 +181,24 @@ export default function WalletReconciliationCenter({
         </div>
       </div>
 
-      {isLoading ? (
+      {isHistoryLoading ? (
         <div className="mt-4 h-20 animate-pulse rounded-2xl bg-slate-100" />
-      ) : error ? (
+      ) : historyError ? (
         <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
-          {error}
+          {historyError}
         </div>
-      ) : records.length > 0 ? (
+      ) : historyRecords.length > 0 ? (
         <div className="mt-4 hidden sm:block">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-xs font-black text-slate-700">
               Lịch sử đối soát gần đây
             </p>
             <span className="text-[10px] font-bold text-slate-400">
-              {records.length} biên nhận
+              {historyRecords.length} biên nhận
             </span>
           </div>
           <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">
-            {records.slice(0, 5).map((record) => {
+            {historyRecords.slice(0, 5).map((record) => {
               const wallet = wallets.find((item) => item.id === record.walletId);
               return (
                 <div

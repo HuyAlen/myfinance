@@ -25,7 +25,7 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(source).toContain("periodAnalyticsError");
   });
 
-  it("applies Wallet, period analytics, link counts and reconciliation history independently", () => {
+  it("applies Wallet, period analytics, link counts, reconciliation coverage and history independently", () => {
     const start = source.indexOf("const reloadData = useCallback(async () => {");
     const end = source.indexOf("}, []);", start);
     expect(start).toBeGreaterThan(-1);
@@ -43,6 +43,11 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(fnSource).toContain("setPeriodForexCashTransactions(");
 
     expect(fnSource).toContain(
+      "const reconciliationCoverageTask = getWalletReconciliationCoverage()",
+    );
+    expect(fnSource).toContain("setReconciliationCoverage(records)");
+    expect(fnSource).toContain("setIsLoadingReconciliationCoverage(false)");
+    expect(fnSource).toContain(
       "const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })",
     );
     expect(fnSource).toContain("setReconciliationHistory(records)");
@@ -53,7 +58,7 @@ describe("WalletsPage load integrity (WALLETS-CORRECTNESS-1)", () => {
     expect(fnSource).toContain("getForexCashWalletLinks()");
 
     expect(fnSource).toMatch(
-      /await Promise\.all\(\[\s*walletTask,\s*periodAnalyticsTask,\s*linkCountsTask,\s*reconciliationHistoryTask,\s*\]\);/,
+      /await Promise\.all\(\[\s*walletTask,\s*periodAnalyticsTask,\s*linkCountsTask,\s*reconciliationCoverageTask,\s*reconciliationHistoryTask,\s*\]\);/,
     );
 
     expect(fnSource).not.toContain(

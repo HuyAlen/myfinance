@@ -2270,6 +2270,34 @@ export async function getWalletReconciliations(options: {
   return (data ?? []).map(mapWalletReconciliationRow);
 }
 
+/**
+ * WALLET-RECONCILIATION-COVERAGE-SSOT-1
+ *
+ * Reads one authoritative latest receipt per wallet. This intentionally uses
+ * the dedicated server read model instead of the recent-history query, whose
+ * limit is a presentation concern and must never define coverage semantics.
+ */
+export async function getWalletReconciliationCoverage(): Promise<
+  WalletReconciliationRecord[]
+> {
+  const userId = await getAuthUserId();
+  if (!userId) throw new Error(ERR_NO_AUTH);
+
+  const { data, error } = await supabase.rpc(
+    "get_wallet_reconciliation_coverage",
+  );
+
+  if (error) {
+    console.error(
+      "[financeStorage] getWalletReconciliationCoverage:",
+      error.message,
+    );
+    throw new Error("Kh\u00f4ng th\u1ec3 t\u1ea3i tr\u1ea1ng th\u00e1i \u0111\u1ed1i so\u00e1t v\u00ed.");
+  }
+
+  return (data ?? []).map(mapWalletReconciliationRow);
+}
+
 export async function reconcileWalletBalance(input: {
   walletId: string;
   expectedBalance: number;

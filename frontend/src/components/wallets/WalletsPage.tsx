@@ -46,6 +46,7 @@ import {
   getSavingTransactionsInRange,
   getTransactionWalletLinks,
   getTransactionsInRange,
+  getWalletReconciliationCoverage,
   getWalletReconciliations,
   getWallets,
   hasWalletReferences,
@@ -290,6 +291,13 @@ export default function WalletsPage() {
   );
   const [reconcileBalance, setReconcileBalance] = useState("");
   const [reconcileNote, setReconcileNote] = useState("");
+  const [reconciliationCoverage, setReconciliationCoverage] = useState<
+    WalletReconciliationRecord[]
+  >([]);
+  const [isLoadingReconciliationCoverage, setIsLoadingReconciliationCoverage] =
+    useState(true);
+  const [reconciliationCoverageError, setReconciliationCoverageError] =
+    useState<string | null>(null);
   const [reconciliationHistory, setReconciliationHistory] = useState<WalletReconciliationRecord[]>([]);
   const [isLoadingReconciliationHistory, setIsLoadingReconciliationHistory] = useState(true);
   const [reconciliationHistoryError, setReconciliationHistoryError] = useState<string | null>(null);
@@ -435,6 +443,26 @@ export default function WalletsPage() {
         }
       });
 
+    const reconciliationCoverageTask = getWalletReconciliationCoverage()
+      .then((records) => {
+        setReconciliationCoverage(records);
+        setReconciliationCoverageError(null);
+      })
+      .catch((error) => {
+        console.error(
+          "[WalletsPage] reconciliation coverage reload failed:",
+          error,
+        );
+        setReconciliationCoverageError(
+          error instanceof Error
+            ? error.message
+            : "Kh\u00f4ng th\u1ec3 t\u1ea3i tr\u1ea1ng th\u00e1i \u0111\u1ed1i so\u00e1t v\u00ed.",
+        );
+      })
+      .finally(() => {
+        setIsLoadingReconciliationCoverage(false);
+      });
+
     const reconciliationHistoryTask = getWalletReconciliations({ limit: 100 })
       .then((records) => {
         setReconciliationHistory(records);
@@ -474,6 +502,7 @@ export default function WalletsPage() {
       walletTask,
       periodAnalyticsTask,
       linkCountsTask,
+      reconciliationCoverageTask,
       reconciliationHistoryTask,
     ]);
   }, []);
@@ -1553,9 +1582,12 @@ export default function WalletsPage() {
       <div data-wallets-section="reconciliation">
         <WalletReconciliationCenter
         wallets={spendableWallets}
-        records={reconciliationHistory}
-        isLoading={isLoadingReconciliationHistory}
-        error={reconciliationHistoryError}
+        records={reconciliationCoverage}
+        isLoading={isLoadingReconciliationCoverage}
+        error={reconciliationCoverageError}
+        historyRecords={reconciliationHistory}
+        isHistoryLoading={isLoadingReconciliationHistory}
+        historyError={reconciliationHistoryError}
         onReconcile={openReconcileForm}
         />
       </div>

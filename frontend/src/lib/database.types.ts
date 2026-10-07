@@ -962,6 +962,10 @@ export type Database = {
         Returns: undefined;
       };
       delete_wallet_atomic: { Args: { p_wallet_id: string }; Returns: undefined };
+      get_wallet_reconciliation_coverage: {
+        Args: Record<string, never>;
+        Returns: WalletReconciliationRow[];
+      };
       reconcile_wallet_balance_atomic: {
         Args: { p_wallet_id: string; p_expected_balance: number; p_actual_balance: number; p_note?: string | null };
         Returns: WalletReconciliationRow[];
