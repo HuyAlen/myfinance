@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const dashboard = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
+const dashboard = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8").replace(/\r\n/g, "\n");
 const intelligence = readFileSync(
   path.resolve(__dirname, "../../lib/dashboard/dashboardIntelligence.ts"),
   "utf8",

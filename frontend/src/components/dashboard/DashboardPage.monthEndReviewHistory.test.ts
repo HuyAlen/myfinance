@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
+const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8").replace(/\r\n/g, "\n");
 
 describe("MONTH-END-REVIEW-HISTORY-1 Dashboard wiring", () => {
   it("uses the dedicated history module instead of writing localStorage inline", () => {

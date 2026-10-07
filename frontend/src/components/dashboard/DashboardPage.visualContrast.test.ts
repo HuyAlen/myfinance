@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * correctness/readiness tests remain the source of truth for those flows.
  */
 describe("Dashboard visual contrast hierarchy", () => {
-  const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
+  const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8").replace(/\r\n/g, "\n");
 
   function extractHeroMiniSource() {
     const start = source.indexOf("function HeroMini({");

@@ -3932,26 +3932,32 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* DASHBOARD-MOBILE-CUSTOMIZATION-COMPACT-1: mobile keeps the same customization semantics with denser presentation. */}
       <div
         data-dashboard-customization-toolbar="true"
-        className="flex items-center justify-between gap-3 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 sm:px-4"
+        className="flex items-center justify-between gap-2 rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3"
       >
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#60778D]">
-            Tổng quan của bạn
+        <div className="flex min-w-0 items-center gap-2 sm:block">
+          <p className="truncate text-xs font-black text-[#60778D] sm:uppercase sm:tracking-[0.12em]">
+            <span className="sm:hidden">Tùy chỉnh Tổng quan</span>
+            <span className="hidden sm:inline">Tổng quan của bạn</span>
           </p>
-          <p className="mt-0.5 truncate text-[11px] font-semibold text-[#71879A]">
+          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black tabular-nums text-[#60778D] sm:hidden">
+            {DASHBOARD_CUSTOMIZATION_SECTIONS.length - dashboardCustomization.hidden.length}/{DASHBOARD_CUSTOMIZATION_SECTIONS.length}
+          </span>
+          <p className="mt-0.5 hidden truncate text-[11px] font-semibold text-[#71879A] sm:block">
             {DASHBOARD_CUSTOMIZATION_SECTIONS.length - dashboardCustomization.hidden.length}/{DASHBOARD_CUSTOMIZATION_SECTIONS.length} mục hỗ trợ đang hiển thị
           </p>
         </div>
         <button
           type="button"
           onClick={() => setIsDashboardCustomizationOpen(true)}
-          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white text-xs font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:w-auto sm:px-3"
           aria-haspopup="dialog"
+          aria-label="Tùy chỉnh Tổng quan"
         >
           <SlidersHorizontal size={15} />
-          Tùy chỉnh
+          <span className="hidden sm:inline">Tùy chỉnh</span>
         </button>
       </div>
 
@@ -3969,15 +3975,18 @@ export default function DashboardPage() {
             aria-labelledby="dashboard-customization-title"
             className="relative z-10 flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#D5E3EE] bg-white shadow-2xl sm:max-w-2xl sm:rounded-3xl"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-[#E4EDF4] bg-[#F8FBFE] px-4 py-4 sm:px-5">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#2F80ED]">
+            <div className="flex items-start justify-between gap-3 border-b border-[#E4EDF4] bg-[#F8FBFE] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
+              <div className="min-w-0">
+                <p className="hidden text-[10px] font-black uppercase tracking-[0.14em] text-[#2F80ED] sm:block">
                   Cá nhân hóa
                 </p>
-                <h2 id="dashboard-customization-title" className="mt-1 text-lg font-black text-[#294A66]">
+                <h2 id="dashboard-customization-title" className="text-base font-black text-[#294A66] sm:mt-1 sm:text-lg">
                   Tùy chỉnh Tổng quan
                 </h2>
-                <p className="mt-1 max-w-xl text-xs leading-5 text-[#60778D]">
+                <p className="mt-0.5 text-[11px] font-semibold text-[#71879A] sm:hidden">
+                  {DASHBOARD_CUSTOMIZATION_SECTIONS.length - dashboardCustomization.hidden.length}/{DASHBOARD_CUSTOMIZATION_SECTIONS.length} mục đang hiển thị
+                </p>
+                <p className="mt-1 hidden max-w-xl text-xs leading-5 text-[#60778D] sm:block">
                   Tài sản ròng và các KPI vận hành luôn được ghim ở đầu để giữ thứ tự ưu tiên tài chính. Mục Việc cần làm cũng được ghim để bạn không bỏ sót việc quan trọng. Bạn có thể ẩn hoặc sắp xếp các mục hỗ trợ bên dưới.
                 </p>
               </div>
@@ -3991,8 +4000,8 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
-              <div className="space-y-2">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2.5 py-2.5 sm:px-5 sm:py-4">
+              <div className="space-y-1.5 sm:space-y-2">
                 {dashboardCustomization.order.map((sectionId, index) => {
                   const section = DASHBOARD_CUSTOMIZATION_SECTIONS.find(
                     (candidate) => candidate.id === sectionId,
@@ -4005,7 +4014,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={sectionId}
-                      className="flex items-center gap-2 rounded-2xl border border-[#DCE8F1] bg-[#FCFEFF] p-2.5 sm:p-3"
+                      className="flex items-center gap-1.5 rounded-xl border border-[#DCE8F1] bg-[#FCFEFF] p-1.5 sm:gap-2 sm:rounded-2xl sm:p-3"
                     >
                       <button
                         type="button"
@@ -4021,14 +4030,14 @@ export default function DashboardPage() {
                         {visible ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                       <div className="min-w-0 flex-1">
-                        <p className={`truncate text-sm font-black ${visible ? "text-[#31536F]" : "text-slate-400"}`}>
+                        <p className={`truncate text-[13px] font-black sm:text-sm ${visible ? "text-[#31536F]" : "text-slate-400"}`}>
                           {section.label}
                         </p>
-                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-[#71879A]">
+                        <p className="mt-0.5 hidden text-[11px] leading-4 text-[#71879A] sm:line-clamp-2 sm:block">
                           {section.description}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                         <button
                           type="button"
                           disabled={index === 0}
@@ -4059,14 +4068,15 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-[#E4EDF4] bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+            <div className="flex items-center justify-between gap-3 border-t border-[#E4EDF4] bg-white px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-3">
               <button
                 type="button"
                 onClick={handleResetDashboardCustomization}
                 className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-black text-[#60778D] transition hover:bg-slate-50 hover:text-[#31536F]"
               >
                 <RotateCcw size={15} />
-                Khôi phục mặc định
+                <span className="sm:hidden">Mặc định</span>
+                <span className="hidden sm:inline">Khôi phục mặc định</span>
               </button>
               <button
                 type="button"

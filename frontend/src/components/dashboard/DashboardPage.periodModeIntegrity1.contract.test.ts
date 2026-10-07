@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8");
+const source = readFileSync(path.resolve(__dirname, "DashboardPage.tsx"), "utf8").replace(/\r\n/g, "\n");
 
 describe("DASHBOARD-PERIOD-MODE-INTEGRITY-1", () => {
   it("reads the active filter mode and distinguishes month-only surfaces", () => {
