@@ -1895,6 +1895,99 @@ export function calculateWalletCashMovementSnapshot(input: {
   };
 }
 
+export type WalletActivityTransactionLink = {
+  walletId: string;
+  transferToWalletId?: string | null;
+  transferReference?: string | null;
+  transferReferenceType?: string | null;
+};
+
+export type WalletActivityForexLink = {
+  walletId: string;
+};
+
+export type WalletActivitySavingLink = {
+  walletId: string;
+  savingId: string;
+};
+
+function getSavingMirrorPairKey(link: WalletActivityTransactionLink) {
+  if (link.transferReferenceType !== "saving" || !link.transferReference) {
+    return null;
+  }
+
+  const match = /^(?:saving_deposit|saving_withdraw|saving_close):([^:]+):/.exec(
+    link.transferReference,
+  );
+  if (!match?.[1]) return null;
+
+  return JSON.stringify([link.walletId, match[1]]);
+}
+
+/**
+ * WALLETS-LINKED-ACTIVITY-COUNT-SSOT-1
+ *
+ * Counts user-visible Wallet-linked activities rather than raw ledger rows.
+ * Later Savings movements are mirrored in both transactions and
+ * saving_transactions, while initial Savings funding exists only in the
+ * Savings ledger. Pairing by wallet + saving lets us count the mirror once
+ * without letting an unrelated saving consume another saving's unmatched row.
+ */
+export function calculateWalletLinkedActivityCounts(input: {
+  transactionLinks: WalletActivityTransactionLink[];
+  forexLinks: WalletActivityForexLink[];
+  savingLinks: WalletActivitySavingLink[];
+}): Map<string, number> {
+  const counts = new Map<string, number>();
+  const mirroredSavingCounts = new Map<string, number>();
+  const savingRowsByPair = new Map<
+    string,
+    { walletId: string; count: number }
+  >();
+
+  const increment = (walletId: string, amount = 1) => {
+    if (!walletId || amount <= 0) return;
+    counts.set(walletId, (counts.get(walletId) ?? 0) + amount);
+  };
+
+  for (const link of input.transactionLinks) {
+    increment(link.walletId);
+    if (link.transferToWalletId) increment(link.transferToWalletId);
+
+    const mirrorKey = getSavingMirrorPairKey(link);
+    if (mirrorKey) {
+      mirroredSavingCounts.set(
+        mirrorKey,
+        (mirroredSavingCounts.get(mirrorKey) ?? 0) + 1,
+      );
+    }
+  }
+
+  for (const link of input.forexLinks) {
+    increment(link.walletId);
+  }
+
+  for (const link of input.savingLinks) {
+    if (!link.walletId || !link.savingId) continue;
+    const key = JSON.stringify([link.walletId, link.savingId]);
+    const current = savingRowsByPair.get(key);
+    savingRowsByPair.set(key, {
+      walletId: link.walletId,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+
+  for (const [key, savingRows] of savingRowsByPair) {
+    const unmatchedSavingsRows = Math.max(
+      0,
+      savingRows.count - (mirroredSavingCounts.get(key) ?? 0),
+    );
+    increment(savingRows.walletId, unmatchedSavingsRows);
+  }
+
+  return counts;
+}
+
 export function getDisposableCashFlow(
   transactions: Transaction[],
   categories: Category[] = [],

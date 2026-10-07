@@ -2459,13 +2459,33 @@ export async function hasWalletReferences(
  * category, note, date, transfer metadata, ...), so it stays cheap even
  * across a full transaction history.
  */
+export type TransactionWalletLink = {
+  walletId: string;
+  transferToWalletId: string | null;
+  transferReference?: string;
+  transferReferenceType?: string;
+};
+
+type TransactionWalletLinkDbRow = {
+  walletId: string;
+  transferToWalletId: string | null;
+  transfer_reference?: string | null;
+  transfer_reference_type?: string | null;
+};
+
 export async function getTransactionWalletLinks(): Promise<
-  { walletId: string; transferToWalletId: string | null }[]
+  TransactionWalletLink[]
 > {
   if (LOCAL_UI_MODE) {
     return getLocalUiDemoData().transactions.map((transaction) => ({
       walletId: transaction.walletId,
       transferToWalletId: transaction.transferToWalletId ?? null,
+      ...(transaction.transferReference
+        ? { transferReference: transaction.transferReference }
+        : {}),
+      ...(transaction.transferReferenceType
+        ? { transferReferenceType: transaction.transferReferenceType }
+        : {}),
     }));
   }
 
@@ -2474,7 +2494,9 @@ export async function getTransactionWalletLinks(): Promise<
 
   const { data, error } = await supabase
     .from("transactions")
-    .select("walletId, transferToWalletId")
+    .select(
+      "walletId, transferToWalletId, transfer_reference, transfer_reference_type",
+    )
     .eq("user_id", userId);
 
   if (error) {
@@ -2482,7 +2504,16 @@ export async function getTransactionWalletLinks(): Promise<
     throw new Error(error.message);
   }
 
-  return (data ?? []) as { walletId: string; transferToWalletId: string | null }[];
+  return ((data ?? []) as TransactionWalletLinkDbRow[]).map((row) => ({
+    walletId: row.walletId,
+    transferToWalletId: row.transferToWalletId,
+    ...(row.transfer_reference
+      ? { transferReference: row.transfer_reference }
+      : {}),
+    ...(row.transfer_reference_type
+      ? { transferReferenceType: row.transfer_reference_type }
+      : {}),
+  }));
 }
 
 /** Same narrow-projection intent as getTransactionWalletLinks, for Forex cash. */
@@ -2507,6 +2538,38 @@ export async function getForexCashWalletLinks(): Promise<
   return ((data ?? []) as { wallet_id: string }[]).map((row) => ({
     walletId: row.wallet_id,
   }));
+}
+
+export async function getSavingTransactionWalletLinks(): Promise<
+  { walletId: string; savingId: string }[]
+> {
+  if (LOCAL_UI_MODE) return [];
+
+  const userId = await getAuthUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("saving_transactions")
+    .select("saving_id,wallet_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error(
+      "[financeStorage] getSavingTransactionWalletLinks:",
+      error.message,
+    );
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as { saving_id: string; wallet_id: string | null }[])
+    .filter(
+      (row): row is { saving_id: string; wallet_id: string } =>
+        Boolean(row.wallet_id),
+    )
+    .map((row) => ({
+      walletId: row.wallet_id,
+      savingId: row.saving_id,
+    }));
 }
 
 // ─── Finance Engine v3: Savings Atomic Money Movement ──────────────────────

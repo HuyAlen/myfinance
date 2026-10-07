@@ -42,6 +42,7 @@ import {
   getCategories,
   getForexCashTransactionsInRange,
   getForexCashWalletLinks,
+  getSavingTransactionWalletLinks,
   getSavingTransactionsInRange,
   getTransactionWalletLinks,
   getTransactionsInRange,
@@ -54,6 +55,7 @@ import {
 
 import {
   calculateWalletCashMovementSnapshot,
+  calculateWalletLinkedActivityCounts,
   formatVND,
   getTotalAssets,
   type SavingAllocationMovement,
@@ -273,10 +275,10 @@ export default function WalletsPage() {
   const [periodAnalyticsReady, setPeriodAnalyticsReady] = useState(false);
   const [periodAnalyticsRangeKey, setPeriodAnalyticsRangeKey] =
     useState<string | null>(null);
-  // All-time per-wallet linked-record count, for the wallet card caption
-  // only. Built from a narrow id-only projection (see
-  // getTransactionWalletLinks/getForexCashWalletLinks) instead of full
-  // transaction rows, so it stays cheap even across a full history.
+  // All-time per-wallet linked-activity count, for the wallet card caption
+  // only. Narrow projections cover main transactions, Forex, and Savings;
+  // the canonical calculator deduplicates Savings rows mirrored into the main
+  // transactions ledger so this remains an activity count, not a raw-row count.
   const [walletLinkCounts, setWalletLinkCounts] = useState<
     Map<string, number>
   >(new Map());
@@ -450,21 +452,14 @@ export default function WalletsPage() {
     const linkCountsTask = Promise.all([
       getTransactionWalletLinks(),
       getForexCashWalletLinks(),
+      getSavingTransactionWalletLinks(),
     ])
-      .then(([txnLinks, forexLinks]) => {
-        const counts = new Map<string, number>();
-        for (const link of txnLinks) {
-          counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-          if (link.transferToWalletId) {
-            counts.set(
-              link.transferToWalletId,
-              (counts.get(link.transferToWalletId) ?? 0) + 1,
-            );
-          }
-        }
-        for (const link of forexLinks) {
-          counts.set(link.walletId, (counts.get(link.walletId) ?? 0) + 1);
-        }
+      .then(([txnLinks, forexLinks, savingLinks]) => {
+        const counts = calculateWalletLinkedActivityCounts({
+          transactionLinks: txnLinks,
+          forexLinks,
+          savingLinks,
+        });
 
         setWalletLinkCounts(counts);
         setWalletLinkCountsReady(true);
