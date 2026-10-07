@@ -2150,7 +2150,7 @@ export async function updateWallet(
 ): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("wallets")
     // WALLET-RECONCILIATION-1: generic wallet edits own identity fields only.
     // Balance changes must use reconcileWalletBalance(), whose expected-balance
@@ -2160,10 +2160,23 @@ export async function updateWallet(
       type: updatedWallet.type,
     })
     .eq("id", updatedWallet.id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    // WALLET-IDENTITY-UPDATE-INTEGRITY-1: PostgREST can report no query error
+    // even when an UPDATE matches zero rows. Require an identity receipt so the
+    // UI never reports success for a missing/not-owned wallet.
+    .select("id")
+    .maybeSingle();
   if (error) {
     console.error("[financeStorage] updateWallet:", error.message);
     return { error: error.message };
+  }
+  if (!data || data.id !== updatedWallet.id) {
+    console.error(
+      "[financeStorage] updateWallet: mutation receipt missing or mismatched",
+    );
+    return {
+      error: "Không thể xác nhận cập nhật ví. Vui lòng tải lại và thử lại.",
+    };
   }
   return { error: null };
 }
