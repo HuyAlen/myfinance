@@ -21,20 +21,24 @@ function transaction(
 const baseInput = {
   mode: "expense" as const,
   note: "Cà phê",
-  categoryId: "food",
   validCategoryIds: ["food", "fuel", "salary"],
-  validWalletIds: ["wallet-1", "wallet-2"],
 };
 
-describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
-  it("uses exact normalized note history and returns the most recent amount/category/wallet", () => {
+describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
+  it("uses exact normalized note history and returns only the newest category", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
       note: "  CA   PHE ",
       transactions: [
-        transaction("old", { amount: 45000, date: "2026-10-01" }),
+        transaction("old", {
+          amount: 45000,
+          categoryId: "food",
+          walletId: "wallet-1",
+          date: "2026-10-01",
+        }),
         transaction("new", {
           amount: 55000,
+          categoryId: "fuel",
           walletId: "wallet-2",
           date: "2026-10-05",
         }),
@@ -46,21 +50,30 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
       matchCount: 2,
       sourceTransactionId: "new",
       sourceDate: "2026-10-05",
-      amount: 55000,
-      categoryId: "food",
-      walletId: "wallet-2",
+      categoryId: "fuel",
     });
+    expect(result).not.toHaveProperty("amount");
+    expect(result).not.toHaveProperty("walletId");
   });
 
   it("allows one exact-note example because the user supplied a precise context", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
-      transactions: [transaction("only", { amount: 72000 })],
+      transactions: [
+        transaction("only", {
+          amount: 72000,
+          walletId: "wallet-2",
+        }),
+      ],
     });
 
-    expect(result?.matchKind).toBe("note");
-    expect(result?.matchCount).toBe(1);
-    expect(result?.amount).toBe(72000);
+    expect(result).toEqual({
+      matchKind: "note",
+      matchCount: 1,
+      sourceTransactionId: "only",
+      sourceDate: "2026-10-01",
+      categoryId: "food",
+    });
   });
 
   it("does not guess before the user supplies a meaningful note", () => {
@@ -89,7 +102,7 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
     ).toBeNull();
   });
 
-  it("falls back to category history only after two valid examples when the note is new", () => {
+  it("does not fall back from category history when the note is new", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
       note: "Bữa trưa mới",
@@ -103,35 +116,39 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
       ],
     });
 
-    expect(result).toMatchObject({
-      matchKind: "category",
-      matchCount: 2,
-      sourceTransactionId: "new",
-      amount: 95000,
-      categoryId: "food",
-      walletId: "wallet-2",
-    });
+    expect(result).toBeNull();
   });
 
-  it("does not create a category fallback from a one-off historical transaction", () => {
-    expect(
-      buildTransactionSmartDefaultsSuggestion({
-        ...baseInput,
-        note: "Bữa trưa mới",
-        transactions: [transaction("only")],
-      }),
-    ).toBeNull();
+  it("ignores amount and wallet differences when matching note context", () => {
+    const result = buildTransactionSmartDefaultsSuggestion({
+      ...baseInput,
+      transactions: [
+        transaction("a", { amount: 1000, walletId: "wallet-a" }),
+        transaction("b", {
+          amount: 9999999,
+          walletId: "wallet-b",
+          date: "2026-10-03",
+        }),
+      ],
+    });
+
+    expect(result?.matchCount).toBe(2);
+    expect(result?.categoryId).toBe("food");
+    expect(result).not.toHaveProperty("amount");
+    expect(result).not.toHaveProperty("walletId");
   });
 
   it("keeps income and expense histories independent", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       mode: "income",
       note: "Lương tháng",
-      categoryId: "salary",
       validCategoryIds: ["salary"],
-      validWalletIds: ["wallet-1"],
       transactions: [
-        transaction("expense", { note: "Lương tháng", amount: 100000 }),
+        transaction("expense", {
+          note: "Lương tháng",
+          categoryId: "food",
+          amount: 100000,
+        }),
         transaction("income", {
           type: "income",
           note: "Lương tháng",
@@ -145,18 +162,17 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
       matchKind: "note",
       matchCount: 1,
       sourceTransactionId: "income",
-      amount: 25000000,
       categoryId: "salary",
     });
   });
 
-  it("excludes transfers, recurring schedule rows and invalid/deleted entity references", () => {
+  it("excludes transfers, recurring schedule rows and invalid/deleted categories", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
       transactions: [
         transaction("transfer", {
           type: "transfer",
-          categoryId: "",
+          categoryId: "food",
           transferToWalletId: "wallet-2",
         }),
         transaction("recurring", {
@@ -165,7 +181,6 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
           nextRunDate: "2026-11-01",
         }),
         transaction("deleted-category", { categoryId: "deleted" }),
-        transaction("deleted-wallet", { walletId: "deleted" }),
       ],
     });
 
@@ -175,7 +190,7 @@ describe("TRANSACTION-SMART-DEFAULTS-1 suggestion SSOT", () => {
   it("excludes Savings-managed mirrors even if legacy metadata is cast onto a transaction", () => {
     const saving = transaction("saving", {
       type: "transfer",
-      categoryId: "",
+      categoryId: "food",
       transferToWalletId: "saving-1",
       note: "Cà phê",
     }) as Transaction & {

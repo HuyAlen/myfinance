@@ -1383,28 +1383,20 @@ export default function TransactionsPage() {
       transactions,
       mode: form.formMode,
       note: form.note,
-      categoryId: form.categoryId,
       validCategoryIds: filteredCategories.map((category) => category.id),
-      validWalletIds: wallets.map((wallet) => wallet.id),
     });
     if (!suggestion) return null;
 
-    const alreadyApplied =
-      Number(form.amount) === suggestion.amount &&
-      form.categoryId === suggestion.categoryId &&
-      form.walletId === suggestion.walletId;
+    const alreadyApplied = form.categoryId === suggestion.categoryId;
     return alreadyApplied ? null : suggestion;
   }, [
     activeRuleSuggestion,
     filteredCategories,
-    form.amount,
     form.categoryId,
     form.formMode,
     form.id,
     form.note,
-    form.walletId,
     transactions,
-    wallets,
   ]);
 
   function applyActiveSmartDefaultsSuggestion() {
@@ -1412,9 +1404,7 @@ export default function TransactionsPage() {
 
     setForm((current) => ({
       ...current,
-      amount: String(activeSmartDefaultsSuggestion.amount),
       categoryId: activeSmartDefaultsSuggestion.categoryId,
-      walletId: activeSmartDefaultsSuggestion.walletId,
     }));
     setSaveError(null);
   }
@@ -4183,24 +4173,17 @@ export default function TransactionsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-600">
-                        Gợi ý từ lịch sử
+                        Gợi ý danh mục
                       </p>
                       <p className="mt-0.5 text-sm font-black text-slate-800">
-                        {activeSmartDefaultsSuggestion.matchKind === "note"
-                          ? `Khớp ${activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.`
-                          : `Dựa trên ${activeSmartDefaultsSuggestion.matchCount} giao dịch cùng danh mục.`}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
                         {categoryById.get(activeSmartDefaultsSuggestion.categoryId)
                           ?.name ?? "Danh mục"}
-                        {" · "}
-                        {walletById.get(activeSmartDefaultsSuggestion.walletId)
-                          ?.name ?? "Ví"}
-                        {" · "}
-                        {formatVND(activeSmartDefaultsSuggestion.amount)}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                        {`Khớp ${activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.`}
                       </p>
                       <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                        Bạn vẫn kiểm tra trước khi lưu.
+                        Chỉ áp dụng danh mục; số tiền và ví được giữ nguyên.
                       </p>
                     </div>
                     <button

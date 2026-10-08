@@ -12,8 +12,8 @@ const smartDefaults = readFileSync(
 ).replace(/\r\n/g, "\n");
 const normalized = page.replace(/\s+/g, " ");
 
-describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
-  it("derives advisory defaults from the already-loaded ledger without adding finance queries", () => {
+describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
+  it("derives advisory category suggestions from the already-loaded ledger without adding finance queries", () => {
     expect(page).toContain(
       'import { buildTransactionSmartDefaultsSuggestion } from "@/src/lib/transactions/transactionSmartDefaults";',
     );
@@ -24,7 +24,7 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(page.split("getWallets(").length - 1).toBe(1);
   });
 
-  it("keeps smart defaults create-only for income/expense and waits for typed note context", () => {
+  it("keeps category suggestion create-only for income/expense and waits for typed note context", () => {
     const start = page.indexOf("const activeSmartDefaultsSuggestion = useMemo(() => {");
     const end = page.indexOf("function applyActiveSmartDefaultsSuggestion()", start);
     const region = page.slice(start, end);
@@ -43,7 +43,7 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(page).toContain('data-transaction-smart-defaults="true"');
   });
 
-  it("never auto-applies: history only changes the form after the user taps Dùng gợi ý", () => {
+  it("never auto-applies: history only changes the category after the user taps Dùng gợi ý", () => {
     expect(page).toContain("function applyActiveSmartDefaultsSuggestion() {");
     expect(page).toContain("onClick={applyActiveSmartDefaultsSuggestion}");
     expect(page).toContain("Dùng gợi ý");
@@ -51,14 +51,14 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(page).not.toContain("autoApplySmartDefaults");
   });
 
-  it("only applies amount/category/wallet and leaves date, note, recurrence and save flow untouched", () => {
+  it("applies category only and leaves amount, wallet, date, note, recurrence and save flow untouched", () => {
     const start = page.indexOf("function applyActiveSmartDefaultsSuggestion() {");
     const end = page.indexOf("const activeEntryConfidenceWarnings", start);
     const region = page.slice(start, end);
 
-    expect(region).toContain("amount: String(activeSmartDefaultsSuggestion.amount)");
     expect(region).toContain("categoryId: activeSmartDefaultsSuggestion.categoryId");
-    expect(region).toContain("walletId: activeSmartDefaultsSuggestion.walletId");
+    expect(region).not.toContain("amount:");
+    expect(region).not.toContain("walletId:");
     expect(region).not.toContain("date:");
     expect(region).not.toContain("note:");
     expect(region).not.toContain("isRecurring:");
@@ -66,14 +66,38 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(region).not.toContain("addTransaction(");
   });
 
-  it("uses current valid category/wallet ids and excludes transfer/recurring/Savings rows in the pure SSOT", () => {
+  it("does not use amount or wallet as learned suggestion inputs", () => {
+    const start = page.indexOf("const activeSmartDefaultsSuggestion = useMemo(() => {");
+    const end = page.indexOf("function applyActiveSmartDefaultsSuggestion()", start);
+    const region = page.slice(start, end);
+
+    expect(region).toContain("form.categoryId === suggestion.categoryId");
+    expect(region).not.toContain("Number(form.amount)");
+    expect(region).not.toContain("suggestion.amount");
+    expect(region).not.toContain("suggestion.walletId");
+    expect(region).not.toContain("validWalletIds");
+    expect(smartDefaults).not.toContain("transaction.amount");
+    expect(smartDefaults).not.toContain("walletId");
+  });
+
+  it("uses current valid category ids and excludes transfer/recurring/Savings rows in the pure SSOT", () => {
     expect(page).toContain(
       "validCategoryIds: filteredCategories.map((category) => category.id)",
     );
-    expect(page).toContain("validWalletIds: wallets.map((wallet) => wallet.id)");
     expect(smartDefaults).toContain("isInternalTransferTransaction(transaction)");
     expect(smartDefaults).toContain("isSavingsManagedTransaction(transaction)");
     expect(smartDefaults).toContain("hasRecurringMetadata(transaction)");
+  });
+
+  it("keeps the suggestion card category-only with no historical amount or wallet display", () => {
+    const start = page.indexOf('{activeSmartDefaultsSuggestion ? (');
+    const end = page.indexOf('{activeRuleSuggestion ? (', start);
+    const region = page.slice(start, end);
+
+    expect(region).toContain("Gợi ý danh mục");
+    expect(region).toContain("Chỉ áp dụng danh mục; số tiền và ví được giữ nguyên.");
+    expect(region).not.toContain("formatVND(activeSmartDefaultsSuggestion.amount)");
+    expect(region).not.toContain("walletById.get(activeSmartDefaultsSuggestion.walletId)");
   });
 
   it("does not persist learned transaction content to browser storage", () => {
