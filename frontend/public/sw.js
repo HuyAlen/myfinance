@@ -5,7 +5,8 @@
 //   • Images/SVG/fonts: cache-first
 //   • API, Supabase, SSE and non-GET: pass-through
 
-const CACHE = "myfinance-v2";
+const CACHE_PREFIX = "myfinance-";
+const CACHE = `${CACHE_PREFIX}v2`;
 
 const PRECACHE_URLS = ["/icon-192.svg", "/icon-512.svg"];
 
@@ -25,13 +26,17 @@ self.addEventListener("install", (event) => {
 
 // ─── Activate ───────────────────────────────────────────────────────────────
 
+function isOwnedStaleCache(key) {
+  return key.startsWith(CACHE_PREFIX) && key !== CACHE;
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)),
+          keys.filter(isOwnedStaleCache).map((key) => caches.delete(key)),
         ),
       ),
   );
