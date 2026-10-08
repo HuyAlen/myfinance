@@ -112,8 +112,8 @@ describe("PRODUCTION-BOOT-RECOVERY-AUDIT-1 — P1", () => {
       layout.indexOf("<HouseholdProvider>"),
     );
     expect(realtimeProvider).toContain("financeOwnerUserId");
-    expect(realtimeProvider).toContain(
-      "if (!user?.id || !financeOwnerUserId) return;",
+    expect(realtimeProvider).toMatch(
+      /if \(!user\?\.id \|\| !financeOwnerUserId\) \{[\s\S]*statusRef\.current = "INITIAL";[\s\S]*return;[\s\S]*\}/,
     );
   });
 });

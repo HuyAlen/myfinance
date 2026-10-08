@@ -233,9 +233,11 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       }, 120);
     };
     window.addEventListener("focus", scheduleRefresh);
+    window.addEventListener("online", scheduleRefresh);
     document.addEventListener("visibilitychange", scheduleRefresh);
     return () => {
       window.removeEventListener("focus", scheduleRefresh);
+      window.removeEventListener("online", scheduleRefresh);
       document.removeEventListener("visibilitychange", scheduleRefresh);
       if (timer !== null) window.clearTimeout(timer);
     };
