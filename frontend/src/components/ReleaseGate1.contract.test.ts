@@ -28,8 +28,13 @@ describe("MYFINANCE-RELEASE-GATE-1 — P1", () => {
     );
   });
 
-  it("runs diff checks, typecheck, lint, all Vitest tests, MJS contracts and Next build", () => {
+  it("runs env preflight, diff checks, typecheck, lint, all Vitest tests, MJS contracts and Next build", () => {
     expect(gate).toContain('run("git", ["diff", "--check"])');
+    expect(gate).toContain('"Environment preflight"');
+    expect(gate).toContain('"scripts/validate-env.mjs"');
+    expect(gate.indexOf('"Environment preflight"')).toBeLessThan(
+      gate.indexOf('"TypeScript"'),
+    );
     expect(gate).toContain('"node_modules/typescript/bin/tsc"');
     expect(gate).toContain('"node_modules/eslint/bin/eslint.js"');
     expect(gate).toContain('"node_modules/vitest/vitest.mjs"');

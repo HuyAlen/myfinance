@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "env:check": "node scripts/validate-env.mjs --mode=production",
+    "dev": "node scripts/validate-env.mjs --mode=development && next dev",
+    "build": "node scripts/validate-env.mjs --mode=production && next build",
+    "start": "node scripts/validate-env.mjs --mode=production && next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -13,6 +14,7 @@
     "release:gate": "node scripts/release-gate.mjs"
   },
   "dependencies": {
+    "@next/env": "16.3.3",
     "@supabase/supabase-js": "^2.107.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",

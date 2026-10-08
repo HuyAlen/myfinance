@@ -85,6 +85,22 @@ a valid MyFinance setup.
 
 ## 5. Required environment variables
 
+The repository tracks an empty, credential-safe template at
+`frontend/.env.example`. For local development on Windows PowerShell:
+
+```powershell
+Set-Location frontend
+Copy-Item .env.example .env.local
+# Fill in the target project values in .env.local.
+npm run env:check
+```
+
+The preflight uses Next.js environment-file loading semantics, so `.env.local`
+and environment-specific files are resolved the same way as the application.
+`npm run dev`, `npm run build`, `npm run start`, and the canonical release gate
+all run this check. Missing or malformed required Supabase public configuration
+therefore fails before `next build` reaches page compilation/prerendering.
+
 Set these in the local environment and in the deployment platform (for example,
 Vercel Project Settings → Environment Variables):
 

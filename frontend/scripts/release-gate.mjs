@@ -9,6 +9,11 @@ const frontendDir = path.resolve(scriptDir, "..");
 
 const NODE_STAGES = [
   {
+    name: "Environment preflight",
+    executable: "scripts/validate-env.mjs",
+    args: ["--mode=production"],
+  },
+  {
     name: "TypeScript",
     executable: "node_modules/typescript/bin/tsc",
     args: ["--noEmit"],
@@ -23,12 +28,13 @@ const NODE_STAGES = [
     executable: "node_modules/vitest/vitest.mjs",
     args: ["run"],
   },
-  {
-    name: "Next build",
-    executable: "node_modules/next/dist/bin/next",
-    args: ["build"],
-  },
 ];
+
+const NEXT_BUILD_STAGE = {
+  name: "Next build",
+  executable: "node_modules/next/dist/bin/next",
+  args: ["build"],
+};
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -61,13 +67,13 @@ function runNodeStage(stage) {
 console.log("[release-gate] MYFINANCE-RELEASE-GATE-1");
 runGitDiffCheck("git diff --check (before)");
 
-for (const stage of NODE_STAGES.slice(0, 3)) {
+for (const stage of NODE_STAGES) {
   runNodeStage(stage);
 }
 
 runMjsContracts();
 
-runNodeStage(NODE_STAGES[3]);
+runNodeStage(NEXT_BUILD_STAGE);
 runGitDiffCheck("git diff --check (after)");
 
 console.log("\n[release-gate] PASS");
