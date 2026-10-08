@@ -611,9 +611,7 @@ export function buildTransactionCsvImportPreviewWithRules(input: {
       : row.draft;
 
     const changed = Boolean(
-      match &&
-        (nextDraft.categoryId !== row.draft.categoryId ||
-          nextDraft.walletId !== row.draft.walletId),
+      match && nextDraft.categoryId !== row.draft.categoryId,
     );
     if (changed) ruleAppliedCount += 1;
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Category, Transaction, Wallet } from "@/src/types/finance";
+import type { TransactionRule } from "@/src/lib/transactions/transactionRules";
 import {
   buildTransactionCsvFingerprint,
   buildTransactionCsvImportPreview,
+  buildTransactionCsvImportPreviewWithRules,
   materializeTransactionCsvImportRows,
   parseTransactionCsvAmount,
   parseTransactionCsvDate,
@@ -185,5 +187,43 @@ describe("TRANSACTION-CSV-IMPORT-1 validation and dedupe", () => {
     expect(buildTransactionCsvFingerprint(materialized[0].transaction)).toBe(
       result.rows[0].fingerprint,
     );
+  });
+});
+describe("TRANSACTION-RULE-CATEGORY-ONLY-1 CSV rule application", () => {
+  it("changes only category and preserves the wallet from the CSV row", () => {
+    const csv = [
+      "Ngày,Loại,Ghi chú,Danh mục,Ví,Số tiền",
+      "2026-10-08,Chi,Grab Bike,Ăn uống,VCB Chính,85000",
+    ].join("\n");
+
+    const rule: TransactionRule = {
+      id: "rule-grab",
+      name: "Grab → Di chuyển",
+      enabled: true,
+      priority: 10,
+      transactionType: "expense",
+      noteContains: "grab",
+      walletId: null,
+      amountMin: null,
+      amountMax: null,
+      actionCategoryId: "cat-rent",
+      actionWalletId: "wallet-cash",
+      createdAt: "2026-10-08T00:00:00.000Z",
+      updatedAt: "2026-10-08T00:00:00.000Z",
+    };
+
+    const result = buildTransactionCsvImportPreviewWithRules({
+      csvText: csv,
+      wallets,
+      categories,
+      existingTransactions: [],
+      rules: [rule],
+    });
+
+    expect(result.ruleAppliedCount).toBe(1);
+    expect(result.rows[0].draft?.categoryId).toBe("cat-rent");
+    expect(result.rows[0].draft?.walletId).toBe("wallet-main");
+    expect(result.rows[0].draft?.amount).toBe(85000);
+    expect(result.rows[0].appliedRuleId).toBe("rule-grab");
   });
 });

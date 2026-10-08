@@ -7,19 +7,26 @@ const source = readFileSync(
   "utf8",
 );
 
-describe("TRANSACTION-RULES-1 storage contract", () => {
+describe("TRANSACTION-RULE-CATEGORY-ONLY-1 storage contract", () => {
   it("loads active-workspace rules in deterministic priority order", () => {
     expect(source).toContain("getFinanceOwnerUserId()");
     expect(source).toContain('.from("transaction_rules")');
     expect(source).toContain('.order("priority", { ascending: true })');
   });
 
-  it("validates rule actions before persistence", () => {
-    expect(source).toContain(
-      "Quy tắc cần ít nhất một hành động: Danh mục hoặc Ví.",
+  it("requires a category action and clears legacy wallet actions on save", () => {
+    expect(source).toContain("Quy tắc cần một danh mục gợi ý.");
+    expect(source).toContain("action_category_id: normalizeOptionalText(input.actionCategoryId)");
+    expect(source).toContain("action_wallet_id: null");
+    expect(source).not.toContain(
+      "action_wallet_id: normalizeOptionalText(input.actionWalletId)",
     );
-    expect(source).toContain("amountMin");
-    expect(source).toContain("amountMax");
+  });
+
+  it("keeps wallet/amount as optional rule match conditions", () => {
+    expect(source).toContain("wallet_id: normalizeOptionalText(input.walletId)");
+    expect(source).toContain("amount_min: normalizeOptionalNumber(input.amountMin)");
+    expect(source).toContain("amount_max: normalizeOptionalNumber(input.amountMax)");
   });
 
   it("supports create, update, enable/disable and delete", () => {

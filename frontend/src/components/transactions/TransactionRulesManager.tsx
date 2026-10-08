@@ -27,7 +27,6 @@ type RuleForm = {
   amountMin: string;
   amountMax: string;
   actionCategoryId: string;
-  actionWalletId: string;
 };
 
 const EMPTY_FORM: RuleForm = {
@@ -40,7 +39,6 @@ const EMPTY_FORM: RuleForm = {
   amountMin: "",
   amountMax: "",
   actionCategoryId: "",
-  actionWalletId: "",
 };
 
 function toNumberOrNull(value: string) {
@@ -61,7 +59,6 @@ function toInput(form: RuleForm): TransactionRuleInput {
     amountMin: toNumberOrNull(form.amountMin),
     amountMax: toNumberOrNull(form.amountMax),
     actionCategoryId: form.actionCategoryId || null,
-    actionWalletId: form.actionWalletId || null,
   };
 }
 
@@ -107,7 +104,6 @@ export default function TransactionRulesManager({
       amountMin: rule.amountMin === null ? "" : String(rule.amountMin),
       amountMax: rule.amountMax === null ? "" : String(rule.amountMax),
       actionCategoryId: rule.actionCategoryId ?? "",
-      actionWalletId: rule.actionWalletId ?? "",
     });
   }
 
@@ -183,7 +179,7 @@ export default function TransactionRulesManager({
               Quy tắc giao dịch
             </h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
-              Quy tắc chỉ tạo gợi ý khi nhập tay và được hiển thị trong preview CSV trước khi ghi. Ưu tiên nhỏ hơn chạy trước; quy tắc khớp đầu tiên thắng.
+              Quy tắc chỉ gợi ý danh mục khi nhập tay và trong preview CSV. Ví và số tiền có thể dùng làm điều kiện khớp nhưng không bao giờ bị quy tắc thay đổi. Ưu tiên nhỏ hơn chạy trước; quy tắc khớp đầu tiên thắng.
             </p>
           </div>
           <button
@@ -312,32 +308,21 @@ export default function TransactionRulesManager({
                   </label>
                 </div>
 
-                <label>
-                  <span className="mb-1.5 block text-xs font-black text-violet-700">Đặt danh mục</span>
+                <label className="sm:col-span-2">
+                  <span className="mb-1.5 block text-xs font-black text-violet-700">Gợi ý danh mục</span>
                   <select
                     value={form.actionCategoryId}
                     onChange={(event) => setForm((current) => ({ ...current, actionCategoryId: event.target.value }))}
                     className="min-h-11 w-full rounded-2xl border border-violet-200 bg-white px-3 text-sm font-bold text-slate-700"
                   >
-                    <option value="">Không đổi danh mục</option>
+                    <option value="">Chọn danh mục gợi ý</option>
                     {compatibleCategories.map((category) => (
                       <option key={category.id} value={category.id}>{category.name}</option>
                     ))}
                   </select>
-                </label>
-
-                <label>
-                  <span className="mb-1.5 block text-xs font-black text-violet-700">Đặt ví</span>
-                  <select
-                    value={form.actionWalletId}
-                    onChange={(event) => setForm((current) => ({ ...current, actionWalletId: event.target.value }))}
-                    className="min-h-11 w-full rounded-2xl border border-violet-200 bg-white px-3 text-sm font-bold text-slate-700"
-                  >
-                    <option value="">Không đổi ví</option>
-                    {wallets.map((wallet) => (
-                      <option key={wallet.id} value={wallet.id}>{wallet.name}</option>
-                    ))}
-                  </select>
+                  <span className="mt-1 block text-[10px] text-slate-400">
+                    Khi áp dụng, MyFinance chỉ thay danh mục; ví, số tiền, ngày và ghi chú được giữ nguyên.
+                  </span>
                 </label>
               </div>
 
@@ -414,14 +399,9 @@ export default function TransactionRulesManager({
                             {rule.amountMax !== null ? ` · ≤ ${rule.amountMax.toLocaleString("vi-VN")}đ` : ""}
                           </p>
                           <p className="mt-1 text-[11px] font-bold text-violet-700">
-                            → {[
-                              rule.actionCategoryId
-                                ? categoryName.get(rule.actionCategoryId) ?? "Danh mục"
-                                : null,
-                              rule.actionWalletId
-                                ? walletName.get(rule.actionWalletId) ?? "Ví"
-                                : null,
-                            ].filter(Boolean).join(" · ")}
+                            → {rule.actionCategoryId
+                              ? categoryName.get(rule.actionCategoryId) ?? "Danh mục"
+                              : "Chưa chọn danh mục"}
                           </p>
                         </button>
                         <button

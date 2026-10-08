@@ -28,14 +28,12 @@ export type TransactionRuleCandidate = {
 
 export type TransactionRulePatch = {
   categoryId?: string;
-  walletId?: string;
 };
 
 export type TransactionRuleMatch = {
   rule: TransactionRule;
   patch: TransactionRulePatch;
   changesCategory: boolean;
-  changesWallet: boolean;
 };
 
 export function normalizeTransactionRuleText(value: string) {
@@ -80,9 +78,6 @@ export function buildTransactionRulePatch(
   if (rule.actionCategoryId && rule.actionCategoryId !== candidate.categoryId) {
     patch.categoryId = rule.actionCategoryId;
   }
-  if (rule.actionWalletId && rule.actionWalletId !== candidate.walletId) {
-    patch.walletId = rule.actionWalletId;
-  }
   return patch;
 }
 
@@ -101,9 +96,8 @@ export function evaluateTransactionRules(
     if (!transactionRuleMatches(rule, candidate)) continue;
     const patch = buildTransactionRulePatch(rule, candidate);
     const changesCategory = Boolean(patch.categoryId);
-    const changesWallet = Boolean(patch.walletId);
-    if (!changesCategory && !changesWallet) continue;
-    return { rule, patch, changesCategory, changesWallet };
+    if (!changesCategory) continue;
+    return { rule, patch, changesCategory };
   }
 
   return null;
@@ -116,6 +110,5 @@ export function applyTransactionRuleMatch<T extends TransactionRuleCandidate>(
   return {
     ...candidate,
     ...(match.patch.categoryId ? { categoryId: match.patch.categoryId } : {}),
-    ...(match.patch.walletId ? { walletId: match.patch.walletId } : {}),
   };
 }

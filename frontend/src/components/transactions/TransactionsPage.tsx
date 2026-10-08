@@ -835,15 +835,12 @@ export default function TransactionsPage() {
   ]);
 
   function applyActiveRuleSuggestion() {
-    if (!activeRuleSuggestion) return;
+    const categoryId = activeRuleSuggestion?.patch.categoryId;
+    if (!categoryId) return;
+
     setForm((current) => ({
       ...current,
-      ...(activeRuleSuggestion.patch.categoryId
-        ? { categoryId: activeRuleSuggestion.patch.categoryId }
-        : {}),
-      ...(activeRuleSuggestion.patch.walletId
-        ? { walletId: activeRuleSuggestion.patch.walletId }
-        : {}),
+      categoryId,
     }));
   }
   const rawTransactionReviewInbox = useMemo(
@@ -1695,14 +1692,12 @@ export default function TransactionsPage() {
       return;
     }
 
+    const categoryId = activeReviewRuleSuggestion.patch.categoryId;
+    if (!categoryId) return;
+
     const { error } = await persistTransactionUpdate({
       ...activeReviewTransaction,
-      ...(activeReviewRuleSuggestion.patch.categoryId
-        ? { categoryId: activeReviewRuleSuggestion.patch.categoryId }
-        : {}),
-      ...(activeReviewRuleSuggestion.patch.walletId
-        ? { walletId: activeReviewRuleSuggestion.patch.walletId }
-        : {}),
+      categoryId,
     });
     if (error) {
       toast({ variant: "error", message: error });
@@ -2596,16 +2591,10 @@ export default function TransactionsPage() {
                           {activeReviewRuleSuggestion.rule.name}
                         </p>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          {activeReviewRuleSuggestion.patch.categoryId
-                            ? `Danh mục → ${categoryById.get(activeReviewRuleSuggestion.patch.categoryId)?.name ?? "Danh mục"}`
-                            : ""}
-                          {activeReviewRuleSuggestion.patch.categoryId &&
-                          activeReviewRuleSuggestion.patch.walletId
-                            ? " · "
-                            : ""}
-                          {activeReviewRuleSuggestion.patch.walletId
-                            ? `Ví → ${walletById.get(activeReviewRuleSuggestion.patch.walletId)?.name ?? "Ví"}`
-                            : ""}
+                          {`Danh mục → ${categoryById.get(activeReviewRuleSuggestion.patch.categoryId ?? "")?.name ?? "Danh mục"}`}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                          Chỉ áp dụng danh mục; số tiền và ví được giữ nguyên.
                         </p>
                       </div>
                       <button
@@ -4214,16 +4203,10 @@ export default function TransactionsPage() {
                         {activeRuleSuggestion.rule.name}
                       </p>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                        {activeRuleSuggestion.patch.categoryId
-                          ? `Danh mục → ${categoryById.get(activeRuleSuggestion.patch.categoryId)?.name ?? "Danh mục"}`
-                          : ""}
-                        {activeRuleSuggestion.patch.categoryId &&
-                        activeRuleSuggestion.patch.walletId
-                          ? " · "
-                          : ""}
-                        {activeRuleSuggestion.patch.walletId
-                          ? `Ví → ${walletById.get(activeRuleSuggestion.patch.walletId)?.name ?? "Ví"}`
-                          : ""}
+                        {`Danh mục → ${categoryById.get(activeRuleSuggestion.patch.categoryId ?? "")?.name ?? "Danh mục"}`}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                        Chỉ áp dụng danh mục; số tiền và ví được giữ nguyên.
                       </p>
                     </div>
                     <button

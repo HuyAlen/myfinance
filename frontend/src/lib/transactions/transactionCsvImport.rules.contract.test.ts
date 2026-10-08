@@ -6,17 +6,31 @@ const source = readFileSync(
   path.resolve(__dirname, "transactionCsvImport.ts"),
   "utf8",
 ).replace(/\r\n/g, "\n");
+const engine = readFileSync(
+  path.resolve(__dirname, "transactionRules.ts"),
+  "utf8",
+).replace(/\r\n/g, "\n");
 const modal = readFileSync(
   path.resolve(__dirname, "../../components/transactions/TransactionCsvImportModal.tsx"),
   "utf8",
 ).replace(/\r\n/g, "\n");
 
-describe("TRANSACTION-RULES-1 CSV integration", () => {
+describe("TRANSACTION-RULE-CATEGORY-ONLY-1 CSV integration", () => {
   it("evaluates rules in preview and recomputes fingerprints before import", () => {
     expect(source).toContain("buildTransactionCsvImportPreviewWithRules");
     expect(source).toContain("evaluateTransactionRules(input.rules");
     expect(source).toContain("buildTransactionCsvFingerprint(nextDraft)");
     expect(source).toContain("appliedRuleName");
+  });
+
+  it("counts a rule application only when category changes", () => {
+    expect(source).toContain(
+      "match && nextDraft.categoryId !== row.draft.categoryId",
+    );
+    expect(source).not.toContain(
+      "nextDraft.walletId !== row.draft.walletId",
+    );
+    expect(engine).not.toContain("patch.walletId");
   });
 
   it("keeps rule changes visible before the canonical addTransaction mutation", () => {

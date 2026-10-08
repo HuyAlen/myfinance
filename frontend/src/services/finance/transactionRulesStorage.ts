@@ -18,6 +18,7 @@ export type TransactionRuleInput = {
   amountMin?: number | null;
   amountMax?: number | null;
   actionCategoryId?: string | null;
+  /** @deprecated TRANSACTION-RULE-CATEGORY-ONLY-1 ignores wallet actions. */
   actionWalletId?: string | null;
 };
 
@@ -70,8 +71,8 @@ function validateRuleInput(input: TransactionRuleInput): string | null {
     return "Số tiền tối thiểu không được lớn hơn tối đa.";
   }
 
-  if (!input.actionCategoryId && !input.actionWalletId) {
-    return "Quy tắc cần ít nhất một hành động: Danh mục hoặc Ví.";
+  if (!normalizeOptionalText(input.actionCategoryId)) {
+    return "Quy tắc cần một danh mục gợi ý.";
   }
 
   return null;
@@ -89,7 +90,9 @@ function toDbPayload(userId: string, input: TransactionRuleInput) {
     amount_min: normalizeOptionalNumber(input.amountMin),
     amount_max: normalizeOptionalNumber(input.amountMax),
     action_category_id: normalizeOptionalText(input.actionCategoryId),
-    action_wallet_id: normalizeOptionalText(input.actionWalletId),
+    // Legacy DB column stays present for compatibility, but category-only is
+    // the canonical action contract. Saving a rule clears any old wallet action.
+    action_wallet_id: null,
   };
 }
 

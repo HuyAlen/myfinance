@@ -24,7 +24,7 @@ const base = (patch: Partial<TransactionRule> = {}): TransactionRule => ({
   ...patch,
 });
 
-describe("TRANSACTION-RULES-1 engine", () => {
+describe("TRANSACTION-RULE-CATEGORY-ONLY-1 engine", () => {
   it("normalizes case and Vietnamese accents for note matching", () => {
     expect(normalizeTransactionRuleText("  GRÁB   Bike ")).toBe("grab bike");
     expect(
@@ -37,7 +37,7 @@ describe("TRANSACTION-RULES-1 engine", () => {
     ).toBe(true);
   });
 
-  it("combines configured conditions with AND semantics", () => {
+  it("keeps explicit wallet/amount fields as match conditions only", () => {
     const rule = base({
       walletId: "vcb",
       amountMin: 50000,
@@ -75,7 +75,7 @@ describe("TRANSACTION-RULES-1 engine", () => {
     expect(match?.rule.id).toBe("first");
   });
 
-  it("ignores disabled, transfer, and no-op rules", () => {
+  it("ignores disabled, transfer, and category no-op rules", () => {
     expect(
       evaluateTransactionRules(
         [base({ enabled: false })],
@@ -114,7 +114,7 @@ describe("TRANSACTION-RULES-1 engine", () => {
     ).toBeNull();
   });
 
-  it("can suggest both category and wallet without mutating the original candidate", () => {
+  it("applies only category and preserves wallet, amount, note and type", () => {
     const candidate = {
       type: "expense" as const,
       amount: 80000,
@@ -127,11 +127,34 @@ describe("TRANSACTION-RULES-1 engine", () => {
       candidate,
     )!;
     const next = applyTransactionRuleMatch(candidate, match);
+
     expect(next).toEqual({
       ...candidate,
       categoryId: "transport",
-      walletId: "vcb",
     });
-    expect(candidate.walletId).toBe("cash");
+    expect(next.walletId).toBe("cash");
+    expect(next.amount).toBe(80000);
+    expect(candidate).toEqual({
+      type: "expense",
+      amount: 80000,
+      note: "Grab",
+      walletId: "cash",
+      categoryId: "",
+    });
+  });
+
+  it("fails closed for legacy wallet-only actions", () => {
+    const match = evaluateTransactionRules(
+      [base({ actionCategoryId: null, actionWalletId: "vcb" })],
+      {
+        type: "expense",
+        amount: 80000,
+        note: "Grab",
+        walletId: "cash",
+        categoryId: "",
+      },
+    );
+
+    expect(match).toBeNull();
   });
 });
