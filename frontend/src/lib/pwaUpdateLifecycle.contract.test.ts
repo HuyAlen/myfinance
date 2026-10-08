@@ -16,9 +16,18 @@ const component = read("src/components/pwa/ServiceWorkerRegistration.tsx");
 const helper = read("src/lib/pwa/serviceWorkerRegistration.ts");
 
 describe("PWA-UPDATE-LIFECYCLE-1 — P2", () => {
-  it("does not force a newly installed worker to activate over an existing session", () => {
-    expect(serviceWorker).not.toContain("self.skipWaiting(");
-    expect(serviceWorker).not.toContain(".skipWaiting(");
+  it("does not force a newly installed worker to activate during install", () => {
+    const installStart = serviceWorker.indexOf(
+      'self.addEventListener("install"',
+    );
+    const activateStart = serviceWorker.indexOf(
+      'self.addEventListener("activate"',
+    );
+    const installBlock = serviceWorker.slice(installStart, activateStart);
+
+    expect(installStart).toBeGreaterThan(-1);
+    expect(activateStart).toBeGreaterThan(installStart);
+    expect(installBlock).not.toContain("skipWaiting");
   });
 
   it("does not claim already-open clients during activation", () => {
@@ -49,12 +58,12 @@ describe("PWA-UPDATE-LIFECYCLE-1 — P2", () => {
     const activateStart = serviceWorker.indexOf(
       'self.addEventListener("activate"',
     );
-    const fetchStart = serviceWorker.indexOf(
-      'self.addEventListener("fetch"',
+    const messageStart = serviceWorker.indexOf(
+      'self.addEventListener("message"',
     );
 
     const installBlock = serviceWorker.slice(installStart, activateStart);
-    const activateBlock = serviceWorker.slice(activateStart, fetchStart);
+    const activateBlock = serviceWorker.slice(activateStart, messageStart);
 
     expect(installBlock).not.toContain("caches.delete(");
     expect(activateBlock).toContain("event.waitUntil(");
@@ -63,13 +72,20 @@ describe("PWA-UPDATE-LIFECYCLE-1 — P2", () => {
     expect(activateBlock).toContain("caches.delete(key)");
   });
 
-  it("does not add a hidden client-side force-update or reload path", () => {
-    expect(component).not.toContain("controllerchange");
-    expect(component).not.toContain("window.location.reload");
-    expect(component).not.toContain("registration.waiting");
-    expect(component).not.toContain(".postMessage(");
-    expect(helper).not.toContain(".postMessage(");
-    expect(helper).not.toContain("SKIP_WAITING");
+  it("allows takeover only behind explicit client-side update intent", () => {
+    const messageStart = serviceWorker.indexOf(
+      'self.addEventListener("message"',
+    );
+    const fetchStart = serviceWorker.indexOf(
+      'self.addEventListener("fetch"',
+    );
+    const messageBlock = serviceWorker.slice(messageStart, fetchStart);
+
+    expect(messageBlock).toContain("MYFINANCE_SKIP_WAITING");
+    expect(messageBlock).toContain("event.waitUntil(self.skipWaiting())");
+    expect(helper).toContain("requestMyFinanceServiceWorkerActivation");
+    expect(helper).toContain("worker.postMessage");
+    expect(component).toContain("updateRequestedRef.current = true");
   });
 
   it("preserves revisioned registration and HTTP-cache bypass for update discovery", () => {

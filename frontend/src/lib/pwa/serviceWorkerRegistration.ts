@@ -2,8 +2,10 @@
 
 export const MYFINANCE_SERVICE_WORKER_URL = "/sw.js";
 export const MYFINANCE_SERVICE_WORKER_SCOPE = "/";
+export const MYFINANCE_SKIP_WAITING_MESSAGE = "MYFINANCE_SKIP_WAITING";
 
 type ServiceWorkerRegistrationTarget = Pick<ServiceWorkerContainer, "register">;
+type ServiceWorkerActivationTarget = Pick<ServiceWorker, "postMessage">;
 
 export function shouldRegisterMyFinanceServiceWorker(input: {
   nodeEnv: string | undefined;
@@ -39,6 +41,19 @@ export function registerMyFinanceServiceWorker(
       updateViaCache: "none",
     },
   );
+}
+
+export function isMyFinanceServiceWorkerUpdateReady(input: {
+  hasController: boolean;
+  workerState: ServiceWorkerState | undefined;
+}) {
+  return input.hasController && input.workerState === "installed";
+}
+
+export function requestMyFinanceServiceWorkerActivation(
+  worker: ServiceWorkerActivationTarget,
+) {
+  worker.postMessage({ type: MYFINANCE_SKIP_WAITING_MESSAGE });
 }
 
 export function serviceWorkerRegistrationErrorMessage(error: unknown) {

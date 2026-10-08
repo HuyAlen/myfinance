@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   buildMyFinanceServiceWorkerUrl,
+  isMyFinanceServiceWorkerUpdateReady,
   MYFINANCE_SERVICE_WORKER_SCOPE,
   MYFINANCE_SERVICE_WORKER_URL,
+  MYFINANCE_SKIP_WAITING_MESSAGE,
   registerMyFinanceServiceWorker,
+  requestMyFinanceServiceWorkerActivation,
   serviceWorkerRegistrationErrorMessage,
   shouldRegisterMyFinanceServiceWorker,
 } from "./serviceWorkerRegistration";
@@ -87,6 +90,51 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 helper", () => {
         updateViaCache: "none",
       },
     );
+  });
+
+  it("offers an update only for an installed worker when an older controller exists", () => {
+    expect(
+      isMyFinanceServiceWorkerUpdateReady({
+        hasController: true,
+        workerState: "installed",
+      }),
+    ).toBe(true);
+
+    expect(
+      isMyFinanceServiceWorkerUpdateReady({
+        hasController: false,
+        workerState: "installed",
+      }),
+    ).toBe(false);
+
+    expect(
+      isMyFinanceServiceWorkerUpdateReady({
+        hasController: true,
+        workerState: "installing",
+      }),
+    ).toBe(false);
+
+    expect(
+      isMyFinanceServiceWorkerUpdateReady({
+        hasController: true,
+        workerState: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("requests waiting-worker activation only through the explicit update message", () => {
+    const postMessage = vi.fn();
+    const worker = { postMessage } as unknown as Pick<
+      ServiceWorker,
+      "postMessage"
+    >;
+
+    requestMyFinanceServiceWorkerActivation(worker);
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: MYFINANCE_SKIP_WAITING_MESSAGE,
+    });
   });
 
   it("keeps registration failures non-fatal and bounded for production logs", () => {

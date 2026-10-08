@@ -55,6 +55,18 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// ─── Explicit update activation ─────────────────────────────────────────────
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "MYFINANCE_SKIP_WAITING") {
+    return;
+  }
+
+  // Only explicit user intent from the client may bypass the normal waiting
+  // lifecycle. Never call skipWaiting during install.
+  event.waitUntil(self.skipWaiting());
+});
+
 // ─── Fetch ──────────────────────────────────────────────────────────────────
 
 self.addEventListener("fetch", (event) => {
