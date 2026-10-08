@@ -45,7 +45,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "MyFinance",
-  description: "Quáº£n lÃ½ tÃ i chÃ­nh cÃ¡ nhÃ¢n thÃ´ng minh vá»›i AI",
+  description: "Ứng dụng quản lý tài chính cá nhân thông minh với AI",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
