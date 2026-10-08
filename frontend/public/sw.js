@@ -35,8 +35,6 @@ self.addEventListener("install", (event) => {
         Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url))),
       ),
   );
-
-  self.skipWaiting();
 });
 
 // ─── Activate ───────────────────────────────────────────────────────────────
@@ -55,8 +53,6 @@ self.addEventListener("activate", (event) => {
         ),
       ),
   );
-
-  self.clients.claim();
 });
 
 // ─── Fetch ──────────────────────────────────────────────────────────────────
