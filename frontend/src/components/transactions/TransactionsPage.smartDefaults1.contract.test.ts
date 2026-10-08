@@ -89,6 +89,17 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     expect(smartDefaults).toContain("hasRecurringMetadata(transaction)");
   });
 
+  it("shows category support without overstating conflicting history", () => {
+    expect(smartDefaults).toContain(
+      "winnerMatches.length * 2 <= exactNoteMatches.length",
+    );
+    expect(smartDefaults).toContain("totalMatchCount");
+    expect(page).toContain("activeSmartDefaultsSuggestion.totalMatchCount === 1");
+    expect(page).toContain(
+      "activeSmartDefaultsSuggestion.matchCount}/${activeSmartDefaultsSuggestion.totalMatchCount}",
+    );
+  });
+
   it("keeps the suggestion card category-only with no historical amount or wallet display", () => {
     const start = page.indexOf('{activeSmartDefaultsSuggestion ? (');
     const end = page.indexOf('{activeRuleSuggestion ? (', start);

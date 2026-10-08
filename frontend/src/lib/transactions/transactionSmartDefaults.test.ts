@@ -24,36 +24,78 @@ const baseInput = {
   validCategoryIds: ["food", "fuel", "salary"],
 };
 
-describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
-  it("uses exact normalized note history and returns only the newest category", () => {
+describe("TRANSACTION-CATEGORY-SUGGESTION-CONFIDENCE-1 — P1", () => {
+  it("fails closed when exact-note history is split 1-1 instead of trusting the newest row", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
       note: "  CA   PHE ",
       transactions: [
-        transaction("old", {
-          amount: 45000,
+        transaction("old-food", {
           categoryId: "food",
-          walletId: "wallet-1",
           date: "2026-10-01",
         }),
-        transaction("new", {
-          amount: 55000,
+        transaction("new-fuel", {
           categoryId: "fuel",
-          walletId: "wallet-2",
           date: "2026-10-05",
+        }),
+      ],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("uses a strict majority and picks the newest transaction inside the winning category", () => {
+    const result = buildTransactionSmartDefaultsSuggestion({
+      ...baseInput,
+      transactions: [
+        transaction("food-old", {
+          categoryId: "food",
+          date: "2026-10-01",
+        }),
+        transaction("food-new", {
+          categoryId: "food",
+          date: "2026-10-04",
+        }),
+        transaction("food-mid", {
+          categoryId: "food",
+          date: "2026-10-03",
+        }),
+        transaction("fuel-old", {
+          categoryId: "fuel",
+          date: "2026-10-02",
+        }),
+        transaction("fuel-newest-overall", {
+          categoryId: "fuel",
+          date: "2026-10-08",
         }),
       ],
     });
 
     expect(result).toEqual({
       matchKind: "note",
-      matchCount: 2,
-      sourceTransactionId: "new",
-      sourceDate: "2026-10-05",
-      categoryId: "fuel",
+      matchCount: 3,
+      totalMatchCount: 5,
+      sourceTransactionId: "food-new",
+      sourceDate: "2026-10-04",
+      categoryId: "food",
     });
-    expect(result).not.toHaveProperty("amount");
-    expect(result).not.toHaveProperty("walletId");
+  });
+
+  it("rejects a 2-of-4 plurality because it is not a strict majority", () => {
+    const result = buildTransactionSmartDefaultsSuggestion({
+      ...baseInput,
+      transactions: [
+        transaction("food-1", { categoryId: "food" }),
+        transaction("food-2", { categoryId: "food", date: "2026-10-02" }),
+        transaction("fuel-1", { categoryId: "fuel", date: "2026-10-03" }),
+        transaction("salary-1", {
+          categoryId: "salary",
+          date: "2026-10-04",
+        }),
+      ],
+    });
+
+    expect(result).toBeNull();
   });
 
   it("allows one exact-note example because the user supplied a precise context", () => {
@@ -70,6 +112,7 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     expect(result).toEqual({
       matchKind: "note",
       matchCount: 1,
+      totalMatchCount: 1,
       sourceTransactionId: "only",
       sourceDate: "2026-10-01",
       categoryId: "food",
@@ -119,7 +162,7 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     expect(result).toBeNull();
   });
 
-  it("ignores amount and wallet differences when matching note context", () => {
+  it("ignores amount and wallet differences while counting category support", () => {
     const result = buildTransactionSmartDefaultsSuggestion({
       ...baseInput,
       transactions: [
@@ -133,6 +176,7 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     });
 
     expect(result?.matchCount).toBe(2);
+    expect(result?.totalMatchCount).toBe(2);
     expect(result?.categoryId).toBe("food");
     expect(result).not.toHaveProperty("amount");
     expect(result).not.toHaveProperty("walletId");
@@ -161,6 +205,7 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     expect(result).toMatchObject({
       matchKind: "note",
       matchCount: 1,
+      totalMatchCount: 1,
       sourceTransactionId: "income",
       categoryId: "salary",
     });
@@ -210,7 +255,7 @@ describe("TRANSACTION-CATEGORY-SUGGESTION-ONLY-1 — P0", () => {
     ).toBeNull();
   });
 
-  it("does not mutate the ledger while deriving a suggestion", () => {
+  it("does not mutate the ledger while deriving consensus", () => {
     const rows = [
       transaction("a", { date: "2026-10-01" }),
       transaction("b", { date: "2026-10-02" }),

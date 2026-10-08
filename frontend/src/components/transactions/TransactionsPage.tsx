@@ -4169,7 +4169,9 @@ export default function TransactionsPage() {
                           ?.name ?? "Danh mục"}
                       </p>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                        {`Khớp ${activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.`}
+                        {activeSmartDefaultsSuggestion.totalMatchCount === 1
+                          ? "Dựa trên 1 giao dịch có cùng ghi chú."
+                          : `${activeSmartDefaultsSuggestion.matchCount}/${activeSmartDefaultsSuggestion.totalMatchCount} giao dịch cùng ghi chú dùng danh mục này.`}
                       </p>
                       <p className="mt-1 text-[10px] font-semibold text-slate-400">
                         Chỉ áp dụng danh mục; số tiền và ví được giữ nguyên.
