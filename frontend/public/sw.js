@@ -1,4 +1,4 @@
-// MyFinance Service Worker — v2
+// MyFinance Service Worker
 // Strategies:
 //   • Navigation: network-first, no HTML runtime caching
 //   • /_next/static/**: cache-first
@@ -6,7 +6,21 @@
 //   • API, Supabase, SSE and non-GET: pass-through
 
 const CACHE_PREFIX = "myfinance-";
-const CACHE = `${CACHE_PREFIX}v2`;
+
+function normalizeCacheRevision(value) {
+  const normalized = String(value || "unversioned")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+
+  return normalized || "unversioned";
+}
+
+const CACHE_REVISION = normalizeCacheRevision(
+  new URL(self.location.href).searchParams.get("rev"),
+);
+const CACHE = `${CACHE_PREFIX}${CACHE_REVISION}`;
 
 const PRECACHE_URLS = ["/icon-192.svg", "/icon-512.svg"];
 

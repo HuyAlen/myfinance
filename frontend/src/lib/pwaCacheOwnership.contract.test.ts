@@ -16,7 +16,9 @@ const serviceWorker = read("public/sw.js");
 describe("PWA-CACHE-OWNERSHIP-1 — P2", () => {
   it("names MyFinance caches behind one explicit ownership prefix", () => {
     expect(serviceWorker).toContain('const CACHE_PREFIX = "myfinance-";');
-    expect(serviceWorker).toContain('const CACHE = `${CACHE_PREFIX}v2`;');
+    expect(serviceWorker).toContain(
+      'const CACHE = `${CACHE_PREFIX}${CACHE_REVISION}`;',
+    );
   });
 
   it("deletes only stale caches owned by MyFinance during activation", () => {

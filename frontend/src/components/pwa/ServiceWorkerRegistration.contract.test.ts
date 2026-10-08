@@ -41,12 +41,17 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 — P2", () => {
     expect(component).not.toContain(".unregister(");
   });
 
-  it("uses a root scope and bypasses HTTP cache for worker updates", () => {
+  it("uses a revisioned root worker URL, root scope, and bypasses HTTP cache for updates", () => {
     expect(helper).toContain(
       'export const MYFINANCE_SERVICE_WORKER_URL = "/sw.js"',
     );
     expect(helper).toContain(
       'export const MYFINANCE_SERVICE_WORKER_SCOPE = "/"',
+    );
+    expect(helper).toContain("buildMyFinanceServiceWorkerUrl");
+    expect(helper).toContain("?rev=");
+    expect(component).toContain(
+      "process.env.NEXT_PUBLIC_MYFINANCE_DEPLOYMENT_REVISION",
     );
     expect(helper).toContain('updateViaCache: "none"');
   });

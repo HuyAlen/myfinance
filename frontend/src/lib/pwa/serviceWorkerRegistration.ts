@@ -17,15 +17,28 @@ export function shouldRegisterMyFinanceServiceWorker(input: {
   );
 }
 
+export function buildMyFinanceServiceWorkerUrl(
+  deploymentRevision: string | undefined,
+) {
+  const revision = deploymentRevision?.trim() || "unversioned";
+  return `${MYFINANCE_SERVICE_WORKER_URL}?rev=${encodeURIComponent(
+    revision.slice(0, 96),
+  )}`;
+}
+
 export function registerMyFinanceServiceWorker(
   serviceWorker: ServiceWorkerRegistrationTarget,
+  deploymentRevision: string | undefined,
 ) {
-  return serviceWorker.register(MYFINANCE_SERVICE_WORKER_URL, {
-    scope: MYFINANCE_SERVICE_WORKER_SCOPE,
-    // Always revalidate the worker script/imports instead of letting an HTTP
-    // cache keep an old worker around after a production deployment.
-    updateViaCache: "none",
-  });
+  return serviceWorker.register(
+    buildMyFinanceServiceWorkerUrl(deploymentRevision),
+    {
+      scope: MYFINANCE_SERVICE_WORKER_SCOPE,
+      // Always revalidate the worker script/imports instead of letting an HTTP
+      // cache keep an old worker around after a production deployment.
+      updateViaCache: "none",
+    },
+  );
 }
 
 export function serviceWorkerRegistrationErrorMessage(error: unknown) {

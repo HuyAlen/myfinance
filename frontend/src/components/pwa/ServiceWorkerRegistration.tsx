@@ -25,7 +25,10 @@ export default function ServiceWorkerRegistration() {
     let disposed = false;
 
     const register = () => {
-      void registerMyFinanceServiceWorker(navigator.serviceWorker).catch(
+      void registerMyFinanceServiceWorker(
+        navigator.serviceWorker,
+        process.env.NEXT_PUBLIC_MYFINANCE_DEPLOYMENT_REVISION,
+      ).catch(
         (error: unknown) => {
           if (disposed) return;
 

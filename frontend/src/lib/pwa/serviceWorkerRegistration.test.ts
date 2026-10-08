@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildMyFinanceServiceWorkerUrl,
   MYFINANCE_SERVICE_WORKER_SCOPE,
   MYFINANCE_SERVICE_WORKER_URL,
   registerMyFinanceServiceWorker,
@@ -44,7 +45,29 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 helper", () => {
     }
   });
 
-  it("registers the root worker with a root scope and bypasses HTTP cache for updates", async () => {
+  it("builds a deployment-revision worker URL without changing the root worker path", () => {
+    expect(buildMyFinanceServiceWorkerUrl("abc123")).toBe(
+      `${MYFINANCE_SERVICE_WORKER_URL}?rev=abc123`,
+    );
+    expect(buildMyFinanceServiceWorkerUrl(" release 1 ")).toBe(
+      `${MYFINANCE_SERVICE_WORKER_URL}?rev=release%201`,
+    );
+    expect(buildMyFinanceServiceWorkerUrl(undefined)).toBe(
+      `${MYFINANCE_SERVICE_WORKER_URL}?rev=unversioned`,
+    );
+  });
+
+  it("bounds the deployment revision before registering the worker", () => {
+    const revision = "x".repeat(200);
+    const workerUrl = buildMyFinanceServiceWorkerUrl(revision);
+    const queryRevision = new URL(workerUrl, "https://example.com").searchParams.get(
+      "rev",
+    );
+
+    expect(queryRevision).toHaveLength(96);
+  });
+
+  it("registers the revisioned root worker with a root scope and bypasses HTTP cache for updates", async () => {
     const registration = { scope: "https://example.com/" };
     const register = vi.fn().mockResolvedValue(registration);
     const serviceWorker = { register } as unknown as Pick<
@@ -53,14 +76,17 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 helper", () => {
     >;
 
     await expect(
-      registerMyFinanceServiceWorker(serviceWorker),
+      registerMyFinanceServiceWorker(serviceWorker, "abc123"),
     ).resolves.toBe(registration);
 
     expect(register).toHaveBeenCalledTimes(1);
-    expect(register).toHaveBeenCalledWith(MYFINANCE_SERVICE_WORKER_URL, {
-      scope: MYFINANCE_SERVICE_WORKER_SCOPE,
-      updateViaCache: "none",
-    });
+    expect(register).toHaveBeenCalledWith(
+      `${MYFINANCE_SERVICE_WORKER_URL}?rev=abc123`,
+      {
+        scope: MYFINANCE_SERVICE_WORKER_SCOPE,
+        updateViaCache: "none",
+      },
+    );
   });
 
   it("keeps registration failures non-fatal and bounded for production logs", () => {
