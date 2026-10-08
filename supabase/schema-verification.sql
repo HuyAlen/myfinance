@@ -574,3 +574,60 @@ SELECT
     'EXECUTE'
   ) AS bootstrap_seed_function_remains_private;
 -- END AUDIT-MUTATION-1 VERIFICATION
+
+-- 12) AI-MIGRATION-INTEGRITY-1 runtime/migration invariants.
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ai_pending_actions'
+      AND column_name = 'confirmed_by'
+      AND data_type = 'uuid'
+  ) AS pending_has_confirmed_by,
+  EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ai_pending_actions'
+      AND column_name = 'idempotency_key'
+      AND data_type = 'text'
+  ) AS pending_has_idempotency_key,
+  EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.ai_pending_actions'::regclass
+      AND conname = 'ai_pending_actions_idempotency_key'
+      AND contype = 'u'
+  ) AS pending_has_idempotency_unique_guard,
+  EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.ai_pending_actions'::regclass
+      AND conname = 'ai_pending_actions_status_check'
+      AND pg_get_constraintdef(oid, true) LIKE '%executing%'
+  ) AS pending_status_allows_executing,
+  (
+    SELECT count(*) = 4
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ai_user_settings'
+      AND column_name IN (
+        'encrypted_api_key',
+        'api_key_iv',
+        'api_key_auth_tag',
+        'api_key_hint'
+      )
+  ) AS settings_has_encrypted_key_payload,
+  (
+    SELECT count(*) = 4
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ai_user_settings'
+      AND column_name IN (
+        'connection_status',
+        'last_tested_at',
+        'last_test_latency_ms',
+        'last_test_error'
+      )
+  ) AS settings_has_connection_diagnostics;

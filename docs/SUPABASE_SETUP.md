@@ -92,9 +92,11 @@ Vercel Project Settings → Environment Variables):
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project API URL | Production + Preview + Development |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable/anon key | Production + Preview + Development |
+| `AI_SETTINGS_ENCRYPTION_KEY` | Server-only 64-character hexadecimal secret (32 bytes) used for AES-256-GCM BYOK encryption | Production + Preview + Development where provider keys are enabled |
 
 After changing deployment environment variables, redeploy the application.
-Never commit service-role keys or database passwords to the repository.
+Never expose `AI_SETTINGS_ENCRYPTION_KEY` with a `NEXT_PUBLIC_` prefix, and never
+commit it, service-role keys, or database passwords to the repository.
 
 ## 6. Authentication configuration
 

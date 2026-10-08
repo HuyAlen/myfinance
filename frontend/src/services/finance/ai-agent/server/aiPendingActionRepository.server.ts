@@ -26,6 +26,7 @@ export type PendingActionRecord = {
   idempotency_key: string | null;
   expires_at: string;
   confirmed_at: string | null;
+  confirmed_by: string | null;
   executed_at: string | null;
   created_at: string;
   updated_at: string;

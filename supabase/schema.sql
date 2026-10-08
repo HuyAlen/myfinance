@@ -409,6 +409,7 @@ CREATE TABLE IF NOT EXISTS public.ai_pending_actions (
   idempotency_key text,
   expires_at      timestamptz NOT NULL,
   confirmed_at    timestamptz,
+  confirmed_by    uuid,
   executed_at     timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
