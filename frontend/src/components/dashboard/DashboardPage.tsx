@@ -2495,7 +2495,7 @@ export default function DashboardPage() {
         dateRange,
         (transaction) => transaction.date,
       ).filter((transaction) => transaction.type === "interest"),
-    [dateRange.endDate, dateRange.startDate, savingTransactions],
+    [dateRange, savingTransactions],
   );
 
   const recentForexCashTransactionsInPeriod = useMemo(
@@ -2505,7 +2505,7 @@ export default function DashboardPage() {
         dateRange,
         (transaction) => transaction.transactionDate,
       ),
-    [dateRange.endDate, dateRange.startDate, forexCashTransactions],
+    [dateRange, forexCashTransactions],
   );
 
   const recentTxns = useMemo<RecentActivityItem[]>(() => {
@@ -3011,7 +3011,7 @@ export default function DashboardPage() {
           upcomingDays: 3,
         }),
       ),
-    [recurringMoneySchedules, transactions],
+    [recurringMoneySchedules, recurringReferenceDate, transactions],
   );
 
   const recurringOccurrences = useMemo(
@@ -3126,7 +3126,10 @@ export default function DashboardPage() {
     }
   }, []);
   useEffect(() => {
-    void reloadTransactionReviewAcknowledgements();
+    const timer = window.setTimeout(() => {
+      void reloadTransactionReviewAcknowledgements();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reloadTransactionReviewAcknowledgements]);
 
   useRealtimeTable(
@@ -3375,7 +3378,10 @@ export default function DashboardPage() {
   >(null);
 
   useEffect(() => {
-    setMonthEndReviewHistory(readMonthEndReviewHistory());
+    const timer = window.setTimeout(() => {
+      setMonthEndReviewHistory(readMonthEndReviewHistory());
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -3445,7 +3451,10 @@ export default function DashboardPage() {
   useSuppressGlobalFabsWhileOpen(isDashboardCustomizationOpen);
 
   useEffect(() => {
-    setDashboardCustomization(readDashboardCustomization());
+    const timer = window.setTimeout(() => {
+      setDashboardCustomization(readDashboardCustomization());
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

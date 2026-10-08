@@ -107,24 +107,43 @@ function getDynamicYAxisDomain(points: NetWorthDisplayPoint[]): [number, number]
   return [domainMin, domainMax];
 }
 
+function buildTrendWithDeltas(
+  trend: NetWorthTrendPoint[],
+): NetWorthDisplayPoint[] {
+  return trend.reduce<{
+    points: NetWorthDisplayPoint[];
+    previousSnapshotValue: number | null;
+  }>(
+    (state, point) => {
+      const hasSnapshot = point.hasData && point.value !== null;
+      const numericValue = hasSnapshot ? Number(point.value) : null;
+      const deltaFromPrevious =
+        numericValue !== null && state.previousSnapshotValue !== null
+          ? numericValue - state.previousSnapshotValue
+          : null;
+
+      return {
+        points: [...state.points, { ...point, deltaFromPrevious }],
+        previousSnapshotValue:
+          numericValue !== null
+            ? numericValue
+            : state.previousSnapshotValue,
+      };
+    },
+    {
+      points: [],
+      previousSnapshotValue: null,
+    },
+  ).points;
+}
+
 export default function NetWorthTrendChart({
   trend,
 }: {
   trend: NetWorthTrendPoint[];
 }) {
   const display = useMemo(() => {
-    let previousSnapshotValue: number | null = null;
-    const trendWithDeltas: NetWorthDisplayPoint[] = trend.map((point) => {
-      const hasSnapshot = point.hasData && point.value !== null;
-      const deltaFromPrevious =
-        hasSnapshot && previousSnapshotValue !== null
-          ? Number(point.value) - previousSnapshotValue
-          : null;
-
-      if (hasSnapshot) previousSnapshotValue = Number(point.value);
-
-      return { ...point, deltaFromPrevious };
-    });
+    const trendWithDeltas = buildTrendWithDeltas(trend);
 
     const snapshotPoints = trendWithDeltas.filter(
       (point) => point.hasData && point.value !== null,

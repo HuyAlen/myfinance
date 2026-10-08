@@ -69,8 +69,25 @@ describe("WALLETS-PERIOD-SSOT-1", () => {
   });
 
   it("invalidates the previous selected-period snapshot while the new period loads", () => {
-    expect(source).toMatch(
-      /useEffect\(\(\) => \{\n    setPeriodAnalyticsReady\(false\);\n    setIsLoadingPeriodAnalytics\(true\);\n    setPeriodAnalyticsError\(null\);\n    void runReload\(\);\n  \}, \[dateRange\.startDate, dateRange\.endDate, runReload\]\);/,
+    const commentStart = source.indexOf(
+      "// Initial load and every global reporting-period change are immediate.",
+    );
+    const nextSection = source.indexOf(
+      "// Wallet analytics consume Savings and Forex movement ledgers directly.",
+      commentStart,
+    );
+    expect(commentStart).toBeGreaterThan(-1);
+    expect(nextSection).toBeGreaterThan(commentStart);
+
+    const effect = source.slice(commentStart, nextSection);
+    expect(effect).toContain("const timer = window.setTimeout(() => {");
+    expect(effect).toContain("setPeriodAnalyticsReady(false);");
+    expect(effect).toContain("setIsLoadingPeriodAnalytics(true);");
+    expect(effect).toContain("setPeriodAnalyticsError(null);");
+    expect(effect).toContain("void runReload();");
+    expect(effect).toContain("return () => window.clearTimeout(timer);");
+    expect(effect).toContain(
+      "}, [dateRange.startDate, dateRange.endDate, runReload]);",
     );
   });
 

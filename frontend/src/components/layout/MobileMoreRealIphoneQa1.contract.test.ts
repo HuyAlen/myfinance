@@ -104,6 +104,23 @@ describe("MOBILE-MORE-REAL-IPHONE-QA-1", () => {
     expect(bottomNav).toContain("onMoreMenuOpenChange?.(false)");
     expect(header).toContain("onAccountMenuOpenChange?.(dropdownOpen)");
     expect(header).toContain("onAccountMenuOpenChange?.(false)");
-    expect(header).toContain("if (sidebarOpen) setDropdownOpen(false);");
+
+    const sidebarCloseStart = header.indexOf(
+      "useEffect(() => {\n    if (!sidebarOpen) return;",
+    );
+    const sidebarCloseEnd = header.indexOf(
+      "// MOBILE-MORE-REAL-IPHONE-QA-1",
+      sidebarCloseStart,
+    );
+    expect(sidebarCloseStart).toBeGreaterThan(-1);
+    expect(sidebarCloseEnd).toBeGreaterThan(sidebarCloseStart);
+    const sidebarCloseEffect = header.slice(
+      sidebarCloseStart,
+      sidebarCloseEnd,
+    );
+    expect(sidebarCloseEffect).toContain("window.setTimeout(() => {");
+    expect(sidebarCloseEffect).toContain("setDropdownOpen(false);");
+    expect(sidebarCloseEffect).toContain("return () => window.clearTimeout(timer);");
+    expect(sidebarCloseEffect).toContain("}, [sidebarOpen]);");
   });
 });

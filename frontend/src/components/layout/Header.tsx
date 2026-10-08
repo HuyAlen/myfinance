@@ -1059,7 +1059,11 @@ export default function Header({
   }, [dropdownOpen, onAccountMenuOpenChange]);
 
   useEffect(() => {
-    if (sidebarOpen) setDropdownOpen(false);
+    if (!sidebarOpen) return;
+    const timer = window.setTimeout(() => {
+      setDropdownOpen(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [sidebarOpen]);
 
   // MOBILE-MORE-REAL-IPHONE-QA-1: the account popup is fixed on compact

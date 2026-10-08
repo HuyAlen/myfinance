@@ -26,7 +26,10 @@ export default function BottomNav({
 
   useEffect(() => {
     restoreMoreTriggerFocusRef.current = false;
-    setMoreOpen(false);
+    const timer = window.setTimeout(() => {
+      setMoreOpen(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   useEffect(() => {
