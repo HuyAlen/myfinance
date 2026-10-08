@@ -23,6 +23,7 @@ const CACHE_REVISION = normalizeCacheRevision(
 const CACHE = `${CACHE_PREFIX}${CACHE_REVISION}`;
 
 const PRECACHE_URLS = ["/icon-192.svg", "/icon-512.svg"];
+const MAX_RUNTIME_ASSET_ENTRIES = 96;
 
 // ─── Install ────────────────────────────────────────────────────────────────
 
@@ -77,13 +78,13 @@ self.addEventListener("fetch", (event) => {
 
   // Next.js immutable hashed assets.
   if (url.pathname.startsWith("/_next/static/")) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(cacheFirst(request, event));
     return;
   }
 
   // Images, icons and fonts.
   if (/\.(svg|png|ico|webp|jpg|jpeg|woff2?|ttf|otf)$/i.test(url.pathname)) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(cacheFirst(request, event));
     return;
   }
 
@@ -134,32 +135,103 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
+async function cacheFirst(request, event) {
+  const resolution = resolveAssetRequest(request);
+
+  const cacheWrite = resolution
+    .then(async ({ cache, responseForCache }) => {
+      if (!responseForCache) {
+        return;
+      }
+
+      try {
+        await cache.put(request, responseForCache);
+
+        if (!isProtectedCacheRequest(request)) {
+          await trimRuntimeAssetEntries(cache);
+        }
+      } catch (error) {
+        console.warn("[Service Worker] Cache write failed:", error);
+      }
+    })
+    // Network failures still reject the response promise below. The lifecycle
+    // sidecar must not create a second unhandled rejection.
+    .catch(() => undefined);
+
+  event.waitUntil(cacheWrite);
+
+  return resolution.then(({ response }) => response);
+}
+
+async function resolveAssetRequest(request) {
+  // Read only from the active MyFinance cache. `caches.match()` searches every
+  // cache on the origin and can accidentally consume another app's response.
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
 
   if (cached) {
-    return cached;
+    return {
+      cache,
+      response: cached,
+      responseForCache: null,
+    };
   }
 
   const response = await fetch(request);
 
-  if (!response.ok) {
-    return response;
-  }
-
-  // Clone immediately, before returning/consuming the original response.
-  const responseForCache = response.clone();
-
-  eventSafeCachePut(request, responseForCache);
-
-  return response;
+  return {
+    cache,
+    response,
+    // Clone before the response is returned to the browser and its body can
+    // become consumed.
+    responseForCache: isCacheableAssetResponse(response)
+      ? response.clone()
+      : null,
+  };
 }
 
-function eventSafeCachePut(request, response) {
-  caches
-    .open(CACHE)
-    .then((cache) => cache.put(request, response))
-    .catch((error) => {
-      console.warn("[Service Worker] Cache write failed:", error);
-    });
+function isCacheableAssetResponse(response) {
+  const cacheControl = (
+    response.headers.get("cache-control") || ""
+  ).toLowerCase();
+  const contentType = (
+    response.headers.get("content-type") || ""
+  ).toLowerCase();
+
+  return (
+    response.ok &&
+    response.type === "basic" &&
+    !response.redirected &&
+    !cacheControl.includes("no-store") &&
+    !cacheControl.includes("no-cache") &&
+    !cacheControl.includes("private") &&
+    !contentType.includes("text/html")
+  );
+}
+
+function isProtectedCacheRequest(request) {
+  const pathname = new URL(request.url).pathname;
+
+  return (
+    pathname.startsWith("/_next/static/") ||
+    PRECACHE_URLS.includes(pathname)
+  );
+}
+
+async function trimRuntimeAssetEntries(cache) {
+  const keys = await cache.keys();
+  const runtimeKeys = keys.filter(
+    (request) => !isProtectedCacheRequest(request),
+  );
+  const overflow = runtimeKeys.length - MAX_RUNTIME_ASSET_ENTRIES;
+
+  if (overflow <= 0) {
+    return;
+  }
+
+  await Promise.all(
+    runtimeKeys
+      .slice(0, overflow)
+      .map((request) => cache.delete(request)),
+  );
 }

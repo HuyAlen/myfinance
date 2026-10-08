@@ -76,7 +76,7 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 — P2", () => {
       'if (request.mode === "navigate")',
     );
     const cacheFirstStart = serviceWorker.indexOf(
-      "async function cacheFirst(request)",
+      "async function cacheFirst(request, event)",
       navigationStart,
     );
 
@@ -122,7 +122,9 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 — P2", () => {
     expect(serviceWorker).toContain(
       String.raw`/\.(svg|png|ico|webp|jpg|jpeg|woff2?|ttf|otf)$/i`,
     );
-    expect(serviceWorker).toContain("event.respondWith(cacheFirst(request))");
+    expect(serviceWorker).toContain(
+      "event.respondWith(cacheFirst(request, event))",
+    );
   });
 
   it("keeps manifest root scope/installability aligned with the registered worker", () => {
