@@ -1279,6 +1279,98 @@ export default function WalletsPage() {
           </div>
         ) : null}
       </section>
+      {/* WALLETS-ACTION-PLACEMENT-1: action sections precede the wallet list on all viewports. */}
+      <div data-wallets-section="reconciliation">
+        <WalletReconciliationCenter
+        wallets={spendableWallets}
+        records={reconciliationCoverage}
+        isLoading={isLoadingReconciliationCoverage}
+        error={reconciliationCoverageError}
+        historyRecords={reconciliationHistory}
+        isHistoryLoading={isLoadingReconciliationHistory}
+        historyError={reconciliationHistoryError}
+        onReconcile={openReconcileForm}
+        />
+      </div>
+
+      {/* SECTION 2 · Wallet Types */}
+      <section
+        data-wallets-section="wallet-types"
+        className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-black text-slate-900 sm:text-base">
+              Phân loại ví
+            </h2>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+              Tổng số dư theo loại ví đang sử dụng.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 sm:px-3 sm:text-xs">
+            {walletSnapshotReady
+              ? `${spendableWallets.length} ví`
+              : isLoadingWallets
+                ? "Đang tải..."
+                : "—"}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
+          {!walletSnapshotReady ? (
+            <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:col-span-3 sm:rounded-3xl sm:p-4 sm:text-sm">
+              {isLoadingWallets
+                ? "Đang tải phân loại ví..."
+                : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
+            </div>
+          ) : (
+            walletStats.map((stat, index) => {
+              const percentage =
+                totalAssets > 0
+                  ? Math.round((stat.total / totalAssets) * 100)
+                  : 0;
+
+              return (
+                <div
+                  key={stat.value}
+                  className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4 ${index === 2 ? "col-span-2 sm:col-span-1" : ""}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <WalletIcon type={stat.value} compact />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-black leading-4 text-slate-900 sm:text-sm">
+                        {stat.label}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-500 sm:mt-0.5 sm:text-xs">
+                        {stat.count} ví · {percentage}%
+                      </p>
+                    </div>
+                  </div>
+                  <p
+                    className="mt-2 truncate text-xs font-black tabular-nums text-slate-900 sm:mt-4 sm:text-xl"
+                    title={formatVND(stat.total)}
+                  >
+                    <span className="sm:hidden">
+                      {formatCompactWalletAmount(stat.total)}
+                    </span>
+                    <span className="hidden sm:inline">{formatVND(stat.total)}</span>
+                  </p>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white sm:mt-3 sm:h-2">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(percentage, 100)}%`,
+                        background: TYPE_COLORS[stat.value],
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 3 · Wallet List
           ══════════════════════════════════════════════════════════════════ */}
@@ -1646,97 +1738,6 @@ export default function WalletsPage() {
                 </button>
               </div>
             )}
-        </div>
-      </section>
-
-      <div data-wallets-section="reconciliation">
-        <WalletReconciliationCenter
-        wallets={spendableWallets}
-        records={reconciliationCoverage}
-        isLoading={isLoadingReconciliationCoverage}
-        error={reconciliationCoverageError}
-        historyRecords={reconciliationHistory}
-        isHistoryLoading={isLoadingReconciliationHistory}
-        historyError={reconciliationHistoryError}
-        onReconcile={openReconcileForm}
-        />
-      </div>
-
-      {/* SECTION 2 · Wallet Types */}
-      <section
-        data-wallets-section="wallet-types"
-        className="rounded-3xl border border-slate-200 bg-white p-3.5 shadow-sm sm:rounded-4xl sm:p-6"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-black text-slate-900 sm:text-base">
-              Phân loại ví
-            </h2>
-            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
-              Tổng số dư theo loại ví đang sử dụng.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 sm:px-3 sm:text-xs">
-            {walletSnapshotReady
-              ? `${spendableWallets.length} ví`
-              : isLoadingWallets
-                ? "Đang tải..."
-                : "—"}
-          </span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
-          {!walletSnapshotReady ? (
-            <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-xs font-semibold text-slate-500 sm:col-span-3 sm:rounded-3xl sm:p-4 sm:text-sm">
-              {isLoadingWallets
-                ? "Đang tải phân loại ví..."
-                : walletsLoadError ?? "Chưa có dữ liệu phân loại ví."}
-            </div>
-          ) : (
-            walletStats.map((stat, index) => {
-              const percentage =
-                totalAssets > 0
-                  ? Math.round((stat.total / totalAssets) * 100)
-                  : 0;
-
-              return (
-                <div
-                  key={stat.value}
-                  className={`min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 sm:rounded-3xl sm:p-4 ${index === 2 ? "col-span-2 sm:col-span-1" : ""}`}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <WalletIcon type={stat.value} compact />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[11px] font-black leading-4 text-slate-900 sm:text-sm">
-                        {stat.label}
-                      </p>
-                      <p className="text-[10px] font-semibold text-slate-500 sm:mt-0.5 sm:text-xs">
-                        {stat.count} ví · {percentage}%
-                      </p>
-                    </div>
-                  </div>
-                  <p
-                    className="mt-2 truncate text-xs font-black tabular-nums text-slate-900 sm:mt-4 sm:text-xl"
-                    title={formatVND(stat.total)}
-                  >
-                    <span className="sm:hidden">
-                      {formatCompactWalletAmount(stat.total)}
-                    </span>
-                    <span className="hidden sm:inline">{formatVND(stat.total)}</span>
-                  </p>
-                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white sm:mt-3 sm:h-2">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(percentage, 100)}%`,
-                        background: TYPE_COLORS[stat.value],
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
         </div>
       </section>
 
