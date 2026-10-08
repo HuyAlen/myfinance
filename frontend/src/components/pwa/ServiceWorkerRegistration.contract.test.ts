@@ -71,7 +71,7 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 — P2", () => {
     expect(serviceWorker).toContain('url.pathname.startsWith("/api/")');
   });
 
-  it("keeps navigation network-first with no cached HTML fallback", () => {
+  it("keeps navigation network-first and delegates only failures to the dedicated offline shell", () => {
     const navigationStart = serviceWorker.indexOf(
       'if (request.mode === "navigate")',
     );
@@ -88,10 +88,13 @@ describe("PWA-SERVICE-WORKER-REGISTRATION-1 — P2", () => {
       cacheFirstStart,
     );
 
-    expect(navigationBlock).toContain("fetch(request).catch");
-    expect(navigationBlock).toContain('"Cache-Control": "no-store"');
+    expect(navigationBlock).toContain(
+      "fetch(request).catch(() => offlineNavigationResponse())",
+    );
     expect(navigationBlock).not.toContain("caches.match");
     expect(navigationBlock).not.toContain("cache.put");
+    expect(serviceWorker).toContain('const OFFLINE_URL = "/offline.html"');
+    expect(serviceWorker).toContain('"Cache-Control": "no-store"');
   });
 
   it("limits precache to static icons instead of authenticated application routes", () => {

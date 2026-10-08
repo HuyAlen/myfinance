@@ -22,18 +22,28 @@ const CACHE_REVISION = normalizeCacheRevision(
 );
 const CACHE = `${CACHE_PREFIX}${CACHE_REVISION}`;
 
-const PRECACHE_URLS = ["/icon-192.svg", "/icon-512.svg"];
+const OFFLINE_URL = "/offline.html";
+const PRECACHE_URLS = [OFFLINE_URL, "/icon-192.svg", "/icon-512.svg"];
 const MAX_RUNTIME_ASSET_ENTRIES = 96;
 
 // ─── Install ────────────────────────────────────────────────────────────────
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) =>
-        Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url))),
-      ),
+    caches.open(CACHE).then(async (cache) => {
+      // The offline shell is part of the worker's availability contract.
+      // If it cannot be cached, keep the previous worker instead of activating
+      // a deployment that cannot provide the promised navigation fallback.
+      await cache.add(OFFLINE_URL);
+
+      // Icons are useful for installability but are not critical to the worker
+      // lifecycle, so a transient icon failure must not block an update.
+      await Promise.allSettled(
+        PRECACHE_URLS.filter((url) => url !== OFFLINE_URL).map((url) =>
+          cache.add(url),
+        ),
+      );
+    }),
   );
 });
 
@@ -96,50 +106,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation must always fetch fresh HTML.
+  // Navigation must always fetch fresh HTML. Only a real network failure may
+  // fall back to the dedicated, non-authenticated offline shell.
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request).catch(
-        () =>
-          new Response(
-            `<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Không có kết nối</title>
-</head>
-<body style="
-  font-family:system-ui;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  min-height:100vh;
-  margin:0;
-  background:#f8fafc;
-  color:#0f172a
-">
-  <div style="text-align:center">
-    <p style="font-size:3rem;margin:0">📴</p>
-    <h1 style="font-size:1.5rem;font-weight:900;margin:.5rem 0">
-      Không có kết nối
-    </h1>
-    <p style="color:#64748b">
-      Vui lòng kiểm tra mạng và thử lại.
-    </p>
-  </div>
-</body>
-</html>`,
-            {
-              status: 503,
-              headers: {
-                "Content-Type": "text/html; charset=utf-8",
-                "Cache-Control": "no-store",
-              },
-            },
-          ),
-      ),
-    );
+    event.respondWith(fetch(request).catch(() => offlineNavigationResponse()));
   }
 });
 
@@ -242,4 +212,41 @@ async function trimRuntimeAssetEntries(cache) {
       .slice(0, overflow)
       .map((request) => cache.delete(request)),
   );
+}
+
+async function offlineNavigationResponse() {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(OFFLINE_URL);
+
+  const headers = {
+    "Cache-Control": "no-store",
+    "Content-Language": "vi",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  };
+
+  if (!cached) {
+    return new Response(
+      "Không có kết nối. Vui lòng kiểm tra mạng và thử lại.",
+      {
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: {
+          ...headers,
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      },
+    );
+  }
+
+  return new Response(await cached.text(), {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers: {
+      ...headers,
+      "Content-Type": "text/html; charset=utf-8",
+    },
+  });
 }
