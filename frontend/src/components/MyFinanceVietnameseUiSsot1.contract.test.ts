@@ -8,8 +8,22 @@ import {
 } from "@/src/lib/ui/vietnameseUiTerminology";
 
 const root = path.resolve(__dirname);
-const read = (relativePath: string) =>
+const readRaw = (relativePath: string) =>
   readFileSync(path.resolve(root, relativePath), "utf8").replace(/\r\n/g, "\n");
+
+const read = (relativePath: string) => {
+  const primary = readRaw(relativePath);
+
+  if (relativePath === "savings/SavingsPage.tsx") {
+    return [
+      primary,
+      readRaw("savings/savingsPageSupport.tsx"),
+      readRaw("savings/SavingsPageSummaryTiles.tsx"),
+    ].join("\n");
+  }
+
+  return primary;
+};
 
 function extractUiLiteralText(source: string, fileName: string) {
   const scriptKind = fileName.endsWith(".tsx")

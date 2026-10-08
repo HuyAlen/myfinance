@@ -14,6 +14,10 @@ describe("SavingsPage action-first polish", () => {
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
   );
+  const summaryTiles = readFileSync(
+    path.resolve(__dirname, "SavingsPageSummaryTiles.tsx"),
+    "utf8",
+  );
 
   const heroStart = source.indexOf("SAVINGS-POLISH-3");
   const accountsStart = source.indexOf("{/* SAVING ACCOUNTS */}", heroStart);
@@ -41,7 +45,7 @@ describe("SavingsPage action-first polish", () => {
       "mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-4",
     );
     expect(hero).not.toContain("bg-linear-to-br from-white");
-    expect(source).toContain(
+    expect(summaryTiles).toContain(
       "rounded-2xl border border-[#E3EAF1] bg-[#F8FBFE] p-3",
     );
   });

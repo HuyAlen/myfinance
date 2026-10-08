@@ -7,7 +7,11 @@ const read = (relative: string) =>
 
 const dashboard = read("dashboard/DashboardPage.tsx");
 const settings = read("settings/SettingsPage.tsx");
-const savings = read("savings/SavingsPage.tsx");
+const savings = [
+  read("savings/SavingsPage.tsx"),
+  read("savings/savingsPageSupport.tsx"),
+  read("savings/SavingsPageSummaryTiles.tsx"),
+].join("\n");
 const header = read("layout/Header.tsx");
 const investments = read("investments/InvestmentsPage.tsx");
 

@@ -8,6 +8,9 @@ const read = (relativePath: string) =>
 
 const categories = read("src/components/categories/CategoriesPage.tsx");
 const transactions = read("src/components/transactions/TransactionsPage.tsx");
+const transactionSupport = read(
+  "src/components/transactions/transactionPageSupport.ts",
+);
 
 describe("RECURRING-MONEY-MANAGER-1 cross-editor integrity", () => {
   it("treats disabling an existing category schedule as pause, preserving its plan metadata", () => {
@@ -20,7 +23,7 @@ describe("RECURRING-MONEY-MANAGER-1 cross-editor integrity", () => {
   });
 
   it("gives transaction schedules an explicit next-run date instead of creating incomplete legacy schedules", () => {
-    expect(transactions).toContain("nextRunDate: string;");
+    expect(transactionSupport).toContain("nextRunDate: string;");
     expect(transactions).toContain('nextRunDate: t.nextRunDate ?? ""');
     expect(transactions).toContain('if (form.isRecurring && !form.nextRunDate)');
     expect(transactions).toContain("Ngày chạy tiếp");

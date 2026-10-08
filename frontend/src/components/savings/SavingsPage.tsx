@@ -2,7 +2,6 @@
 
 import {
   type FormEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -12,7 +11,6 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
 import { parseFocusId } from "@/src/lib/navigation/financeNavigation";
-import { formatLocalISODate } from "@/src/lib/date/calendarDate";
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -33,7 +31,6 @@ import {
   X,
 } from "lucide-react";
 import type {
-  SavingAccount,
   SavingType,
   Wallet as WalletType,
 } from "@/src/types/finance";
@@ -47,446 +44,54 @@ import {
 } from "@/src/services/finance/financeStorage";
 import { supabase } from "@/src/lib/supabase";
 import SavingsInternalTransferModal from "@/src/components/savings/SavingsInternalTransferModal";
+import {
+  HeroMetric,
+  SavingsInfoTile,
+} from "@/src/components/savings/SavingsPageSummaryTiles";
 
-type SavingWithWallet = SavingAccount & {
-  walletId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type SavingsPageProps = {
-  savings?: SavingWithWallet[];
-};
-
-type SavingsFilter = "all" | "active" | "maturing" | "emergency" | "completed";
-
-type SavingFormState = {
-  name: string;
-  type: SavingType;
-  balance: string;
-  walletId: string;
-  interestRate: string;
-  maturityDate: string;
-  notes: string;
-};
-
-type ToastState = {
-  type: "success" | "error";
-  message: string;
-};
-
-type SavingTransactionType = "deposit" | "withdraw" | "interest" | "settlement";
-
-type SavingTransaction = {
-  id: string;
-  savingId: string;
-  type: SavingTransactionType;
-  amount: number;
-  date: string;
-  note: string;
-  transferReference?: string;
-  transferDirection?: "out" | "in";
-};
-
-type TransactionFormState = {
-  type: Exclude<SavingTransactionType, "interest">;
-  amount: string;
-  walletId: string;
-  note: string;
-};
-
-type SavingRow = {
-  id: string;
-  user_id?: string | null;
-  name: string;
-  type: SavingType;
-  balance: number;
-  wallet_id: string | null;
-  interest_rate: number | null;
-  maturity_date: string | null;
-  notes: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type SavingTransactionRow = {
-  id: string;
-  saving_id: string;
-  user_id?: string | null;
-  type: SavingTransactionType;
-  amount: number;
-  wallet_id?: string | null;
-  transaction_date: string;
-  note: string | null;
-  created_at?: string;
-};
-
-const isSupabaseConfigured = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-);
-
-const mapSavingRowToSaving = (row: SavingRow): SavingWithWallet => ({
-  id: row.id,
-  name: row.name,
-  type: row.type,
-  balance: Number(row.balance ?? 0),
-  walletId: row.wallet_id ?? undefined,
-  interestRate: row.interest_rate ?? undefined,
-  maturityDate: row.maturity_date ?? undefined,
-  notes: row.notes ?? undefined,
-  createdAt: row.created_at ?? undefined,
-  updatedAt: row.updated_at ?? undefined,
-});
-
-const parseSavingTransferLedgerNote = (note: string) => {
-  const match = note.match(
-    /^__saving_transfer__:([0-9a-f-]+):(out|in)\|(.*)$/i,
-  );
-  if (!match) return null;
-
-  return {
-    reference: match[1],
-    direction: match[2] as "out" | "in",
-    displayNote: match[3] || "Chuyển giữa các khoản tiết kiệm",
-  };
-};
-const mapTransactionRowToTransaction = (
-  row: SavingTransactionRow,
-): SavingTransaction => {
-  const transfer = parseSavingTransferLedgerNote(row.note ?? "");
-
-  return {
-    id: row.id,
-    savingId: row.saving_id,
-    type: row.type,
-    amount: Number(row.amount ?? 0),
-    date: row.transaction_date,
-    note: transfer?.displayNote ?? row.note ?? getTransactionLabel(row.type),
-    transferReference: transfer?.reference,
-    transferDirection: transfer?.direction,
-  };
-};
-
-const groupTransactionsBySavingId = (transactions: SavingTransaction[]) =>
-  transactions.reduce<Record<string, SavingTransaction[]>>((grouped, item) => {
-    grouped[item.savingId] = [...(grouped[item.savingId] ?? []), item];
-    return grouped;
-  }, {});
-
-const EMPTY_SAVINGS: SavingWithWallet[] = [];
-
-const INITIAL_FORM: SavingFormState = {
-  name: "",
-  type: "savings_account",
-  balance: "",
-  walletId: "",
-  interestRate: "",
-  maturityDate: "",
-  notes: "",
-};
-
-const INITIAL_TRANSACTION_FORM: TransactionFormState = {
-  type: "deposit",
-  amount: "",
-  walletId: "",
-  note: "",
-};
-
-const todayInputValue = () => formatLocalISODate();
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(value);
-
-const formatPercent = (value: number) =>
-  `${new Intl.NumberFormat("vi-VN", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
-  }).format(value)}%`;
-
-const formatDate = (date?: string) => {
-  if (!date) return "-";
-
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(parsed);
-};
-
-const getDaysUntil = (date?: string) => {
-  if (!date) return null;
-
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  parsed.setHours(0, 0, 0, 0);
-
-  return Math.ceil((parsed.getTime() - today.getTime()) / 86_400_000);
-};
-
-const getSavingTypeLabel = (type: SavingType) => {
-  switch (type) {
-    case "savings_account":
-      return "Tài khoản tiết kiệm";
-    case "term_deposit":
-      return "Tiền gửi có kỳ hạn";
-    case "certificate":
-      return "Chứng chỉ tiền gửi";
-    case "emergency_fund":
-      return "Quỹ khẩn cấp";
-    default:
-      return "Khác";
-  }
-};
-
-const getSavingStatus = (saving: SavingWithWallet) => {
-  const daysUntilMaturity = getDaysUntil(saving.maturityDate);
-
-  if (daysUntilMaturity !== null && daysUntilMaturity < 0) {
-    return {
-      label: "Đã đáo hạn",
-      className: "bg-slate-100 text-slate-600",
-    };
-  }
-
-  if (daysUntilMaturity !== null && daysUntilMaturity <= 30) {
-    return {
-      label: "Đáo hạn gần nhất",
-      className: "bg-amber-100 text-amber-700",
-    };
-  }
-
-  if (saving.type === "emergency_fund") {
-    return {
-      label: "Quỹ khẩn cấp",
-      className: "bg-emerald-100 text-emerald-700",
-    };
-  }
-
-  return {
-    label: "Đang gửi",
-    className: "bg-blue-100 text-blue-700",
-  };
-};
-
-const estimateAnnualInterest = (saving: SavingAccount) => {
-  const rate = saving.interestRate ?? 0;
-  return calculateProjectedInterest(saving.balance, rate, saving.maturityDate);
-};
-
-const parseNumberInput = (value: string) => {
-  const normalized = value
-    .replace(",", ".")
-    .replace(/[^\d.-]/g, "")
-    .trim();
-  if (!normalized) return 0;
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const parseCurrencyValue = (value: string) => {
-  const digitsOnly = value.replace(/\D/g, "");
-  if (!digitsOnly) return 0;
-
-  const parsed = Number(digitsOnly);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const parseCurrencyInput = (value: string) => {
-  const digitsOnly = value.replace(/\D/g, "");
-  if (!digitsOnly) return "";
-
-  return new Intl.NumberFormat("vi-VN", {
-    maximumFractionDigits: 0,
-  }).format(Number(digitsOnly));
-};
-
-const formatCurrencyInputFromNumber = (value: number) =>
-  value > 0
-    ? new Intl.NumberFormat("vi-VN", {
-        maximumFractionDigits: 0,
-      }).format(value)
-    : "";
-
-const calculateProjectedInterest = (
-  principal: number,
-  annualRate: number,
-  maturityDate?: string,
-) => {
-  if (principal <= 0 || annualRate <= 0) return 0;
-
-  const daysUntilMaturity = getDaysUntil(maturityDate);
-  const termInDays =
-    daysUntilMaturity !== null && daysUntilMaturity > 0
-      ? daysUntilMaturity
-      : 365;
-
-  return Math.round((principal * annualRate * termInDays) / 100 / 365);
-};
-
-const getSavingFormConfig = (type: SavingType) => {
-  switch (type) {
-    case "term_deposit":
-      return {
-        nameLabel: "Tên sổ tiết kiệm",
-        namePlaceholder: "Ví dụ: Sổ tiết kiệm Techcombank 6 tháng",
-        amountLabel: "Số tiền gửi",
-        amountPlaceholder: "50.000.000",
-        showInterestRate: true,
-        interestLabel: "Lãi suất / năm (%)",
-        interestPlaceholder: "5.8",
-        showMaturityDate: true,
-        maturityLabel: "Ngày đáo hạn",
-        maturityRequired: true,
-        notesPlaceholder: "Ví dụ: Tự động tái tục gốc và lãi",
-        previewTitle: "Xem trước tiền lãi",
-        previewDescription:
-          "Ước tính lãi theo ngày đáo hạn. Nếu chưa chọn ngày, hệ thống tạm tính theo 1 năm.",
-        interestTitle: "Lãi dự kiến",
-        totalTitle: "Giá trị đáo hạn",
-      };
-
-    case "certificate":
-      return {
-        nameLabel: "Tên chứng chỉ tiền gửi",
-        namePlaceholder: "Ví dụ: Chứng chỉ tiền gửi ngân hàng 12 tháng",
-        amountLabel: "Giá trị chứng chỉ",
-        amountPlaceholder: "100.000.000",
-        showInterestRate: true,
-        interestLabel: "Lãi suất chứng chỉ / năm (%)",
-        interestPlaceholder: "6.2",
-        showMaturityDate: true,
-        maturityLabel: "Ngày tất toán",
-        maturityRequired: true,
-        notesPlaceholder: "Ví dụ: Không rút trước hạn, giữ đến ngày tất toán",
-        previewTitle: "Xem trước chứng chỉ tiền gửi",
-        previewDescription:
-          "Ước tính lợi tức đến ngày tất toán. Nếu chưa chọn ngày, hệ thống tạm tính theo 1 năm.",
-        interestTitle: "Lợi tức dự kiến",
-        totalTitle: "Giá trị tất toán",
-      };
-
-    case "emergency_fund":
-      return {
-        nameLabel: "Tên quỹ khẩn cấp",
-        namePlaceholder: "Ví dụ: Quỹ khẩn cấp gia đình",
-        amountLabel: "Số tiền gửi ban đầu",
-        amountPlaceholder: "30.000.000",
-        showInterestRate: false,
-        interestLabel: "",
-        interestPlaceholder: "",
-        showMaturityDate: false,
-        maturityLabel: "",
-        maturityRequired: false,
-        notesPlaceholder: "Ví dụ: Dự phòng 6 tháng chi phí sinh hoạt",
-        previewTitle: "Xem trước quỹ khẩn cấp",
-        previewDescription:
-          "Quỹ khẩn cấp là khoản linh hoạt, không cần lãi suất hoặc ngày đáo hạn.",
-        interestTitle: "Lãi dự kiến",
-        totalTitle: "Tổng quỹ",
-      };
-
-    case "savings_account":
-    default:
-      return {
-        nameLabel: "Tên tài khoản tiết kiệm",
-        namePlaceholder: "Ví dụ: Tài khoản tiết kiệm linh hoạt",
-        amountLabel: "Số dư hiện tại",
-        amountPlaceholder: "50.000.000",
-        showInterestRate: true,
-        interestLabel: "Lãi suất / năm (%)",
-        interestPlaceholder: "4.5",
-        showMaturityDate: false,
-        maturityLabel: "",
-        maturityRequired: false,
-        notesPlaceholder: "Ví dụ: Tài khoản linh hoạt, có thể nạp/rút khi cần",
-        previewTitle: "Xem trước tiết kiệm",
-        previewDescription:
-          "Tài khoản tiết kiệm linh hoạt được ước tính theo 1 năm vì không có ngày đáo hạn.",
-        interestTitle: "Lãi dự kiến / năm",
-        totalTitle: "Giá trị sau 1 năm",
-      };
-  }
-};
-
-const isInterestBearingSaving = (type: SavingType) =>
-  type === "savings_account" ||
-  type === "term_deposit" ||
-  type === "certificate";
-
-const getTransactionLabel = (type: SavingTransactionType) => {
-  switch (type) {
-    case "deposit":
-      return "Nạp thêm";
-    case "withdraw":
-      return "Rút tiền";
-    case "interest":
-      return "Ghi nhận lãi";
-    case "settlement":
-      return "Tất toán";
-    default:
-      return "Giao dịch";
-  }
-};
-
-const getTransactionIcon = (type: SavingTransactionType) => {
-  switch (type) {
-    case "deposit":
-      return <ArrowUpRight size={17} />;
-    case "withdraw":
-      return <ArrowDownLeft size={17} />;
-    case "interest":
-      return <TrendingUp size={17} />;
-    case "settlement":
-      return <CheckCircle2 size={17} />;
-    default:
-      return <Banknote size={17} />;
-  }
-};
-
-const getSignedTransactionAmount = (transaction: SavingTransaction) => {
-  if (transaction.type === "withdraw" || transaction.type === "settlement") {
-    return -transaction.amount;
-  }
-
-  return transaction.amount;
-};
-
-const MONTHLY_EXPENSE_TARGET = 25_000_000;
-const EMERGENCY_MONTH_TARGET = 6;
-
-const getSavingProgress = (saving: SavingWithWallet) => {
-  const days = getDaysUntil(saving.maturityDate);
-
-  if (days === null) return 100;
-  if (days <= 0) return 100;
-
-  const estimatedTermDays = days > 365 ? days + 180 : 365;
-  return Math.max(
-    8,
-    Math.min(100, Math.round(100 - (days / estimatedTermDays) * 100)),
-  );
-};
-
-const getProgressLabel = (saving: SavingWithWallet) => {
-  const days = getDaysUntil(saving.maturityDate);
-
-  if (days === null) return "Linh hoạt";
-  if (days < 0) return "Đã đáo hạn";
-  if (days === 0) return "Đáo hạn hôm nay";
-  return `Còn ${days} ngày`;
-};
+import type {
+  SavingWithWallet,
+  SavingsPageProps,
+  SavingsFilter,
+  SavingFormState,
+  ToastState,
+  SavingTransactionType,
+  SavingTransaction,
+  TransactionFormState,
+  SavingRow,
+  SavingTransactionRow,
+} from "./savingsPageSupport";
+import {
+  isSupabaseConfigured,
+  mapSavingRowToSaving,
+  mapTransactionRowToTransaction,
+  groupTransactionsBySavingId,
+  EMPTY_SAVINGS,
+  INITIAL_FORM,
+  INITIAL_TRANSACTION_FORM,
+  todayInputValue,
+  formatCurrency,
+  formatPercent,
+  formatDate,
+  getDaysUntil,
+  getSavingTypeLabel,
+  getSavingStatus,
+  estimateAnnualInterest,
+  parseNumberInput,
+  parseCurrencyValue,
+  parseCurrencyInput,
+  formatCurrencyInputFromNumber,
+  calculateProjectedInterest,
+  getSavingFormConfig,
+  isInterestBearingSaving,
+  getTransactionLabel,
+  getTransactionIcon,
+  getSignedTransactionAmount,
+  MONTHLY_EXPENSE_TARGET,
+  EMERGENCY_MONTH_TARGET,
+  getSavingProgress,
+  getProgressLabel,
+} from "./savingsPageSupport";
 
 export default function SavingsPage({
   savings = EMPTY_SAVINGS,
@@ -3251,76 +2856,5 @@ export default function SavingsPage({
         </div>
       ) : null}
     </section>
-  );
-}
-
-function HeroMetric({
-  label,
-  value,
-  note,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  note: string;
-  icon: ReactNode;
-  tone: "blue" | "emerald" | "amber" | "violet";
-}) {
-  const styles = {
-    blue: "bg-[#EAF3FC] text-[#2F80ED]",
-    emerald: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    violet: "bg-[#EEF3FA] text-[#587A9B]",
-  };
-
-  return (
-    <div className="rounded-2xl border border-[#E3EAF1] bg-[#F8FBFE] p-3 sm:p-3.5">
-      <div className="flex items-center justify-between gap-2.5">
-        <p className="text-[9px] font-black uppercase tracking-[0.14em] text-[#61788F] sm:text-[10px]">
-          {label}
-        </p>
-        <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-lg sm:size-8 ${styles[tone]}`}
-        >
-          {icon}
-        </span>
-      </div>
-
-      <p className="mt-2 wrap-break-word text-[16px] font-black leading-tight tabular-nums text-[#36536B] sm:text-lg">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[10px] font-semibold leading-4 text-[#8CA0B3] sm:text-[11px]">
-        {note}
-      </p>
-    </div>
-  );
-}
-
-function SavingsInfoTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "blue" | "emerald" | "rose";
-}) {
-  const styles = {
-    blue: "text-[#2F80ED]",
-    emerald: "text-emerald-600",
-    rose: "text-rose-600",
-  };
-
-  return (
-    <div className="min-w-0 rounded-xl border border-[#E8EEF4] bg-[#F8FBFE] px-2.5 py-2.5 sm:p-3">
-      <p className="text-[8px] font-black uppercase leading-3 tracking-wide text-[#8CA0B3] sm:text-[9px]">
-        {label}
-      </p>
-      <p className={`mt-1 wrap-break-word text-[10px] font-black leading-tight tracking-tight sm:text-sm ${styles[tone]}`}>
-        {value}
-      </p>
-    </div>
   );
 }

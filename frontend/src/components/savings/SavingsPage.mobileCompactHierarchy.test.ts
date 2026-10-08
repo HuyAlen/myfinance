@@ -14,6 +14,10 @@ describe("SavingsPage compact mobile financial hierarchy", () => {
     path.resolve(__dirname, "SavingsPage.tsx"),
     "utf8",
   );
+  const summaryTiles = readFileSync(
+    path.resolve(__dirname, "SavingsPageSummaryTiles.tsx"),
+    "utf8",
+  );
 
   const heroStart = source.indexOf("SAVINGS-POLISH-3");
   const accountsStart = source.indexOf("{/* SAVING ACCOUNTS */}", heroStart);
@@ -41,7 +45,7 @@ describe("SavingsPage compact mobile financial hierarchy", () => {
     expect(hero).toContain(
       "inline-flex min-h-10 shrink-0 items-center justify-center",
     );
-    expect(source).toContain(
+    expect(summaryTiles).toContain(
       "rounded-2xl border border-[#E3EAF1] bg-[#F8FBFE] p-3",
     );
   });

@@ -242,7 +242,20 @@ function blockedTokens(value: string) {
 
 function auditSurface(surface: Surface) {
   const fullPath = path.resolve(root, surface.file);
-  const source = readFileSync(fullPath, "utf8");
+  const source =
+    surface.file === "savings/SavingsPage.tsx"
+      ? [
+          readFileSync(fullPath, "utf8"),
+          readFileSync(
+            path.resolve(root, "savings/savingsPageSupport.tsx"),
+            "utf8",
+          ),
+          readFileSync(
+            path.resolve(root, "savings/SavingsPageSummaryTiles.tsx"),
+            "utf8",
+          ),
+        ].join("\n")
+      : readFileSync(fullPath, "utf8");
   const copy = extractRenderedCopy(source, surface.file);
   return copy.flatMap((item) => {
     const blocked = blockedTokens(item.value);
