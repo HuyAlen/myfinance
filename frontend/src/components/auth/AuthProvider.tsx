@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -16,12 +17,16 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  bootstrapError: boolean;
+  retryAuthBootstrap: () => void;
 };
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  bootstrapError: false,
+  retryAuthBootstrap: () => {},
 });
 
 const LOCAL_UI_MODE =
@@ -67,11 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     LOCAL_UI_MODE ? LOCAL_UI_SESSION : null,
   );
   const [loading, setLoading] = useState(() => !LOCAL_UI_MODE);
+  const [bootstrapError, setBootstrapError] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const retryAuthBootstrap = useCallback(() => {
+    if (LOCAL_UI_MODE) return;
+
+    setBootstrapError(false);
+    setLoading(true);
+    setBootstrapAttempt((current) => current + 1);
+  }, []);
   const mountedAtRef = useRef<number | null>(null);
   const hasReportedAuthReadyRef = useRef(false);
 
   useEffect(() => {
     mountedAtRef.current = performance.now();
+    const attemptNumber = bootstrapAttempt + 1;
 
     const reportAuthReady = () => {
       if (
@@ -110,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      setBootstrapError(false);
       setLoading(false);
       reportAuthReady();
     };
@@ -122,17 +138,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authStateRevision += 1;
       setSession(null);
       setUser(null);
+      setBootstrapError(true);
       setLoading(false);
 
       // Do not include tokens/session payloads in logs. Supabase error objects
-      // may carry implementation details, so only emit a bounded message.
+      // may carry implementation details, so emit only a bounded message.
       const message =
         reason instanceof Error
           ? reason.message
           : typeof reason === "string"
             ? reason
             : "Unable to resolve initial auth session.";
-      console.error("[AuthProvider] Initial session bootstrap failed:", message);
+      const boundedMessage = message.slice(0, 240);
+      console.error(
+        `[AuthProvider] Initial session bootstrap failed (attempt ${attemptNumber}):`,
+        boundedMessage,
+      );
     };
 
     const initialSessionTimeout = window.setTimeout(() => {
@@ -179,10 +200,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(initialSessionTimeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [bootstrapAttempt]);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        loading,
+        bootstrapError,
+        retryAuthBootstrap,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
 import StartupShellSkeleton from "./StartupShellSkeleton";
+import AuthBootstrapRecovery from "@/src/components/auth/AuthBootstrapRecovery";
 import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { useOnboarding } from "@/src/components/onboarding/OnboardingProvider";
@@ -73,17 +74,17 @@ export default function AppShell({ children }: AppShellProps) {
   // FabVisibilityProvider. AppShell owns this boolean directly since it's
   // the one deciding whether to render the FABs; pages only get a setter.
   const [isGlobalFabSuppressed, setGlobalFabSuppressed] = useState(false);
-  const { user, loading } = useAuth();
+  const { user, loading, bootstrapError, retryAuthBootstrap } = useAuth();
   const router = useRouter();
   const { wizardDone, tourDone } = useOnboarding();
   const shellChromeOverlayOpen =
     sidebarOpen || headerAccountOpen || moreMenuOpen;
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !bootstrapError) {
       router.replace("/login");
     }
-  }, [user, loading, router]);
+  }, [bootstrapError, user, loading, router]);
 
   // Fires once on AppShell's very first render (whether that's the loading
   // skeleton below or the fully-resolved shell), independent of auth state —
@@ -221,6 +222,10 @@ export default function AppShell({ children }: AppShellProps) {
       document.body.style.overflow = "";
     };
   }, [sidebarOpen]);
+
+  if (bootstrapError) {
+    return <AuthBootstrapRecovery onRetry={retryAuthBootstrap} />;
+  }
 
   if (loading || !user) {
     // Shared skeleton — same component app/loading.tsx renders — so the

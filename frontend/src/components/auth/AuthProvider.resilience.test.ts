@@ -52,4 +52,20 @@ describe("AUTH-RESILIENCE-1 — auth bootstrap recovery contract", () => {
     expect(source).toContain("useState(() => !LOCAL_UI_MODE)");
     expect(source).toContain('reportPerformanceMetric(\n        "auth_ready"');
   });
+
+  it("separates bootstrap infrastructure failure from a clean signed-out session", () => {
+    expect(source).toContain("bootstrapError: boolean");
+    expect(source).toContain("setBootstrapError(true)");
+    expect(source).toContain("setBootstrapError(false)");
+    expect(source).toContain("retryAuthBootstrap");
+  });
+
+  it("retries bootstrap with a fresh timeout/subscription lifecycle and bounded logging", () => {
+    expect(source).toMatch(
+      /retryAuthBootstrap[\s\S]*setLoading\(true\)[\s\S]*setBootstrapAttempt/,
+    );
+    expect(source).toContain("bootstrapAttempt");
+    expect(source).toContain("message.slice(0, 240)");
+    expect(source).toContain("attemptNumber");
+  });
 });
