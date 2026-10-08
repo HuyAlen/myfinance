@@ -12,6 +12,8 @@ function statusForError(message: string) {
   if (message === "PENDING_ACTION_IN_PROGRESS") return 409;
   if (message === "PENDING_ACTION_CANCELLED") return 409;
   if (message === "PENDING_ACTION_FAILED") return 409;
+  if (message === "PENDING_ACTION_FORBIDDEN") return 403;
+  if (message === "PENDING_ACTION_INVALID_RECEIPT") return 502;
   return 400;
 }
 

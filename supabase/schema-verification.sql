@@ -141,7 +141,8 @@ WITH required(function_name) AS (
     ('delete_forex_account_atomic'),
     ('export_finance_backup'),
     ('restore_finance_backup'),
-    ('clone_previous_month_budgets_atomic')
+    ('clone_previous_month_budgets_atomic'),
+    ('execute_ai_pending_action_atomic')
 )
 SELECT
   r.function_name,
@@ -201,7 +202,8 @@ target_functions AS (
       'create_investment_capital_movement','update_investment_snapshot_atomic','delete_investment_atomic',
       'create_forex_cash_transaction','update_forex_cash_transaction','delete_forex_cash_transaction',
       'delete_forex_account_atomic',
-      'export_finance_backup','restore_finance_backup','clone_previous_month_budgets_atomic'
+      'export_finance_backup','restore_finance_backup','clone_previous_month_budgets_atomic',
+      'execute_ai_pending_action_atomic'
     )
 ),
 function_grants AS (
@@ -631,3 +633,44 @@ SELECT
         'last_test_error'
       )
   ) AS settings_has_connection_diagnostics;
+-- 13) AI-PENDING-ACTION-ATOMIC-EXECUTION-1 invariants.
+SELECT
+  to_regprocedure(
+    'public.execute_ai_pending_action_atomic(uuid)'
+  ) IS NOT NULL AS ai_pending_action_execution_exists,
+  (
+    SELECT NOT p.prosecdef
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'execute_ai_pending_action_atomic'
+      AND pg_get_function_identity_arguments(p.oid) = 'p_action_id uuid'
+  ) AS ai_pending_action_execution_is_security_invoker,
+  strpos(
+    pg_get_functiondef(
+      'public.execute_ai_pending_action_atomic(uuid)'::regprocedure
+    ),
+    'FOR UPDATE'
+  ) > 0 AS ai_pending_action_execution_has_row_lock,
+  strpos(
+    pg_get_functiondef(
+      'public.execute_ai_pending_action_atomic(uuid)'::regprocedure
+    ),
+    'current_finance_write_owner_user_id'
+  ) > 0 AS ai_pending_action_execution_uses_household_write_owner,
+  strpos(
+    pg_get_functiondef(
+      'public.execute_ai_pending_action_atomic(uuid)'::regprocedure
+    ),
+    'ai_action_audit_logs'
+  ) > 0 AS ai_pending_action_execution_writes_ai_audit,
+  has_function_privilege(
+    'authenticated',
+    'public.execute_ai_pending_action_atomic(uuid)',
+    'EXECUTE'
+  ) AS ai_pending_action_execution_authenticated_can_execute,
+  NOT has_function_privilege(
+    'anon',
+    'public.execute_ai_pending_action_atomic(uuid)',
+    'EXECUTE'
+  ) AS ai_pending_action_execution_anon_cannot_execute;

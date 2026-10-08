@@ -49,11 +49,28 @@ describe("DATA-INTEGRITY-2 database authority", () => {
 });
 
 describe("DATA-INTEGRITY-2 AI write claim", () => {
-  it("uses compare-and-set pending -> executing so concurrent confirmations cannot both execute", () => {
+  it("serializes confirmations inside the atomic database boundary", () => {
     expect(pendingRepo).toContain("export async function updatePendingActionIfStatus");
     expect(pendingRepo).toContain('.eq("status", input.expectedStatus)');
-    expect(writeExecutor).toContain('expectedStatus: "pending"');
-    expect(writeExecutor).toContain('status: "executing"');
-    expect(writeExecutor).toContain('throw new Error("PENDING_ACTION_IN_PROGRESS")');
+
+    const atomicStart = schema.indexOf(
+      "CREATE OR REPLACE FUNCTION public.execute_ai_pending_action_atomic",
+    );
+    expect(atomicStart).toBeGreaterThan(-1);
+
+    const atomicExecution = schema.slice(atomicStart);
+    expect(atomicExecution).toContain("FOR UPDATE;");
+    expect(atomicExecution).toContain("status = 'executing'");
+    expect(atomicExecution).toContain("confirmed_by = v_actor_user_id");
+    expect(atomicExecution).toContain(
+      "v_finance_owner_user_id := public.current_finance_write_owner_user_id();",
+    );
+
+    expect(writeExecutor).toContain('"execute_ai_pending_action_atomic"');
+    expect(writeExecutor).not.toContain('.from("budgets")');
+    expect(writeExecutor).not.toContain('.from("goals")');
+    expect(writeExecutor).toContain(
+      'throw new Error("PENDING_ACTION_IN_PROGRESS")',
+    );
   });
 });

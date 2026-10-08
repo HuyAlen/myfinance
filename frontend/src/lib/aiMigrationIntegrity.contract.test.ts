@@ -118,13 +118,26 @@ describe("AI-MIGRATION-INTEGRITY-1 — P1", () => {
     );
   });
 
-  it("backs every migration-critical field used by the server repositories", () => {
+  it("backs every migration-critical field after atomic execution handoff", () => {
     expect(pendingRepository).toContain('.eq("idempotency_key", idempotencyKey)');
     expect(pendingRepository).toContain('.eq("status", input.expectedStatus)');
-    expect(executor).toContain('status: "executing"');
-    expect(executor).toContain("confirmed_by: input.context.userId");
-    expect(executor).toContain("executed_at:");
-    expect(executor).toContain("recordAIActionAudit");
+
+    expect(executor).toContain('"execute_ai_pending_action_atomic"');
+    expect(executor).not.toContain('.from("budgets")');
+    expect(executor).not.toContain('.from("goals")');
+
+    const atomicStart = schema.indexOf(
+      "CREATE OR REPLACE FUNCTION public.execute_ai_pending_action_atomic",
+    );
+    expect(atomicStart).toBeGreaterThan(-1);
+
+    const atomicExecution = schema.slice(atomicStart);
+    expect(atomicExecution).toContain("status = 'executing'");
+    expect(atomicExecution).toContain("confirmed_by = v_actor_user_id");
+    expect(atomicExecution).toContain("executed_at = clock_timestamp()");
+    expect(atomicExecution).toContain(
+      "INSERT INTO public.ai_action_audit_logs",
+    );
 
     expect(settingsRepository).toContain("payload.encrypted_api_key");
     expect(settingsRepository).toContain("payload.api_key_iv");
