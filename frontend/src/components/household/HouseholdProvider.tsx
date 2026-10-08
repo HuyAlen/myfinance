@@ -6,10 +6,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import StartupShellSkeleton from "@/src/components/layout/StartupShellSkeleton";
 import { supabase } from "@/src/lib/supabase";
 import {
   acceptHouseholdInvite,
@@ -54,6 +56,31 @@ type HouseholdContextType = {
   renameHousehold: (name: string) => Promise<void>;
 };
 
+const HOUSEHOLD_BOOTSTRAP_TIMEOUT_MS = 12_000;
+const HOUSEHOLD_BOOTSTRAP_TIMEOUT_MESSAGE =
+  "Không thể tải không gian tài chính trong thời gian cho phép.";
+const HOUSEHOLD_BOOTSTRAP_ERROR_MESSAGE =
+  "MyFinance chưa tải được không gian tài chính. Hãy kiểm tra kết nối và thử lại.";
+
+function loadHouseholdContextWithTimeout(): Promise<HouseholdContextValue> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(HOUSEHOLD_BOOTSTRAP_TIMEOUT_MESSAGE));
+    }, HOUSEHOLD_BOOTSTRAP_TIMEOUT_MS);
+
+    void getHouseholdContext().then(
+      (next) => {
+        window.clearTimeout(timeoutId);
+        resolve(next);
+      },
+      (loadError: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(loadError);
+      },
+    );
+  });
+}
+
 const HouseholdContext = createContext<HouseholdContextType>({
   context: null,
   household: null,
@@ -88,8 +115,11 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   const [contextAuthUserId, setContextAuthUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshRevisionRef = useRef(0);
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    const requestRevision = ++refreshRevisionRef.current;
+
     if (!authUserId) {
       invalidateFinanceScopeCache();
       setContext(null);
@@ -98,24 +128,53 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+
     const requestedAuthUserId = authUserId;
-    if (!options?.silent) setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+      setError(null);
+    }
+
     try {
-      const next = await getHouseholdContext();
+      const next = await loadHouseholdContextWithTimeout();
+
+      if (refreshRevisionRef.current !== requestRevision) {
+        return;
+      }
+
       setContext(next);
       setContextAuthUserId(requestedAuthUserId);
       setError(null);
     } catch (loadError) {
-      console.error("[HouseholdProvider] refresh failed:", loadError);
-      setError(
+      if (refreshRevisionRef.current !== requestRevision) {
+        return;
+      }
+
+      const message =
         loadError instanceof Error
           ? loadError.message
-          : "Không thể tải không gian tài chính dùng chung.",
+          : "Household bootstrap failed.";
+      console.error(
+        "[HouseholdProvider] refresh failed:",
+        message.slice(0, 240),
+      );
+      setError(
+        message === HOUSEHOLD_BOOTSTRAP_TIMEOUT_MESSAGE
+          ? HOUSEHOLD_BOOTSTRAP_TIMEOUT_MESSAGE
+          : HOUSEHOLD_BOOTSTRAP_ERROR_MESSAGE,
       );
     } finally {
-      if (!options?.silent) setLoading(false);
+      if (refreshRevisionRef.current === requestRevision) {
+        setLoading(false);
+      }
     }
   }, [authUserId]);
+
+  useEffect(() => {
+    return () => {
+      refreshRevisionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -129,7 +188,14 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   // The SQL policy only exposes rows addressed to the authenticated email; the
   // foreground refresh below remains a safe fallback after reconnect/sleep.
   useEffect(() => {
-    if (!authUserId || !authEmail || typeof supabase.channel !== "function") return;
+    if (
+      !authUserId ||
+      contextAuthUserId !== authUserId ||
+      !authEmail ||
+      typeof supabase.channel !== "function"
+    ) {
+      return;
+    }
     const channel = supabase
       .channel(`household-invites:${authUserId}`)
       .on(
@@ -150,13 +216,13 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
         void supabase.removeChannel(channel);
       }
     };
-  }, [authEmail, authUserId, refresh]);
+  }, [authEmail, authUserId, contextAuthUserId, refresh]);
 
   // HOUSEHOLD-WORKSPACE-1: no polling is needed for in-app invites.
   // Refresh when the user returns to MyFinance so an invite created in another
   // session appears in the bell/settings without requiring a manual reload.
   useEffect(() => {
-    if (!authUserId) return;
+    if (!authUserId || contextAuthUserId !== authUserId) return;
     let timer: number | null = null;
     const scheduleRefresh = () => {
       if (document.visibilityState === "hidden") return;
@@ -173,7 +239,7 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", scheduleRefresh);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [authUserId, refresh]);
+  }, [authUserId, contextAuthUserId, refresh]);
 
   const invite = useCallback(
     async (email: string, role: "member" | "viewer") => {
@@ -313,28 +379,54 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
   if (authUserId && !activeContext) {
     if (error && !loading) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-          <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-6 text-center shadow-sm">
-            <p className="text-sm font-black text-slate-900">
-              Không thể xác định không gian tài chính
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-500">{error}</p>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white"
+        <main className="flex min-h-(--app-height) items-center justify-center bg-[var(--finance-page)] px-4 py-8 sm:px-6">
+          <section
+            role="alert"
+            aria-live="assertive"
+            aria-labelledby="household-recovery-title"
+            className="w-full max-w-lg rounded-3xl border border-blue-100 bg-white p-5 text-center shadow-[0_12px_40px_rgba(54,83,107,0.10)] sm:p-7"
+          >
+            <div
+              aria-hidden="true"
+              className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-blue-50 text-xl font-black text-blue-600"
             >
-              Thử lại
-            </button>
-          </div>
-        </div>
+              !
+            </div>
+
+            <h1
+              id="household-recovery-title"
+              className="mt-4 text-xl font-black tracking-tight text-slate-900 sm:text-2xl"
+            >
+              Không thể tải không gian tài chính
+            </h1>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              {error}
+            </p>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              >
+                Thử tải lại
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              >
+                Tải lại ứng dụng
+              </button>
+            </div>
+          </section>
+        </main>
       );
     }
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-semibold text-slate-500">
-        Đang tải không gian tài chính...
-      </div>
-    );
+
+    return <StartupShellSkeleton />;
   }
 
   return (
