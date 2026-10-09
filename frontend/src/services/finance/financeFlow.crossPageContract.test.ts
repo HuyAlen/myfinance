@@ -75,18 +75,20 @@ describe("FINANCE-FLOW-SSOT-1 cross-page adoption", () => {
     expect(reports).not.toContain("savingAllocationFromSavings");
   });
 
-  it("Transactions uses wallet cash movement cards without changing canonical real-expense semantics", () => {
+  it("Transactions counts only ordinary income/real expense without Forex/Savings/Portfolio capital", () => {
     const transactions = read("../../components/transactions/TransactionsPage.tsx");
-    const cards = read("../../lib/transactions/transactionCashMovementCards.ts");
+    const summary = read("../../lib/transactions/transactionIncomeExpenseScope.ts");
     const finance = read("./financeCalculations.ts");
 
-    // Transactions reports cash in/out of spendable wallets, not a second
-    // income/real-expense definition. Keep ordinary expense semantics in SSOT.
-    expect(transactions).toContain("summarizeTransactionWalletCashMovement({");
-    expect(transactions).toContain('label="Tiền vào ví"');
-    expect(transactions).toContain('label="Tiền ra ví"');
+    expect(transactions).toContain("summarizeTransactionIncomeExpense({");
+    expect(transactions).toContain('label="Thu nhập"');
+    expect(transactions).toContain('label="Chi tiêu"');
+    expect(transactions).toContain('label="Thu − Chi"');
     expect(transactions).toContain("if (!isOrdinaryTransactionFeedRow(t)) return false;");
-    expect(cards).toContain("return calculateFinanceFlowSnapshot({");
+    expect(summary).toContain("getTotalIncome(scoped)");
+    expect(summary).toContain("getRealExpenseTransactions(scoped, input.categories)");
+    expect(transactions).not.toContain("getForexCashTransactionsInRange");
+    expect(transactions).not.toContain("getSavingTransactionsInRange");
     expect(finance).toContain("const realExpenses = getRealExpenseTransactions(transactions, categories);");
     expect(finance).toContain("const operatingCashOut = realExpense;");
     expect(transactions).not.toContain("function getCategoryPlanningGroup(");

@@ -128,8 +128,9 @@ describe("TransactionsPage wiring: effective range consumed consistently (source
       "const { startDate, endDate } = effectiveRange;",
     );
     expect(reloadSource).toContain("getTransactionsInRange(startDate, endDate)");
-    expect(reloadSource).toContain("getForexCashTransactionsInRange(startDate, endDate)");
-    expect(reloadSource).toContain("getSavingTransactionsInRange(startDate, endDate)");
+    expect(reloadSource).toContain("getCategories()");
+    expect(reloadSource).not.toContain("getForexCashTransactionsInRange");
+    expect(reloadSource).not.toContain("getSavingTransactionsInRange");
   });
 
   it("the main load-trigger effect re-fetches on effectiveRange change, not a stale selectedMonth", () => {
@@ -184,6 +185,6 @@ describe("F-7 wiring: header disambiguates filtered totals from period totals (s
 
   it("the period-specific footer labels no longer hardcode 'tháng này' (this MONTH) now that the period can be a quarter/year/custom range", () => {
     expect(source).not.toContain("Dòng tiền tháng này");
-    expect(source).toContain("Dòng tiền kỳ này");
+    expect(source).toContain("Thu − Chi kỳ này");
   });
 });

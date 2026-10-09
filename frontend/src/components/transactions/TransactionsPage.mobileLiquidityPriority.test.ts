@@ -83,7 +83,7 @@ describe("LiquidityHeroCard follows responsive-polish-2 density", () => {
     expect(heroSource).toContain(
       "border-t border-white/15 pt-2 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/10 sm:px-3.5 sm:py-3",
     );
-    expect(heroSource).toContain("Dòng tiền kỳ này");
+    expect(heroSource).toContain("Thu − Chi kỳ này");
     expect(heroSource).toContain("getSignedAmountText(netCashFlow)");
     expect(heroSource).toContain("sm:hidden");
     expect(heroSource).toContain("sm:flex");

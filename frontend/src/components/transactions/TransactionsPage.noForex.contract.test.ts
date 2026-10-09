@@ -3,11 +3,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * TRANSACTIONS-NO-FOREX-1 + TRANSACTIONS-CASH-MOVEMENT-CARDS-1.
- * Transactions may read bounded Forex cash for summary aggregates only.
- * Forex identity, mutation, history, list filtering and export stay in Investments.
+ * TRANSACTIONS-NO-FOREX-1 / TRANSACTIONS-INCOME-EXPENSE-SCOPE-1.
+ * Forex funding, fees, and principal remain owned by Investments and included
+ * in wallet-liquidity accounting. None of those ledgers belong to the ordinary
+ * Transactions income/expense cards or editable feed.
  */
-describe("TransactionsPage reads Forex for cash cards without owning its ledger", () => {
+describe("Transactions owns no Forex or Savings capital summary", () => {
   const transactions = readFileSync(
     path.resolve(__dirname, "TransactionsPage.tsx"),
     "utf8",
@@ -16,36 +17,45 @@ describe("TransactionsPage reads Forex for cash cards without owning its ledger"
     path.resolve(__dirname, "../investments/InvestmentsPage.tsx"),
     "utf8",
   );
-  const reloadStart = transactions.indexOf("const reloadData = useCallback(async () => {");
-  const feedStart = transactions.indexOf("const filtered = useMemo(() => {");
-  const feedEnd = transactions.indexOf("const sorted = useMemo(() => {", feedStart);
+  const wallets = readFileSync(
+    path.resolve(__dirname, "../wallets/WalletsPage.tsx"),
+    "utf8",
+  );
 
-  it("reads bounded Forex history solely for the summary in the effective period", () => {
-    expect(transactions).toContain("getForexCashTransactionsInRange(startDate, endDate)");
-    expect(transactions).toContain("summarizeTransactionWalletCashMovement({");
-    expect(reloadStart).toBeGreaterThan(-1);
-    expect(feedStart).toBeGreaterThan(reloadStart);
+  it("does not fetch or aggregate Forex/Savings capital in Transactions", () => {
+    expect(transactions).toContain("getTransactionsInRange(startDate, endDate)");
+    expect(transactions).toContain("summarizeTransactionIncomeExpense({");
+    for (const token of [
+      "getForexCashTransactionsInRange",
+      "getSavingTransactionsInRange",
+      "forexCashTransactions",
+      "savingMovements",
+      "summarizeTransactionWalletCashMovement",
+      "showCashMovementBreakdown",
+    ]) {
+      expect(transactions).not.toContain(token);
+    }
   });
 
-  it("does not own Forex accounts, history editing, export, or manual mutations", () => {
+  it("keeps all Forex history/mutations in Investments", () => {
     for (const token of [
       "getForexAccounts(",
       "deleteForexCashTransaction(",
       "createForexCashTransaction(",
       'from("forex_cash_transactions")',
-      "forexCashTransactions.map(",
+      'data-ui="forex-history-workstation"',
     ]) {
       expect(transactions).not.toContain(token);
     }
-    expect(transactions.slice(feedStart, feedEnd)).not.toContain("forexCashTransactions");
-    expect(transactions).not.toContain('data-ui="forex-history-workstation"');
     expect(investments).toContain('data-ui="forex-history-workstation"');
     expect(investments).toContain("getForexCashTransactions");
   });
 
-  it("preserves the ordinary transactions read and realtime listener", () => {
-    expect(transactions).toContain("getTransactionsInRange(startDate, endDate)");
+  it("preserves canonical wallet movement including investment and saving activity", () => {
+    expect(wallets).toContain("calculateWalletCashMovementSnapshot({");
+    expect(wallets).toContain("getSavingTransactionsInRange(startDate, endDate)");
+    expect(wallets).toContain("getForexCashTransactionsInRange(startDate, endDate)");
     expect(transactions).toContain('useRealtimeTable(\n    ["transactions", "wallets", "categories"],');
-    expect(transactions).toContain('useRealtimeTable(\n    ["saving_transactions", "forex_cash_transactions"],');
+    expect(transactions).not.toContain('useRealtimeTable(\n    ["saving_transactions", "forex_cash_transactions"],');
   });
 });

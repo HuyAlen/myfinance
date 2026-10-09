@@ -17,14 +17,15 @@ describe("CROSSPAGE-REGRESSION-1 page adoption gate", () => {
     expect(source).toContain("periodFinanceFlow.futureNetAllocation");
   });
 
-  it("keeps Transactions and Wallets on canonical wallet cash movement while real expense remains in SSOT", () => {
+  it("keeps Transactions on real income/expense while Wallets retains canonical liquidity", () => {
     const transactions = read("components/transactions/TransactionsPage.tsx");
-    const cardSelectors = read("lib/transactions/transactionCashMovementCards.ts");
+    const selectors = read("lib/transactions/transactionIncomeExpenseScope.ts");
     const wallets = read("components/wallets/WalletsPage.tsx");
 
-    expect(transactions).toContain("summarizeTransactionWalletCashMovement({");
+    expect(transactions).toContain("summarizeTransactionIncomeExpense({");
     expect(transactions).toContain("if (!isOrdinaryTransactionFeedRow(t)) return false;");
-    expect(cardSelectors).toContain("calculateFinanceFlowSnapshot({");
+    expect(selectors).toContain("getTotalIncome(scoped)");
+    expect(selectors).toContain("getRealExpenseTransactions(scoped, input.categories)");
     expect(wallets).toContain("calculateWalletCashMovementSnapshot({");
     expect(wallets).toContain("periodWalletCashMovement.cashIn");
     expect(wallets).toContain("periodWalletCashMovement.cashOut");
