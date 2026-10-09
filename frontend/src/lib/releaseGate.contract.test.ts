@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const workflow = readFileSync(
   path.resolve(__dirname, "../../../.github/workflows/myfinance-quality-gate.yml"),
   "utf8",
-);
+).replace(/\r\n?/g, "\n");
 
 /** MYFINANCE-RELEASE-GATE-1 - guard the actual GitHub Actions config. */
 describe("MyFinance release gate contract", () => {
