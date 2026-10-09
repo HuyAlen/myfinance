@@ -21,6 +21,11 @@ import {
 } from "@/src/lib/transactions/transactionClassification";
 import { resolveTransactionsEffectiveRange } from "@/src/lib/transactions/transactionsPeriod";
 import {
+  isOrdinaryTransactionFeedRow,
+  scopeWalletCashMovementTransactions,
+  summarizeTransactionWalletCashMovement,
+} from "@/src/lib/transactions/transactionCashMovementCards";
+import {
   applyTransactionReviewAcknowledgements,
   buildTransactionReviewAcknowledgementKey,
   findPossibleDuplicatePeers,
@@ -93,6 +98,7 @@ import {
 
 import type {
   Category,
+  ForexCashTransaction,
   RecurrenceFrequency,
   Transaction,
   TransactionType,
@@ -102,6 +108,8 @@ import {
   addTransaction,
   deleteTransaction,
   getCategories,
+  getForexCashTransactionsInRange,
+  getSavingTransactionsInRange,
   getTransactionsInRange,
   getWallets,
   updateTransaction,
@@ -109,8 +117,7 @@ import {
 import {
   formatVND,
   getCategoryPlanningGroup,
-  getRealExpenseTransactions,
-  getTotalIncome,
+  type SavingAllocationMovement,
 } from "@/src/services/finance/financeCalculations";
 import {
   CurrencyInput,
@@ -543,6 +550,14 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  // Domain-specific ledgers supply read-only cash movement summaries.
+  const [savingMovements, setSavingMovements] = useState<SavingAllocationMovement[]>([]);
+  const [forexCashTransactions, setForexCashTransactions] = useState<ForexCashTransaction[]>([]);
+  const [cashMovementReadState, setCashMovementReadState] = useState<{
+    periodKey: string;
+    status: "ready" | "error";
+  } | null>(null);
+  const [showCashMovementBreakdown, setShowCashMovementBreakdown] = useState(false);
   // FINANCE-DATA-1B: "Chưa có giao dịch" is a legitimate-empty-ledger
   // claim — it must not render before the transactions fetch has actually
   // SUCCEEDED at least once. `isLoadingTransactions` only ever tracks the
@@ -691,11 +706,14 @@ export default function TransactionsPage() {
   // ledger; investment cash history belongs exclusively to Investments.
   const reloadData = useCallback(async () => {
     const { startDate, endDate } = effectiveRange;
-    const [txnsResult, catsResult, walletsResult] = await Promise.allSettled([
-      getTransactionsInRange(startDate, endDate),
-      getCategories(),
-      getWallets(),
-    ]);
+    const [txnsResult, catsResult, walletsResult, savingResult, forexResult] =
+      await Promise.allSettled([
+        getTransactionsInRange(startDate, endDate),
+        getCategories(),
+        getWallets(),
+        getSavingTransactionsInRange(startDate, endDate),
+        getForexCashTransactionsInRange(startDate, endDate),
+      ]);
 
     if (txnsResult.status === "fulfilled") {
       setTransactions(txnsResult.value);
@@ -728,6 +746,29 @@ export default function TransactionsPage() {
         walletsResult.reason,
       );
     }
+
+    if (savingResult.status === "fulfilled") {
+      setSavingMovements(savingResult.value.map((row) => ({
+        type: row.type,
+        amount: Number(row.amount),
+        date: row.transaction_date,
+        walletId: row.wallet_id,
+      })));
+    } else {
+      console.error("[TransactionsPage] Savings cash summary unavailable", savingResult.reason);
+    }
+    if (forexResult.status === "fulfilled") {
+      setForexCashTransactions(forexResult.value);
+    } else {
+      console.error("[TransactionsPage] Forex cash summary unavailable", forexResult.reason);
+    }
+    // Never certify a partial read as a real zero. The period key prevents
+    // old period totals showing briefly during a new period's fetch.
+    setCashMovementReadState({
+      periodKey: startDate + "|" + endDate,
+      status: [txnsResult, catsResult, walletsResult, savingResult, forexResult]
+        .every((result) => result.status === "fulfilled") ? "ready" : "error",
+    });
   }, [effectiveRange]);
   // ── Reload coordinator ──────────────────────────────────────────────────
   // `reloadData`'s identity changes with `effectiveRange`. `latestReloadDataRef`
@@ -799,6 +840,10 @@ export default function TransactionsPage() {
   }, []);
   useRealtimeTable(
     ["transactions", "wallets", "categories"],
+    requestTransactionsRefresh,
+  );
+  useRealtimeTable(
+    ["saving_transactions", "forex_cash_transactions"],
     requestTransactionsRefresh,
   );
   useRealtimeTable(["transaction_rules"], reloadTransactionRules);
@@ -928,6 +973,9 @@ export default function TransactionsPage() {
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
+      // Managed transfers remain in the canonical database for reconciliation;
+      // their history is not an editable ordinary transaction feed entry.
+      if (!isOrdinaryTransactionFeedRow(t)) return false;
       // TXN-CORRECTNESS-1: defensive re-check against the actual effective
       // period (not a hardcoded "month" prefix match) — the fetch is
       // already scoped to this same range, but keeping this guard means a
@@ -1025,51 +1073,55 @@ export default function TransactionsPage() {
     });
   }, [filtered, sortKey, sortDir, categoryById, walletById]);
 
-  const cashFlowTransactions = useMemo(
-    () =>
-      filtered.filter(
-        (transaction) => !isInternalTransferTransaction(transaction),
-      ),
-    [filtered],
+  // CASH-MOVEMENT-CARDS-1: cards follow period + wallet/local-date context;
+  // keyword, type, category and amount remain ordinary-feed-only filters.
+  const cashMovementScope = useMemo(
+    () => ({ effectiveRange, dateFrom, dateTo, walletId: walletFilter }),
+    [effectiveRange, dateFrom, dateTo, walletFilter],
   );
-  const totalIncome = useMemo(
-    () => getTotalIncome(cashFlowTransactions),
-    [cashFlowTransactions],
+  const cashMovementSnapshot = useMemo(
+    () => summarizeTransactionWalletCashMovement({
+      transactions,
+      categories,
+      savingMovements,
+      forexCashTransactions,
+      scope: cashMovementScope,
+    }),
+    [transactions, categories, savingMovements, forexCashTransactions, cashMovementScope],
   );
-  const realExpenseTransactions = useMemo(
-    () => getRealExpenseTransactions(cashFlowTransactions, categories),
-    [cashFlowTransactions, categories],
-  );
-  const totalExpense = useMemo(
-    () =>
-      realExpenseTransactions.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0,
-      ),
-    [realExpenseTransactions],
-  );
+  const cashMovementPeriodKey = effectiveRange.startDate + "|" + effectiveRange.endDate;
+  const cashMovementReady =
+    !!cashMovementReadState &&
+    cashMovementReadState?.periodKey === cashMovementPeriodKey &&
+    cashMovementReadState.status === "ready" &&
+    !isLoadingTransactions &&
+    !transactionsLoadError;
+  const cashMovementError =
+    !!cashMovementReadState &&
+    cashMovementReadState.periodKey === cashMovementPeriodKey &&
+    cashMovementReadState.status === "error";
+  const totalIncome = cashMovementSnapshot.cashIn;
+  const totalExpense = cashMovementSnapshot.cashOut;
+  const netCashFlow = cashMovementSnapshot.netCashMovement;
   const totalLiquidity = useMemo(
     () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
     [wallets],
   );
-  const netCashFlow = totalIncome - totalExpense;
+  const scopedWalletTransfers = useMemo(
+    () => scopeWalletCashMovementTransactions(transactions, cashMovementScope)
+      .filter((transaction) =>
+        isOrdinaryTransactionFeedRow(transaction) &&
+        isInternalTransferTransaction(transaction) &&
+        Boolean(transaction.transferToWalletId)),
+    [transactions, cashMovementScope],
+  );
   const internalTransferTurnover = useMemo(
-    () =>
-      filtered
-        .filter((transaction) => isInternalTransferTransaction(transaction))
-        .reduce(
-          (sum, transaction) =>
-            sum + getInternalTransferTurnoverAmount(transaction),
-          0,
-        ),
-    [filtered],
+    () => scopedWalletTransfers.reduce(
+      (sum, transaction) => sum + getInternalTransferTurnoverAmount(transaction), 0,
+    ),
+    [scopedWalletTransfers],
   );
-  const transferCount = useMemo(
-    () =>
-      filtered.filter((transaction) => isInternalTransferTransaction(transaction))
-        .length,
-    [filtered],
-  );
+  const transferCount = scopedWalletTransfers.length;
 
   const timelineGroups = useMemo(() => {
     const groups = new Map<string, Transaction[]>();
@@ -2153,10 +2205,6 @@ export default function TransactionsPage() {
     amountMin,
     amountMax,
   ].filter(Boolean).length;
-  const cashFlowMarginRate =
-    totalIncome > 0
-      ? Math.round((Math.max(0, netCashFlow) / totalIncome) * 100)
-      : 0;
 
   const modalAmount = Number(form.amount) || 0;
   const selectedWallet = wallets.find((wallet) => wallet.id === form.walletId);
@@ -2351,53 +2399,130 @@ export default function TransactionsPage() {
           <LiquidityHeroCard
             value={formatVND(totalLiquidity)}
             walletCount={wallets.length}
-            netCashFlow={netCashFlow}
+            netCashFlow={cashMovementReady ? netCashFlow : null}
           />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3 xl:grid-cols-4">
           <SummaryCard
-            label="Thu nhập"
-            value={formatVND(totalIncome)}
-            note={`${cashFlowTransactions.filter((item) => item.type === "income").length} giao dịch`}
-            footerLabel="Dòng tiền kỳ này"
-            footerValue={getSignedAmountText(netCashFlow)}
+            label="Tiền vào ví"
+            value={cashMovementReady ? formatVND(totalIncome) : "—"}
+            note="Thu nhập + vốn rút về"
+            footerLabel="Thu nhập thực"
+            footerValue={cashMovementReady ? formatVND(cashMovementSnapshot.ordinaryCashIn) : "—"}
             hideFooterValueOnMobile
             tone="income"
           />
 
           <SummaryCard
-            label="Chi tiêu"
-            value={formatVND(totalExpense)}
-            note={`${realExpenseTransactions.length} giao dịch`}
-            footerLabel="Tỷ lệ chi tiêu / Thu nhập"
-            mobileFooterLabel="Tỷ lệ chi / thu"
-            footerValue={
-              totalIncome > 0
-                ? `${Math.round((totalExpense / totalIncome) * 100)}%`
-                : "0%"
-            }
+            label="Tiền ra ví"
+            value={cashMovementReady ? formatVND(totalExpense) : "—"}
+            note="Chi tiêu + vốn nạp vào"
+            footerLabel="Chi tiêu và phân bổ thủ công"
+            mobileFooterLabel="Chi tiêu / phân bổ"
+            footerValue={cashMovementReady ? formatVND(cashMovementSnapshot.ordinaryCashOut) : "—"}
+            hideFooterValueOnMobile
             tone="expense"
           />
 
           <SummaryCard
             label="Dòng tiền ròng"
-            value={getSignedAmountText(netCashFlow)}
-            note={netCashFlow >= 0 ? "Thu lớn hơn chi" : "Chi lớn hơn thu"}
-            footerLabel="Dư sau chi / Thu nhập"
-            footerValue={`${cashFlowMarginRate}%`}
+            value={cashMovementReady ? getSignedAmountText(netCashFlow) : "—"}
+            note="Tiền vào trừ tiền ra ví"
+            footerLabel="Dòng tiền hoạt động"
+            mobileFooterLabel="Thu/chi thực"
+            footerValue={cashMovementReady ? getSignedAmountText(cashMovementSnapshot.operatingNetCashFlow) : "—"}
+            hideFooterValueOnMobile
             tone={netCashFlow >= 0 ? "positive" : "negative"}
           />
 
           <SummaryCard
-            label="Chuyển nội bộ"
-            value={formatVND(internalTransferTurnover)}
-            note={`${transferCount} giao dịch`}
-            footerLabel="Ảnh hưởng thu chi"
+            label="Chuyển giữa ví"
+            value={cashMovementReady ? formatVND(internalTransferTurnover) : "—"}
+            note={cashMovementReady ? `${transferCount} lần chuyển ví` : "Đang tổng hợp"}
+            footerLabel="Ảnh hưởng tiền vào/ra"
+            mobileFooterLabel="Ảnh hưởng dòng tiền"
             footerValue="Không"
             tone="transfer"
           />
         </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1 text-[10px] leading-4 text-slate-500 sm:mt-3 sm:text-xs">
+          <p>
+            Số liệu theo {effectiveRangeLabel}
+            {walletFilter ? " · ví đã chọn" : " · tất cả ví"}
+            {dateFrom || dateTo ? " · ngày đã lọc" : ""}.
+            Bộ lọc danh sách khác không đổi số liệu thẻ.
+          </p>
+          {cashMovementReady && (
+            <button
+              type="button"
+              aria-controls="txn-cash-movement-breakdown"
+              aria-expanded={showCashMovementBreakdown}
+              onClick={() => setShowCashMovementBreakdown((value) => !value)}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-black text-blue-700 transition hover:bg-blue-100"
+            >
+              Chi tiết dòng tiền
+              <ChevronDown size={14} className={showCashMovementBreakdown ? "rotate-180" : ""} />
+            </button>
+          )}
+        </div>
+
+        {!cashMovementReady && (
+          <p
+            role={cashMovementError ? "alert" : "status"}
+            className={
+              "mt-2 rounded-xl px-3 py-2 text-xs font-semibold " +
+              (cashMovementError
+                ? "border border-rose-200 bg-rose-50 text-rose-700"
+                : "bg-slate-50 text-slate-500")
+            }
+          >
+            {cashMovementError
+              ? "Không thể tổng hợp đủ các sổ dòng tiền. Kiểm tra kết nối và tải lại."
+              : "Đang đồng bộ dòng tiền từ các sổ tài chính..."}
+          </p>
+        )}
+
+        {cashMovementReady && showCashMovementBreakdown && (
+          <div
+            id="txn-cash-movement-breakdown"
+            data-cash-movement-breakdown="true"
+            className="mt-3 grid gap-2 sm:grid-cols-2"
+          >
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/45 p-3">
+              <p className="text-xs font-black text-emerald-800">Tiền vào ví</p>
+              {([
+                ["Thu nhập thực", cashMovementSnapshot.ordinaryCashIn],
+                ["Rút tiết kiệm", cashMovementSnapshot.savingCashIn],
+                ["Rút vốn danh mục đầu tư", cashMovementSnapshot.portfolioInvestmentCashIn],
+                ["Rút vốn ngoại hối (thực nhận)", cashMovementSnapshot.forexCashIn],
+              ] as const).map(([label, amount]) => (
+                <div key={label} className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                  <span className="min-w-0">{label}</span>
+                  <span className="shrink-0 font-black tabular-nums text-emerald-800">{formatVND(amount)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl border border-rose-100 bg-rose-50/45 p-3">
+              <p className="text-xs font-black text-rose-700">Tiền ra ví</p>
+              {([
+                ["Chi tiêu và phân bổ thủ công", cashMovementSnapshot.ordinaryCashOut],
+                ["Gửi tiết kiệm", cashMovementSnapshot.savingCashOut],
+                ["Nạp vốn danh mục đầu tư", cashMovementSnapshot.portfolioInvestmentCashOut],
+                ["Nạp vốn ngoại hối (gồm phí)", cashMovementSnapshot.forexCashOut],
+              ] as const).map(([label, amount]) => (
+                <div key={label} className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                  <span className="min-w-0">{label}</span>
+                  <span className="shrink-0 font-black tabular-nums text-rose-700">{formatVND(amount)}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] leading-4 text-slate-500 sm:col-span-2">
+              Nạp/rút đầu tư là dịch chuyển tài sản, không phải thu nhập hoặc chi tiêu thực. Phí ngoại hối được tính một lần theo số tiền thực vào/ra ví.
+            </p>
+          </div>
+        )}
       </section>
 
       {reviewMode && (
@@ -4555,9 +4680,12 @@ function LiquidityHeroCard({
 }: {
   value: string;
   walletCount: number;
-  netCashFlow: number;
+  netCashFlow: number | null;
 }) {
-  const positiveFlow = netCashFlow >= 0;
+  const positiveFlow = netCashFlow === null || netCashFlow >= 0;
+  const flowStatus = netCashFlow === null
+    ? "Chưa có dữ liệu"
+    : positiveFlow ? "Ổn định" : "Cần kiểm soát";
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-blue-300 bg-linear-to-r from-blue-600 via-blue-600 to-indigo-600 px-3.5 py-3 text-white shadow-md shadow-blue-200/45 sm:rounded-[24px] sm:from-sky-500 sm:px-5 sm:py-4 sm:shadow-lg sm:shadow-blue-200/55">
@@ -4608,7 +4736,7 @@ function LiquidityHeroCard({
                 Dòng tiền kỳ này
               </p>
               <p className="mt-1 whitespace-nowrap text-lg font-black leading-none tabular-nums text-white sm:mt-2 sm:text-2xl">
-                {getSignedAmountText(netCashFlow)}
+                {netCashFlow === null ? "—" : getSignedAmountText(netCashFlow)}
               </p>
             </div>
             <span
@@ -4619,7 +4747,7 @@ function LiquidityHeroCard({
                   : "bg-rose-500/25 text-rose-100")
               }
             >
-              {positiveFlow ? "Ổn định" : "Cần kiểm soát"}
+              {flowStatus}
             </span>
           </div>
           <div className="mt-3 hidden items-center justify-between gap-3 text-xs font-bold sm:flex">
@@ -4632,7 +4760,7 @@ function LiquidityHeroCard({
                   : "bg-rose-500/25 text-rose-100")
               }
             >
-              {positiveFlow ? "Ổn định" : "Cần kiểm soát"}
+              {flowStatus}
             </span>
           </div>
         </div>

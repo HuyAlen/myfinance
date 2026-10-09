@@ -128,7 +128,8 @@ describe("TransactionsPage wiring: effective range consumed consistently (source
       "const { startDate, endDate } = effectiveRange;",
     );
     expect(reloadSource).toContain("getTransactionsInRange(startDate, endDate)");
-    expect(reloadSource).not.toContain("getForexCashTransactionsInRange");
+    expect(reloadSource).toContain("getForexCashTransactionsInRange(startDate, endDate)");
+    expect(reloadSource).toContain("getSavingTransactionsInRange(startDate, endDate)");
   });
 
   it("the main load-trigger effect re-fetches on effectiveRange change, not a stale selectedMonth", () => {
