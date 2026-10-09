@@ -23,7 +23,7 @@ describe("TRANSACTION-QUICK-REPEAT-1 candidate SSOT", () => {
     expect(
       buildTransactionQuickRepeatCandidates([
         transaction("one"),
-        transaction("different", { amount: 90000 }),
+        transaction("different", { note: "Different" }),
       ]),
     ).toEqual([]);
 
@@ -46,7 +46,7 @@ describe("TRANSACTION-QUICK-REPEAT-1 candidate SSOT", () => {
     expect(result[0].occurrences).toBe(2);
   });
 
-  it("keeps amount, category and wallet boundaries distinct", () => {
+  it("groups matching categories/notes/wallets despite varying previous amounts", () => {
     const result = buildTransactionQuickRepeatCandidates([
       transaction("base-1"),
       transaction("base-2"),
@@ -58,7 +58,12 @@ describe("TRANSACTION-QUICK-REPEAT-1 candidate SSOT", () => {
       transaction("category-2", { categoryId: "fuel" }),
     ], 10);
 
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(3);
+    const food = result.find((candidate) =>
+      candidate.transaction.categoryId === "food" &&
+      candidate.transaction.walletId === "wallet-1",
+    );
+    expect(food?.occurrences).toBe(4);
   });
 
   it("supports repeated wallet transfers only when source and destination are valid and distinct", () => {

@@ -1383,28 +1383,18 @@ export default function TransactionsPage() {
       transactions,
       mode: form.formMode,
       note: form.note,
-      categoryId: form.categoryId,
       validCategoryIds: filteredCategories.map((category) => category.id),
-      validWalletIds: wallets.map((wallet) => wallet.id),
     });
-    if (!suggestion) return null;
-
-    const alreadyApplied =
-      Number(form.amount) === suggestion.amount &&
-      form.categoryId === suggestion.categoryId &&
-      form.walletId === suggestion.walletId;
-    return alreadyApplied ? null : suggestion;
+    if (!suggestion || form.categoryId === suggestion.categoryId) return null;
+    return suggestion;
   }, [
     activeRuleSuggestion,
     filteredCategories,
-    form.amount,
     form.categoryId,
     form.formMode,
     form.id,
     form.note,
-    form.walletId,
     transactions,
-    wallets,
   ]);
 
   function applyActiveSmartDefaultsSuggestion() {
@@ -1412,9 +1402,7 @@ export default function TransactionsPage() {
 
     setForm((current) => ({
       ...current,
-      amount: String(activeSmartDefaultsSuggestion.amount),
       categoryId: activeSmartDefaultsSuggestion.categoryId,
-      walletId: activeSmartDefaultsSuggestion.walletId,
     }));
     setSaveError(null);
   }
@@ -1801,7 +1789,7 @@ export default function TransactionsPage() {
       ...createEmptyForm(),
       formMode,
       type: getTransactionTypeFromFormMode(formMode),
-      amount: String(t.amount),
+      amount: "",
       categoryId:
         formMode === "transfer"
           ? ""
@@ -2346,7 +2334,7 @@ export default function TransactionsPage() {
                     </p>
                     <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="whitespace-nowrap text-xs font-black text-slate-700">
-                        {formatVND(transaction.amount)}
+                        Nhập số tiền mới
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] font-black text-cyan-700">
                         <CopyPlus size={12} /> Ghi hôm nay
@@ -4183,24 +4171,20 @@ export default function TransactionsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-600">
-                        Gợi ý từ lịch sử
+                        Gợi ý danh mục từ lịch sử
                       </p>
                       <p className="mt-0.5 text-sm font-black text-slate-800">
-                        {activeSmartDefaultsSuggestion.matchKind === "note"
-                          ? `Khớp ${activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.`
-                          : `Dựa trên ${activeSmartDefaultsSuggestion.matchCount} giao dịch cùng danh mục.`}
+                        Khớp {activeSmartDefaultsSuggestion.matchCount} giao dịch có cùng ghi chú.
                       </p>
-                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                        {categoryById.get(activeSmartDefaultsSuggestion.categoryId)
-                          ?.name ?? "Danh mục"}
-                        {" · "}
-                        {walletById.get(activeSmartDefaultsSuggestion.walletId)
-                          ?.name ?? "Ví"}
-                        {" · "}
-                        {formatVND(activeSmartDefaultsSuggestion.amount)}
+                      <p className="mt-1 text-[11px] leading-4 text-slate-600">
+                        Danh mục đề xuất:{" "}
+                        <span className="font-bold">
+                          {categoryById.get(activeSmartDefaultsSuggestion.categoryId)
+                            ?.name ?? "Danh mục"}
+                        </span>
                       </p>
-                      <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                        Bạn vẫn kiểm tra trước khi lưu.
+                      <p className="mt-1 text-[10px] font-semibold text-slate-500">
+                        Số tiền cần nhập mới, không sao chép từ lịch sử.
                       </p>
                     </div>
                     <button
@@ -4208,7 +4192,7 @@ export default function TransactionsPage() {
                       onClick={applyActiveSmartDefaultsSuggestion}
                       className="min-h-10 shrink-0 rounded-xl bg-sky-600 px-3 py-2 text-xs font-black text-white transition hover:bg-sky-700 active:scale-[0.98]"
                     >
-                      Dùng gợi ý
+                      Chọn danh mục
                     </button>
                   </div>
                 </div>

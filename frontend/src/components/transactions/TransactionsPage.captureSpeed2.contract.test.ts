@@ -94,7 +94,8 @@ describe("TRANSACTION-CAPTURE-SPEED-2 — P0", () => {
     expect(start).toBeGreaterThan(-1);
     expect(region).toContain("...createEmptyForm()");
     expect(region).not.toContain("id: t.id");
-    expect(region).toContain("amount: String(t.amount)");
+    expect(region).toContain('amount: ""');
+    expect(region).not.toContain("t.amount");
     expect(region).toContain("date: getLocalDateInputValue()");
     expect(region).toContain("isRecurring: false");
     expect(region).toContain('nextRunDate: ""');

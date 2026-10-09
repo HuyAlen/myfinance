@@ -27,7 +27,7 @@ describe("WALLETS-MOBILE-POLISH-1 — compact mobile wallet hierarchy", () => {
 
   it("renders wallet-type classification as a compact read-only 2+1 mobile summary", () => {
     const start = source.indexOf("{/* SECTION 2 · Wallet Types */}");
-    const end = source.indexOf("Transfer Modal", start);
+    const end = source.indexOf("SECTION 3 · Wallet List", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const section = source.slice(start, end);

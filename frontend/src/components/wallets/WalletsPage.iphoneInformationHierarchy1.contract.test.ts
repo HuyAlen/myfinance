@@ -14,9 +14,9 @@ describe("WALLETS-IPHONE-INFORMATION-HIERARCHY-1", () => {
     const walletTypes = page.indexOf('data-wallets-section="wallet-types"');
 
     expect(overview).toBeGreaterThan(-1);
-    expect(walletList).toBeGreaterThan(overview);
-    expect(reconciliation).toBeGreaterThan(walletList);
+    expect(reconciliation).toBeGreaterThan(overview);
     expect(walletTypes).toBeGreaterThan(reconciliation);
+    expect(walletList).toBeGreaterThan(walletTypes);
     expect(page).not.toContain("md:order-none");
     expect(page).not.toMatch(/className="order-[1-4]/);
   });

@@ -36,7 +36,6 @@ function normalizeRepeatNote(note: string) {
 function buildRepeatKey(transaction: Transaction) {
   if (isSavingsManagedTransaction(transaction)) return null;
   if (hasRecurringMetadata(transaction)) return null;
-  if (!Number.isFinite(transaction.amount) || transaction.amount <= 0) return null;
 
   const mode = getRepeatMode(transaction);
   if (!mode) return null;
@@ -57,7 +56,6 @@ function buildRepeatKey(transaction: Transaction) {
 
   return [
     mode,
-    String(transaction.amount),
     categoryId,
     walletId,
     transferToWalletId,

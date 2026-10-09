@@ -12,8 +12,8 @@ const smartDefaults = readFileSync(
 ).replace(/\r\n/g, "\n");
 const normalized = page.replace(/\s+/g, " ");
 
-describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
-  it("derives advisory defaults from the already-loaded ledger without adding finance queries", () => {
+describe("TRANSACTION-SMART-DEFAULTS-1 category-only regression", () => {
+  it("uses only the already-loaded ledger and creates no extra finance queries", () => {
     expect(page).toContain(
       'import { buildTransactionSmartDefaultsSuggestion } from "@/src/lib/transactions/transactionSmartDefaults";',
     );
@@ -24,15 +24,16 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(page.split("getWallets(").length - 1).toBe(1);
   });
 
-  it("keeps smart defaults create-only for income/expense and waits for typed note context", () => {
+  it("waits for a note, remains create-only, and excludes transfer/review suggestion", () => {
     const start = page.indexOf("const activeSmartDefaultsSuggestion = useMemo(() => {");
     const end = page.indexOf("function applyActiveSmartDefaultsSuggestion()", start);
     const region = page.slice(start, end);
-
     expect(start).toBeGreaterThan(-1);
     expect(region).toContain('form.id || form.formMode === "transfer"');
     expect(region).toContain("if (!form.note.trim()) return null;");
     expect(region).toContain("mode: form.formMode");
+    expect(region).not.toContain("form.amount");
+    expect(region).not.toContain("form.walletId");
   });
 
   it("gives explicit user rules priority over learned history", () => {
@@ -43,47 +44,45 @@ describe("TRANSACTION-SMART-DEFAULTS-1 — P0", () => {
     expect(page).toContain('data-transaction-smart-defaults="true"');
   });
 
-  it("never auto-applies: history only changes the form after the user taps Dùng gợi ý", () => {
+  it("requires a tap, not automatic application", () => {
     expect(page).toContain("function applyActiveSmartDefaultsSuggestion() {");
     expect(page).toContain("onClick={applyActiveSmartDefaultsSuggestion}");
-    expect(page).toContain("Dùng gợi ý");
     expect(page).not.toContain("useEffect(() => applyActiveSmartDefaultsSuggestion");
     expect(page).not.toContain("autoApplySmartDefaults");
   });
 
-  it("only applies amount/category/wallet and leaves date, note, recurrence and save flow untouched", () => {
+  it("applies only category without overwriting amount, wallet, date, note or recurrence", () => {
     const start = page.indexOf("function applyActiveSmartDefaultsSuggestion() {");
     const end = page.indexOf("const activeEntryConfidenceWarnings", start);
     const region = page.slice(start, end);
-
-    expect(region).toContain("amount: String(activeSmartDefaultsSuggestion.amount)");
     expect(region).toContain("categoryId: activeSmartDefaultsSuggestion.categoryId");
-    expect(region).toContain("walletId: activeSmartDefaultsSuggestion.walletId");
+    expect(region).not.toContain("amount:");
+    expect(region).not.toContain("walletId:");
     expect(region).not.toContain("date:");
     expect(region).not.toContain("note:");
     expect(region).not.toContain("isRecurring:");
-    expect(region).not.toContain("nextRunDate:");
     expect(region).not.toContain("addTransaction(");
   });
 
-  it("uses current valid category/wallet ids and excludes transfer/recurring/Savings rows in the pure SSOT", () => {
+  it("filters valid categories, recurring, transfer and Savings-managed rows", () => {
     expect(page).toContain(
       "validCategoryIds: filteredCategories.map((category) => category.id)",
     );
-    expect(page).toContain("validWalletIds: wallets.map((wallet) => wallet.id)");
     expect(smartDefaults).toContain("isInternalTransferTransaction(transaction)");
     expect(smartDefaults).toContain("isSavingsManagedTransaction(transaction)");
     expect(smartDefaults).toContain("hasRecurringMetadata(transaction)");
+    expect(smartDefaults).not.toContain("transaction.amount");
+    expect(smartDefaults).not.toContain("transaction.walletId");
   });
 
-  it("does not persist learned transaction content to browser storage", () => {
+  it("never persists learned transaction content", () => {
     expect(smartDefaults).not.toContain("localStorage");
     expect(smartDefaults).not.toContain("sessionStorage");
     expect(smartDefaults).not.toContain("persistTransactionCapturePreferences");
     expect(smartDefaults).not.toContain("JSON.stringify");
   });
 
-  it("keeps one canonical mutation path and preserves Quick Repeat + capture-speed behavior", () => {
+  it("preserves one canonical mutation path and quick repeat plumbing", () => {
     expect(page.split("addTransaction(").length - 1).toBe(1);
     expect(page.split("updateTransaction(").length - 1).toBe(1);
     expect(page).toContain("buildTransactionQuickRepeatCandidates(transactions, 3)");
