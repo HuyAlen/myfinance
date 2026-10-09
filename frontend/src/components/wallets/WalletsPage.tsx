@@ -66,6 +66,10 @@ import { SaveError } from "@/src/components/ui/SaveError";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import WalletReconciliationCenter from "@/src/components/wallets/WalletReconciliationCenter";
 import type { WalletReconciliationRecord } from "@/src/services/finance/financeStorage";
+import {
+  getWalletReconciliationStatus,
+  walletReconciliationStatusLabels,
+} from "@/src/lib/walletReconciliationStatus";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -625,6 +629,10 @@ export default function WalletsPage() {
     () => wallets.filter(isSpendableWallet),
     [wallets],
   );
+  const reconciliationRecordByWallet = useMemo(
+    () => new Map(reconciliationCoverage.map((record) => [record.walletId, record])),
+    [reconciliationCoverage],
+  );
 
   // REALTIME-NAV-INTEGRITY-1: entity-focus links are navigation context, not
   // filters. Once the authoritative wallet snapshot contains the requested
@@ -956,15 +964,11 @@ export default function WalletsPage() {
     if (!reconcileTarget || isReconciling) return;
 
     const actualBalance = Number(reconcileBalance);
-    if (!Number.isFinite(actualBalance) || actualBalance < 0) {
+    if (!reconcileBalance.trim() || !Number.isFinite(actualBalance) || actualBalance < 0) {
       setReconcileError("Vui lòng nhập số dư thực tế hợp lệ");
       return;
     }
-    if (actualBalance === reconcileTarget.balance) {
-      setReconcileError("Số dư thực tế đang trùng với MyFinance, không cần điều chỉnh.");
-      return;
-    }
-
+    // Equal balances still need an immutable confirmation receipt.
     setReconcileError(null);
     setIsReconciling(true);
     try {
@@ -999,7 +1003,9 @@ export default function WalletsPage() {
           : "−" + formatVND(Math.abs(result.difference));
       toast({
         variant: "success",
-        message: "Đã đối soát " + reconcileTarget.name + ": " + deltaText + ".",
+        message: result.difference === 0
+          ? "Đã xác nhận số dư khớp cho ví " + reconcileTarget.name + "."
+          : "Đã đối soát " + reconcileTarget.name + ": " + deltaText + ".",
       });
       setReconcileTarget(null);
       setReconcileBalance("");
@@ -1408,6 +1414,10 @@ export default function WalletsPage() {
               ? (walletLinkCounts.get(wallet.id) ?? 0)
               : null;
             const color = TYPE_COLORS[wallet.type];
+            const reconciliationStatus = getWalletReconciliationStatus(
+              wallet,
+              reconciliationRecordByWallet.get(wallet.id),
+            );
 
             return (
               <div
@@ -1439,6 +1449,20 @@ export default function WalletsPage() {
                       >
                         {getWalletTypeLabel(wallet.type)}
                       </span>
+                      {!isLoadingReconciliationCoverage && !reconciliationCoverageError ? (
+                        <span
+                          className={
+                            "mt-1 ml-1 inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-bold " +
+                            (reconciliationStatus === "reconciled"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : reconciliationStatus === "never"
+                                ? "border-amber-200 bg-amber-50 text-amber-800"
+                                : "border-orange-200 bg-orange-50 text-orange-800")
+                          }
+                        >
+                          {walletReconciliationStatusLabels[reconciliationStatus]}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2016,10 +2040,10 @@ export default function WalletsPage() {
                 </div>
                 <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
                   <p className="text-xs font-black text-blue-800">
-                    Điều chỉnh số dư, không tạo dòng tiền giả
+                    Xác nhận số dư, không tạo dòng tiền giả
                   </p>
                   <p className="mt-1 text-[11px] leading-5 text-slate-600">
-                    Đối soát không tạo giao dịch Thu/Chi/Chuyển tiền, nên không làm sai báo cáo dòng tiền. Thay đổi số dư được ghi nhật ký tự động với số dư trước/sau và người thực hiện.
+                    Đối soát không tạo giao dịch Thu/Chi/Chuyển tiền, nên không làm sai báo cáo dòng tiền. Số dư khớp chỉ lưu biên nhận; số dư lệch mới được điều chỉnh. Biên nhận lưu số dư trước/sau và người thực hiện.
                   </p>
                   <Link
                     href="/activity"
@@ -2053,13 +2077,17 @@ export default function WalletsPage() {
                     type="submit"
                     disabled={
                       isReconciling ||
+                      !reconcileBalance.trim() ||
                       !Number.isFinite(Number(reconcileBalance)) ||
-                      Number(reconcileBalance) < 0 ||
-                      Number(reconcileBalance) === reconcileTarget.balance
+                      Number(reconcileBalance) < 0
                     }
                     className="min-h-11 flex-1 rounded-2xl bg-blue-600 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isReconciling ? "Đang đối soát..." : "Xác nhận đối soát"}
+                    {isReconciling
+                      ? "Đang đối soát..."
+                      : Number(reconcileBalance) === reconcileTarget.balance
+                        ? "Xác nhận số dư khớp"
+                        : "Xác nhận điều chỉnh"}
                   </button>
                 </div>
               </div>

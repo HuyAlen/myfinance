@@ -63,6 +63,7 @@ describe("WALLET-RECONCILIATION-COVERAGE-SSOT-1 storage", () => {
           actor_user_id: "actor-1",
           reconciled_at: "2026-01-02T03:04:05.000Z",
           created_at: "2026-01-02T03:04:05.000Z",
+          balance_revision: null,
         },
       ],
       error: null,
@@ -79,6 +80,7 @@ describe("WALLET-RECONCILIATION-COVERAGE-SSOT-1 storage", () => {
         note: null,
         actorUserId: "actor-1",
         reconciledAt: "2026-01-02T03:04:05.000Z",
+        balanceRevision: null,
       },
     ]);
     expect(mockRpc).toHaveBeenCalledWith(
@@ -86,6 +88,37 @@ describe("WALLET-RECONCILIATION-COVERAGE-SSOT-1 storage", () => {
     );
   });
 
+  it("preserves the version of a newly verified wallet", async () => {
+    const reader = getCoverageReader();
+    expect(reader).toBeTypeOf("function");
+    if (!reader) return;
+
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          id: "receipt-versioned",
+          user_id: "user-1",
+          wallet_id: "wallet-2",
+          expected_balance: "50",
+          actual_balance: "50",
+          difference: "0",
+          note: null,
+          actor_user_id: "actor-1",
+          reconciled_at: "2026-10-09T09:00:00.000Z",
+          created_at: "2026-10-09T09:00:00.000Z",
+          balance_revision: 7,
+        },
+      ],
+      error: null,
+    });
+
+    await expect(reader()).resolves.toEqual([
+      expect.objectContaining({
+        walletId: "wallet-2",
+        balanceRevision: 7,
+      }),
+    ]);
+  });
   it("rejects a coverage RPC failure instead of certifying fake zero coverage", async () => {
     const reader = getCoverageReader();
     expect(reader).toBeTypeOf("function");

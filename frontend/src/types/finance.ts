@@ -37,6 +37,8 @@ export type Wallet = {
   name: string;
   type: WalletType;
   balance: number;
+  /** Server-stamped balance mutation version, present after STATUS-UX-1 migration. */
+  balance_revision?: number;
 };
 
 export type SavingAccount = {

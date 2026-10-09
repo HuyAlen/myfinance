@@ -66,7 +66,7 @@ describe("REAL-IPHONE-NO-OVERLAP-NOWRAP-1", () => {
       'className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3"',
     );
     expect(reconciliation).toContain(
-      'className="col-span-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 sm:col-span-1"',
+      'className="col-span-2 rounded-2xl border border-orange-100 bg-orange-50/70 p-3 sm:col-span-1"',
     );
     expect(
       reconciliation.split(

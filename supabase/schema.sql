@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS public.wallets (
   name       text          NOT NULL,
   type       wallet_type   NOT NULL DEFAULT 'cash',
   balance    numeric(15,2) NOT NULL DEFAULT 0,
+  balance_revision bigint NOT NULL DEFAULT 0,
   currency   text          NOT NULL DEFAULT 'VND',
   created_at timestamptz   NOT NULL DEFAULT now(),
   updated_at timestamptz   NOT NULL DEFAULT now(),
@@ -7580,6 +7581,7 @@ CREATE TABLE IF NOT EXISTS public.wallet_reconciliations (
   expected_balance numeric NOT NULL,
   actual_balance numeric NOT NULL,
   difference numeric GENERATED ALWAYS AS (actual_balance - expected_balance) STORED,
+  balance_revision bigint,
   note text,
   actor_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   reconciled_at timestamptz NOT NULL DEFAULT now(),
@@ -7607,6 +7609,33 @@ REVOKE ALL ON TABLE public.wallet_reconciliations FROM PUBLIC, anon;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.wallet_reconciliations FROM authenticated;
 GRANT SELECT ON TABLE public.wallet_reconciliations TO authenticated;
 
+-- WALLET-RECONCILIATION-STATUS-UX-1: version only actual balance mutations.
+-- This avoids false "needs review" after editing wallet name/type and preserves
+-- an immutable check marker even when a balance later returns to its old value.
+CREATE OR REPLACE FUNCTION public.wallet_balance_revision_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.balance_revision := 0;
+  ELSIF NEW.balance IS DISTINCT FROM OLD.balance THEN
+    NEW.balance_revision := OLD.balance_revision + 1;
+  ELSE
+    NEW.balance_revision := OLD.balance_revision;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.wallet_balance_revision_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_wallet_balance_revision ON public.wallets;
+CREATE TRIGGER trg_wallet_balance_revision
+BEFORE INSERT OR UPDATE ON public.wallets
+FOR EACH ROW EXECUTE FUNCTION public.wallet_balance_revision_guard();
+
 CREATE OR REPLACE FUNCTION public.reconcile_wallet_balance_atomic(
   p_wallet_id text,
   p_expected_balance numeric,
@@ -7623,6 +7652,7 @@ DECLARE
   v_owner_user_id uuid;
   v_wallet public.wallets%rowtype;
   v_note text := NULLIF(trim(COALESCE(p_note, '')), '');
+  v_balance_revision bigint;
 BEGIN
   IF v_actor_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = 'MFR01';
@@ -7659,14 +7689,14 @@ BEGIN
     RAISE EXCEPTION 'Wallet balance changed' USING ERRCODE = 'MFR02';
   END IF;
 
-  IF p_actual_balance = p_expected_balance THEN
-    RAISE EXCEPTION 'No reconciliation needed' USING ERRCODE = 'MFR05';
+  v_balance_revision := v_wallet.balance_revision;
+  IF p_actual_balance IS DISTINCT FROM p_expected_balance THEN
+    UPDATE public.wallets
+    SET balance = p_actual_balance
+    WHERE id = v_wallet.id
+      AND user_id = v_owner_user_id
+    RETURNING balance_revision INTO v_balance_revision;
   END IF;
-
-  UPDATE public.wallets
-  SET balance = p_actual_balance
-  WHERE id = v_wallet.id
-    AND user_id = v_owner_user_id;
 
   RETURN QUERY
   INSERT INTO public.wallet_reconciliations (
@@ -7675,7 +7705,8 @@ BEGIN
     expected_balance,
     actual_balance,
     note,
-    actor_user_id
+    actor_user_id,
+    balance_revision
   )
   VALUES (
     v_owner_user_id,
@@ -7683,7 +7714,8 @@ BEGIN
     p_expected_balance,
     p_actual_balance,
     v_note,
-    v_actor_user_id
+    v_actor_user_id,
+    v_balance_revision
   )
   RETURNING *;
 END;

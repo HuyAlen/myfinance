@@ -148,6 +148,7 @@ type WalletRow = {
   name: string;
   type: WalletType;
   balance: number;
+  balance_revision: number;
   currency: string;
   created_at: string;
   updated_at: string;
@@ -158,6 +159,7 @@ type WalletInsert = {
   name: string;
   type?: WalletType;
   balance?: number;
+  balance_revision?: number;
   currency?: string;
   created_at?: string;
   updated_at?: string;
@@ -171,6 +173,7 @@ type WalletReconciliationRow = {
   expected_balance: number;
   actual_balance: number;
   difference: number;
+  balance_revision: number | null;
   note: string | null;
   actor_user_id: string;
   reconciled_at: string;
@@ -182,6 +185,7 @@ type WalletReconciliationInsert = {
   wallet_id: string;
   expected_balance: number;
   actual_balance: number;
+  balance_revision?: number | null;
   note?: string | null;
   actor_user_id: string;
   reconciled_at?: string;

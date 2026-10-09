@@ -2197,6 +2197,7 @@ export type WalletReconciliationRecord = {
   note: string | null;
   actorUserId: string;
   reconciledAt: string;
+  balanceRevision?: number | null;
 };
 
 export type WalletReconciliationResult =
@@ -2226,6 +2227,7 @@ function mapWalletReconciliationRow(
     note: row.note,
     actorUserId: row.actor_user_id,
     reconciledAt: row.reconciled_at,
+    balanceRevision: row.balance_revision ?? null,
   };
 }
 
@@ -2265,7 +2267,7 @@ export async function getWalletReconciliations(options: {
   let query = supabase
     .from("wallet_reconciliations")
     .select(
-      "id,user_id,wallet_id,expected_balance,actual_balance,difference,note,actor_user_id,reconciled_at,created_at",
+      "id,user_id,wallet_id,expected_balance,actual_balance,difference,note,actor_user_id,reconciled_at,created_at,balance_revision",
     )
     .eq("user_id", userId)
     .order("reconciled_at", { ascending: false })
@@ -2333,13 +2335,8 @@ export async function reconcileWalletBalance(input: {
   ) {
     return { error: "Số dư đối soát không hợp lệ.", code: "invalid" };
   }
-  if (actualBalance === expectedBalance) {
-    return {
-      error: "Số dư thực tế đang trùng với MyFinance, không cần điều chỉnh.",
-      code: "invalid",
-    };
-  }
-
+  // Equal balances are legitimate confirmations. The server inserts a
+  // zero-difference receipt WITHOUT updating wallets.balance.
   const { data, error } = await supabase.rpc("reconcile_wallet_balance_atomic", {
     p_wallet_id: input.walletId,
     p_expected_balance: expectedBalance,

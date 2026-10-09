@@ -39,11 +39,12 @@ describe("WALLETS-IPHONE-INFORMATION-HIERARCHY-1", () => {
     expect(page).not.toContain('· {txCount === null ? "—" : txCount} GD liên kết\n');
   });
 
-  it("prioritizes never-reconciled wallets, then the wallet with the oldest latest receipt", () => {
+  it("prioritizes never-reconciled wallets, then due rechecks, then the oldest latest receipt", () => {
     expect(center).toContain('const reconciliationDataReady = !isLoading && !error;');
     expect(center).toContain('const oldestReconciledWallet =');
+    expect(center).toContain('const needsReview = walletRows.filter((row) => row.status === "needs_review");');
     expect(center).toContain('const reconciliationPriorityWallet =');
-    expect(center).toContain('neverReconciled[0] ?? oldestReconciledWallet');
+    expect(center).toContain('neverReconciled[0]?.wallet ?? needsReview[0]?.wallet ?? oldestReconciledWallet');
     expect(center).toContain('onReconcile(reconciliationPriorityWallet)');
     expect(center).toContain('Đối soát lâu nhất');
   });
