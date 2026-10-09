@@ -190,7 +190,10 @@ export default function RecurringMoneyPage() {
   }, []);
 
   useEffect(() => {
-    void reloadData();
+    const timer = window.setTimeout(() => {
+      void reloadData();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reloadData]);
 
   useRealtimeTable(["categories", "transactions", "wallets"], () => {

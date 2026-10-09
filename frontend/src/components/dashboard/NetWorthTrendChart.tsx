@@ -114,7 +114,8 @@ export default function NetWorthTrendChart({
 }) {
   const display = useMemo(() => {
     let previousSnapshotValue: number | null = null;
-    const trendWithDeltas: NetWorthDisplayPoint[] = trend.map((point) => {
+    const trendWithDeltas: NetWorthDisplayPoint[] = [];
+    for (const point of trend) {
       const hasSnapshot = point.hasData && point.value !== null;
       const deltaFromPrevious =
         hasSnapshot && previousSnapshotValue !== null
@@ -123,8 +124,8 @@ export default function NetWorthTrendChart({
 
       if (hasSnapshot) previousSnapshotValue = Number(point.value);
 
-      return { ...point, deltaFromPrevious };
-    });
+      trendWithDeltas.push({ ...point, deltaFromPrevious });
+    }
 
     const snapshotPoints = trendWithDeltas.filter(
       (point) => point.hasData && point.value !== null,

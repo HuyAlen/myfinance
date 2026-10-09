@@ -147,8 +147,6 @@ function extractRenderedCopy(source: string, fileName: string): CopyItem[] {
   );
   const items: CopyItem[] = [];
 
-  let visit: (node: ts.Node) => void;
-
   const collectValue = (node: ts.Node | undefined): void => {
     if (!node) return;
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
@@ -185,7 +183,7 @@ function extractRenderedCopy(source: string, fileName: string): CopyItem[] {
     ts.forEachChild(node, visitNestedJsx);
   };
 
-  visit = (node: ts.Node): void => {
+  function visit(node: ts.Node): void {
     if (ts.isJsxText(node)) {
       addCopy(items, sourceFile, node, node.getText(sourceFile));
       return;
@@ -231,7 +229,7 @@ function extractRenderedCopy(source: string, fileName: string): CopyItem[] {
     }
 
     ts.forEachChild(node, visit);
-  };
+  }
 
   visit(sourceFile);
   return items;

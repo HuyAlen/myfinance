@@ -70,7 +70,7 @@ describe("WALLETS-PERIOD-SSOT-1", () => {
 
   it("invalidates the previous selected-period snapshot while the new period loads", () => {
     expect(source).toMatch(
-      /useEffect\(\(\) => \{\n    setPeriodAnalyticsReady\(false\);\n    setIsLoadingPeriodAnalytics\(true\);\n    setPeriodAnalyticsError\(null\);\n    void runReload\(\);\n  \}, \[dateRange\.startDate, dateRange\.endDate, runReload\]\);/,
+      /useEffect\(\(\) => \{\n    const timer = window\.setTimeout\(\(\) => \{\n      setPeriodAnalyticsReady\(false\);\n      setIsLoadingPeriodAnalytics\(true\);\n      setPeriodAnalyticsError\(null\);\n      void runReload\(\);\n    \}, 0\);\n    return \(\) => window\.clearTimeout\(timer\);\n  \}, \[dateRange\.startDate, dateRange\.endDate, runReload\]\);/,
     );
   });
 

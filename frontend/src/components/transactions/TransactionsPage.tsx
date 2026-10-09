@@ -583,7 +583,10 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    void reloadTransactionReviewAcknowledgements();
+    const timer = window.setTimeout(() => {
+      void reloadTransactionReviewAcknowledgements();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reloadTransactionReviewAcknowledgements]);
 
   const [keyword, setKeyword] = useState("");
@@ -691,7 +694,10 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    void reloadTransactionRules();
+    const timer = window.setTimeout(() => {
+      void reloadTransactionRules();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [reloadTransactionRules]);
   // FINANCE-DATA-1: a rejected read never overwrites last-known-good state
   // with an empty array. Transactions owns only the ordinary transaction
@@ -913,22 +919,18 @@ export default function TransactionsPage() {
   const activeDuplicatePeers = activeReviewTransaction
     ? findPossibleDuplicatePeers(activeReviewTransaction, transactions)
     : [];
-  const activeReviewRuleSuggestion = useMemo(() => {
-    if (
-      !activeReviewTransaction ||
-      (activeReviewTransaction.type !== "income" &&
-        activeReviewTransaction.type !== "expense")
-    ) {
-      return null;
-    }
-    return evaluateTransactionRules(transactionRules, {
-      type: activeReviewTransaction.type,
-      amount: Number(activeReviewTransaction.amount),
-      note: activeReviewTransaction.note,
-      walletId: activeReviewTransaction.walletId,
-      categoryId: activeReviewTransaction.categoryId,
-    });
-  }, [activeReviewTransaction, transactionRules]);
+  const activeReviewRuleSuggestion =
+    activeReviewTransaction &&
+    (activeReviewTransaction.type === "income" ||
+      activeReviewTransaction.type === "expense")
+      ? evaluateTransactionRules(transactionRules, {
+          type: activeReviewTransaction.type,
+          amount: Number(activeReviewTransaction.amount),
+          note: activeReviewTransaction.note,
+          walletId: activeReviewTransaction.walletId,
+          categoryId: activeReviewTransaction.categoryId,
+        })
+      : null;
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {

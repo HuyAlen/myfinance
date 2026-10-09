@@ -589,10 +589,13 @@ export default function WalletsPage() {
   // The range-ref synchronization effect is declared earlier, so this reload
   // always observes the latest committed DateFilterProvider range.
   useEffect(() => {
-    setPeriodAnalyticsReady(false);
-    setIsLoadingPeriodAnalytics(true);
-    setPeriodAnalyticsError(null);
-    void runReload();
+    const timer = window.setTimeout(() => {
+      setPeriodAnalyticsReady(false);
+      setIsLoadingPeriodAnalytics(true);
+      setPeriodAnalyticsError(null);
+      void runReload();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [dateRange.startDate, dateRange.endDate, runReload]);
 
   // Wallet analytics consume Savings and Forex movement ledgers directly.

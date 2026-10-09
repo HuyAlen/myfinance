@@ -396,7 +396,9 @@ export default function InvestmentsPage() {
     cutoffAt: periodCutoffAt,
     periodKey,
   });
-  periodRequestRef.current = { cutoffAt: periodCutoffAt, periodKey };
+  useEffect(() => {
+    periodRequestRef.current = { cutoffAt: periodCutoffAt, periodKey };
+  }, [periodCutoffAt, periodKey]);
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
   const pendingReloadAttemptsRef = useRef(1);

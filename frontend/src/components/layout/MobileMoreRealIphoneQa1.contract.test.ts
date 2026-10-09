@@ -104,6 +104,8 @@ describe("MOBILE-MORE-REAL-IPHONE-QA-1", () => {
     expect(bottomNav).toContain("onMoreMenuOpenChange?.(false)");
     expect(header).toContain("onAccountMenuOpenChange?.(dropdownOpen)");
     expect(header).toContain("onAccountMenuOpenChange?.(false)");
-    expect(header).toContain("if (sidebarOpen) setDropdownOpen(false);");
+    expect(header).toContain("if (!sidebarOpen) return;");
+    expect(header).toContain("const timer = window.setTimeout(() => setDropdownOpen(false), 0);");
+    expect(header).toContain("return () => window.clearTimeout(timer);");
   });
 });
