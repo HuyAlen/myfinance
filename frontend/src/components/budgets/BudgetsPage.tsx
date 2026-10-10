@@ -1,4 +1,5 @@
 "use client";
+import { sortBudgetCardsByStatusPriority } from "@/src/lib/budgets/budgetStatusPrioritySort";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
@@ -440,17 +441,14 @@ export default function BudgetsPage() {
     periodBudgetRollups,
   ]);
 
-  // BUDGET-SPEND-SORT-1: show the categories with the highest actual spend
-  // first. Use the exact same canonical spend value rendered by each card;
-  // do not sort by budget limit or usage percentage. Copy before sorting so
-  // source state / rollup ordering is never mutated.
+  // BUDGET-STATUS-PRIORITY-SORT-1: prioritize overspent, at-limit, then
+  // under-limit budgets by utilization. Preserve source order on exact ties.
   const sortedDisplayBudgets = useMemo(
     () =>
-      [...displayBudgets].sort((a, b) => {
-        const spentA = a.periodSpent ?? getSpent(a);
-        const spentB = b.periodSpent ?? getSpent(b);
-        return spentB - spentA;
-      }),
+      sortBudgetCardsByStatusPriority(displayBudgets, (budget) => ({
+        spent: budget.periodSpent ?? getSpent(budget),
+        limit: budget.limitAmount,
+      })),
     [displayBudgets, getSpent],
   );
 

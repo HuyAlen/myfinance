@@ -51,20 +51,21 @@ describe("BUDGET-PERIOD-AGGREGATION-1 page integration", () => {
     expect(source).toContain('className="hidden gap-x-8 md:grid md:grid-cols-2"');
   });
 
-  it("keeps budget-card ranking separate and based on actual spend descending", () => {
+  it("ranks budget cards by status priority using canonical spending, independently of allocation", () => {
     const cardSortBlock = sliceBetween(
       "const sortedDisplayBudgets = useMemo",
       "// ── Selected-period budget summary",
     );
 
     expect(cardSortBlock).toContain(
-      "const spentA = a.periodSpent ?? getSpent(a);",
+      "sortBudgetCardsByStatusPriority(displayBudgets, (budget) => ({",
     );
     expect(cardSortBlock).toContain(
-      "const spentB = b.periodSpent ?? getSpent(b);",
+      "spent: budget.periodSpent ?? getSpent(budget),",
     );
-    expect(cardSortBlock).toContain("return spentB - spentA;");
-    expect(cardSortBlock).not.toContain("limitAmount");
+    expect(cardSortBlock).toContain("limit: budget.limitAmount,");
+    expect(cardSortBlock).toContain("[displayBudgets, getSpent]");
+    expect(cardSortBlock).not.toContain("return spentB - spentA;");
     expect(source).toContain("{sortedDisplayBudgets.map((budget) => {");
   });
 
