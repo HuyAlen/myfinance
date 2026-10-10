@@ -1264,20 +1264,20 @@ export default function BudgetsPage() {
                 key={budget.id}
                 id={`budget-card-${budget.id}`}
                 className={
-                  "group relative rounded-2xl border bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-5 " +
+                  "group relative flex h-full min-w-0 flex-col rounded-2xl border bg-white p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:rounded-3xl sm:p-5 " +
                   s.border +
                   (highlightedBudgetId === budget.id
                     ? " ring-2 ring-blue-400 ring-offset-2"
                     : "")
                 }
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-1 items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#2F80ED] shadow-sm sm:size-11 sm:rounded-2xl sm:bg-linear-to-br sm:from-blue-600 sm:to-cyan-500 sm:text-white">
                       <ChartPie size={18} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="line-clamp-2 text-[15px] font-black leading-snug text-[#36536B] sm:text-base">
+                      <h3 className="line-clamp-2 min-h-10 text-[15px] font-black leading-snug text-[#36536B] sm:min-h-11 sm:text-base">
                         {category?.name ?? "Danh mục"}
                       </h3>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
