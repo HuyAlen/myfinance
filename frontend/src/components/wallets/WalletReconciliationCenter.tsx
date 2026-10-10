@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  CheckCircle2, Clock3, RefreshCcw, ShieldCheck,
+  CheckCircle2, ChevronDown, ChevronUp, Clock3, RefreshCcw, ShieldCheck,
   AlertCircle,
 } from "lucide-react";
 import type { Wallet } from "@/src/types/finance";
@@ -66,6 +66,7 @@ export default function WalletReconciliationCenter({
   onReconcile,
 }: Props) {
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [isWalletStatusExpanded, setIsWalletStatusExpanded] = useState(false);
   const reconciliationDataReady = !isLoading && !error;
   const latestByWallet = new Map<string, WalletReconciliationRecord>();
   for (const record of records) {
@@ -208,14 +209,32 @@ export default function WalletReconciliationCenter({
       ) : isLoading ? (
         <div className="mt-4 h-16 animate-pulse rounded-2xl bg-slate-100" />
       ) : wallets.length > 0 ? (
-        <div className="mt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-black text-slate-800">Trạng thái từng ví</h3>
-            <span className="text-[10px] font-semibold text-slate-500">
-              Gần nhất: {latestRecord ? formatDateTime(latestRecord.reconciledAt) : "chưa có biên nhận"}
-            </span>
+        <div className="mt-3" data-wallet-reconciliation-status-section="true">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 sm:px-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-black text-slate-800">Trạng thái từng ví</h3>
+              <p className="mt-0.5 text-[10px] font-semibold text-slate-600 sm:text-xs">
+                {neverReconciled.length > 0 || needsReview.length > 0
+                  ? `${neverReconciled.length} chưa đối soát · ${needsReview.length} cần kiểm tra lại`
+                  : `${reconciledCount}/${wallets.length} ví đã đối soát · không cần xử lý`}
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+                Gần nhất: {latestRecord ? formatDateTime(latestRecord.reconciledAt) : "chưa có biên nhận"}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-expanded={isWalletStatusExpanded}
+              aria-controls="wallet-reconciliation-details"
+              onClick={() => setIsWalletStatusExpanded((expanded) => !expanded)}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+            >
+              {isWalletStatusExpanded ? "Thu gọn" : `Xem chi tiết (${wallets.length})`}
+              {isWalletStatusExpanded ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
+            </button>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" aria-label="Lọc trạng thái đối soát">
+          <div id="wallet-reconciliation-details" data-wallet-reconciliation-details="true" hidden={!isWalletStatusExpanded}>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" aria-label="Lọc trạng thái đối soát">
             {statusFilters.map((item) => (
               <button
                 key={item.value}
@@ -242,13 +261,15 @@ export default function WalletReconciliationCenter({
               <div className="divide-y divide-slate-100">
                 {orderedRows.map(({ wallet, receipt, status }) => (
                   <div key={wallet.id} data-reconciliation-wallet-id={wallet.id}
-                       className="flex min-w-0 items-center justify-between gap-2 px-3 py-3 sm:px-4">
+                       className="flex min-w-0 items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-black text-slate-800 sm:text-sm">{wallet.name}</p>
-                      <span className={"mt-1 inline-flex max-w-full rounded-full border px-2 py-0.5 text-[10px] font-bold " + getStatusClass(status)}>
-                        {walletReconciliationStatusLabels[status]}
-                      </span>
-                      <p className="mt-1 text-[10px] leading-4 text-slate-500 sm:text-xs">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="min-w-0 max-w-full truncate text-xs font-black text-slate-800 sm:text-sm">{wallet.name}</p>
+                        <span className={"inline-flex max-w-full shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold " + getStatusClass(status)}>
+                          {walletReconciliationStatusLabels[status]}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-slate-500 sm:text-xs">
                         {!receipt
                           ? "Chưa xác nhận số dư lần đầu"
                           : receipt.balanceRevision == null
@@ -275,6 +296,7 @@ export default function WalletReconciliationCenter({
             “Cần kiểm tra lại” không có nghĩa là số dư đang sai. Hệ thống chỉ phát hiện
             biến động số dư MyFinance hoặc biên nhận cũ chưa có phiên bản xác nhận.
           </p>
+          </div>
         </div>
       ) : (
         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">
