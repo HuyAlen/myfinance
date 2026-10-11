@@ -143,6 +143,31 @@ export function moveDashboardSection(
   return { ...normalized, order };
 }
 
+// Drag/drop uses the destination index in the order AFTER removing the dragged
+// item. Keep hidden modules in the same canonical order so re-showing them
+// restores the user's chosen position; never mutate existing preference state.
+export function reorderDashboardSection(
+  customization: DashboardCustomization,
+  sectionId: DashboardSectionId,
+  targetIndex: number,
+): DashboardCustomization {
+  const normalized = normalizeDashboardCustomization(customization);
+  const currentIndex = normalized.order.indexOf(sectionId);
+  if (
+    currentIndex === -1 ||
+    !Number.isInteger(targetIndex) ||
+    targetIndex < 0 ||
+    targetIndex >= normalized.order.length ||
+    currentIndex === targetIndex
+  ) {
+    return normalized;
+  }
+  const order = [...normalized.order];
+  order.splice(currentIndex, 1);
+  order.splice(targetIndex, 0, sectionId);
+  return { ...normalized, order };
+}
+
 export function toggleDashboardSection(
   customization: DashboardCustomization,
   sectionId: DashboardSectionId,

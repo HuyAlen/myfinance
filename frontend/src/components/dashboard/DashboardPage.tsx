@@ -3,6 +3,7 @@
 import { calculateEmergencyCoverageSnapshot } from "@/src/services/finance/emergencyCoverage";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -107,6 +108,7 @@ import {
   getDashboardSectionOrder,
   isDashboardSectionVisible,
   moveDashboardSection,
+  reorderDashboardSection,
   persistDashboardCustomization,
   readDashboardCustomization,
   toggleDashboardSection,
@@ -128,6 +130,7 @@ import {
   CircleAlert,
   Eye,
   EyeOff,
+  GripVertical,
   Info,
   Landmark,
   PiggyBank,
@@ -3448,6 +3451,34 @@ export default function DashboardPage() {
     useState<string | null>(null);
   const [dashboardCustomizationSaveState, setDashboardCustomizationSaveState] =
     useState<"ready" | "saved" | "error">("ready");
+  // DASHBOARD-CUSTOMIZATION-DRAG-DROP-1: pointer capture works for mouse,
+  // touch and pen without HTML5 drag events (which do not support iPhone well).
+  // Persist only on drop; let the rest of the modal keep its normal scroll.
+  const dashboardCustomizationScrollRef = useRef<HTMLDivElement | null>(null);
+  const dashboardSectionDragRef = useRef<{
+    pointerId: number;
+    sectionId: DashboardSectionId;
+    startY: number;
+    clientY: number;
+    targetIndex: number;
+    hasMoved: boolean;
+  } | null>(null);
+  const dashboardSectionDragFrameRef = useRef<number | null>(null);
+  const [dashboardSectionDragPreview, setDashboardSectionDragPreview] = useState<{
+    sectionId: DashboardSectionId;
+    targetIndex: number;
+  } | null>(null);
+
+  // Cancel animation if the sheet closes or Dashboard unmounts mid-drag.
+  useEffect(() => {
+    if (!isDashboardCustomizationOpen) dashboardSectionDragRef.current = null;
+    return () => {
+      if (dashboardSectionDragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dashboardSectionDragFrameRef.current);
+        dashboardSectionDragFrameRef.current = null;
+      }
+    };
+  }, [isDashboardCustomizationOpen]);
   useSuppressGlobalFabsWhileOpen(isDashboardCustomizationOpen);
 
   useEffect(() => {
@@ -3545,9 +3576,134 @@ export default function DashboardPage() {
     );
   }
 
+  function stopDashboardSectionDrag() {
+    if (dashboardSectionDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dashboardSectionDragFrameRef.current);
+      dashboardSectionDragFrameRef.current = null;
+    }
+    dashboardSectionDragRef.current = null;
+    setDashboardSectionDragPreview(null);
+  }
+
+  function updateDashboardSectionDropTarget(drag: NonNullable<typeof dashboardSectionDragRef.current>) {
+    const scroller = dashboardCustomizationScrollRef.current;
+    if (!scroller) return;
+    const otherRows = Array.from(
+      scroller.querySelectorAll<HTMLElement>("[data-dashboard-customization-row-id]"),
+    ).filter((row) => row.dataset.dashboardCustomizationRowId !== drag.sectionId);
+    let targetIndex = otherRows.findIndex((row) => {
+      const bounds = row.getBoundingClientRect();
+      return drag.clientY < bounds.top + bounds.height / 2;
+    });
+    if (targetIndex === -1) targetIndex = otherRows.length;
+    drag.targetIndex = targetIndex;
+    setDashboardSectionDragPreview((current) =>
+      current?.sectionId === drag.sectionId && current.targetIndex === targetIndex
+        ? current
+        : { sectionId: drag.sectionId, targetIndex },
+    );
+  }
+
+  function dashboardSectionDragAutoScroll() {
+    const drag = dashboardSectionDragRef.current;
+    const scroller = dashboardCustomizationScrollRef.current;
+    if (!drag?.hasMoved || !scroller) {
+      dashboardSectionDragFrameRef.current = null;
+      return;
+    }
+    const rect = scroller.getBoundingClientRect();
+    const edge = Math.min(56, Math.max(32, rect.height / 4));
+    const toTop = rect.top + edge - drag.clientY;
+    const toBottom = drag.clientY - (rect.bottom - edge);
+    const delta = toTop > 0
+      ? -Math.min(16, Math.max(4, Math.ceil((toTop / edge) * 12)))
+      : toBottom > 0
+        ? Math.min(16, Math.max(4, Math.ceil((toBottom / edge) * 12)))
+        : 0;
+
+    if (delta !== 0) {
+      const before = scroller.scrollTop;
+      scroller.scrollTop = Math.max(
+        0,
+        Math.min(scroller.scrollHeight - scroller.clientHeight, before + delta),
+      );
+      if (scroller.scrollTop !== before) updateDashboardSectionDropTarget(drag);
+    }
+    dashboardSectionDragFrameRef.current = window.requestAnimationFrame(dashboardSectionDragAutoScroll);
+  }
+
+  function handleDashboardSectionPointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    sectionId: DashboardSectionId,
+  ) {
+    if (event.button !== 0 || !event.isPrimary || dashboardSectionDragRef.current) return;
+    const currentIndex = dashboardCustomization.order.indexOf(sectionId);
+    if (currentIndex < 0) return;
+    dashboardSectionDragRef.current = {
+      pointerId: event.pointerId,
+      sectionId,
+      startY: event.clientY,
+      clientY: event.clientY,
+      targetIndex: currentIndex,
+      hasMoved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleDashboardSectionPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dashboardSectionDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.clientY = event.clientY;
+    if (!drag.hasMoved && Math.abs(drag.clientY - drag.startY) < 7) return;
+    if (!drag.hasMoved) {
+      drag.hasMoved = true;
+      dashboardSectionDragFrameRef.current = window.requestAnimationFrame(dashboardSectionDragAutoScroll);
+    }
+    updateDashboardSectionDropTarget(drag);
+  }
+
+  function handleDashboardSectionPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dashboardSectionDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.hasMoved) {
+      drag.clientY = event.clientY;
+      updateDashboardSectionDropTarget(drag);
+      if (dashboardCustomization.order.indexOf(drag.sectionId) !== drag.targetIndex) {
+        applyDashboardCustomization(
+          reorderDashboardSection(dashboardCustomization, drag.sectionId, drag.targetIndex),
+        );
+      }
+    }
+    stopDashboardSectionDrag();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleDashboardSectionPointerCancel(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (dashboardSectionDragRef.current?.pointerId === event.pointerId) {
+      stopDashboardSectionDrag();
+    }
+  }
+
   function handleResetDashboardCustomization() {
     applyDashboardCustomization(createDefaultDashboardCustomization());
   }
+
+  const dashboardDragRemainingOrder = dashboardSectionDragPreview
+    ? dashboardCustomization.order.filter((id) => id !== dashboardSectionDragPreview.sectionId)
+    : [];
+  const dashboardDropMarker = dashboardSectionDragPreview
+    ? dashboardSectionDragPreview.targetIndex < dashboardDragRemainingOrder.length
+      ? {
+          sectionId: dashboardDragRemainingOrder[dashboardSectionDragPreview.targetIndex],
+          edge: "before" as const,
+        }
+      : {
+          sectionId: dashboardDragRemainingOrder[dashboardDragRemainingOrder.length - 1],
+          edge: "after" as const,
+        }
+    : null;
 
   return (
     <div data-dashboard-depth="true" className="dashboard-depth-root scroll-smooth min-w-0 max-w-full space-y-4 overflow-x-clip sm:space-y-5">
@@ -4079,7 +4235,14 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-2.5 py-2.5 sm:px-5 sm:py-4">
+            <div
+              ref={dashboardCustomizationScrollRef}
+              className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-2.5 py-2.5 sm:px-5 sm:py-4"
+            >
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#60778D]">
+                <GripVertical size={14} aria-hidden="true" />
+                Giá»¯ tay náº¯m Ä‘á»ƒ kÃ©o tháº£, hoáº·c dÃ¹ng mÅ©i tÃªn Ä‘á»ƒ sáº¯p xáº¿p.
+              </p>
               <div className="space-y-1.5 sm:space-y-2">
                 {dashboardCustomization.order.map((sectionId, index) => {
                   const section = DASHBOARD_CUSTOMIZATION_SECTIONS.find(
@@ -4093,8 +4256,45 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={sectionId}
+                      data-dashboard-customization-row-id={sectionId}
                       className="flex items-center gap-1.5 rounded-xl border border-[#DCE8F1] bg-[#FCFEFF] p-1.5 sm:gap-2 sm:rounded-2xl sm:p-3"
+                      style={{
+                        position: "relative",
+                        opacity: dashboardSectionDragPreview?.sectionId === sectionId ? 0.45 : undefined,
+                        borderColor: dashboardSectionDragPreview?.sectionId === sectionId ? "#93C5FD" : undefined,
+                      }}
                     >
+                      {dashboardDropMarker?.sectionId === sectionId && (
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none absolute left-3 right-3 z-10 h-1 rounded-full bg-[#2F80ED] shadow-[0_0_0_2px_white] ${
+                            dashboardDropMarker.edge === "before" ? "-top-0.5" : "-bottom-0.5"
+                          }`}
+                        />
+                      )}
+                      <button
+                          type="button"
+                          onPointerDown={(event) => handleDashboardSectionPointerDown(event, sectionId)}
+                          onPointerMove={handleDashboardSectionPointerMove}
+                          onPointerUp={handleDashboardSectionPointerUp}
+                          onPointerCancel={handleDashboardSectionPointerCancel}
+                          onLostPointerCapture={handleDashboardSectionPointerCancel}
+                          onKeyDown={(event) => {
+                            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                              event.preventDefault();
+                              const direction = event.key === "ArrowUp" ? "up" : "down";
+                              if (direction === "up" ? index > 0 : index < dashboardCustomization.order.length - 1) {
+                                handleMoveDashboardSection(sectionId, direction);
+                              }
+                            }
+                          }}
+                          aria-label={`Kéo thả để sắp xếp ${section.label}; dùng phím mũi tên lên xuống để di chuyển`}
+                          aria-keyshortcuts="ArrowUp ArrowDown"
+                          title="Giữ và kéo để thay đổi vị trí"
+                          className="flex size-10 shrink-0 touch-none cursor-grab items-center justify-center rounded-xl border border-blue-100 bg-blue-50/70 text-[#527FAD] transition hover:bg-blue-100 active:cursor-grabbing"
+                        >
+                          <GripVertical size={18} aria-hidden="true" />
+                        </button>
                       <button
                         type="button"
                         onClick={() => handleToggleDashboardSection(sectionId)}
