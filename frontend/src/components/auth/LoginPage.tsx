@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff, PiggyBank } from "lucide-react";
 import { signIn } from "@/src/lib/auth";
 import { useAuth } from "@/src/components/auth/AuthProvider";
+import { SeasonalAuthShell } from "@/src/components/auth/SeasonalAuthShell";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,14 +43,14 @@ export default function LoginPage() {
   if (loading) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-50 via-white to-sky-50 p-4">
+    <SeasonalAuthShell>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex size-16 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-200">
             <PiggyBank size={32} />
           </div>
-          <div className="text-center">
+          <div data-myfinance-auth-brand className="text-center">
             <h1 className="text-2xl font-black tracking-tight text-slate-900">
               MyFinance
             </h1>
@@ -136,6 +137,6 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
-    </div>
+    </SeasonalAuthShell>
   );
 }

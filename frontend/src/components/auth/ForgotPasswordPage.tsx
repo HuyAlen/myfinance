@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, PiggyBank } from "lucide-react";
 import { resetPassword } from "@/src/lib/auth";
+import { SeasonalAuthShell } from "@/src/components/auth/SeasonalAuthShell";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -29,14 +30,14 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-50 via-white to-sky-50 p-4">
+    <SeasonalAuthShell>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex size-16 items-center justify-center rounded-3xl bg-linear-to-br from-blue-600 to-cyan-500 text-white shadow-xl shadow-blue-200">
             <PiggyBank size={32} />
           </div>
-          <div className="text-center">
+          <div data-myfinance-auth-brand className="text-center">
             <h1 className="text-2xl font-black tracking-tight text-slate-900">
               MyFinance
             </h1>
@@ -111,6 +112,6 @@ export default function ForgotPasswordPage() {
           </div>
         )}
       </div>
-    </div>
+    </SeasonalAuthShell>
   );
 }

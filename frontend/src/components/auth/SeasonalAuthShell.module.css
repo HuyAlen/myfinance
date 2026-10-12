@@ -1,0 +1,122 @@
+/* MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1
+ * MyFinance should feel closer to STL in scene quality, but keep a lighter,
+ * more approachable white card. The background stays vivid; readability is
+ * protected with typography, not a wash, halo or white overlay.
+ */
+.shell {
+  --seasonal-scene: none;
+  --seasonal-canvas: #eef4ff;
+
+  background: linear-gradient(180deg, #f4f8ff 0%, #edf5ff 100%);
+  color: #0f172a;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  background-color: var(--seasonal-canvas);
+  background-image: var(--seasonal-scene);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+
+/* The scenery remains completely intact behind the logo. We fix the
+ * contrast on the brand text itself, NOT by painting the scene white. */
+.shell:not([data-myfinance-auth-season="off"]) [data-myfinance-auth-brand] {
+  text-shadow:
+    0 1px 2px rgb(2 8 23 / 0.96),
+    0 2px 7px rgb(2 8 23 / 0.85),
+    0 4px 14px rgb(2 8 23 / 0.58);
+}
+
+.shell:not([data-myfinance-auth-season="off"]) [data-myfinance-auth-brand] h1 {
+  color: #ffffff;
+}
+
+.shell:not([data-myfinance-auth-season="off"]) [data-myfinance-auth-brand] p {
+  color: #f4f9ff;
+}
+
+.scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgb(15 23 42 / 0.18) 0%, transparent 20%, transparent 80%, rgb(15 23 42 / 0.14) 100%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.10) 0%, transparent 18%, transparent 84%, rgb(15 23 42 / 0.14) 100%);
+}
+
+.shell[data-myfinance-auth-season="spring"] {
+  --seasonal-scene: url("/seasonal-auth/spring-cinematic.webp");
+  --seasonal-canvas: #eef3ff;
+}
+
+.shell[data-myfinance-auth-season="summer"] {
+  --seasonal-scene: url("/seasonal-auth/summer-cinematic.webp");
+  --seasonal-canvas: #eaf7ff;
+}
+
+.shell[data-myfinance-auth-season="autumn"] {
+  --seasonal-scene: url("/seasonal-auth/autumn-cinematic.webp");
+  --seasonal-canvas: #eef2ff;
+}
+
+.shell[data-myfinance-auth-season="christmas"] {
+  --seasonal-scene: url("/seasonal-auth/christmas-cinematic.webp");
+  --seasonal-canvas: #edf6ff;
+}
+
+.shell[data-myfinance-auth-season="newyear"] {
+  --seasonal-scene: url("/seasonal-auth/newyear-cinematic.webp");
+  --seasonal-canvas: #eef2ff;
+}
+
+.shell[data-myfinance-auth-season="tet"] {
+  --seasonal-scene: url("/seasonal-auth/tet-cinematic.webp");
+  --seasonal-canvas: #fff4f6;
+}
+
+:global(html[data-theme="dark"]) .shell {
+  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  color: #e5eef9;
+}
+
+:global(html[data-theme="dark"]) .scene {
+  opacity: 0.94;
+  filter: saturate(1.02) brightness(0.82);
+}
+
+:global(html[data-theme="dark"]) .scene::after {
+  background:
+    linear-gradient(90deg, rgb(2 8 23 / 0.40) 0%, transparent 22%, transparent 78%, rgb(2 8 23 / 0.36) 100%),
+    linear-gradient(180deg, rgb(2 8 23 / 0.32) 0%, transparent 20%, transparent 80%, rgb(2 8 23 / 0.30) 100%);
+}
+
+@media (max-width: 767px) {
+  .scene {
+    background-position: center center;
+  }
+
+  .scene::after {
+    background:
+      linear-gradient(180deg, rgb(15 23 42 / 0.10) 0%, transparent 18%, transparent 86%, rgb(15 23 42 / 0.10) 100%);
+  }
+
+  :global(html[data-theme="dark"]) .scene {
+    opacity: 0.90;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene,
+  .scene::after {
+    animation: none;
+    transition: none;
+  }
+}
