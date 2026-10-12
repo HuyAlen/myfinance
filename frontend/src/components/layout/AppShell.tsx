@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import SeasonalWorkspaceAmbientMotion from "./SeasonalWorkspaceAmbientMotion";
-import BottomNav from "./BottomNav";
+import MobileBottomNavScrollHide from "./MobileBottomNavScrollHide";
 import StartupShellSkeleton from "./StartupShellSkeleton";
 import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
 import { useAuth } from "@/src/components/auth/AuthProvider";
@@ -267,7 +267,7 @@ export default function AppShell({ children }: AppShellProps) {
           </main>
         </div>
 
-        <BottomNav onMoreMenuOpenChange={setMoreMenuOpen} />
+        <MobileBottomNavScrollHide onMoreMenuOpenChange={setMoreMenuOpen} holdVisible={shellChromeOverlayOpen || sidebarOpen} />
 
         {SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && !shellChromeOverlayOpen && (
           <AIFloatingButton
