@@ -1,0 +1,231 @@
+/* MYFINANCE-SEASONAL-PAGE-ATMOSPHERE-1
+ * Additional atmosphere inside authenticated content, not only the chrome.
+ * The calendar/override resolver is owned by SeasonalWorkspaceThemeController.
+ * Opt-in hero surfaces avoid changing finance semantics, tables or dialogs.
+ */
+:root[data-finance-workspace-season="spring"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/spring-hero.svg");
+  --finance-atmo-canvas-top: #fcf5f8;
+  --finance-atmo-canvas-mid: #f1f7f6;
+  --finance-atmo-hero-edge: #fbecf1;
+}
+:root[data-finance-workspace-season="summer"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/summer-hero.svg");
+  --finance-atmo-canvas-top: #f3fbfc;
+  --finance-atmo-canvas-mid: #ecf7f9;
+  --finance-atmo-hero-edge: #e6f9fd;
+}
+:root[data-finance-workspace-season="autumn"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/autumn-hero.svg");
+  --finance-atmo-canvas-top: #fbf5ee;
+  --finance-atmo-canvas-mid: #f7f2ed;
+  --finance-atmo-hero-edge: #fae8d1;
+}
+:root[data-finance-workspace-season="christmas"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/christmas-hero.svg");
+  --finance-atmo-canvas-top: #f3faf9;
+  --finance-atmo-canvas-mid: #eff7f8;
+  --finance-atmo-hero-edge: #e1f3f1;
+}
+:root[data-finance-workspace-season="newyear"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/newyear-hero.svg");
+  --finance-atmo-canvas-top: #f8f5fc;
+  --finance-atmo-canvas-mid: #f3f2fb;
+  --finance-atmo-hero-edge: #f0e9ff;
+}
+:root[data-finance-workspace-season="tet"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/tet-hero.svg");
+  --finance-atmo-canvas-top: #fff6f4;
+  --finance-atmo-canvas-mid: #fcf1eb;
+  --finance-atmo-hero-edge: #ffe7e6;
+}
+
+/* PAGE-CANVAS-UNIFY-1: Every exposed gutter between Header, recovery alerts,
+ * hero and supporting cards shares one seasonal canvas. The previous 'neutral'
+ * 2.5rem/2rem cap actually repainted the top gutter in --finance-page blue,
+ * while the 60rem stop brought back that blue lower down. Do not reintroduce
+ * any --finance-page stop in an active seasonal .finance-main background. */
+/* Ambient color belongs to the authenticated single scroll owner. The
+ * local right-edge artwork and very soft color glows remain behind cards.
+ * No blue fallback cap, overlay, fixed layer or new scroll container. */
+:root[data-finance-workspace-season] .finance-shell .finance-main {
+  background-color: var(--finance-atmo-canvas-mid);
+  background-image:
+    var(--finance-season-page-art),
+    radial-gradient(ellipse 46rem 24rem at 93% -3%, rgb(var(--finance-season-primary) / 0.25), transparent 76%),
+    radial-gradient(ellipse 35rem 20rem at 3% 61%, rgb(var(--finance-season-secondary) / 0.095), transparent 84%),
+    linear-gradient(180deg, var(--finance-atmo-canvas-top) 0%, var(--finance-atmo-canvas-mid) 22rem);
+  background-position: right top, center, center, center;
+  background-size: min(52vw, 700px) auto, cover, cover, cover;
+  background-repeat: no-repeat;
+  background-attachment: scroll;
+}
+
+/* The hero artwork is part of the surface background, never a visual overlay.
+ * Left-side text is protected by the first opaque-to-clear wash. In particular
+ * this does not recolor KPI numerals, input controls, charts, or state chips. */
+:root[data-finance-workspace-season] {
+  --finance-atmo-hero-surface: #ffffff;
+  --finance-atmo-hero-fade: rgb(255 255 255 / 0.84);
+}
+:root[data-finance-workspace-season] .finance-main :is(
+  [data-dashboard-surface="hero-gradient"],
+  [data-seasonal-page-surface="primary"],
+  [data-wallets-section="overview"]
+),
+:root[data-finance-workspace-season] .finance-main [data-seasonal-page-surface="primary"] > div:first-child {
+  background-color: var(--finance-atmo-hero-surface);
+  background-image:
+    linear-gradient(90deg,
+      var(--finance-atmo-hero-surface) 0%,
+      var(--finance-atmo-hero-surface) 26%,
+      var(--finance-atmo-hero-fade) 53%,
+      transparent 100%),
+    var(--finance-atmo-art),
+    radial-gradient(ellipse 29rem 15rem at 96% 9%, rgb(var(--finance-season-primary) / 0.14), transparent 86%),
+    linear-gradient(120deg, var(--finance-atmo-hero-surface) 0%, var(--finance-atmo-hero-surface) 43%, var(--finance-atmo-hero-edge) 100%);
+  background-repeat: no-repeat;
+  background-position: center, right top, center, center;
+  background-size: cover, min(49vw, 700px) auto, cover, cover;
+}
+
+/* MYFINANCE-SEASONAL-CARD-SEAM-FIX-1:
+ * These blue-gray strips were cast shadows from the header and financial
+ * panels, not an extra wrapper or another background gradient. On the warm
+ * seasonal canvas they look like connected, offset card outlines.
+ * Keep card borders/rounded corners/artwork. Remove only outward shadows on
+ * financial surface shells; dialogs, menus, buttons, and all data stay as-is. */
+:root[data-finance-workspace-season] .finance-shell .finance-main {
+  --finance-shadow-soft: none;
+  --finance-shadow-card: none;
+}
+:root[data-finance-workspace-season] .finance-shell .finance-header,
+:root[data-theme="dark"][data-finance-workspace-season] .finance-shell .finance-header {
+  box-shadow: none;
+}
+:root[data-finance-workspace-season] .finance-main :is(
+  [data-dashboard-surface="hero-shell"],
+  [data-seasonal-page-surface="primary"],
+  [data-wallets-section="overview"]
+) {
+  border-top-color: var(--finance-border);
+}
+:root[data-finance-workspace-season] .finance-shell .finance-main :is(
+  [data-dashboard-surface="hero-shell"],
+  [data-dashboard-surface="hero-mini"],
+  [data-dashboard-surface="networth-history"],
+  [data-dashboard-depth-card="kpi"],
+  [data-dashboard-depth-card="panel"],
+  [data-seasonal-page-surface="primary"],
+  [data-wallets-section="overview"]
+) {
+  box-shadow: none;
+}
+/* Interactive KPI cards previously used a box-shadow focus ring; keep a
+ * keyboard focus indicator even while their ambient drop shadow is off. */
+:root[data-finance-workspace-season] .finance-shell .finance-main [data-dashboard-depth-card="kpi"]:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: 2px;
+}
+
+/* Keep the separate dark surface language and dark semantic accessibility.
+ * Existing global dark-mode text and status color rules stay authoritative. */
+:root[data-theme="dark"][data-finance-workspace-season] {
+  --finance-atmo-canvas-top: #1b2731;
+  --finance-atmo-canvas-mid: #15212b;
+  --finance-atmo-hero-surface: var(--finance-surface);
+  --finance-atmo-hero-fade: rgb(23 33 43 / 0.88);
+  --finance-atmo-hero-edge: #202e3a;
+}
+/* Existing seasonal-workspace.css has more-specific dark backgrounds. Match that
+ * specificity so the new artwork is visible in dark Dashboard/Page too. */
+:root[data-theme="dark"][data-finance-workspace-season] .finance-shell .finance-main {
+  background-image:
+    var(--finance-season-page-art),
+    radial-gradient(ellipse 46rem 24rem at 93% -3%, rgb(var(--finance-season-primary) / 0.17), transparent 78%),
+    radial-gradient(ellipse 35rem 20rem at 3% 61%, rgb(var(--finance-season-secondary) / 0.07), transparent 86%),
+    linear-gradient(180deg, var(--finance-atmo-canvas-top) 0%, var(--finance-atmo-canvas-mid) 22rem);
+  background-position: right top, center, center, center;
+  background-size: min(52vw, 700px) auto, cover, cover, cover;
+}
+:root[data-theme="dark"][data-finance-workspace-season] .finance-main [data-dashboard-surface="hero-gradient"] {
+  background-color: var(--finance-atmo-hero-surface);
+  background-image:
+    linear-gradient(90deg, var(--finance-atmo-hero-surface) 0%, var(--finance-atmo-hero-surface) 26%, var(--finance-atmo-hero-fade) 53%, transparent 100%),
+    var(--finance-atmo-art),
+    radial-gradient(ellipse 29rem 15rem at 96% 9%, rgb(var(--finance-season-primary) / 0.12), transparent 88%),
+    linear-gradient(120deg, var(--finance-atmo-hero-surface) 0%, var(--finance-atmo-hero-surface) 43%, var(--finance-atmo-hero-edge) 100%);
+  background-position: center, right top, center, center;
+  background-size: cover, min(49vw, 700px) auto, cover, cover;
+  background-repeat: no-repeat;
+}
+:root[data-theme="dark"][data-finance-workspace-season] .finance-main :is(
+  [data-dashboard-surface="hero-shell"],
+  [data-seasonal-page-surface="primary"],
+  [data-wallets-section="overview"]
+) {
+  border-top-color: var(--finance-border);
+  box-shadow: none;
+}
+
+/* iPhone: keep art in the upper-right corner, with a reliable solid wash
+ * behind the title and amounts. Background scrolls with the page, no iOS
+ * viewport-fixed paint, no new animation, and no touch interception. */
+@media (max-width: 767px) {
+  :root[data-finance-workspace-season] .finance-shell .finance-main {
+    background-image:
+      var(--finance-season-page-art),
+      radial-gradient(ellipse 23rem 16rem at 96% 0%, rgb(var(--finance-season-primary) / 0.19), transparent 85%),
+      linear-gradient(180deg, var(--finance-atmo-canvas-top) 0%, var(--finance-atmo-canvas-mid) 18rem);
+    background-position: right top, center, center;
+    background-size: 64vw auto, cover, cover;
+    background-attachment: scroll;
+  }
+  :root[data-finance-workspace-season] .finance-main :is(
+    [data-dashboard-surface="hero-gradient"],
+    [data-seasonal-page-surface="primary"],
+    [data-wallets-section="overview"]
+  ),
+  :root[data-finance-workspace-season] .finance-main [data-seasonal-page-surface="primary"] > div:first-child {
+    background-image:
+      linear-gradient(90deg, var(--finance-atmo-hero-surface) 0%, var(--finance-atmo-hero-fade) 72%, transparent 100%),
+      var(--finance-atmo-art),
+      linear-gradient(125deg, var(--finance-atmo-hero-surface), var(--finance-atmo-hero-edge));
+    background-position: center, right top, center;
+    background-size: cover, min(55vw, 240px) auto, cover;
+    background-repeat: no-repeat;
+  }
+
+  :root[data-theme="dark"][data-finance-workspace-season] .finance-shell .finance-main {
+    background-image:
+      var(--finance-season-page-art),
+      radial-gradient(ellipse 23rem 16rem at 96% 0%, rgb(var(--finance-season-primary) / 0.16), transparent 86%),
+      linear-gradient(180deg, var(--finance-atmo-canvas-top) 0%, var(--finance-atmo-canvas-mid) 18rem);
+    background-position: right top, center, center;
+    background-size: 64vw auto, cover, cover;
+  }
+  :root[data-theme="dark"][data-finance-workspace-season] .finance-main [data-dashboard-surface="hero-gradient"] {
+    background-image:
+      linear-gradient(90deg, var(--finance-atmo-hero-surface) 0%, var(--finance-atmo-hero-fade) 72%, transparent 100%),
+      var(--finance-atmo-art),
+      linear-gradient(125deg, var(--finance-atmo-hero-surface), var(--finance-atmo-hero-edge));
+    background-position: center, right top, center;
+    background-size: cover, min(55vw, 240px) auto, cover;
+  }
+}
+
+/* Printing financial reports must never include seasonal decoration or tint. */
+@media print {
+  :root[data-finance-workspace-season] .finance-shell .finance-main {
+    background-color: transparent !important;
+  }
+  :root[data-finance-workspace-season] .finance-shell .finance-main,
+  :root[data-finance-workspace-season] .finance-main :is(
+    [data-dashboard-surface="hero-gradient"],
+    [data-seasonal-page-surface="primary"],
+    [data-wallets-section="overview"]
+  ),
+  :root[data-finance-workspace-season] .finance-main [data-seasonal-page-surface="primary"] > div:first-child {
+    background-image: none !important;
+  }
+}

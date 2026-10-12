@@ -2247,7 +2247,9 @@ export default function TransactionsPage() {
         </div>
       )}
       {/* SECTION 1 · Transaction Summary */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-5">
+      <section
+        data-seasonal-page-surface="primary"
+        className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-4xl sm:p-5">
         <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-5">
           <div className="min-w-0">
             <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.16em] text-blue-500 sm:text-[11px] sm:tracking-[0.18em]">

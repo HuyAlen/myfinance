@@ -1467,7 +1467,9 @@ export default function ReportsPage() {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 · Bright Hero + 5 KPI cards
           ══════════════════════════════════════════════════════════════════ */}
-      <section className="overflow-hidden rounded-3xl border border-blue-100 shadow-sm sm:rounded-4xl">
+      <section
+        data-seasonal-page-surface="primary"
+        className="overflow-hidden rounded-3xl border border-blue-100 shadow-sm sm:rounded-4xl">
         <div className="bg-linear-to-br from-blue-50 via-white to-cyan-50 px-4 pb-4 pt-4 sm:px-8 sm:pb-7 sm:pt-6">
           <div className="flex items-start justify-between gap-3 sm:flex-wrap sm:gap-4">
             <div className="min-w-0">
