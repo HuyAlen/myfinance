@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import Script from "next/script";
+import { Suspense } from "react";
 import "./globals.css";
+import "./seasonal-workspace.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
 import { HouseholdProvider } from "@/src/components/household/HouseholdProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";
@@ -11,6 +13,7 @@ import ServiceWorkerRegistration from "@/src/components/pwa/ServiceWorkerRegistr
 import InstallPrompt from "@/src/components/pwa/InstallPrompt";
 import WebVitalsReporter from "@/src/components/performance/WebVitalsReporter";
 import ThemeProvider from "@/src/components/theme/ThemeProvider";
+import SeasonalWorkspaceThemeController from "@/src/components/layout/SeasonalWorkspaceThemeController";
 
 const beVietnam = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
@@ -88,6 +91,9 @@ export default function RootLayout({
       </head>
       <body className={beVietnam.variable}>
         <ThemeProvider>
+          <Suspense fallback={null}>
+            <SeasonalWorkspaceThemeController />
+          </Suspense>
         <WebVitalsReporter />
         <AuthProvider>
           <HouseholdProvider>

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
+import SeasonalWorkspaceAmbientMotion from "./SeasonalWorkspaceAmbientMotion";
 import { usePathname } from "next/navigation";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
@@ -126,6 +127,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       ].join(" ")}
     >
+      <SeasonalWorkspaceAmbientMotion area="sidebar" />
+
       {/* Close — mobile only */}
       <button
         onClick={onClose}

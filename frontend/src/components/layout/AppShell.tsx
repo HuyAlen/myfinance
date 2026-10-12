@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import SeasonalWorkspaceAmbientMotion from "./SeasonalWorkspaceAmbientMotion";
 import BottomNav from "./BottomNav";
 import StartupShellSkeleton from "./StartupShellSkeleton";
 import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
@@ -259,6 +260,7 @@ export default function AppShell({ children }: AppShellProps) {
             data-mobile-chrome-overlay-open={shellChromeOverlayOpen ? "true" : undefined}
             className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto data-[mobile-chrome-overlay-open=true]:overflow-y-hidden data-[mobile-chrome-overlay-open=true]:overscroll-none px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6"
           >
+            <SeasonalWorkspaceAmbientMotion area="page" />
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
               {children}
             </FabSuppressionProvider>
