@@ -41,9 +41,12 @@ export function nextFlybyDelayMs({
   first: boolean;
   random?: () => number;
 }): number {
-  if (preview) return first ? 1_300 : mobile ? 17_000 : 14_000;
-  const min = mobile ? (first ? 90_000 : 105_000) : first ? 45_000 : 65_000;
-  const max = mobile ? (first ? 130_000 : 160_000) : first ? 80_000 : 110_000;
+  // Fire the opening event as soon as the workspace is eligible.
+  // Accessibility, visibility, editing and active-user guards remain in the component.
+  if (first) return 0;
+  if (preview) return mobile ? 17_000 : 14_000;
+  const min = mobile ? 105_000 : 65_000;
+  const max = mobile ? 160_000 : 110_000;
   return Math.round(pick(random, min, max));
 }
 

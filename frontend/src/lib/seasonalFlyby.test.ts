@@ -17,14 +17,21 @@ describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 pure motion plans", () => {
     }
   });
 
-  it("retains rare real cadence, sparse mobile events and opt-in fast preview", () => {
-    expect(nextFlybyDelayMs({ mobile: false, preview: false, first: true, random: () => 0 })).toBe(45_000);
-    expect(nextFlybyDelayMs({ mobile: false, preview: false, first: true, random: () => 1 })).toBe(80_000);
+  it("starts first eligible event immediately on mobile and desktop", () => {
+    for (const mobile of [false, true]) {
+      for (const preview of [false, true]) {
+        for (const random of [() => 0, () => 0.5, () => 1]) {
+          expect(nextFlybyDelayMs({ mobile, preview, first: true, random })).toBe(0);
+        }
+      }
+    }
+  });
+
+  it("keeps follow-up events rare, with opt-in preview cadence", () => {
     expect(nextFlybyDelayMs({ mobile: false, preview: false, first: false, random: () => 0 })).toBe(65_000);
     expect(nextFlybyDelayMs({ mobile: false, preview: false, first: false, random: () => 1 })).toBe(110_000);
-    expect(nextFlybyDelayMs({ mobile: true, preview: false, first: true, random: () => 0 })).toBe(90_000);
+    expect(nextFlybyDelayMs({ mobile: true, preview: false, first: false, random: () => 0 })).toBe(105_000);
     expect(nextFlybyDelayMs({ mobile: true, preview: false, first: false, random: () => 1 })).toBe(160_000);
-    expect(nextFlybyDelayMs({ mobile: false, preview: true, first: true })).toBe(1_300);
     expect(nextFlybyDelayMs({ mobile: false, preview: true, first: false })).toBe(14_000);
     expect(nextFlybyDelayMs({ mobile: true, preview: true, first: false })).toBe(17_000);
     expect(FLYBY_DURATION_MS).toBe(7_600);

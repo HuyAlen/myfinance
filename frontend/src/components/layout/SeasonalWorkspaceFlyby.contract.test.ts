@@ -120,3 +120,23 @@ describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 integration", () => {
     expect(css).toContain('url("/seasonal-workspace/flyby/christmas-reindeer.svg")');
   });
 });
+
+describe("MYFINANCE-SEASONAL-FIRST-LOAD-FLYBY-1 startup lifecycle", () => {
+  it("starts once when eligible, even after shell remounts", () => {
+    const latch = "let firstFlybyPlayedForDocument = false;";
+    expect(component).toContain(latch);
+    expect(component.indexOf(latch)).toBeLessThan(component.indexOf("export default function"));
+    expect(component).toContain("first: !hasPlayed && !firstFlybyPlayedForDocument");
+    expect(component).toContain("firstFlybyPlayedForDocument = true;");
+    expect(lib).toContain("if (first) return 0;");
+  });
+
+  it("retains visibility, reduced-motion and editing protections", () => {
+    expect(component).toContain("document.hidden || reducedMotion.matches || !currentSeason");
+    expect(component).toContain("editing() || modalOpen()");
+    expect(component).toContain("if (quietFor < FLYBY_ACTIVITY_QUIET_MS)");
+    expect(component).toContain("if (running) {");
+    expect(component).toContain('document.addEventListener("pointerdown", onActivity');
+    expect(component).toContain('attributeFilter: [THEME_ATTRIBUTE]');
+  });
+});

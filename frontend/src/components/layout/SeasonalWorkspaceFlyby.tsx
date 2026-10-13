@@ -12,6 +12,10 @@ import {
 
 type Motion = { id: number; plan: SeasonalMotionPlan };
 
+// One opening flourish per document load, even if AppShell temporarily
+// unmounts for a sidebar, modal or mobile overlay. F5 resets this latch.
+let firstFlybyPlayedForDocument = false;
+
 const THEME_ATTRIBUTE = "data-finance-workspace-season";
 const MODAL_SELECTOR = '[role="dialog"][aria-modal="true"], [role="alertdialog"], dialog[open]';
 const EDITING_SELECTOR = 'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]';
@@ -107,6 +111,7 @@ export default function SeasonalWorkspaceFlyby() {
         if (plan.mode === "glide") previousDirection = plan.sleigh.direction;
         running = true;
         hasPlayed = true;
+        firstFlybyPlayedForDocument = true;
         motionCounter += 1;
         setMotion({ id: motionCounter, plan });
         finishingTimer = window.setTimeout(() => {
@@ -114,7 +119,7 @@ export default function SeasonalWorkspaceFlyby() {
           stopMotion();
           schedule();
         }, plan.durationMs);
-      }, delay ?? nextFlybyDelayMs({ mobile: mobile.matches, preview, first: !hasPlayed }));
+      }, delay ?? nextFlybyDelayMs({ mobile: mobile.matches, preview, first: !hasPlayed && !firstFlybyPlayedForDocument }));
     };
 
     const restart = () => {
