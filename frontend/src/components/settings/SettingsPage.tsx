@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { resolveActiveSettingsSection } from "@/src/lib/settings/settingsScrollSpy";
 import ConfirmDialog, {
   type PendingConfirm,
 } from "@/src/components/ui/ConfirmDialog";
@@ -292,6 +293,7 @@ export default function SettingsPage() {
 
   // Active nav section
   const [activeSection, setActiveSection] = useState("profile");
+  const desktopSectionNavRef = useRef<HTMLDivElement | null>(null);
 
   const connected = status === "SUBSCRIBED";
   const authProfileName =
@@ -798,6 +800,61 @@ export default function SettingsPage() {
   }
 
   // ── Scroll-to helper ───────────────────────────────────────────────────────
+  // SETTINGS-DESKTOP-SCROLLSPY-1: AppShell scrolls main.finance-main, not window.
+  // Follow the section currently in view when the user scrolls the page.
+  useEffect(() => {
+    const scrollRoot = document.querySelector<HTMLElement>("main.finance-main");
+    if (!scrollRoot) return;
+
+    let frameId: number | null = null;
+    const syncActiveSection = () => {
+      frameId = null;
+      const activationLine = scrollRoot.getBoundingClientRect().top +
+        Math.min(120, Math.max(80, scrollRoot.clientHeight * 0.2));
+      const positions = SECTIONS.flatMap((section) => {
+        const node = document.getElementById("settings-" + section.id);
+        return node ? [{ id: section.id, top: node.getBoundingClientRect().top }] : [];
+      });
+      if (positions.length === 0) return;
+      const atScrollEnd =
+        scrollRoot.scrollHeight > scrollRoot.clientHeight + 2 &&
+        scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
+      const next = resolveActiveSettingsSection(positions, activationLine, atScrollEnd);
+      if (next !== null) {
+        setActiveSection((current) => (current === next ? current : next));
+      }
+    };
+    const scheduleSync = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(syncActiveSection);
+    };
+    scrollRoot.addEventListener("scroll", scheduleSync, { passive: true });
+    window.addEventListener("resize", scheduleSync);
+    scheduleSync();
+    return () => {
+      scrollRoot.removeEventListener("scroll", scheduleSync);
+      window.removeEventListener("resize", scheduleSync);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  // If the desktop menu is taller than the screen, only scroll its own card
+  // to keep the selected item in view; never scroll finance-main from here.
+  useEffect(() => {
+    const nav = desktopSectionNavRef.current;
+    if (!nav || nav.clientHeight === 0) return;
+    const activeButton = nav.querySelector<HTMLElement>('[aria-current="location"]');
+    if (!activeButton) return;
+    const navRect = nav.getBoundingClientRect();
+    const itemRect = activeButton.getBoundingClientRect();
+    const margin = 8;
+    if (itemRect.top < navRect.top + margin) {
+      nav.scrollTop += itemRect.top - navRect.top - margin;
+    } else if (itemRect.bottom > navRect.bottom - margin) {
+      nav.scrollTop += itemRect.bottom - navRect.bottom + margin;
+    }
+  }, [activeSection]);
+
   function scrollTo(id: string) {
     setActiveSection(id);
     document
@@ -1216,7 +1273,7 @@ export default function SettingsPage() {
       <div className="flex gap-6 xl:gap-8">
         {/* Left nav — desktop only */}
         <aside className="hidden w-44 shrink-0 xl:block">
-          <div className="sticky top-6 overflow-hidden rounded-[1.7rem] border border-slate-100 bg-white shadow-sm">
+          <div ref={desktopSectionNavRef} className="sticky top-6 max-h-[calc(100dvh_-_8.5rem)] overflow-y-auto overscroll-contain rounded-[1.7rem] border border-slate-100 bg-white shadow-sm">
             <div className="p-2 space-y-0.5">
               {SECTIONS.map((s) => {
                 const Icon = s.icon;
@@ -1226,6 +1283,7 @@ export default function SettingsPage() {
                   <button
                     key={s.id}
                     onClick={() => scrollTo(s.id)}
+                    aria-current={active ? "location" : undefined}
                     className={
                       "flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-[12px] font-bold transition-all " +
                       (active
