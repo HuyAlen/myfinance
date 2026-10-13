@@ -21,8 +21,8 @@ describe("SETTINGS-DOMAIN-CONSISTENCY-1 destructive-action copy", () => {
       expect(clearRegion).toContain(label);
     }
 
-    expect(resetRegion).toContain("resetFinanceDemoData()");
-    expect(clearRegion).toContain("clearAllUserData()");
+    expect(resetRegion).toContain("resetFinanceDemoData(expectedWorkspaceId)");
+    expect(clearRegion).toContain("clearAllUserData(expectedWorkspaceId)");
     expect(clearRegion).toContain("lịch sử Tài sản ròng");
   });
 });

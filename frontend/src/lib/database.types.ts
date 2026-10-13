@@ -1034,7 +1034,9 @@ export type Database = {
       capture_current_net_worth_snapshot: { Args: { p_user_id: string }; Returns: undefined };
       clone_previous_month_budgets_atomic: { Args: { p_target_month: string }; Returns: Json };
       export_finance_backup: { Args: Record<PropertyKey, never>; Returns: Json };
+      export_finance_backup_scoped: { Args: { p_expected_household_id: string }; Returns: Json };
       restore_finance_backup: { Args: { p_backup: Json }; Returns: Json };
+      restore_finance_backup_scoped: { Args: { p_backup: Json; p_expected_household_id: string }; Returns: Json };
       seed_finance_demo_data: { Args: { p_seed: Json }; Returns: boolean };
     };
     Enums: {

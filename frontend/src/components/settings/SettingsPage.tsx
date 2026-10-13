@@ -54,6 +54,8 @@ import HouseholdSettingsCard from "@/src/components/settings/HouseholdSettingsCa
 import SeasonalThemeSettingsCard from "@/src/components/settings/SeasonalThemeSettingsCard";
 import SeasonalSkinPicker from "@/src/components/settings/SeasonalSkinPicker";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
+import { useHousehold } from "@/src/components/household/HouseholdProvider";
+import { resolveBackupWorkspaceAccess } from "@/src/lib/settings/financeDataWorkspaceGuard";
 
 import {
   clearAllUserData,
@@ -187,6 +189,7 @@ function withSettingsTimeout<T>(request: Promise<T>, label: string): Promise<T> 
 export default function SettingsPage() {
   const { user, session } = useAuth();
   const { status, lastSync } = useRealtime();
+  const { activeWorkspace, context: householdContext, loading: householdLoading } = useHousehold();
   const { theme, setTheme } = useTheme();
 
   const [stats, setStats] = useState<SettingsStats>({
@@ -290,6 +293,14 @@ export default function SettingsPage() {
     null,
   );
   const { toast } = useToast();
+  const backupAccess = resolveBackupWorkspaceAccess(
+    user?.id, activeWorkspace, householdContext?.activeHouseholdId, householdLoading,
+  );
+  function requireBackupWorkspace(): string | null {
+    if (backupAccess.allowed && backupAccess.householdId) return backupAccess.householdId;
+    toast({ variant: "error", message: backupAccess.reason });
+    return null;
+  }
 
   // Active nav section
   const [activeSection, setActiveSection] = useState("profile");
@@ -622,8 +633,10 @@ export default function SettingsPage() {
 
   // ── Preserved handlers ─────────────────────────────────────────────────────
   async function handleResetDemo() {
+    const expectedWorkspaceId = requireBackupWorkspace();
+    if (!expectedWorkspaceId) return;
     setPendingAction({
-      title: "Đặt lại dữ liệu mẫu?",
+      title: `Đặt lại dữ liệu mẫu trong ${backupAccess.workspaceName}?`,
       description:
         "Toàn bộ dữ liệu hiện tại (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm và Ngoại hối) sẽ bị xóa và thay bằng trạng thái mẫu mặc định.",
       confirmText: "Đặt lại",
@@ -638,7 +651,7 @@ export default function SettingsPage() {
         }
         recoveryInFlightRef.current = true;
         try {
-        const { error } = await resetFinanceDemoData();
+        const { error } = await resetFinanceDemoData(expectedWorkspaceId);
         if (error) {
           toast({
             variant: "error",
@@ -659,8 +672,10 @@ export default function SettingsPage() {
   }
 
   async function handleClearAll() {
+    const expectedWorkspaceId = requireBackupWorkspace();
+    if (!expectedWorkspaceId) return;
     setPendingAction({
-      title: "Xóa toàn bộ dữ liệu?",
+      title: `Xóa toàn bộ dữ liệu trong ${backupAccess.workspaceName}?`,
       description:
         "Hành động này không thể hoàn tác. Toàn bộ dữ liệu tài chính (Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, Tiết kiệm, Ngoại hối và lịch sử Tài sản ròng) sẽ bị xóa vĩnh viễn.",
       confirmText: "Xóa tất cả",
@@ -675,7 +690,7 @@ export default function SettingsPage() {
         }
         recoveryInFlightRef.current = true;
         try {
-        const { error } = await clearAllUserData();
+        const { error } = await clearAllUserData(expectedWorkspaceId);
         if (error) {
           toast({ variant: "error", message: "Lỗi xóa dữ liệu: " + error });
           return;
@@ -690,11 +705,13 @@ export default function SettingsPage() {
   }
 
   async function handleExportJson() {
+    const expectedWorkspaceId = requireBackupWorkspace();
+    if (!expectedWorkspaceId) return;
     // FINANCE-DATA-2: the database now produces one versioned snapshot in a
     // single RPC call. This prevents a partial browser-side export where one
     // of several independent collection reads fails after the others succeed.
     try {
-      const backup = await exportFinanceBackup();
+      const backup = await exportFinanceBackup(expectedWorkspaceId);
       const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
       });
@@ -719,9 +736,9 @@ export default function SettingsPage() {
     }
   }
 
-  function requestBackupRestore(backup: FinanceBackupV4, fileName: string) {
+  function requestBackupRestore(backup: FinanceBackupV4, fileName: string, expectedWorkspaceId: string) {
     setPendingAction({
-      title: "Khôi phục bản sao lưu?",
+      title: `Khôi phục vào ${backupAccess.workspaceName}?`,
       description:
         `Tệp ${fileName} sẽ thay thế toàn bộ dữ liệu tài chính hiện tại ` +
         "(Ví, Danh mục, Giao dịch, Nợ, Mục tiêu, Ngân sách, Đầu tư, " +
@@ -740,7 +757,7 @@ export default function SettingsPage() {
         }
         recoveryInFlightRef.current = true;
         try {
-        const { error: restoreError } = await restoreFinanceBackup(backup);
+        const { error: restoreError } = await restoreFinanceBackup(backup, expectedWorkspaceId);
         if (restoreError) {
           toast({
             variant: "error",
@@ -762,7 +779,9 @@ export default function SettingsPage() {
   }
 
   function handleImportJson(event: React.ChangeEvent<HTMLInputElement>) {
+    const expectedWorkspaceId = requireBackupWorkspace();
     const input = event.currentTarget;
+    if (!expectedWorkspaceId) { input.value = ""; return; }
     const file = input.files?.[0];
     if (!file) return;
 
@@ -785,7 +804,7 @@ export default function SettingsPage() {
           return;
         }
 
-        requestBackupRestore(validation.backup, file.name);
+        requestBackupRestore(validation.backup, file.name, expectedWorkspaceId);
       } catch {
         toast({ variant: "error", message: "Tệp JSON không hợp lệ." });
       }
@@ -2148,6 +2167,12 @@ export default function SettingsPage() {
               title="Dữ liệu"
               desc="Quản lý, sao lưu và khôi phục dữ liệu"
             />
+            <div data-settings-backup-scope={backupAccess.allowed ? "owner" : "blocked"} className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-bold text-blue-900">Không gian dữ liệu: {backupAccess.workspaceName}</p>
+              <p className="mt-1 text-xs text-blue-700">{backupAccess.allowed
+                ? "Bạn là chủ sở hữu. Sao lưu/khôi phục/đặt lại/xóa chỉ tác động lên không gian này; server xác minh lại trước khi thực thi."
+                : backupAccess.reason}</p>
+            </div>
             <div className="mt-4 space-y-4">
               {/* Storage info */}
               <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:rounded-4xl sm:p-5">
@@ -2198,6 +2223,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     onClick={handleExportJson}
+                    disabled={!backupAccess.allowed}
                     className="mt-4 flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-blue-200 transition-all hover:bg-blue-700 active:scale-[.98]"
                   >
                     <Download size={13} />
@@ -2222,6 +2248,7 @@ export default function SettingsPage() {
                     <input
                       type="file"
                       accept="application/json"
+                      disabled={!backupAccess.allowed}
                       onChange={handleImportJson}
                       className="hidden"
                     />
@@ -2241,6 +2268,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     onClick={handleResetDemo}
+                    disabled={!backupAccess.allowed}
                     className="mt-4 flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-amber-200 transition-all hover:bg-amber-600 active:scale-[.98]"
                   >
                     <RefreshCcw size={13} />
@@ -2501,6 +2529,7 @@ export default function SettingsPage() {
               desc="Các thao tác không thể hoàn tác"
               danger
             />
+            <p data-settings-danger-workspace="true" className="mt-3 text-sm font-semibold text-rose-700">Đích thao tác: {backupAccess.workspaceName}. Chỉ chủ sở hữu được phép; server sẽ từ chối khi workspace thay đổi.</p>
             <div className="mt-3 rounded-3xl border border-rose-200 bg-rose-50/50 p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="space-y-4">
                 {/* Đặt lại dữ liệu mẫu */}
@@ -2519,6 +2548,7 @@ export default function SettingsPage() {
                   </div>
                   <button
                     onClick={handleResetDemo}
+                    disabled={!backupAccess.allowed}
                     className="shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition-all hover:bg-amber-100 active:scale-[.98]"
                   >
                     Đặt lại dữ liệu mẫu
@@ -2540,6 +2570,7 @@ export default function SettingsPage() {
                   </div>
                   <button
                     onClick={handleClearAll}
+                    disabled={!backupAccess.allowed}
                     className="shrink-0 rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-200 transition-all hover:bg-rose-600 active:scale-[.98]"
                   >
                     Xóa tất cả

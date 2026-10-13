@@ -359,19 +359,37 @@ function mapFinanceBackupError(error: { code?: string; message: string }) {
       return "Đây là backup phiên bản cũ và không chứa đầy đủ Savings/Forex. Không thể khôi phục tự động để tránh mất dữ liệu.";
     case "MFB05":
       return "Máy chủ không thể xác minh trạng thái sau khôi phục nên toàn bộ thay đổi đã được rollback.";
+    case "MFB06":
+      return "Bạn không phải chủ sở hữu không gian đang chọn, hoặc không gian đã thay đổi. Dữ liệu chưa bị tác động.";
     default:
       return error.message;
   }
 }
 
-export async function exportFinanceBackup(): Promise<FinanceBackupV4> {
+/** Expected household IDs originate from the authenticated HouseholdProvider.
+ * Only the server can authorize the final operation. An explicit invalid ID
+ * is NEVER allowed to silently fall back to the unscoped legacy RPC.
+ */
+function assertExpectedBackupWorkspaceId(workspaceId: string | undefined): string | null {
+  if (workspaceId === undefined) return null;
+  const value = workspaceId.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error("Không thể xác minh ID không gian tài chính. Đã hủy thao tác.");
+  }
+  return value;
+}
+
+export async function exportFinanceBackup(expectedHouseholdId?: string): Promise<FinanceBackupV4> {
   if (LOCAL_UI_MODE) {
     throw new Error(
       "Backup cloud không khả dụng khi NEXT_PUBLIC_LOCAL_UI_MODE=true.",
     );
   }
 
-  const { data, error } = await supabase.rpc("export_finance_backup");
+  const scopedId = assertExpectedBackupWorkspaceId(expectedHouseholdId);
+  const { data, error } = scopedId
+    ? await supabase.rpc("export_finance_backup_scoped", { p_expected_household_id: scopedId })
+    : await supabase.rpc("export_finance_backup");
   if (error) {
     console.error("[financeStorage] exportFinanceBackup:", error.message);
     throw new Error(mapFinanceBackupError(error));
@@ -395,6 +413,7 @@ export async function exportFinanceBackup(): Promise<FinanceBackupV4> {
 
 export async function restoreFinanceBackup(
   input: unknown,
+  expectedHouseholdId?: string,
 ): Promise<{ error: string | null }> {
   if (LOCAL_UI_MODE) {
     return {
@@ -408,9 +427,19 @@ export async function restoreFinanceBackup(
   // V2/V3 are normalized client-side to a V4 envelope. Missing historical
   // collections stay empty: Net Worth may capture one truthful current baseline
   // server-side, while Forex Balance history is never fabricated.
-  const { data, error } = await supabase.rpc("restore_finance_backup", {
-    p_backup: validation.backup,
-  });
+  let scopedId: string | null;
+  try {
+    scopedId = assertExpectedBackupWorkspaceId(expectedHouseholdId);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Không gian tài chính không hợp lệ." };
+  }
+
+  const { data, error } = scopedId
+    ? await supabase.rpc("restore_finance_backup_scoped", {
+        p_backup: validation.backup,
+        p_expected_household_id: scopedId,
+      })
+    : await supabase.rpc("restore_finance_backup", { p_backup: validation.backup });
 
   if (error) {
     console.error("[financeStorage] restoreFinanceBackup:", error.message);
@@ -1628,7 +1657,7 @@ export async function initFinanceDemoData() {
   }
 }
 
-export async function resetFinanceDemoData(): Promise<{
+export async function resetFinanceDemoData(expectedHouseholdId?: string): Promise<{
   error: string | null;
 }> {
   const userId = await getAuthUserId();
@@ -1639,7 +1668,7 @@ export async function resetFinanceDemoData(): Promise<{
   // both paths cannot drift on demo rows or persisted field names.
   const backup = buildDemoFinanceBackup(userId);
 
-  const result = await restoreFinanceBackup(backup);
+  const result = await restoreFinanceBackup(backup, expectedHouseholdId);
   if (result.error) return result;
 
   // Only re-enable automatic demo seeding after the atomic replacement has
@@ -1648,7 +1677,7 @@ export async function resetFinanceDemoData(): Promise<{
   return { error: null };
 }
 
-export async function clearAllUserData(): Promise<{ error: string | null }> {
+export async function clearAllUserData(expectedHouseholdId?: string): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
   if (!userId) return { error: ERR_NO_AUTH };
 
@@ -1658,7 +1687,7 @@ export async function clearAllUserData(): Promise<{ error: string | null }> {
   // net_worth_snapshots, and forex_balance_snapshots.
   // restore_finance_backup performs the destructive work inside one PostgreSQL
   // transaction, so Clear All can no longer stop halfway through.
-  const result = await restoreFinanceBackup(createEmptyFinanceBackupV4());
+  const result = await restoreFinanceBackup(createEmptyFinanceBackupV4(), expectedHouseholdId);
   if (result.error) return result;
 
   // Prevent auto-seed from re-populating demo data on next page load. Set this

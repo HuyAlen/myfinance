@@ -10,7 +10,7 @@ describe("SettingsPage FINANCE-DATA-2 backup flow", () => {
     const end = source.indexOf("function requestBackupRestore", start);
     const region = source.slice(start, end);
 
-    expect(region).toContain("exportFinanceBackup()");
+    expect(region).toContain("exportFinanceBackup(expectedWorkspaceId)");
     expect(region).not.toContain("Promise.all(");
     expect(region).not.toContain("pf_wallets");
   });
@@ -22,7 +22,7 @@ describe("SettingsPage FINANCE-DATA-2 backup flow", () => {
 
     expect(region).toContain("validateFinanceBackup(parsed)");
     expect(region).toContain("if (!validation.ok)");
-    expect(region).toContain("requestBackupRestore(validation.backup, file.name)");
+    expect(region).toContain("requestBackupRestore(validation.backup, file.name, expectedWorkspaceId)");
   });
 
   it("performs restore only from the confirmation action", () => {
@@ -32,7 +32,7 @@ describe("SettingsPage FINANCE-DATA-2 backup flow", () => {
 
     expect(region).toContain("setPendingAction({");
     expect(region).toContain("onConfirm: async () => {");
-    expect(region).toContain("restoreFinanceBackup(backup)");
+    expect(region).toContain("restoreFinanceBackup(backup, expectedWorkspaceId)");
     expect(region).toContain("giao dịch nguyên tử trên máy chủ");
     expect(region).toContain("hoàn tác");
     expect(region).toContain("khôi phục dở dang");
