@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { formatDateFromDate, formatISODateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import { calculateEmergencyCoverageSnapshot } from "@/src/services/finance/emergencyCoverage";
 
@@ -379,7 +381,7 @@ type RecentActivityItem = {
   kind: RecentActivityKind;
 };
 
-function getRecentDayLabel(dateText: string) {
+function getRecentDayLabel(dateText: string, dateDisplayFormat: DateDisplayFormat) {
   const date = new Date(dateText);
   if (!Number.isFinite(date.getTime())) return "Không rõ ngày";
 
@@ -399,11 +401,7 @@ function getRecentDayLabel(dateText: string) {
   if (diffDays === 0) return "Hôm nay";
   if (diffDays === 1) return "Hôm qua";
 
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return formatDateFromDate(date,dateDisplayFormat);
 }
 
 function hasExplicitTime(value: unknown) {
@@ -615,6 +613,7 @@ function waitForDashboardRetry(delayMs: number): Promise<void> {
 }
 
 export default function DashboardPage() {
+  const dateDisplayFormat = useAccountDateFormat();
   const router = useRouter();
   const mountedAtRef = useRef<number | null>(null);
   const hasReportedCriticalReadyRef = useRef(false);
@@ -2534,7 +2533,7 @@ export default function DashboardPage() {
           subtitle: `${categoryName} · ${walletName}`,
           amount: Math.abs(Number(transaction.amount ?? 0)),
           date: displayDateTime,
-          dayLabel: getRecentDayLabel(displayDateTime),
+          dayLabel: getRecentDayLabel(displayDateTime,dateDisplayFormat),
           timeLabel: getRecentTimeLabel(displayDateTime),
           kind,
         };
@@ -2559,7 +2558,7 @@ export default function DashboardPage() {
           subtitle: `${getSavingActivityTitle(transaction.type)} · ${savingName}`,
           amount: Math.abs(transaction.amount),
           date: displayDateTime,
-          dayLabel: getRecentDayLabel(displayDateTime),
+          dayLabel: getRecentDayLabel(displayDateTime,dateDisplayFormat),
           timeLabel: getRecentTimeLabel(displayDateTime),
           kind: "income" as const,
         };
@@ -2589,7 +2588,7 @@ export default function DashboardPage() {
           : `${accountName} → ${walletName}`,
         amount: Math.abs(transaction.amount),
         date: displayDateTime,
-        dayLabel: getRecentDayLabel(displayDateTime),
+        dayLabel: getRecentDayLabel(displayDateTime,dateDisplayFormat),
         timeLabel: getRecentTimeLabel(displayDateTime),
         kind: isDeposit ? ("forex-out" as const) : ("forex-in" as const),
       };
@@ -2607,6 +2606,7 @@ export default function DashboardPage() {
     savings,
     forexAccounts,
     recentForexCashTransactionsInPeriod,
+    dateDisplayFormat,
   ]);
 
   const recentTxnGroups = useMemo(() => {
@@ -4485,7 +4485,7 @@ export default function DashboardPage() {
                           : `Có nguy cơ âm thanh khoản trong ${cashFlowForecast.daysUntilNegative} ngày`}
                       </p>
                       <p className="mt-1 text-[11px] leading-4 text-[#60778D]">
-                        Số dư dự kiến lần đầu xuống dưới 0 vào {new Date(`${cashFlowForecast.firstNegativeDate}T00:00:00`).toLocaleDateString("vi-VN")} nếu các khoản định kỳ diễn ra đúng lịch.
+                        Số dư dự kiến lần đầu xuống dưới 0 vào {formatISODateForDisplay(cashFlowForecast.firstNegativeDate,dateDisplayFormat)} nếu các khoản định kỳ diễn ra đúng lịch.
                       </p>
                     </div>
                   </div>
@@ -4562,7 +4562,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <p className="text-right text-[11px] font-semibold text-[#71879A]">
-                    {new Date(`${cashFlowForecast.lowPointDate}T00:00:00`).toLocaleDateString("vi-VN")}
+                    {formatISODateForDisplay(cashFlowForecast.lowPointDate,dateDisplayFormat)}
                   </p>
                 </div>
                 <p className="mt-2 text-[11px] leading-4 text-[#60778D]">
@@ -5572,7 +5572,7 @@ export default function DashboardPage() {
                       {item.title}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {item.date.toLocaleDateString("vi-VN")} ·{" "}
+                      {formatDateFromDate(item.date,dateDisplayFormat)} ·{" "}
                       {item.categoryName}
                     </p>
                   </div>

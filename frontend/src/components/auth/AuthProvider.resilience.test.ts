@@ -46,6 +46,13 @@ describe("AUTH-RESILIENCE-1 — auth bootstrap recovery contract", () => {
     );
   });
 
+  it("refreshes per-account metadata safely without delaying existing session bootstrap", () => {
+    expect(source).toContain("supabase.auth.getUser().then");
+    expect(source).toContain("authStateRevision !== expectedRevision");
+    expect(source).toContain("freshUser.id !== expectedUserId");
+    expect(source).toContain("setUser(freshUser)");
+  });
+
   it("keeps local UI mode synchronous and preserves auth readiness instrumentation", () => {
     expect(source).toContain("useState<User | null>(() =>");
     expect(source).toContain("useState<Session | null>(() =>");

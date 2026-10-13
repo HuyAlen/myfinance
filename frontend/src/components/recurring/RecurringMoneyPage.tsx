@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { formatISODateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -76,11 +78,8 @@ function localDateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatDate(value?: string) {
-  if (!value) return "Chưa đặt";
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("vi-VN");
+function formatDate(value: string | undefined, format:DateDisplayFormat) {
+  return value ? formatISODateForDisplay(value,format) : "Chưa đặt";
 }
 
 function formatRecurringAmountInput(value: string) {
@@ -103,6 +102,7 @@ function emptyEditor(categories: Category[], wallets: Wallet[]): EditorState {
 }
 
 export default function RecurringMoneyPage() {
+  const dateDisplayFormat = useAccountDateFormat();
   const router = useRouter();
   const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -425,8 +425,8 @@ export default function RecurringMoneyPage() {
       title: `Ghi giao dịch “${schedule.title}”?`,
       description:
         schedule.type === "income"
-          ? `Ghi nhận khoản thu ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate)}. MyFinance chỉ tạo giao dịch sau khi bạn xác nhận.`
-          : `Ghi nhận khoản chi ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate)}. MyFinance chỉ trừ ví sau khi bạn xác nhận.`,
+          ? `Ghi nhận khoản thu ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate,dateDisplayFormat)}. MyFinance chỉ tạo giao dịch sau khi bạn xác nhận.`
+          : `Ghi nhận khoản chi ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate,dateDisplayFormat)}. MyFinance chỉ trừ ví sau khi bạn xác nhận.`,
       confirmText: "Ghi giao dịch",
       variant: schedule.type === "expense" ? "danger" : "info",
       onConfirm: async () => {
@@ -579,6 +579,7 @@ export default function RecurringMoneyPage() {
               <ScheduleCard
                 key={schedule.id}
                 schedule={schedule}
+                dateDisplayFormat={dateDisplayFormat}
                 dueAction={dueActionByScheduleId.get(schedule.id)}
                 onRecord={(dueAction) =>
                   requestRecordDueTransaction(schedule, dueAction)
@@ -599,7 +600,7 @@ export default function RecurringMoneyPage() {
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.12em] text-[#71879A]">Ngày đến hạn</p>
-                  <p className="mt-1 text-base font-black text-[#294A66]">{formatDate(dateKey)}</p>
+                  <p className="mt-1 text-base font-black text-[#294A66]">{formatDate(dateKey,dateDisplayFormat)}</p>
                 </div>
                 <span className="rounded-full bg-[#EEF5FA] px-2.5 py-1 text-[11px] font-black text-[#60778D]">{items.length} khoản</span>
               </div>
@@ -805,6 +806,7 @@ function EmptyState({ onCreate, calendar = false }: { onCreate: () => void; cale
 
 function ScheduleCard({
   schedule,
+  dateDisplayFormat,
   dueAction,
   onRecord,
   onEdit,
@@ -812,6 +814,7 @@ function ScheduleCard({
   onClear,
 }: {
   schedule: RecurringMoneySchedule;
+  dateDisplayFormat: DateDisplayFormat;
   dueAction?: RecurringDueAction;
   onRecord: (dueAction: RecurringDueAction) => void;
   onEdit: () => void;
@@ -842,7 +845,7 @@ function ScheduleCard({
         </div>
         <div className="rounded-xl bg-[#F8FBFE] px-3 py-2.5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#8297A9]">Lần tới</p>
-          <p className="mt-1 text-xs font-black text-[#3F5F79]">{formatDate(schedule.effectiveNextRunDate ?? schedule.nextRunDate)}</p>
+          <p className="mt-1 text-xs font-black text-[#3F5F79]">{formatDate(schedule.effectiveNextRunDate ?? schedule.nextRunDate,dateDisplayFormat)}</p>
         </div>
       </div>
 
@@ -870,7 +873,7 @@ function ScheduleCard({
                 : `Sắp đến hạn · còn ${dueAction.daysUntilDue} ngày`}
             </p>
             <p className="mt-1 text-[11px] font-medium text-slate-500">
-              {formatDate(dueAction.dueDate)} · MyFinance không tự ghi giao dịch
+              {formatDate(dueAction.dueDate,dateDisplayFormat)} · MyFinance không tự ghi giao dịch
             </p>
           </div>
           {dueAction?.status === "due-today" ? (

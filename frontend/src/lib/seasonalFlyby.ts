@@ -3,7 +3,7 @@
  * Presentation-only seasonal motion plans. No finance data or network access.
  * Each season has its own physical metaphor; plans are bounded and testable.
  */
-export type FlybySeason = "autumn" | "christmas" | "tet";
+export type FlybySeason = "autumn" | "halloween" | "birthday" | "christmas" | "tet";
 export type FlybyDirection = "rtl" | "ltr";
 
 export const FLYBY_DURATION_MS = 7_600;
@@ -12,6 +12,8 @@ export const FLYBY_ACTIVITY_QUIET_MS = 6_000;
 export function resolveFlybySeason(attribute: string | null): FlybySeason | null {
   switch (attribute) {
     case "autumn":
+    case "halloween":
+    case "birthday":
     case "christmas":
     case "tet":
       return attribute;
@@ -84,8 +86,8 @@ export type TetFirework = {
 };
 
 export type SeasonalMotionPlan =
-  | { season: "autumn"; mode: "fall"; durationMs: number; leaves: AutumnLeaf[] }
-  | { season: "christmas"; mode: "glide"; durationMs: number; sleigh: ChristmasSleigh }
+  | { season: "autumn" | "birthday"; mode: "fall"; durationMs: number; leaves: AutumnLeaf[] }
+  | { season: "christmas" | "halloween"; mode: "glide"; durationMs: number; sleigh: ChristmasSleigh }
   | { season: "tet"; mode: "launch-burst"; durationMs: number; fireworks: TetFirework[] };
 
 /** The next event is always one season-specific, finite action. */
@@ -100,7 +102,7 @@ export function nextSeasonalMotionPlan({
   previousDirection?: FlybyDirection | null;
   random?: () => number;
 }): SeasonalMotionPlan {
-  if (season === "autumn") {
+  if (season === "autumn" || season === "birthday") {
     const count = mobile ? 3 : 6;
     const leaves = Array.from({ length: count }, (_, id): AutumnLeaf => {
       const baseX = (id + 0.5) * (100 / count);
@@ -118,21 +120,21 @@ export function nextSeasonalMotionPlan({
       };
     });
     return {
-      season: "autumn",
+      season,
       mode: "fall",
       durationMs: Math.max(...leaves.map((leaf) => leaf.delayMs + leaf.durationMs)) + 220,
       leaves,
     };
   }
 
-  if (season === "christmas") {
+  if (season === "christmas" || season === "halloween") {
     const preferOpposite = previousDirection === "rtl" ? "ltr" : "rtl";
     const direction: FlybyDirection = previousDirection === null
       ? (sampleUnit(random) < 0.5 ? "rtl" : "ltr")
       : (sampleUnit(random) < 0.72 ? preferOpposite : previousDirection);
     const rise = sampleUnit(random) < 0.72;
     return {
-      season: "christmas",
+      season,
       mode: "glide",
       durationMs: Math.round(pick(random, 8_000, mobile ? 10_900 : 10_500)),
       sleigh: {

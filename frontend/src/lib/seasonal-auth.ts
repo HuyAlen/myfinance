@@ -9,6 +9,8 @@ export type SeasonalAuthTheme =
   | "spring"
   | "summer"
   | "autumn"
+  | "halloween"
+  | "birthday"
   | "christmas"
   | "newyear"
   | "tet";
@@ -19,6 +21,8 @@ export const SEASONAL_AUTH_PREVIEWS: readonly ActiveSeasonalAuthTheme[] = [
   "spring",
   "summer",
   "autumn",
+  "halloween",
+  "birthday",
   "christmas",
   "newyear",
   "tet",
@@ -77,6 +81,8 @@ export function resolveSeasonalAuthTheme(
     return "newyear";
   }
   if (month === 11) return "christmas";
+  // Halloween takes priority over autumn during the final 12 days of October.
+  if (month === 9 && day >= 20) return "halloween";
   if (month >= 5 && month <= 7) return "summer";
   if (month >= 8 && month <= 10) return "autumn";
   return "spring";

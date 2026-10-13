@@ -1,3 +1,17 @@
+/* Halloween reuses the bounded diagonal-glide motion, showing bats instead
+ * of the Christmas sleigh. No additional timers, wrappers, or click targets. */
+.finance-season-flyby[data-seasonal-flyby="halloween"] .finance-season-flyby-art {
+  background-image: url("/seasonal-workspace/flyby/halloween-bats.svg");
+  filter: drop-shadow(0 3px 5px rgb(116 84 156 / 0.18));
+}
+
+
+/* ACCOUNT-BIRTHDAY-1: bounded confetti reuses finite fall animations. */
+.finance-season-flyby[data-seasonal-flyby="birthday"] .finance-season-autumn-leaf {
+  background-image: url("/seasonal-workspace/flyby/birthday-confetti.svg");
+  filter: drop-shadow(0 2px 2px rgb(180 90 150 / 0.14));
+}
+
 /* MYFINANCE-SEASONAL-THEMED-MOTION-1
  * Autumn: leaves fall. Christmas: sleigh flies diagonally and bobs.
  * Tet: rockets launch from below and bloom into finite radial fireworks.

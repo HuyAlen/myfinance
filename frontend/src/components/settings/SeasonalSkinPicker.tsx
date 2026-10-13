@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/src/components/auth/AuthProvider";
+import { readAccountBirthDate, resolveAccountSeasonalTheme } from "@/src/lib/accountBirthdayTheme";
 import { Check, Palette } from "lucide-react";
 import { resolveSeasonalAuthTheme } from "@/src/lib/seasonal-auth";
 import { useSeasonalThemeEnabled } from "@/src/lib/seasonalThemePreference";
@@ -14,6 +17,10 @@ import {
 
 /** Compact seasonal skin picker, nested under Settings > Tùy chỉnh. */
 export default function SeasonalSkinPicker() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const accountBirthDate = readAccountBirthDate(user?.user_metadata);
+  const [previewOverride, setPreviewOverride] = useState<string | null>(null);
   // Fixed initial value on SSR prevents hydration mismatch across timezones.
   const [selectedSeason, setSelectedSeason] = useState<SeasonalSkinSeason>("spring");
   const [calendarSeason, setCalendarSeason] = useState<SeasonalSkinSeason | null>(null);
@@ -24,14 +31,37 @@ export default function SeasonalSkinPicker() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const requested = new URLSearchParams(window.location.search).get("season");
-      const active = resolveSeasonalAuthTheme(new Date(), requested);
+      const now = new Date();
+      const calendar = resolveSeasonalAuthTheme(now, requested);
+      const active = resolveAccountSeasonalTheme(calendar, now, requested, accountBirthDate);
       if (active !== "off") {
         setCalendarSeason(active);
         setSelectedSeason(active);
       }
+      setPreviewOverride(requested);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [accountBirthDate]);
+
+  // Preview another season without persisting an override or losing month filters.
+  // The existing workspace controller uses Next search params after navigation.
+  const previewSeason = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("season", selectedSeason);
+    setPreviewOverride(selectedSeason);
+    setCalendarSeason(selectedSeason);
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+  };
+  const restoreCalendar = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("season");
+    setPreviewOverride(null);
+    const now = new Date();
+    const automatic = resolveAccountSeasonalTheme(resolveSeasonalAuthTheme(now, null), now, null, accountBirthDate);
+    setCalendarSeason(automatic === "off" ? null : automatic);
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+  };
+  const isPreviewing = previewOverride === selectedSeason;
 
   return (
     <section
@@ -45,7 +75,7 @@ export default function SeasonalSkinPicker() {
         </span>
         <div className="min-w-0 flex-1">
           <h3 id="seasonal-skins-title" className="text-sm font-bold text-slate-700">Skin theo mùa</h3>
-          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">3 skin/mùa · tự áp dụng theo lịch, lưu riêng trên thiết bị</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">3 skin/chủ đề · tự dùng theo lịch và ngày sinh tài khoản</p>
         </div>
       </div>
 
@@ -72,7 +102,37 @@ export default function SeasonalSkinPicker() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-seasonal-season-preview="true"
+          onClick={previewSeason}
+          disabled={!enabled || isPreviewing}
+          className="min-h-10 rounded-xl border border-violet-200 bg-violet-50 px-3 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-default disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-violet-500"
+        >
+          {"Xem th\u1eed m\u00f9a " + seasonMeta.label}
+        </button>
+        {previewOverride !== null ? (
+          <button
+            type="button"
+            data-seasonal-preview-reset="true"
+            onClick={restoreCalendar}
+            className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-500"
+          >
+            {"V\u1ec1 ch\u1ebf \u0111\u1ed9 t\u1ef1 \u0111\u1ed9ng"}
+          </button>
+        ) : null}
+      </div>
+
+      {selectedSeason === "birthday" ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          {accountBirthDate
+            ? "Skin Sinh nhật sẽ tự hiện mỗi năm vào ngày sinh trong Hồ sơ tài khoản."
+            : "Chưa có ngày sinh. Hãy cập nhật tại Hồ sơ cá nhân ở phía trên."}
+        </p>
+      ) : null}
       <div className="grid grid-cols-3 gap-2" role="group" aria-label={`Skin mùa ${seasonMeta.label}`}>
+
         {SKIN_CHOICES.map((choice) => {
           const selected = selectedSkin === choice.value;
           return (

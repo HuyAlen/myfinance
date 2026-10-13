@@ -1,3 +1,20 @@
+/* Halloween keeps the existing single scroller and readable financial cards. */
+:root[data-finance-workspace-season="halloween"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/halloween-hero.svg");
+  --finance-atmo-canvas-top: #f9f2fb;
+  --finance-atmo-canvas-mid: #f4eef8;
+  --finance-atmo-hero-edge: #f7e9dd;
+}
+
+
+/* ACCOUNT-BIRTHDAY-1: celebratory canvas only for the active user's birthday. */
+:root[data-finance-workspace-season="birthday"] {
+  --finance-atmo-art: url("/seasonal-workspace/page-atmosphere/birthday-hero.svg");
+  --finance-atmo-canvas-top: #fff5fc;
+  --finance-atmo-canvas-mid: #f4f3fc;
+  --finance-atmo-hero-edge: #fae9f6;
+}
+
 /* MYFINANCE-SEASONAL-PAGE-ATMOSPHERE-1
  * Additional atmosphere inside authenticated content, not only the chrome.
  * The calendar/override resolver is owned by SeasonalWorkspaceThemeController.

@@ -112,6 +112,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextSession?.user ?? null);
       setLoading(false);
       reportAuthReady();
+      if (nextSession?.user) {
+        // Metadata can change on another device while this browser caches a JWT.
+        // Verify the account against the auth server without delaying app startup.
+        const expectedUserId = nextSession.user.id;
+        const expectedRevision = authStateRevision;
+        void supabase.auth.getUser().then(({ data, error }) => {
+          const freshUser = data?.user;
+          if (!active || authStateRevision !== expectedRevision || error ||
+              !freshUser || freshUser.id !== expectedUserId) return;
+          setUser(freshUser);
+        }).catch(() => {
+          // Offline: keep the current authenticated session and retry next auth event.
+        });
+      }
     };
 
     const settleBootstrapFailure = (reason: unknown) => {

@@ -7,6 +7,10 @@ import ConfirmDialog, {
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { useTheme } from "@/src/components/theme/ThemeProvider";
 import { isThemePreference } from "@/src/lib/theme";
+import FormattedDateInput from "@/src/components/ui/FormattedDateInput";
+import { isDateDisplayFormat, DATE_DISPLAY_FORMAT_OPTIONS, DEFAULT_DATE_DISPLAY_FORMAT, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
+import { notifyDateFormatSaved } from "@/src/lib/date/dateFormatPreference";
+import { isValidBirthDateInput, readAccountBirthDate } from "@/src/lib/accountBirthdayTheme";
 
 import {
   AlertTriangle,
@@ -199,12 +203,14 @@ export default function SettingsPage() {
 
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [birthDateInvalidForAccount, setBirthDateInvalidForAccount] = useState<string | null>(null);
+  const [profileBirthDateDraft, setProfileBirthDateDraft] = useState<{ accountId: string; value: string } | null>(null);
   const [timezone, setTimezone] = useState("Asia/Ho_Chi_Minh");
 
   // Preferences
   const [lang, setLang] = useState("vi");
   const [currency, setCurrency] = useState("VND");
-  const [dateFormat, setDateFormat] = useState("dd/mm/yyyy");
+  const [dateFormat, setDateFormat] = useState<DateDisplayFormat>(DEFAULT_DATE_DISPLAY_FORMAT);
   const [defaultPage, setDefaultPage] = useState("/");
 
 
@@ -287,6 +293,14 @@ export default function SettingsPage() {
     user?.email?.[0]?.toUpperCase() ||
     "U";
   const displayEmail = user?.email ?? "";
+  const birthDateInputValid = birthDateInvalidForAccount !== (user?.id ?? "");
+  const accountBirthDate = readAccountBirthDate(user?.user_metadata);
+  // Draft is scoped to the authenticated user ID; switching accounts never reuses it.
+  // Explicit null check lets TypeScript safely narrow the draft.
+  const profileBirthDate = profileBirthDateDraft !== null &&
+    profileBirthDateDraft.accountId === user?.id
+    ? profileBirthDateDraft.value
+    : (accountBirthDate ?? "");
   const aiConnectionReady =
     aiProvider === "local" || aiHasStoredApiKey || Boolean(aiApiKey.trim());
   const aiConnectionLabel =
@@ -440,7 +454,7 @@ export default function SettingsPage() {
       if (typeof saved.timezone === "string") setTimezone(saved.timezone);
       if (typeof saved.lang === "string") setLang(saved.lang);
       if (typeof saved.currency === "string") setCurrency(saved.currency);
-      if (typeof saved.dateFormat === "string") setDateFormat(saved.dateFormat);
+      if (isDateDisplayFormat(saved.dateFormat)) setDateFormat(saved.dateFormat);
       if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
       if (isThemePreference(saved.theme)) setTheme(saved.theme);
       if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
@@ -767,6 +781,11 @@ export default function SettingsPage() {
       }
     }
 
+    if (!birthDateInputValid || !isValidBirthDateInput(profileBirthDate)) {
+      toast({ variant: "error", message: "Ngày sinh không hợp lệ hoặc nằm trong tương lai." });
+      return;
+    }
+
     const trimmedProfileName = profileName.trim();
     if (trimmedProfileName.length > 80) {
       toast({ variant: "error", message: "Họ và tên không được vượt quá 80 ký tự." });
@@ -779,6 +798,7 @@ export default function SettingsPage() {
           data: {
             full_name: trimmedProfileName,
             name: trimmedProfileName,
+            birth_date: profileBirthDate || null,
           },
         });
         if (profileError) throw profileError;
@@ -789,6 +809,7 @@ export default function SettingsPage() {
         profileName: trimmedProfileName,
       };
       window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
+      notifyDateFormatSaved();
       setProfileName(trimmedProfileName);
       setSaveSuccess(true);
       window.setTimeout(() => setSaveSuccess(false), 2200);
@@ -1168,6 +1189,25 @@ export default function SettingsPage() {
                   onChange={setProfilePhone}
                   placeholder="+84 xxx xxx xxx"
                 />
+                <div className="min-w-0">
+                  <label htmlFor="account-birth-date" className="mb-1.5 block text-sm font-bold text-slate-700">
+                    Ngày sinh
+                  </label>
+                  <FormattedDateInput
+                    id="account-birth-date"
+                    data-account-birth-date="true"
+                    min="1900-01-01"
+                    value={profileBirthDate}
+                    format={dateFormat}
+                    onChange={(value) => setProfileBirthDateDraft({ accountId: user?.id ?? "", value })}
+                    onValidityChange={(valid) => setBirthDateInvalidForAccount(valid ? null : (user?.id ?? ""))}
+                    disabled={!user?.id || user?.id === "local-ui-user"}
+                  />
+                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    Lưu trong hồ sơ tài khoản; tự bật skin Sinh nhật mỗi năm vào ngày này.
+                    Ngày 29/2 sẽ được kỷ niệm vào 28/2 ở năm không nhuận.
+                  </p>
+                </div>
                 <SettingSelect
                   label="Múi giờ"
                   value={timezone}
@@ -1204,7 +1244,7 @@ export default function SettingsPage() {
                   {saveSuccess ? "Đã lưu!" : "Lưu thay đổi"}
                 </button>
                 <p className="text-xs text-slate-400">
-                  Họ tên được đồng bộ với tài khoản; các tùy chỉnh khác lưu trên trình duyệt
+                  Họ tên và ngày sinh đồng bộ với tài khoản; các tùy chỉnh khác lưu trên trình duyệt
                 </p>
               </div>
             </div>
@@ -1266,12 +1306,12 @@ export default function SettingsPage() {
                   </div>
                   <select
                     value={dateFormat}
-                    onChange={(e) => setDateFormat(e.target.value)}
+                    onChange={(e) => { if (isDateDisplayFormat(e.target.value)) setDateFormat(e.target.value); setBirthDateInvalidForAccount(null); }}
                     className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
-                    <option value="dd/mm/yyyy">DD/MM/YYYY</option>
-                    <option value="mm/dd/yyyy">MM/DD/YYYY</option>
-                    <option value="yyyy-mm-dd">YYYY-MM-DD</option>
+                    {DATE_DISPLAY_FORMAT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
 

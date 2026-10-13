@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { DEFAULT_DATE_DISPLAY_FORMAT, formatISODateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import {
   createContext,
@@ -395,21 +397,19 @@ function getFilterRange(filter: StoredDateFilter) {
   return getMonthRange(filter.selectedMonth);
 }
 
-function getFilterLabel(filter: StoredDateFilter) {
+function getFilterLabel(filter: StoredDateFilter, dateDisplayFormat: DateDisplayFormat = DEFAULT_DATE_DISPLAY_FORMAT) {
   if (filter.mode === "quarter")
     return formatQuarterLabel(filter.selectedQuarter);
   if (filter.mode === "year") return `Năm ${filter.selectedYear}`;
   if (filter.mode === "custom") {
-    return `${filter.customStart.split("-").reverse().join("/")} - ${filter.customEnd
-      .split("-")
-      .reverse()
-      .join("/")}`;
+    return `${formatISODateForDisplay(filter.customStart,dateDisplayFormat)} - ${formatISODateForDisplay(filter.customEnd,dateDisplayFormat)}`;
   }
 
   return formatMonthLabel(filter.selectedMonth);
 }
 
 export function DateFilterProvider({ children }: { children: ReactNode }) {
+  const dateDisplayFormat = useAccountDateFormat();
   const [filter, setFilter] = useState(getInitialFilter);
   const router = useRouter();
   const pathname = usePathname();
@@ -610,14 +610,14 @@ export function DateFilterProvider({ children }: { children: ReactNode }) {
       setSelectedYearFilter,
       setCustomRange,
       monthLabel: formatMonthLabel(filter.selectedMonth),
-      filterLabel: getFilterLabel(filter),
+      filterLabel: getFilterLabel(filter, dateDisplayFormat),
       dateRange: getFilterRange(filter),
       months12: buildMonths12(filter.selectedMonth),
       quarters8: buildQuarters8(filter.selectedMonth),
       years5: buildYears5(filter.selectedMonth),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, dateDisplayFormat]);
 
   return (
     <DateFilterContext.Provider value={value}>

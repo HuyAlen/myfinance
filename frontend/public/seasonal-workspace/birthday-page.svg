@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 510" data-season-scene="birthday">
+<g data-motif="birthday-balloons">
+<g transform="translate(688 92) rotate(-12)"><ellipse cx="0" cy="0" rx="31.1" ry="42" fill="#D878AC" fill-opacity=".88"/><ellipse cx="-9.2" cy="-14.7" rx="5.5" ry="10.1" fill="#fff" fill-opacity=".55"/><path d="M -4 42.0 L 4 42.0 L 0 49.0 Z" fill="#D878AC"/><path d="M 0 49.0 Q -15 97.0 4 144.0" stroke="#9F95BD" stroke-width="2" stroke-linecap="round" fill="none"/></g>
+<g transform="translate(768 204) rotate(12)"><ellipse cx="0" cy="0" rx="25.9" ry="35" fill="#A29EDC" fill-opacity=".88"/><ellipse cx="-7.7" cy="-12.2" rx="4.5" ry="8.4" fill="#fff" fill-opacity=".55"/><path d="M -4 35.0 L 4 35.0 L 0 42.0 Z" fill="#A29EDC"/><path d="M 0 42.0 Q -15 90.0 4 137.0" stroke="#9F95BD" stroke-width="2" stroke-linecap="round" fill="none"/></g>
+<g transform="translate(608 357) scale(0.85)"><ellipse cx="0" cy="58" rx="114" ry="18" fill="#B7B0D4" fill-opacity=".21"/><rect x="-90" y="-12" width="180" height="65" rx="17" fill="#F2B7D5" stroke="#D878AC" stroke-width="4"/><path d="M -90 8 Q -74 -5 -56 7 Q -35 19 -16 6 Q 0 18 16 5 Q 39 19 58 6 Q 75 17 90 6 L90 -13 L-90 -13 Z" fill="#FFF9FD"/><rect x="-71" y="31" width="142" height="9" rx="5" fill="#D878AC" fill-opacity=".35"/><path d="M-50 -15 V-49 M0 -15 V-59 M50 -15 V-49" stroke="#7E90CB" stroke-width="9" stroke-linecap="round"/><path d="M-50 -51 Q -62 -65 -50 -72 Q -38 -66 -50 -51 M0 -62 Q -13 -76 0 -85 Q 14 -76 0 -62 M50 -51 Q 38 -65 50 -72 Q 62 -65 50 -51" fill="#F2BA65"/></g>
+<g transform="translate(80 20) rotate(0)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(376 137) rotate(47)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(672 255) rotate(94)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(264 372) rotate(141)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(560 122) rotate(18)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(152 239) rotate(65)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(448 357) rotate(112)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(744 107) rotate(159)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(336 224) rotate(36)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(631 341) rotate(83)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(224 91) rotate(130)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(520 209) rotate(7)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(112 326) rotate(54)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(408 76) rotate(101)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(704 193) rotate(148)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(296 311) rotate(25)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(592 61) rotate(72)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(184 178) rotate(119)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+</g>
+</svg>

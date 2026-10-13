@@ -17,6 +17,8 @@ const motifs = {
   spring: ["#E27AA8", "#5FB693"],
   summer: ["#19A7D4", "#F2B54B"],
   autumn: ["#E58A3C", "#C85537"],
+  halloween: ["#F38B43", "#74549C"],
+  birthday: ["#D878AC", "#6686C9"],
   christmas: ["#17674C", "#D14E5B"],
   newyear: ["#8A71D1", "#F6C865"],
   tet: ["#DC596D", "#F0B64A"],
@@ -57,8 +59,8 @@ describe("MYFINANCE-WORKSPACE-SEASONAL-ALL-SURFACES-1", () => {
     expect(css).toContain(".finance-bottom-nav");
   });
 
-  it("has 18 tiny vector illustration assets, three for each season", () => {
-    expect(SEASONAL_AUTH_PREVIEWS).toHaveLength(6);
+  it("has 24 tiny vector illustration assets, three for each season", () => {
+    expect(SEASONAL_AUTH_PREVIEWS).toHaveLength(8);
     for (const season of SEASONAL_AUTH_PREVIEWS) {
       for (const area of ["sidebar", "topbar", "page"]) {
         const name = `public/seasonal-workspace/${season}-${area}.svg`;
@@ -120,7 +122,7 @@ describe("MYFINANCE-SEASONAL-WORKSPACE-FINAL-POLISH-1", () => {
     expect(css).not.toMatch(/\.finance-(?:sidebar|header)\s*::(?:before|after)/);
   });
 
-  it("retains six independent themes, contrast-safe dark Christmas and off mode", () => {
+  it("retains eight independent themes, contrast-safe dark Christmas and off mode", () => {
     for (const season of SEASONAL_AUTH_PREVIEWS) {
       expect(css).toContain(`data-finance-workspace-season="${season}"`);
     }
@@ -171,7 +173,7 @@ describe("MYFINANCE-SEASONAL-WORKSPACE-AMBIENT-MOTION-1", () => {
       "financeSeasonGentleFall", "financeSeasonSnowDrift",
       "financeSeasonShimmer", "financeSeasonLanternSway",
     ]) expect(css).toContain(`@keyframes ${name}`);
-    for (const season of ["spring", "summer", "autumn", "christmas", "newyear", "tet"]) {
+    for (const season of ["spring", "summer", "autumn", "halloween", "birthday", "christmas", "newyear", "tet"]) {
       expect(css).toContain(`data-finance-workspace-season="${season}"`);
     }
   });

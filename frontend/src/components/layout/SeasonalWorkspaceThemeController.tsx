@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { resolveSeasonalAuthTheme } from "@/src/lib/seasonal-auth";
+import { useAuth } from "@/src/components/auth/AuthProvider";
+import { readAccountBirthDate, resolveAccountSeasonalTheme } from "@/src/lib/accountBirthdayTheme";
 import {
   handleSeasonalSkinStorage,
   syncSeasonalSkinForDocument,
@@ -25,13 +27,16 @@ export default function SeasonalWorkspaceThemeController() {
   const searchParams = useSearchParams();
   const requestedSeason = searchParams?.get("season") ?? null;
   const seasonalEnabled = useSeasonalThemeEnabled();
+  const { user } = useAuth();
+  const accountBirthDate = readAccountBirthDate(user?.user_metadata);
 
   useEffect(() => {
     let nextMidnightTimer: number | undefined;
 
     const refresh = () => {
       const now = new Date();
-      const theme = resolveSeasonalAuthTheme(now, requestedSeason);
+      const calendarTheme = resolveSeasonalAuthTheme(now, requestedSeason);
+      const theme = resolveAccountSeasonalTheme(calendarTheme, now, requestedSeason, accountBirthDate);
       const root = document.documentElement;
 
       // Always consult the latest store value: a pending React effect from
@@ -79,7 +84,7 @@ export default function SeasonalWorkspaceThemeController() {
       window.removeEventListener("myfinance:seasonal-theme-preference-changed", onPreferenceChange);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [pathname, requestedSeason, seasonalEnabled]);
+  }, [pathname, requestedSeason, seasonalEnabled, accountBirthDate]);
 
   // Only the AppShell consumes this attribute. Clear it if this controller
   // unmounts, but do not flicker the background on ordinary route changes.

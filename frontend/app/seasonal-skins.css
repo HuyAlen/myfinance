@@ -1,3 +1,44 @@
+/* Halloween gets three treatments: Classic (base), Pastel, and Festival. */
+:root[data-finance-workspace-season="halloween"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 201 157 214;
+  --finance-season-secondary: 242 173 120;
+  --finance-season-soft: 255 246 252;
+  --finance-season-ink: #8e6c9d;
+  --finance-atmo-canvas-top: #fff7fc;
+  --finance-atmo-canvas-mid: #faf3fc;
+  --finance-atmo-hero-edge: #fceee6;
+}
+:root[data-finance-workspace-season="halloween"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 234 114 35;
+  --finance-season-secondary: 133 67 175;
+  --finance-season-soft: 250 226 255;
+  --finance-season-ink: #8746a3;
+  --finance-atmo-canvas-top: #f8e9fc;
+  --finance-atmo-canvas-mid: #f1e8f7;
+  --finance-atmo-hero-edge: #ffe5d0;
+}
+
+
+/* ACCOUNT-BIRTHDAY-1: three birthday skins, including unchanged default. */
+:root[data-finance-workspace-season="birthday"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 205 147 191;
+  --finance-season-secondary: 148 172 222;
+  --finance-season-soft: 255 247 253;
+  --finance-season-ink: #946b90;
+  --finance-atmo-canvas-top: #fffafd;
+  --finance-atmo-canvas-mid: #faf7ff;
+  --finance-atmo-hero-edge: #fff1f9;
+}
+:root[data-finance-workspace-season="birthday"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 229 104 161;
+  --finance-season-secondary: 102 112 211;
+  --finance-season-soft: 255 222 241;
+  --finance-season-ink: #a53873;
+  --finance-atmo-canvas-top: #fff0f9;
+  --finance-atmo-canvas-mid: #f4eefd;
+  --finance-atmo-hero-edge: #ffe2f1;
+}
+
 /* MYFINANCE-SEASONAL-SKINS-1
  * Two extra skins per season. The existing skin is unchanged whenever
  * data-finance-season-skin is absent (classic / legacy accounts).

@@ -43,12 +43,12 @@ function setup() {
 }
 
 describe("MYFINANCE-SEASONAL-SKINS-1", () => {
-  it("offers 3 skins for each of the 6 supported seasons and no arbitrary values", () => {
+  it("offers 3 skins for each of the 8 supported themes and no arbitrary values", () => {
     expect(SKIN_CHOICES.map((item) => item.value)).toEqual(["classic", "pastel", "festival"]);
     expect(SKIN_SEASONS.map((item) => item.value)).toEqual([
-      "spring", "summer", "autumn", "christmas", "newyear", "tet",
+      "spring", "summer", "autumn", "halloween", "birthday", "christmas", "newyear", "tet",
     ]);
-    expect(SKIN_SEASONS).toHaveLength(6);
+    expect(SKIN_SEASONS).toHaveLength(8);
     expect(isSkinSeason("autumn")).toBe(true);
     expect(isSkinSeason("../../theme")).toBe(false);
     expect(parseSeasonalSkin("pastel")).toBe("pastel");
@@ -57,9 +57,21 @@ describe("MYFINANCE-SEASONAL-SKINS-1", () => {
     expect(parseSeasonalSkin("script")).toBe("classic");
   });
 
-  it("defaults to the old classic look, independently for all six seasons", () => {
+  it("defaults to the old classic look, independently for all eight themes", () => {
     setup();
     for (const season of SKIN_SEASONS) expect(readSeasonalSkin(season.value)).toBe("classic");
+  });
+
+  it("persists Halloween independently from Autumn and updates an active Halloween immediately", () => {
+    const runtime = setup();
+    runtime.attributes.set("data-finance-workspace-season", "halloween");
+    setSeasonalSkin("halloween", "festival");
+    setSeasonalSkin("autumn", "pastel");
+    expect(readSeasonalSkin("halloween")).toBe("festival");
+    expect(readSeasonalSkin("autumn")).toBe("pastel");
+    expect(runtime.attributes.get(SKIN_ATTRIBUTE)).toBe("festival");
+    expect(runtime.saved.get(seasonalSkinKey("halloween"))).toBe("festival");
+    expect(isSeasonalSkinStorageKey(seasonalSkinKey("halloween"))).toBe(true);
   });
 
   it("stores a different skin for each season without changing another season", () => {

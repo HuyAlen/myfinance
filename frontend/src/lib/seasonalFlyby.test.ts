@@ -8,8 +8,8 @@ import {
 } from "./seasonalFlyby";
 
 describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 pure motion plans", () => {
-  it("allows only three seasonal events and rejects off/unknown seasons", () => {
-    for (const theme of ["autumn", "christmas", "tet"] as const) {
+  it("allows four seasonal events and rejects off/unknown seasons", () => {
+    for (const theme of ["autumn", "halloween", "birthday", "christmas", "tet"] as const) {
       expect(resolveFlybySeason(theme)).toBe(theme);
     }
     for (const value of [null, "off", "spring", "summer", "newyear", "../../tet", "AUTUMN"]) {
@@ -91,6 +91,23 @@ describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 pure motion plans", () => {
     expect(alternate.sleigh.direction).toBe("ltr");
   });
 
+  it("Halloween glides as a finite bat-flight event, including mobile", () => {
+    for (const mobile of [false, true]) {
+      const plan = nextSeasonalMotionPlan({ season: "halloween", mobile, random: () => 0.35 });
+      expect(plan.season).toBe("halloween");
+      expect(plan.mode).toBe("glide");
+      expect(plan.durationMs).toBeGreaterThan(7_000);
+      expect(plan.durationMs).toBeLessThan(11_000);
+    }
+  });
+
+  it("Birthday generates short finite confetti falling motion", () => {
+    const plan = nextSeasonalMotionPlan({ season: "birthday", mobile: true, random: () => 0.5 });
+    expect(plan.season).toBe("birthday");
+    expect(plan.mode).toBe("fall");
+    expect(plan.durationMs).toBeLessThan(13_000);
+  });
+
   it("Tet launches a single mobile rocket or two staged desktop fireworks", () => {
     for (const mobile of [false, true]) {
       for (const r of [0, 0.5, 1, Number.NaN, -99, 99]) {
@@ -118,7 +135,7 @@ describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 pure motion plans", () => {
   });
 
   it("each plan is a single, finite event; no duplicate overlapping modes", () => {
-    for (const season of ["autumn", "christmas", "tet"] as const) {
+    for (const season of ["autumn", "halloween", "birthday", "christmas", "tet"] as const) {
       const plan = nextSeasonalMotionPlan({ season, mobile: false, random: () => 0.42 });
       expect(plan.season).toBe(season);
       expect(plan.durationMs).toBeGreaterThan(0);

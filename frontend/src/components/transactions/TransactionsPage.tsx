@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { formatISODateForDisplay, formatShortISODate, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -202,10 +204,8 @@ function createEmptyForm(): FormState {
  * dd/mm/yyyy) so the header reads consistently whether the range came
  * from the global custom picker or from a contextual drill-down link.
  */
-function formatDrillDownRangeLabel(startDate: string, endDate: string) {
-  const toDisplay = (isoDate: string) =>
-    isoDate.split("-").reverse().join("/");
-  return `${toDisplay(startDate)} - ${toDisplay(endDate)}`;
+function formatDrillDownRangeLabel(startDate: string, endDate: string, dateDisplayFormat: DateDisplayFormat) {
+  return `${formatISODateForDisplay(startDate,dateDisplayFormat)} - ${formatISODateForDisplay(endDate,dateDisplayFormat)}`;
 }
 
 function getTransactionDateValue(transaction: Transaction) {
@@ -309,7 +309,7 @@ function getTransactionTypeFromFormMode(
   return "expense";
 }
 
-function formatTransactionDayLabel(dateValue: string) {
+function formatTransactionDayLabel(dateValue: string, dateDisplayFormat: DateDisplayFormat) {
   dateValue = String(dateValue ?? "").slice(0, 10);
   const today = new Date();
   // Local calendar date comparison — toISOString() is UTC-based and would
@@ -326,8 +326,8 @@ function formatTransactionDayLabel(dateValue: string) {
   if (!year || !month || !day) return dateValue;
 
   return today.getFullYear() === Number(year)
-    ? `${day}/${month}`
-    : `${day}/${month}/${year}`;
+    ? formatShortISODate(dateValue,dateDisplayFormat)
+    : formatISODateForDisplay(dateValue,dateDisplayFormat);
 }
 
 function formatTransactionTime(transaction: Transaction) {
@@ -516,6 +516,7 @@ function getVisiblePageNumbers(totalPages: number, currentPage: number) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TransactionsPage() {
   const { dateRange, filterLabel } = useDateFilter();
+  const dateDisplayFormat = useAccountDateFormat();
   // TXN-CORRECTNESS-1: read before reloadData (below) so its identity can
   // depend on the resolved effective range rather than a locally
   // re-derived, month-only range that used to ignore quarter/year/custom
@@ -538,9 +539,10 @@ export default function TransactionsPage() {
         ? formatDrillDownRangeLabel(
             urlTransactionsContext.dateFrom,
             urlTransactionsContext.dateTo,
+            dateDisplayFormat,
           )
         : filterLabel,
-    [urlTransactionsContext, filterLabel],
+    [urlTransactionsContext, filterLabel, dateDisplayFormat],
   );
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -2591,7 +2593,7 @@ export default function TransactionsPage() {
                     <div className="min-w-0">
                       <p className="truncate text-base font-black text-slate-900">{getTransactionDisplayNote(activeReviewTransaction)}</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {formatTransactionDayLabel(activeReviewTransaction.date)} · {walletById.get(activeReviewTransaction.walletId)?.name ?? "—"}
+                        {formatTransactionDayLabel(activeReviewTransaction.date, dateDisplayFormat)} · {walletById.get(activeReviewTransaction.walletId)?.name ?? "—"}
                       </p>
                     </div>
                     <p className="shrink-0 text-base font-black tabular-nums text-slate-800">{formatVND(activeReviewTransaction.amount)}</p>
@@ -3330,7 +3332,7 @@ export default function TransactionsPage() {
                       <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                         <div className="flex shrink-0 items-center gap-1.5">
                           <span className="whitespace-nowrap text-[12px] font-black text-slate-800 sm:text-sm">
-                            {formatTransactionDayLabel(date)}
+                            {formatTransactionDayLabel(date, dateDisplayFormat)}
                           </span>
                           <span
                             className="shrink-0 whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200 sm:px-2 sm:text-[11px]"
@@ -3517,7 +3519,7 @@ export default function TransactionsPage() {
                                       : categoryLabel.primary +
                                         " · " +
                                         (wal?.name ?? "—")}{" "}
-                                    · {formatTransactionDayLabel(t.date)}{" "}
+                                    · {formatTransactionDayLabel(t.date, dateDisplayFormat)}{" "}
                                     {formatTransactionTime(t)}
                                   </p>
                                 </div>

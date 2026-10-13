@@ -12,7 +12,7 @@ const dashboard = read("src/components/dashboard/DashboardPage.tsx");
 const transactions = read("src/components/transactions/TransactionsPage.tsx");
 const wallets = read("src/components/wallets/WalletsPage.tsx");
 const reports = read("src/components/reports/ReportsPage.tsx");
-const seasons = ["spring", "summer", "autumn", "christmas", "newyear", "tet"] as const;
+const seasons = ["spring", "summer", "autumn", "halloween", "birthday", "christmas", "newyear", "tet"] as const;
 
 describe("MYFINANCE-SEASONAL-PAGE-ATMOSPHERE-1", () => {
   it("imports the new layer after workspace chrome and retains the existing resolver", () => {
@@ -41,7 +41,7 @@ describe("MYFINANCE-SEASONAL-PAGE-ATMOSPHERE-1", () => {
     ]) expect(css).toContain(target);
   });
 
-  it("has six small local transparent hero illustrations with distinct visuals", () => {
+  it("has eight small local transparent hero illustrations with distinct visuals", () => {
     for (const season of seasons) {
       const name = `public/seasonal-workspace/page-atmosphere/${season}-hero.svg`;
       const asset = read(name);

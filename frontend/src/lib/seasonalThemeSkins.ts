@@ -27,6 +27,8 @@ export const SKIN_SEASONS = [
   { value: "spring", label: "Xuân", icon: "🌸", art: "/seasonal-workspace/spring-page.svg", colors: ["#f9e9f2", "#cbead9", "#e579a5"] },
   { value: "summer", label: "Hạ", icon: "☀️", art: "/seasonal-workspace/summer-page.svg", colors: ["#d9f6fd", "#fff0c8", "#159cca"] },
   { value: "autumn", label: "Thu", icon: "🍁", art: "/seasonal-workspace/autumn-page.svg", colors: ["#ffeddb", "#f9d9b9", "#db7839"] },
+  { value: "halloween", label: "Halloween", icon: "🎃", art: "/seasonal-workspace/halloween-page.svg", colors: ["#f3eaf9", "#ffe5cb", "#ba72ca"] },
+  { value: "birthday", label: "Sinh nhật", icon: "🎂", art: "/seasonal-workspace/birthday-page.svg", colors: ["#f9e9f6", "#e2eafe", "#d878ac"] },
   { value: "christmas", label: "Giáng sinh", icon: "🎄", art: "/seasonal-workspace/christmas-page.svg", colors: ["#e2f5ec", "#fce0e1", "#2b9471"] },
   { value: "newyear", label: "Năm mới", icon: "✨", art: "/seasonal-workspace/newyear-page.svg", colors: ["#ece6ff", "#fff0c7", "#8d72d5"] },
   { value: "tet", label: "Tết", icon: "🧧", art: "/seasonal-workspace/tet-page.svg", colors: ["#ffe4e7", "#fff0cd", "#df576d"] },

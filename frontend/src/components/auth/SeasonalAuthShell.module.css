@@ -1,3 +1,16 @@
+/* Halloween illustration is local, decorative, and below the auth card. */
+.shell[data-myfinance-auth-season="halloween"] {
+  --seasonal-scene: url("/seasonal-auth/halloween-scene.svg");
+  --seasonal-canvas: #f5ecfa;
+}
+
+
+/* ACCOUNT-BIRTHDAY-1: SVG scenery only, with the same accessible auth card. */
+.shell[data-myfinance-auth-season="birthday"] {
+  --seasonal-scene: url("/seasonal-auth/birthday-scene.svg");
+  --seasonal-canvas: #faf0fb;
+}
+
 /* MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1
  * MyFinance should feel closer to STL in scene quality, but keep a lighter,
  * more approachable white card. The background stays vivid; readability is

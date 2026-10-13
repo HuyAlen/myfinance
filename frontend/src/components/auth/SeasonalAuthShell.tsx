@@ -3,6 +3,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import styles from "./SeasonalAuthShell.module.css";
 import { useSeasonalThemeEnabled } from "@/src/lib/seasonalThemePreference";
+import { useAuth } from "@/src/components/auth/AuthProvider";
+import { readAccountBirthDate, resolveAccountSeasonalTheme } from "@/src/lib/accountBirthdayTheme";
 import {
   resolveSeasonalAuthTheme,
   type SeasonalAuthTheme,
@@ -16,12 +18,16 @@ import {
  */
 function useSeasonalAuthTheme(): SeasonalAuthTheme {
   const seasonalEnabled = useSeasonalThemeEnabled();
+  const { user } = useAuth();
+  const accountBirthDate = readAccountBirthDate(user?.user_metadata);
   const [season, setSeason] = useState<SeasonalAuthTheme>("off");
 
   useEffect(() => {
     const refresh = () => {
       const requested = new URLSearchParams(window.location.search).get("season");
-      setSeason(seasonalEnabled ? resolveSeasonalAuthTheme(new Date(), requested) : "off");
+      const now = new Date();
+      const calendar = resolveSeasonalAuthTheme(now, requested);
+      setSeason(seasonalEnabled ? resolveAccountSeasonalTheme(calendar, now, requested, accountBirthDate) : "off");
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refresh();
@@ -40,7 +46,7 @@ function useSeasonalAuthTheme(): SeasonalAuthTheme {
       window.removeEventListener("popstate", refresh);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [seasonalEnabled]);
+  }, [seasonalEnabled, accountBirthDate]);
 
   return seasonalEnabled ? season : "off";
 }

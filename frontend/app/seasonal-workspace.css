@@ -1,3 +1,34 @@
+/* HALLOWEEN-1: October 20-31; soft plum and warm pumpkin, no dark finance cards. */
+:root[data-finance-workspace-season="halloween"] {
+  --finance-season-primary: 243 139 67;
+  --finance-season-secondary: 116 84 156;
+  --finance-season-soft: 248 231 252;
+  --finance-season-ink: #76518d;
+  --finance-season-sidebar-art: url("/seasonal-workspace/halloween-sidebar.svg");
+  --finance-season-topbar-art: url("/seasonal-workspace/halloween-topbar.svg");
+  --finance-season-page-art: url("/seasonal-workspace/halloween-page.svg");
+  --finance-season-motion-a: url("/seasonal-workspace/motion/halloween-a.svg");
+  --finance-season-motion-b: url("/seasonal-workspace/motion/halloween-b.svg");
+}
+:root[data-finance-workspace-season="halloween"] .finance-season-motion-particle:nth-child(odd) {
+  animation-name: financeSeasonShimmer;
+  animation-duration: 5.8s;
+}
+
+
+/* ACCOUNT-BIRTHDAY-1: distinct light birthday art, never financial chart colors. */
+:root[data-finance-workspace-season="birthday"] {
+  --finance-season-primary: 216 120 172;
+  --finance-season-secondary: 102 134 201;
+  --finance-season-soft: 252 235 248;
+  --finance-season-ink: #94507a;
+  --finance-season-sidebar-art: url("/seasonal-workspace/birthday-sidebar.svg");
+  --finance-season-topbar-art: url("/seasonal-workspace/birthday-topbar.svg");
+  --finance-season-page-art: url("/seasonal-workspace/birthday-page.svg");
+  --finance-season-motion-a: url("/seasonal-workspace/motion/birthday-a.svg");
+  --finance-season-motion-b: url("/seasonal-workspace/motion/birthday-b.svg");
+}
+
 /* MYFINANCE-SEASONAL-WORKSPACE-FINAL-POLISH-1 (on all surfaces)
  * A recognizable season lives across the sidebar, topbar, and page details.
  * We intentionally REMOVE the single 56px ribbon and use no scenic wallpaper.

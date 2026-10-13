@@ -65,6 +65,14 @@ describe("MYFINANCE-SEASONAL-THEMED-MOTION-1 integration", () => {
     expect(component).toContain('className="finance-season-sleigh-bob"');
   });
 
+  it("Birthday confetti uses the same bounded, non-interactive fall lane", () => {
+    expect(css).toContain('data-seasonal-flyby="birthday"');
+    expect(css).toContain('birthday-confetti.svg');
+    const svg = read('public/seasonal-workspace/flyby/birthday-confetti.svg');
+    expect(svg).toContain('</svg>');
+    expect(svg).not.toMatch(/<script|<image|<foreignObject/i);
+  });
+
   it("Tet rocket RISES BEFORE a 12-ray radial BURST, then both fade away", () => {
     expect(css).toContain('@keyframes financeTetRocketLaunch');
     expect(css).toContain('@keyframes financeTetBurstVisibility');

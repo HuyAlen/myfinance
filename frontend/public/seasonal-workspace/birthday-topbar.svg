@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 160" data-season-scene="birthday">
+<g data-motif="birthday-balloons">
+<g transform="translate(308 80) rotate(-5)"><ellipse cx="0" cy="0" rx="25.2" ry="34" fill="#D878AC" fill-opacity=".88"/><ellipse cx="-7.5" cy="-11.9" rx="4.4" ry="8.2" fill="#fff" fill-opacity=".55"/><path d="M -4 34.0 L 4 34.0 L 0 41.0 Z" fill="#D878AC"/><path d="M 0 41.0 Q -15 89.0 4 136.0" stroke="#9F95BD" stroke-width="2" stroke-linecap="round" fill="none"/></g>
+<g transform="translate(1078 60) rotate(8)"><ellipse cx="0" cy="0" rx="20.7" ry="28" fill="#6686C9" fill-opacity=".88"/><ellipse cx="-6.2" cy="-9.8" rx="3.6" ry="6.7" fill="#fff" fill-opacity=".55"/><path d="M -4 28.0 L 4 28.0 L 0 35.0 Z" fill="#6686C9"/><path d="M 0 35.0 Q -15 83.0 4 130.0" stroke="#9F95BD" stroke-width="2" stroke-linecap="round" fill="none"/></g>
+<g transform="translate(140 6) rotate(0)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(658 43) rotate(47)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(1176 80) rotate(94)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(462 116) rotate(141)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(979 38) rotate(18)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(266 75) rotate(65)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(784 112) rotate(112)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(1302 33) rotate(159)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(588 70) rotate(36)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(1106 107) rotate(83)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(392 28) rotate(130)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(910 65) rotate(7)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(196 102) rotate(54)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+<g transform="translate(714 24) rotate(101)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#A7BEE9" opacity=".7"/></g>
+<g transform="translate(1232 60) rotate(148)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#BF97D9" opacity=".7"/></g>
+<g transform="translate(518 97) rotate(25)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#D878AC" opacity=".7"/></g>
+<g transform="translate(1036 19) rotate(72)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#6686C9" opacity=".7"/></g>
+<g transform="translate(322 56) rotate(119)"><rect x="-3" y="-12" width="6" height="24" rx="3" fill="#E7B462" opacity=".7"/></g>
+</g>
+</svg>

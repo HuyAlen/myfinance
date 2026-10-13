@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { resolveSeasonalAuthTheme, SEASONAL_AUTH_PREVIEWS } from "./seasonal-auth";
 
 describe("MYFINANCE-SEASONAL-AUTH-1 — local calendar & safe previews", () => {
-  it("supports all six seasons and prevents arbitrary image/CSS values", () => {
+  it("supports all eight themes including account birthday preview and prevents arbitrary image/CSS values", () => {
     expect(SEASONAL_AUTH_PREVIEWS).toEqual([
-      "spring", "summer", "autumn", "christmas", "newyear", "tet",
+      "spring", "summer", "autumn", "halloween", "birthday", "christmas", "newyear", "tet",
     ]);
     expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12), "../../evil")).toBe("autumn");
   });
@@ -14,13 +14,26 @@ describe("MYFINANCE-SEASONAL-AUTH-1 — local calendar & safe previews", () => {
     expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12), "spring")).toBe("spring");
   });
 
+  it("permits birthday only as an explicit allowlisted preview or account-derived event", () => {
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 25), "birthday")).toBe("birthday");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 25))).toBe("halloween");
+  });
+
   it("can restore the original auth background", () => {
     expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12), "off")).toBe("off");
     expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12), "default")).toBe("off");
   });
 
-  it("automatically uses autumn in October", () => {
+  it("uses Halloween from October 20 through 31, then restores autumn in November", () => {
+    expect(resolveSeasonalAuthTheme(new Date(2026, 8, 30))).toBe("autumn");
     expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12))).toBe("autumn");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 19))).toBe("autumn");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 20))).toBe("halloween");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 31))).toBe("halloween");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 10, 1))).toBe("autumn");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 12), "Halloween")).toBe("halloween");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 25), "autumn")).toBe("autumn");
+    expect(resolveSeasonalAuthTheme(new Date(2026, 9, 25), "off")).toBe("off");
   });
 
   it("assigns summer and spring using the browser-local calendar", () => {

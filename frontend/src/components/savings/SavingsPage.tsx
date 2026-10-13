@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { formatStoredDateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import {
   type FormEvent,
@@ -208,17 +210,8 @@ const formatPercent = (value: number) =>
     minimumFractionDigits: value % 1 === 0 ? 0 : 1,
   }).format(value)}%`;
 
-const formatDate = (date?: string) => {
-  if (!date) return "-";
-
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(parsed);
+const formatDate = (date: string | undefined, format:DateDisplayFormat) => {
+  return date ? formatStoredDateForDisplay(date,format) : "-";
 };
 
 const getDaysUntil = (date?: string) => {
@@ -491,6 +484,7 @@ const getProgressLabel = (saving: SavingWithWallet) => {
 export default function SavingsPage({
   savings = EMPTY_SAVINGS,
 }: SavingsPageProps) {
+  const dateDisplayFormat = useAccountDateFormat();
   const searchParams = useSearchParams();
   const focusSavingId = parseFocusId(searchParams, "savingId");
   const [localSavings, setLocalSavings] = useState<SavingWithWallet[]>(savings);
@@ -2066,7 +2060,7 @@ export default function SavingsPage({
                       </p>
                       <p className="mt-0.5 truncate text-[13px] font-black text-[#36536B] sm:text-sm">
                         {item.maturityDate
-                          ? formatDate(item.maturityDate)
+                          ? formatDate(item.maturityDate,dateDisplayFormat)
                           : "Không kỳ hạn"}
                       </p>
                     </div>
@@ -2419,7 +2413,7 @@ export default function SavingsPage({
                       </p>
                       <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8CA0B3] sm:text-xs">
                         {isInternalTransfer ? "Chuyển nội bộ · " : ""}
-                        {transaction.note} · {formatDate(transaction.date)}
+                        {transaction.note} · {formatDate(transaction.date,dateDisplayFormat)}
                       </p>
                     </div>
                   </div>
@@ -3124,7 +3118,7 @@ export default function SavingsPage({
                               {transaction.note}
                             </p>
                             <p className="mt-1 text-xs font-bold text-slate-400">
-                              {formatDate(transaction.date)} ·{" "}
+                              {formatDate(transaction.date,dateDisplayFormat)} ·{" "}
                               {transaction.transferReference
                                 ? transaction.transferDirection === "out"
                                   ? "Chuyển đi"

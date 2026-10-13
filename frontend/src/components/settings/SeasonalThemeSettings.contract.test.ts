@@ -90,8 +90,8 @@ describe("MYFINANCE-SEASONAL-THEME-SETTINGS-PLACEMENT-1 contract", () => {
   it("keeps the OFF preference authoritative over season preview", () => {
     expect(workspaceController).toContain('theme === "off" || !readSeasonalThemeEnabled()');
     expect(workspaceController).toContain('root.getAttribute(ATTRIBUTE) !== theme');
-    expect(workspaceController).toContain('[pathname, requestedSeason, seasonalEnabled]');
-    expect(authShell).toContain('seasonalEnabled ? resolveSeasonalAuthTheme(new Date(), requested) : "off"');
+    expect(workspaceController).toContain('[pathname, requestedSeason, seasonalEnabled, accountBirthDate]');
+    expect(authShell).toContain('seasonalEnabled ? resolveAccountSeasonalTheme(calendar, now, requested, accountBirthDate) : "off"');
     expect(authShell).toContain('return seasonalEnabled ? season : "off"');
     expect(preference).toContain('root.removeAttribute(WORKSPACE_ATTRIBUTE)');
   });

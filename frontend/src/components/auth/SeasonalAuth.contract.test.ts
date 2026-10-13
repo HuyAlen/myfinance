@@ -9,6 +9,7 @@ const styles = read("src/components/auth/SeasonalAuthShell.module.css");
 const login = read("src/components/auth/LoginPage.tsx");
 const signup = read("src/components/auth/SignupPage.tsx");
 const forgot = read("src/components/auth/ForgotPasswordPage.tsx");
+const cinematicSeasons = ["spring", "summer", "autumn", "christmas", "newyear", "tet"] as const;
 
 function webpSize(data: Buffer): { width: number; height: number } {
   expect(data.toString("ascii", 0, 4)).toBe("RIFF");
@@ -38,7 +39,7 @@ describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — auth behavior preserved"
   it("keeps the SSR-safe resolver and explicit ?season=off switch", () => {
     expect(shell).toContain('useState<SeasonalAuthTheme>("off")');
     expect(shell).toContain("window.setTimeout(refresh, 0)");
-    expect(shell).toContain("resolveSeasonalAuthTheme(new Date(), requested)");
+    expect(shell).toContain("resolveSeasonalAuthTheme(now, requested)");
     expect(shell).toContain('new URLSearchParams(window.location.search).get("season")');
     // Inspect code references rather than matching words in explanatory comments.
     // The shell documents that Supabase flows are unchanged; that is not an import.
@@ -49,7 +50,7 @@ describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — auth behavior preserved"
 
 describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — cinematic scenes with a light card", () => {
   it("uses one full-page scene layer instead of icon decoration", () => {
-    expect(SEASONAL_AUTH_PREVIEWS).toHaveLength(6);
+    expect(SEASONAL_AUTH_PREVIEWS).toHaveLength(8);
     expect(shell).toContain('data-myfinance-auth-season={season}');
     expect(shell).toContain('className={styles.scene} aria-hidden="true"');
     expect(styles).toContain("background-size: cover;");
@@ -60,7 +61,7 @@ describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — cinematic scenes with a 
   });
 
   it("maps every allowed season to one local cinematic WebP scene", () => {
-    for (const season of SEASONAL_AUTH_PREVIEWS) {
+    for (const season of cinematicSeasons) {
       expect(styles).toContain(`.shell[data-myfinance-auth-season="${season}"]`);
       expect(styles).toContain(`url("/seasonal-auth/${season}-cinematic.webp")`);
       const photo = resolve(process.cwd(), `public/seasonal-auth/${season}-cinematic.webp`);
@@ -68,6 +69,15 @@ describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — cinematic scenes with a 
       expect(statSync(photo).size, season).toBeGreaterThan(250_000);
       expect(statSync(photo).size, season).toBeLessThan(1_600_000);
       expect(webpSize(readFileSync(photo))).toEqual({ width: 2560, height: 1440 });
+    }
+    for (const season of ["halloween", "birthday"]) {
+      expect(styles).toContain(`.shell[data-myfinance-auth-season="${season}"]`);
+      expect(styles).toContain(`url("/seasonal-auth/${season}-scene.svg")`);
+      const path = `public/seasonal-auth/${season}-scene.svg`;
+      const svg = read(path);
+      expect(svg.startsWith("<svg"), path).toBe(true);
+      expect(svg).toContain("</svg>");
+      expect(statSync(resolve(process.cwd(), path)).size).toBeLessThan(15000);
     }
     expect(styles).not.toContain("https://");
     expect(styles).not.toContain("http://");

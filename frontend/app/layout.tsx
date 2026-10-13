@@ -94,11 +94,11 @@ export default function RootLayout({
       </head>
       <body className={beVietnam.variable}>
         <ThemeProvider>
+        <WebVitalsReporter />
+        <AuthProvider>
           <Suspense fallback={null}>
             <SeasonalWorkspaceThemeController />
           </Suspense>
-        <WebVitalsReporter />
-        <AuthProvider>
           <HouseholdProvider>
             <RealtimeProvider>
               <ToastProvider>

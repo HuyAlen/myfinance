@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { formatISODateForDisplay, formatTimestampForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -96,16 +98,8 @@ const ROLE_LABELS = {
   viewer: "Chỉ xem",
 } as const;
 
-function formatEventTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+function formatEventTime(value: string, dateDisplayFormat:DateDisplayFormat) {
+  return formatTimestampForDisplay(value,dateDisplayFormat);
 }
 
 function dayKey(value: string) {
@@ -114,7 +108,7 @@ function dayKey(value: string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function dayLabel(key: string) {
+function dayLabel(key: string, dateDisplayFormat:DateDisplayFormat) {
   const [year, month, day] = key.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   const today = new Date();
@@ -124,12 +118,8 @@ function dayLabel(key: string) {
   const yesterdayKey = dayKey(yesterday.toISOString());
   if (key === todayKey) return "Hôm nay";
   if (key === yesterdayKey) return "Hôm qua";
-  return new Intl.DateTimeFormat("vi-VN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  const weekday = new Intl.DateTimeFormat("vi-VN", { weekday: "long" }).format(date);
+  return `${weekday}, ${formatISODateForDisplay(key,dateDisplayFormat)}`;
 }
 
 
@@ -152,6 +142,7 @@ function toAuditBounds(startDate: string, endDate: string) {
 }
 
 export default function ActivityPage() {
+  const dateDisplayFormat = useAccountDateFormat();
   const { user } = useAuth();
   const { context, household, loading: householdLoading } = useHousehold();
   const { dateRange, filterLabel } = useDateFilter();
@@ -322,13 +313,13 @@ export default function ActivityPage() {
       const key = dayKey(event.created_at);
       const last = groups.at(-1);
       if (!last || last.key !== key) {
-        groups.push({ key, label: dayLabel(key), events: [event] });
+        groups.push({ key, label: dayLabel(key,dateDisplayFormat), events: [event] });
       } else {
         last.events.push(event);
       }
     }
     return groups;
-  }, [events]);
+  }, [events, dateDisplayFormat]);
 
   const memberCount = context?.members.length ?? 0;
   const activeFilterCount =
@@ -816,7 +807,7 @@ export default function ActivityPage() {
                               Thời gian
                             </p>
                             <p className="font-semibold text-slate-600">
-                              {formatEventTime(event.created_at)}
+                              {formatEventTime(event.created_at,dateDisplayFormat)}
                             </p>
                             <p className="mt-2 font-black uppercase tracking-wide text-slate-400">
                               Transaction
