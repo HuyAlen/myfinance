@@ -95,7 +95,12 @@ export function saveAccountNotificationPreferences(
     }),
   );
   // localStorage 'storage' fires on OTHER tabs only. Notify this tab explicitly.
-  window.dispatchEvent(new Event(NOTIFICATION_PREFERENCES_CHANGED));
+  notifyNotificationPreferencesSaved();
+}
+
+/** Also announces persisted financial thresholds (same Settings snapshot). */
+export function notifyNotificationPreferencesSaved(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(NOTIFICATION_PREFERENCES_CHANGED));
 }
 
 function preferenceMask(preferences: SupportedNotificationPreferences): number {

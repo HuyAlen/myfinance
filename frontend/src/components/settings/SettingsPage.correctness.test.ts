@@ -45,7 +45,7 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
     const save = regionBetween("function handleSavePrefs() {", "function getAISettingsPayload()");
     expect(save).toContain('"Mục tiêu tiết kiệm", savingsGoal, 0, 100');
     expect(save).toContain('"Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100');
-    expect(save).toContain('"Ngưỡng cảnh báo nợ", debtAlert, 0, 100');
+    expect(save).toContain('"Ngưỡng cảnh báo nợ", debtAlert, 0, 200');
     expect(save).toContain('"Quỹ khẩn cấp", emergencyFund, 1, 24');
     expect(save).toContain("Number.isFinite(value)");
   });

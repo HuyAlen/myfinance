@@ -57,7 +57,7 @@ describe("MYFINANCE-NOTIFICATION-SETTINGS-SSOT-1 wiring", () => {
     expect(header).toContain("useAccountNotificationPreferences(user?.id)");
     expect(header).toContain("filterNotificationsByPreferences(withReadState, notificationPreferences)");
     expect(header).toContain("maxNotifications: Number.MAX_SAFE_INTEGER");
-    expect(header).toContain("const freshNotifications = buildNotifications(data)");
+    expect(header).toContain("const freshNotifications = buildNotifications(data, readAccountNotificationAlertThresholds(notificationAccountRef.current))");
     expect(header).toContain("advanceNotificationFirstSeen(");
     expect(header).toContain("setNotifList(");
     expect(header).toContain("const filteredNotifList = filterNotificationsByRead(visibleNotifList, notificationReadFilter)");

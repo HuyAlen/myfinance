@@ -87,9 +87,20 @@ import {
   type NotificationFirstSeenMap,
 } from "@/src/lib/notifications/notificationOrdering";
 import {
+  NOTIFICATION_PREFERENCES_CHANGED,
   filterNotificationsByPreferences,
   useAccountNotificationPreferences,
 } from "@/src/lib/notifications/notificationPreferences";
+import {
+  readAccountNotificationAlertThresholds,
+  useAccountNotificationAlertThresholds,
+  type NotificationAlertThresholds,
+} from "@/src/lib/notifications/notificationAlertThresholds";
+import {
+  applyNotificationCloudSettings,
+  pullNotificationCloudSettings,
+} from "@/src/lib/notifications/notificationCloudSync";
+import { supabase } from "@/src/lib/supabase";
 import {
   buildNotificationScope,
   filterNotificationsByRead,
@@ -360,7 +371,7 @@ function buildSearchResults(query: string, data: AppData): SearchResult[] {
 // specific to Header's own presentation (`read`, always false here — the
 // caller immediately overwrites it from localStorage, unchanged from before
 // this ticket).
-function buildNotifications(data: AppData): NotificationItem[] {
+function buildNotifications(data: AppData, thresholds: NotificationAlertThresholds): NotificationItem[] {
   const currentMonth = getCurrentLocalMonthKey();
   const baseNotifications = buildFinanceNotifications({
     budgets: data.budgets,
@@ -373,6 +384,9 @@ function buildNotifications(data: AppData): NotificationItem[] {
     // Keep hidden-but-active alerts in the canonical read and first-seen set.
     // Filtering and the eight-finance-alert display cap happen in the view.
     maxNotifications: Number.MAX_SAFE_INTEGER,
+    budgetAlertPercent: thresholds.budgetAlert,
+    debtAlertPercent: thresholds.debtAlert,
+    goalMilestones: true,
   });
 
   // ACTIONABLE-FINANCE-ALERTS-1: reuse the exact Review detector + device
@@ -572,6 +586,9 @@ export default function Header({
   const { context: householdContext } = useHousehold();
   const notificationScope = buildNotificationScope(user?.id, householdContext?.household?.id);
   const notificationPreferences = useAccountNotificationPreferences(user?.id);
+  const notificationThresholds = useAccountNotificationAlertThresholds(user?.id);
+  const notificationAccountRef = useRef(user?.id ?? null);
+  useEffect(() => { notificationAccountRef.current = user?.id ?? null; }, [user?.id]);
   // Async reads must not publish another account/workspace's notification list.
   const notificationScopeRef = useRef(notificationScope);
   useEffect(() => {
@@ -773,7 +790,7 @@ export default function Header({
       // every realtime-triggered reconciliation call this same function —
       // so there is exactly one source of truth for ordering, never a
       // second sort applied anywhere else.
-      const freshNotifications = buildNotifications(data);
+      const freshNotifications = buildNotifications(data, readAccountNotificationAlertThresholds(notificationAccountRef.current));
       const previousFirstSeen = readNotificationFirstSeen();
       const firstSeen = advanceNotificationFirstSeen(
         freshNotifications.map((notification) => notification.id),
@@ -856,6 +873,48 @@ export default function Header({
       }
     };
   }, []);
+
+  // Threshold changes reuse the existing single-flight reload path rather
+  // than recomputing finance math during React render.
+  useEffect(() => {
+    if (notificationScope) requestHeaderRefresh();
+  }, [notificationScope, notificationThresholds.budgetAlert, notificationThresholds.debtAlert, requestHeaderRefresh]);
+
+  // Cloud settings are account-owned Supabase Auth metadata. Remote wins when
+  // present; an account without cloud data retains local P0 preferences until
+  // the user explicitly saves (safe one-time migration).
+  useEffect(() => {
+    const activeAccountId = user?.id ?? "";
+    if (!activeAccountId || activeAccountId === "local-ui-user") return;
+    let active = true;
+    let revision = 0;
+    const invalidateStaleFetch = () => { revision += 1; };
+    async function refreshFromCloud() {
+      const startedAt = ++revision;
+      try {
+        const remote = await pullNotificationCloudSettings(activeAccountId, supabase.auth);
+        if (!active || startedAt !== revision || !remote) return;
+        applyNotificationCloudSettings(activeAccountId, remote);
+      } catch {
+        // Offline, malformed cache or expired session: preserve last-known-good local settings.
+      }
+    }
+    const onFocus = () => { void refreshFromCloud(); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refreshFromCloud();
+    };
+    window.addEventListener(NOTIFICATION_PREFERENCES_CHANGED, invalidateStaleFetch);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    void refreshFromCloud();
+    return () => {
+      active = false;
+      revision += 1;
+      window.removeEventListener(NOTIFICATION_PREFERENCES_CHANGED, invalidateStaleFetch);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user?.id]);
 
   // Browsers send storage to OTHER tabs only. Same-tab actions below bump
   // notificationReadRevision explicitly; neither path fetches finance data.

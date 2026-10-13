@@ -25,7 +25,7 @@ describe("Header applies canonical newest-first ordering at the single source of
   });
 
   it("reloadHeaderData advances the first-seen map, persists it, and sorts BEFORE merging read state — exactly once", () => {
-    const start = source.indexOf("const freshNotifications = buildNotifications(data);");
+    const start = source.indexOf("const freshNotifications = buildNotifications(data, readAccountNotificationAlertThresholds(notificationAccountRef.current));");
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf("setHasHeaderDataLoaded(true);", start);
     expect(end).toBeGreaterThan(start);

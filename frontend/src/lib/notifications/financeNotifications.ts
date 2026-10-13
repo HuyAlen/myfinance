@@ -53,6 +53,7 @@ import {
   calculateGoalFundingSnapshot,
   getTotalExpense,
   getTotalIncome,
+  getTotalDebt,
 } from "@/src/services/finance/financeCalculations";
 import type {
   Budget,
@@ -93,6 +94,7 @@ function buildBudgetNotifications(
   transactions: Transaction[],
   categories: Category[],
   currentMonth: string,
+  budgetThreshold?: number,
 ): FinanceNotification[] {
   const monthBudgets = budgets.filter((b) => b.month === currentMonth);
   const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -129,7 +131,11 @@ function buildBudgetNotifications(
         href: buildBudgetsHref({ budgetId: spending.budgetId }),
         tone: "warning",
       });
-    } else if (spending.status === "near") {
+    } else if (
+      (budgetThreshold === undefined && spending.status === "near") ||
+      (budgetThreshold !== undefined && spending.limit > 0 && spending.spent > 0 &&
+        spending.spent * 100 >= spending.limit * budgetThreshold)
+    ) {
       out.push({
         id: "bnear-" + spending.budgetId,
         title: "Gần vượt ngân sách · " + label,
@@ -146,6 +152,7 @@ function buildGoalNotifications(
   goals: Goal[],
   transactions: Transaction[],
   savings: SavingAccount[],
+  enableMilestones = false,
 ) {
   const out: FinanceNotification[] = [];
   for (const g of goals) {
@@ -173,6 +180,22 @@ function buildGoalNotifications(
         href: buildGoalsHref({ goalId: g.id }),
         tone: "success",
       });
+    } else if (enableMilestones && progress >= 0.5) {
+      out.push({
+        id: "g50-" + g.id,
+        title: "Cột mốc 50% · " + g.name,
+        body: "Mục tiêu đã đạt mốc 50%.",
+        href: buildGoalsHref({ goalId: g.id }),
+        tone: "success",
+      });
+    } else if (enableMilestones && progress >= 0.25) {
+      out.push({
+        id: "g25-" + g.id,
+        title: "Cột mốc 25% · " + g.name,
+        body: "Mục tiêu đã đạt mốc 25%.",
+        href: buildGoalsHref({ goalId: g.id }),
+        tone: "success",
+      });
     }
   }
   return out;
@@ -195,6 +218,29 @@ function buildDebtNotifications(debts: Debt[]) {
     }
   }
   return out;
+}
+
+/** Loan principal outstanding versus this month's transaction income.
+ * Do not use a debt/ASSET ratio here; Settings explicitly promises income.
+ * No-income months are unknown, not an infinite-risk percentage. */
+function buildDebtIncomeNotification(
+  debts: Debt[],
+  transactions: Transaction[],
+  currentMonth: string,
+  threshold: number,
+): FinanceNotification[] {
+  const thisMonthTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+  const income = getTotalIncome(thisMonthTx);
+  if (income <= 0) return [];
+  const outstanding = getTotalDebt(debts);
+  if (outstanding <= 0 || outstanding * 100 <= income * threshold) return [];
+  return [{
+    id: "debt-income-" + currentMonth,
+    title: "Dư nợ vượt ngưỡng so với thu nhập",
+    body: "Dư nợ hiện tại vượt ngưỡng " + threshold + "% so với thu nhập tháng này.",
+    href: buildDebtsHref({}),
+    tone: "warning",
+  }];
 }
 
 function buildCashFlowNotification(
@@ -239,6 +285,12 @@ export function buildFinanceNotifications(input: {
   currentMonth: string;
   /** Default remains 8; Header requests the full active set for read-state continuity. */
   maxNotifications?: number;
+  /** Configured threshold for the bell; undefined preserves legacy 85% status. */
+  budgetAlertPercent?: number;
+  /** Outstanding debt / current-month income. Undefined preserves legacy per-debt alerts only. */
+  debtAlertPercent?: number;
+  /** Include 25% and 50% milestones; 75% and completion already exist. */
+  goalMilestones?: boolean;
 }): FinanceNotification[] {
   return [
     ...buildBudgetNotifications(
@@ -246,13 +298,18 @@ export function buildFinanceNotifications(input: {
       input.transactions,
       input.categories,
       input.currentMonth,
+      input.budgetAlertPercent,
     ),
     ...buildGoalNotifications(
       input.goals,
       input.transactions,
       input.savings ?? [],
+      input.goalMilestones ?? false,
     ),
     ...buildDebtNotifications(input.debts),
+    ...(input.debtAlertPercent === undefined ? [] : buildDebtIncomeNotification(
+      input.debts, input.transactions, input.currentMonth, input.debtAlertPercent,
+    )),
     ...buildCashFlowNotification(
       input.transactions,
       input.categories,

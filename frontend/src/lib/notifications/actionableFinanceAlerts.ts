@@ -56,6 +56,10 @@ function baseNotificationActionMeta(notification: FinanceNotification): ActionMe
     };
   }
 
+  if (notification.id.startsWith("debt-income-")) {
+    return { actionLabel: "Xem khoản nợ", priority: "urgent", kind: "debt" };
+  }
+
   if (notification.id.startsWith("drisk-")) {
     return {
       actionLabel: "Xem khoản nợ",
@@ -66,7 +70,9 @@ function baseNotificationActionMeta(notification: FinanceNotification): ActionMe
 
   if (
     notification.id.startsWith("gdone-") ||
-    notification.id.startsWith("gnear-")
+    notification.id.startsWith("gnear-") ||
+    notification.id.startsWith("g25-") ||
+    notification.id.startsWith("g50-")
   ) {
     return {
       actionLabel: "Xem mục tiêu",

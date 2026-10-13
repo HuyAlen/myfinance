@@ -15,7 +15,15 @@ import {
   NOTIFICATION_PREFERENCES_CHANGED,
   readAccountNotificationPreferences,
   saveAccountNotificationPreferences,
+  notifyNotificationPreferencesSaved,
 } from "@/src/lib/notifications/notificationPreferences";
+import { readAccountNotificationAlertThresholds } from "@/src/lib/notifications/notificationAlertThresholds";
+import {
+  NOTIFICATION_CLOUD_METADATA_KEY,
+  pullNotificationCloudSettings,
+  pushNotificationCloudSettings,
+  toNotificationCloudSettings,
+} from "@/src/lib/notifications/notificationCloudSync";
 
 import {
   AlertTriangle,
@@ -496,6 +504,9 @@ export default function SettingsPage() {
       setNotifBudget(saved.notifBudget);
       setNotifGoal(saved.notifGoal);
       setNotifDebt(saved.notifDebt);
+      const thresholds = readAccountNotificationAlertThresholds(accountId);
+      setBudgetAlert(String(thresholds.budgetAlert));
+      setDebtAlert(String(thresholds.debtAlert));
     };
     const onStorage = (event: StorageEvent) => {
       if (event.key === localSettingsKey || event.key === null) refreshNotificationToggles();
@@ -795,15 +806,20 @@ export default function SettingsPage() {
   }
 
   // ── Save prefs feedback ────────────────────────────────────────────────────
-  // Notification switches do not need profile validation or Supabase writes.
-  function handleSaveNotifications() {
+  // Notification Save never validates/updates the profile. Only this
+  // account's versioned notification metadata is sent to Supabase Auth.
+  async function handleSaveNotifications() {
     try {
-      saveAccountNotificationPreferences(user?.id, {
-        notifBudget,
-        notifGoal,
-        notifDebt,
-      });
-      toast({ variant: "success", message: "Đã lưu tùy chọn thông báo." });
+      const chosen = { notifBudget, notifGoal, notifDebt };
+      const cloud = toNotificationCloudSettings(
+        chosen, readAccountNotificationAlertThresholds(user?.id),
+      );
+      if (user?.id && user.id !== "local-ui-user") {
+        await pushNotificationCloudSettings(user.id, cloud, supabase.auth);
+      }
+      // Commit the on-device SSOT only after the cloud save succeeds.
+      saveAccountNotificationPreferences(user?.id, chosen);
+      toast({ variant: "success", message: "Đã lưu thông báo trên tài khoản." });
     } catch (error) {
       toast({
         variant: "error",
@@ -818,7 +834,7 @@ export default function SettingsPage() {
     const numericRules = [
       ["Mục tiêu tiết kiệm", savingsGoal, 0, 100],
       ["Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100],
-      ["Ngưỡng cảnh báo nợ", debtAlert, 0, 100],
+      ["Ngưỡng cảnh báo nợ", debtAlert, 0, 200],
       ["Quỹ khẩn cấp", emergencyFund, 1, 24],
     ] as const;
     for (const [label, raw, min, max] of numericRules) {
@@ -841,12 +857,27 @@ export default function SettingsPage() {
     }
 
     try {
+      let preservedNotificationFlags = readAccountNotificationPreferences(user?.id);
       if (user?.id && user.id !== "local-ui-user") {
+        // A different device may have saved newer switches: do not overwrite them
+        // while the user is only editing financial/profile settings.
+        const cloudSaved = await pullNotificationCloudSettings(user.id, supabase.auth);
+        if (cloudSaved) {
+          preservedNotificationFlags = {
+            notifBudget: cloudSaved.notifBudget,
+            notifGoal: cloudSaved.notifGoal,
+            notifDebt: cloudSaved.notifDebt,
+          };
+        }
         const { error: profileError } = await supabase.auth.updateUser({
           data: {
             full_name: trimmedProfileName,
             name: trimmedProfileName,
             birth_date: profileBirthDate || null,
+            [NOTIFICATION_CLOUD_METADATA_KEY]: toNotificationCloudSettings(
+              preservedNotificationFlags,
+              { budgetAlert: Number(budgetAlert), debtAlert: Number(debtAlert) },
+            ),
           },
         });
         if (profileError) throw profileError;
@@ -856,10 +887,12 @@ export default function SettingsPage() {
         ...buildLocalSettingsSnapshot(),
         // A different section's Save must never overwrite notification choices.
         ...readAccountNotificationPreferences(user?.id),
+        ...preservedNotificationFlags,
         profileName: trimmedProfileName,
       };
       window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
       notifyDateFormatSaved();
+      notifyNotificationPreferencesSaved();
       setProfileName(trimmedProfileName);
       setSaveSuccess(true);
       window.setTimeout(() => setSaveSuccess(false), 2200);
@@ -1495,7 +1528,7 @@ export default function SettingsPage() {
                     Ngưỡng cảnh báo nợ (%)
                   </label>
                   <p className="mb-2 text-[11px] text-slate-400">
-                    Cảnh báo khi nợ vượt % thu nhập
+                    Dư nợ hiện tại / thu nhập của tháng; không chia cho 0
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -2018,7 +2051,7 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-rose-100 text-rose-500"
                   label="Cảnh báo ngân sách"
-                  desc="Gần đạt, đạt hoặc vượt giới hạn ngân sách"
+                  desc="Bắt đầu từ ngưỡng % đã chọn; luôn nhắc khi đạt hoặc vượt giới hạn"
                   checked={notifBudget}
                   onChange={() => setNotifBudget((v) => !v)}
                 />
@@ -2026,7 +2059,7 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-emerald-100 text-emerald-600"
                   label="Cột mốc mục tiêu"
-                  desc="Khi mục tiêu đạt ít nhất 75% hoặc hoàn thành"
+                  desc="Các cột mốc 25%, 50%, 75% và hoàn thành 100%"
                   checked={notifGoal}
                   onChange={() => setNotifGoal((v) => !v)}
                 />
@@ -2034,7 +2067,7 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-amber-100 text-amber-600"
                   label="Cảnh báo khoản nợ"
-                  desc="Nhắc các khoản nợ có tỷ lệ hoàn trả dưới 15%"
+                  desc="Nhắc nợ trả chậm và dư nợ vượt ngưỡng % thu nhập tháng"
                   checked={notifDebt}
                   onChange={() => setNotifDebt((v) => !v)}
                 />
@@ -2043,6 +2076,7 @@ export default function SettingsPage() {
                   <p className="mt-1 text-xs leading-5 text-slate-500">Các loại này chưa có nguồn thông báo tự động. Sẽ được bật khi chức năng thực sự sẵn sàng.</p>
                 </div>
               </div>
+              <p className="mt-3 text-xs leading-5 text-slate-500">Đồng bộ theo tài khoản khi có mạng. Sau khi nâng cấp, hãy nhấn Lưu thông báo một lần để đưa lựa chọn cũ lên đám mây. Mở lại ứng dụng trên thiết bị khác để nhận cài đặt.</p>
               <button type="button" onClick={handleSaveNotifications} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Lưu thông báo</button>
             </div>
           </div>
