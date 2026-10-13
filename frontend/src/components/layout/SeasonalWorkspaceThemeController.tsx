@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { resolveSeasonalAuthTheme } from "@/src/lib/seasonal-auth";
 import {
+  handleSeasonalSkinStorage,
+  syncSeasonalSkinForDocument,
+} from "@/src/lib/seasonalThemeSkins";
+import {
   readSeasonalThemeEnabled,
   useSeasonalThemeEnabled,
 } from "@/src/lib/seasonalThemePreference";
@@ -38,6 +42,9 @@ export default function SeasonalWorkspaceThemeController() {
         root.setAttribute(ATTRIBUTE, theme);
       }
 
+      // Match the saved visual treatment to the ACTIVE season, including OFF.
+      syncSeasonalSkinForDocument();
+
       // The next day is evaluated in the browser's local time, including DST.
       // Do not use a fixed 24-hour interval to detect a calendar boundary.
       if (nextMidnightTimer !== undefined) {
@@ -54,13 +61,22 @@ export default function SeasonalWorkspaceThemeController() {
       if (document.visibilityState === "visible") refresh();
     };
 
+    const onSkinStorage = (event: StorageEvent) => handleSeasonalSkinStorage(event);
+    // The existing seasonal on/off setter updates the season attribute before
+    // dispatching this event. Apply the saved skin in the same event turn.
+    const onPreferenceChange = () => syncSeasonalSkinForDocument();
+
     refresh();
     window.addEventListener("pageshow", refresh);
+    window.addEventListener("storage", onSkinStorage);
+    window.addEventListener("myfinance:seasonal-theme-preference-changed", onPreferenceChange);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       if (nextMidnightTimer !== undefined) window.clearTimeout(nextMidnightTimer);
       window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("storage", onSkinStorage);
+      window.removeEventListener("myfinance:seasonal-theme-preference-changed", onPreferenceChange);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [pathname, requestedSeason, seasonalEnabled]);
@@ -68,7 +84,10 @@ export default function SeasonalWorkspaceThemeController() {
   // Only the AppShell consumes this attribute. Clear it if this controller
   // unmounts, but do not flicker the background on ordinary route changes.
   useEffect(() => {
-    return () => document.documentElement.removeAttribute(ATTRIBUTE);
+    return () => {
+      document.documentElement.removeAttribute(ATTRIBUTE);
+      syncSeasonalSkinForDocument();
+    };
   }, []);
 
   return null;

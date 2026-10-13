@@ -1,0 +1,214 @@
+/* MYFINANCE-SEASONAL-SKINS-1
+ * Two extra skins per season. The existing skin is unchanged whenever
+ * data-finance-season-skin is absent (classic / legacy accounts).
+ * Only background artwork, chrome accents and decoration are recolored;
+ * financial amounts, cards, risk/income/expense colors and controls remain SSOT.
+ * Zero animation or overlay layers are introduced by these skins.
+ */
+
+/* ---------------- 6 x PASTEL: clean and soft ---------------- */
+:root[data-finance-workspace-season="spring"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 205 128 168;
+  --finance-season-secondary: 132 192 157;
+  --finance-season-soft: 255 244 250;
+  --finance-season-ink: #965674;
+}
+:root[data-finance-workspace-season="summer"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 93 175 206;
+  --finance-season-secondary: 126 200 189;
+  --finance-season-soft: 238 251 255;
+  --finance-season-ink: #477f97;
+}
+:root[data-finance-workspace-season="autumn"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 198 145 97;
+  --finance-season-secondary: 207 155 134;
+  --finance-season-soft: 255 246 235;
+  --finance-season-ink: #936548;
+}
+:root[data-finance-workspace-season="christmas"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 103 165 145;
+  --finance-season-secondary: 220 143 157;
+  --finance-season-soft: 238 252 245;
+  --finance-season-ink: #488773;
+}
+:root[data-finance-workspace-season="newyear"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 157 143 204;
+  --finance-season-secondary: 225 188 130;
+  --finance-season-soft: 247 243 255;
+  --finance-season-ink: #786b9a;
+}
+:root[data-finance-workspace-season="tet"][data-finance-season-skin="pastel"] {
+  --finance-season-primary: 214 125 148;
+  --finance-season-secondary: 231 187 125;
+  --finance-season-soft: 255 241 244;
+  --finance-season-ink: #a25770;
+}
+
+/* ---------------- 6 x FESTIVAL: celebratory, still readable ---------------- */
+:root[data-finance-workspace-season="spring"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 222 83 146;
+  --finance-season-secondary: 57 167 122;
+  --finance-season-soft: 255 225 239;
+  --finance-season-ink: #9c315f;
+}
+:root[data-finance-workspace-season="summer"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 0 151 210;
+  --finance-season-secondary: 245 180 50;
+  --finance-season-soft: 219 248 255;
+  --finance-season-ink: #08698f;
+}
+:root[data-finance-workspace-season="autumn"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 225 111 36;
+  --finance-season-secondary: 163 69 45;
+  --finance-season-soft: 255 229 195;
+  --finance-season-ink: #9f421e;
+}
+:root[data-finance-workspace-season="christmas"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 20 127 87;
+  --finance-season-secondary: 226 66 83;
+  --finance-season-soft: 223 247 238;
+  --finance-season-ink: #137550;
+}
+:root[data-finance-workspace-season="newyear"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 123 82 205;
+  --finance-season-secondary: 235 173 37;
+  --finance-season-soft: 233 224 255;
+  --finance-season-ink: #6540ae;
+}
+:root[data-finance-workspace-season="tet"][data-finance-season-skin="festival"] {
+  --finance-season-primary: 218 58 84;
+  --finance-season-secondary: 239 173 37;
+  --finance-season-soft: 255 221 226;
+  --finance-season-ink: #b52643;
+}
+
+/* Pastel: smaller artwork, near-white chrome, diffuse seasonal glows. */
+:root[data-finance-workspace-season][data-finance-season-skin="pastel"] .finance-shell .finance-sidebar {
+  background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0.98) 0%, rgb(255 255 255 / 0.92) 62%, rgb(255 255 255 / 0.50) 100%),
+    var(--finance-season-sidebar-art),
+    linear-gradient(160deg, rgb(var(--finance-season-soft) / 0.78), #fbfdff 66%);
+  background-size: 100% 100%, 82% auto, cover;
+  background-position: center, right top, center;
+  border-right-color: rgb(var(--finance-season-primary) / 0.24);
+}
+:root[data-finance-workspace-season][data-finance-season-skin="pastel"] .finance-shell .finance-header {
+  background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0.40), rgb(255 255 255 / 0.90) 62%, rgb(255 255 255 / 0.93)),
+    var(--finance-season-topbar-art),
+    linear-gradient(95deg, rgb(var(--finance-season-soft) / 0.68), #ffffff 55%, rgb(var(--finance-season-soft) / 0.50));
+  background-size: 100% 100%, auto 85%, cover;
+  background-position: center, left center, center;
+  box-shadow: 0 2px 10px rgb(var(--finance-season-primary) / 0.06);
+  border-bottom-color: rgb(var(--finance-season-primary) / 0.25);
+}
+:root[data-finance-workspace-season][data-finance-season-skin="pastel"] .finance-shell .finance-main {
+  background-image:
+    var(--finance-season-page-art),
+    radial-gradient(ellipse 26rem 14rem at 93% 4%, rgb(var(--finance-season-primary) / 0.07), transparent 85%),
+    linear-gradient(180deg, rgb(var(--finance-season-soft) / 0.28), var(--finance-page) 20rem);
+  background-size: min(39vw, 470px) auto, auto, auto;
+  background-position: right top, right top, center;
+  background-repeat: no-repeat;
+}
+:root[data-finance-workspace-season][data-finance-season-skin="pastel"] .finance-shell .finance-bottom-nav {
+  background-image: linear-gradient(90deg, rgb(var(--finance-season-soft) / 0.55), #ffffff 55%, rgb(var(--finance-season-soft) / 0.40));
+  border-top-color: rgb(var(--finance-season-primary) / 0.26);
+}
+
+/* Festival: richer accents and bigger illustrations, still below all content. */
+:root[data-finance-workspace-season][data-finance-season-skin="festival"] .finance-shell .finance-sidebar {
+  background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0.96) 0%, rgb(255 255 255 / 0.91) 48%, rgb(255 255 255 / 0.25) 95%),
+    var(--finance-season-sidebar-art),
+    linear-gradient(170deg, rgb(var(--finance-season-soft) / 0.82), #fbfdff 55%);
+  background-size: 100% 100%, 125% auto, cover;
+  background-position: center, right top, center;
+  border-right-color: rgb(var(--finance-season-primary) / 0.60);
+}
+:root[data-finance-workspace-season][data-finance-season-skin="festival"] .finance-shell .finance-header {
+  background-image:
+    linear-gradient(90deg, rgb(255 255 255 / 0.04) 0%, rgb(255 255 255 / 0.78) 47%, rgb(255 255 255 / 0.95) 100%),
+    var(--finance-season-topbar-art),
+    linear-gradient(105deg, rgb(var(--finance-season-soft) / 0.91), #ffffff 58%, rgb(var(--finance-season-secondary) / 0.12));
+  background-size: 100% 100%, auto 125%, cover;
+  background-position: center, left center, center;
+  border-bottom-color: rgb(var(--finance-season-primary) / 0.68);
+  box-shadow: 0 4px 13px rgb(var(--finance-season-primary) / 0.13);
+}
+:root[data-finance-workspace-season][data-finance-season-skin="festival"] .finance-shell .finance-main {
+  background-image:
+    var(--finance-season-page-art),
+    radial-gradient(ellipse 32rem 18rem at 94% 3%, rgb(var(--finance-season-primary) / 0.14), transparent 82%),
+    radial-gradient(ellipse 22rem 12rem at 0% 21%, rgb(var(--finance-season-secondary) / 0.10), transparent 80%),
+    linear-gradient(180deg, rgb(var(--finance-season-soft) / 0.36), var(--finance-page) 22rem);
+  background-size: min(64vw, 820px) auto, auto, auto, auto;
+  background-position: right top, right top, left top, center;
+  background-repeat: no-repeat;
+}
+:root[data-finance-workspace-season][data-finance-season-skin="festival"] .finance-shell .finance-bottom-nav {
+  background-image: linear-gradient(90deg, rgb(var(--finance-season-soft) / 0.90), #ffffff 52%, rgb(var(--finance-season-secondary) / 0.13));
+  border-top-color: rgb(var(--finance-season-primary) / 0.63);
+}
+
+/* Preserve dark mode chrome contrast, without changing dark finance cards. */
+:root[data-theme="dark"][data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-sidebar {
+  background-color: #131e28;
+  background-image:
+    linear-gradient(90deg, rgb(19 30 40 / 0.97), rgb(19 30 40 / 0.90) 61%, rgb(19 30 40 / 0.42)),
+    var(--finance-season-sidebar-art),
+    linear-gradient(155deg, rgb(var(--finance-season-primary) / 0.13), #131e28 54%);
+}
+:root[data-theme="dark"][data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-header {
+  background-color: #131e28;
+  background-image:
+    linear-gradient(90deg, rgb(19 30 40 / 0.27), rgb(19 30 40 / 0.86) 56%, rgb(19 30 40 / 0.95)),
+    var(--finance-season-topbar-art),
+    linear-gradient(105deg, rgb(var(--finance-season-primary) / 0.12), #131e28 56%);
+}
+:root[data-theme="dark"][data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-main {
+  background-color: var(--finance-page);
+  background-image:
+    var(--finance-season-page-art),
+    radial-gradient(ellipse 32rem 17rem at 90% 0%, rgb(var(--finance-season-primary) / 0.09), transparent 82%),
+    linear-gradient(180deg, #121d27, var(--finance-page) 22rem);
+}
+:root[data-theme="dark"][data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-bottom-nav {
+  background: #131e28;
+}
+
+/* Screens under 768px remain light-weight, centered on clean content. */
+@media (max-width: 767px) {
+  :root[data-finance-workspace-season][data-finance-season-skin="pastel"] .finance-shell .finance-main {
+    background-size: 49vw auto, auto, cover;
+  }
+  :root[data-finance-workspace-season][data-finance-season-skin="festival"] .finance-shell .finance-main {
+    background-size: 75vw auto, auto, auto, cover;
+  }
+  :root[data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-sidebar {
+    background-size: 100% 100%, 110% auto, cover;
+  }
+  :root[data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-header {
+    background-size: 100% 100%, auto 100%, cover;
+  }
+}
+
+/* The auth card is untouched; only its existing seasonal scenery treatment changes. */
+:root[data-finance-season-skin="pastel"] [data-myfinance-auth-season]:not([data-myfinance-auth-season="off"]) > [aria-hidden="true"] {
+  filter: saturate(0.72) brightness(1.06);
+}
+:root[data-finance-season-skin="festival"] [data-myfinance-auth-season]:not([data-myfinance-auth-season="off"]) > [aria-hidden="true"] {
+  filter: saturate(1.15) contrast(1.04);
+}
+:root[data-theme="dark"][data-finance-season-skin="pastel"] [data-myfinance-auth-season]:not([data-myfinance-auth-season="off"]) > [aria-hidden="true"] {
+  filter: saturate(0.75) brightness(0.83);
+}
+:root[data-theme="dark"][data-finance-season-skin="festival"] [data-myfinance-auth-season]:not([data-myfinance-auth-season="off"]) > [aria-hidden="true"] {
+  filter: saturate(1.09) brightness(0.82);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-finance-workspace-season][data-finance-season-skin] .finance-shell :is(.finance-sidebar, .finance-header, .finance-main) {
+    transition: none;
+  }
+}
