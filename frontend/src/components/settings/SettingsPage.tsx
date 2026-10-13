@@ -11,6 +11,11 @@ import FormattedDateInput from "@/src/components/ui/FormattedDateInput";
 import { isDateDisplayFormat, DATE_DISPLAY_FORMAT_OPTIONS, DEFAULT_DATE_DISPLAY_FORMAT, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 import { notifyDateFormatSaved } from "@/src/lib/date/dateFormatPreference";
 import { isValidBirthDateInput, readAccountBirthDate } from "@/src/lib/accountBirthdayTheme";
+import {
+  NOTIFICATION_PREFERENCES_CHANGED,
+  readAccountNotificationPreferences,
+  saveAccountNotificationPreferences,
+} from "@/src/lib/notifications/notificationPreferences";
 
 import {
   AlertTriangle,
@@ -481,6 +486,30 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [authProfileName, localSettingsKey, setTheme, user?.id]);
 
+  // Saved notification preferences are account-scoped and shared with Header.
+  // Keep the editor in sync with same-tab saves and cross-tab storage updates.
+  useEffect(() => {
+    if (!user?.id) return;
+    const accountId = user.id;
+    const refreshNotificationToggles = () => {
+      const saved = readAccountNotificationPreferences(accountId);
+      setNotifBudget(saved.notifBudget);
+      setNotifGoal(saved.notifGoal);
+      setNotifDebt(saved.notifDebt);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === localSettingsKey || event.key === null) refreshNotificationToggles();
+    };
+    const timer = window.setTimeout(refreshNotificationToggles, 0);
+    window.addEventListener(NOTIFICATION_PREFERENCES_CHANGED, refreshNotificationToggles);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(NOTIFICATION_PREFERENCES_CHANGED, refreshNotificationToggles);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [localSettingsKey, user?.id]);
+
   useEffect(() => {
     if (!user?.id || !authProfileName) return;
     const timer = window.setTimeout(() => {
@@ -766,6 +795,25 @@ export default function SettingsPage() {
   }
 
   // ── Save prefs feedback ────────────────────────────────────────────────────
+  // Notification switches do not need profile validation or Supabase writes.
+  function handleSaveNotifications() {
+    try {
+      saveAccountNotificationPreferences(user?.id, {
+        notifBudget,
+        notifGoal,
+        notifDebt,
+      });
+      toast({ variant: "success", message: "Đã lưu tùy chọn thông báo." });
+    } catch (error) {
+      toast({
+        variant: "error",
+        message: error instanceof Error
+          ? `Không thể lưu thông báo: ${error.message}`
+          : "Không thể lưu thông báo. Vui lòng thử lại.",
+      });
+    }
+  }
+
   async function handleSavePrefs() {
     const numericRules = [
       ["Mục tiêu tiết kiệm", savingsGoal, 0, 100],
@@ -806,6 +854,8 @@ export default function SettingsPage() {
 
       const localSnapshot = {
         ...buildLocalSettingsSnapshot(),
+        // A different section's Save must never overwrite notification choices.
+        ...readAccountNotificationPreferences(user?.id),
         profileName: trimmedProfileName,
       };
       window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
@@ -1968,7 +2018,7 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-rose-100 text-rose-500"
                   label="Cảnh báo ngân sách"
-                  desc="Nhận thông báo khi chi tiêu vượt ngưỡng cảnh báo"
+                  desc="Gần đạt, đạt hoặc vượt giới hạn ngân sách"
                   checked={notifBudget}
                   onChange={() => setNotifBudget((v) => !v)}
                 />
@@ -1976,7 +2026,7 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-emerald-100 text-emerald-600"
                   label="Cột mốc mục tiêu"
-                  desc="Nhận thông báo khi đạt 25%, 50%, 75%, 100% mục tiêu"
+                  desc="Khi mục tiêu đạt ít nhất 75% hoặc hoàn thành"
                   checked={notifGoal}
                   onChange={() => setNotifGoal((v) => !v)}
                 />
@@ -1984,36 +2034,16 @@ export default function SettingsPage() {
                   icon={<Bell size={14} />}
                   iconBg="bg-amber-100 text-amber-600"
                   label="Cảnh báo khoản nợ"
-                  desc="Nhận thông báo khi tỷ lệ nợ vượt ngưỡng an toàn"
+                  desc="Nhắc các khoản nợ có tỷ lệ hoàn trả dưới 15%"
                   checked={notifDebt}
                   onChange={() => setNotifDebt((v) => !v)}
                 />
-                <ToggleRow
-                  icon={<Bell size={14} />}
-                  iconBg="bg-blue-100 text-blue-600"
-                  label="Cảnh báo đầu tư"
-                  desc="Nhận thông báo về biến động danh mục đầu tư"
-                  checked={notifInvest}
-                  onChange={() => setNotifInvest((v) => !v)}
-                />
-                <ToggleRow
-                  icon={<Bell size={14} />}
-                  iconBg="bg-indigo-100 text-indigo-600"
-                  label="Tổng kết tuần"
-                  desc="Báo cáo thu chi và tiến độ mục tiêu hàng tuần"
-                  checked={notifWeekly}
-                  onChange={() => setNotifWeekly((v) => !v)}
-                />
-                <ToggleRow
-                  icon={<Bell size={14} />}
-                  iconBg="bg-cyan-100 text-cyan-600"
-                  label="Báo cáo tháng"
-                  desc="Phân tích tài chính toàn diện cuối mỗi tháng"
-                  checked={notifMonthly}
-                  onChange={() => setNotifMonthly((v) => !v)}
-                />
+                <div data-notification-unavailable="true" className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-bold text-slate-600">Chưa hỗ trợ: Cảnh báo đầu tư · Tổng kết tuần · Báo cáo tháng</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">Các loại này chưa có nguồn thông báo tự động. Sẽ được bật khi chức năng thực sự sẵn sàng.</p>
+                </div>
               </div>
-              <button type="button" onClick={handleSavePrefs} className="mt-4 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">Lưu thông báo</button>
+              <button type="button" onClick={handleSaveNotifications} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Lưu thông báo</button>
             </div>
           </div>
 

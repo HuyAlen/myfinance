@@ -29,7 +29,13 @@ describe("MYFINANCE-NOTIFICATIONS-READ-UNREAD-2 React Hooks regression", () => {
     expect(render).toContain("void notificationReadRevision;");
     expect(render).toContain("readNotificationIdsForScope(notificationScope)");
     expect(render).not.toContain("notificationScopeRef.current");
-    expect(render).toContain("notificationReadRevision]");
+    // The memo must track BOTH changes to read state and account notification
+    // preferences; requiring revision to be the last dependency is brittle.
+    const dependencyMatch = render.match(/\},\s*\[([^\]]+)\]\);/);
+    expect(dependencyMatch).not.toBeNull();
+    const dependencies = (dependencyMatch?.[1] ?? "").split(",").map((name) => name.trim());
+    expect(dependencies).toContain("notificationReadRevision");
+    expect(dependencies).toContain("notificationPreferences");
   });
 
   it("declares dependencies for all stable persistence callbacks in the async reload", () => {

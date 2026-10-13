@@ -69,6 +69,7 @@ import {
   getActionableAlertPriorityLabel,
   isActionRequiredPriority,
   type ActionableFinanceAlertPriority,
+  type ActionableFinanceAlertKind,
 } from "@/src/lib/notifications/actionableFinanceAlerts";
 import {
   buildFinanceReviewInbox,
@@ -85,6 +86,10 @@ import {
   sortNotificationsNewestFirst,
   type NotificationFirstSeenMap,
 } from "@/src/lib/notifications/notificationOrdering";
+import {
+  filterNotificationsByPreferences,
+  useAccountNotificationPreferences,
+} from "@/src/lib/notifications/notificationPreferences";
 import {
   buildNotificationScope,
   filterNotificationsByRead,
@@ -195,6 +200,7 @@ type NotificationItem = {
   tone: "warning" | "success" | "info";
   actionLabel?: string;
   priority?: ActionableFinanceAlertPriority;
+  kind?: ActionableFinanceAlertKind;
   read: boolean;
 };
 
@@ -364,6 +370,9 @@ function buildNotifications(data: AppData): NotificationItem[] {
     savings: data.savings,
     debts: data.debts,
     currentMonth,
+    // Keep hidden-but-active alerts in the canonical read and first-seen set.
+    // Filtering and the eight-finance-alert display cap happen in the view.
+    maxNotifications: Number.MAX_SAFE_INTEGER,
   });
 
   // ACTIONABLE-FINANCE-ALERTS-1: reuse the exact Review detector + device
@@ -562,6 +571,7 @@ export default function Header({
   const { user } = useAuth();
   const { context: householdContext } = useHousehold();
   const notificationScope = buildNotificationScope(user?.id, householdContext?.household?.id);
+  const notificationPreferences = useAccountNotificationPreferences(user?.id);
   // Async reads must not publish another account/workspace's notification list.
   const notificationScopeRef = useRef(notificationScope);
   useEffect(() => {
@@ -692,11 +702,12 @@ export default function Header({
     const readIds = readNotificationIdsForScope(notificationScope);
     // Never show stale finance notifications from the previous workspace.
     const financeNotifications = notifDataScope === notificationScope ? notifList : [];
-    return [...householdInviteNotifications, ...financeNotifications].map((notification) => ({
+    const withReadState = [...householdInviteNotifications, ...financeNotifications].map((notification) => ({
       ...notification,
       read: readIds.has(notification.id),
     }));
-  }, [householdInviteNotifications, notifList, notifDataScope, notificationScope, notificationReadRevision]);
+    return filterNotificationsByPreferences(withReadState, notificationPreferences);
+  }, [householdInviteNotifications, notifList, notifDataScope, notificationScope, notificationReadRevision, notificationPreferences]);
   const filteredNotifList = filterNotificationsByRead(visibleNotifList, notificationReadFilter);
   const readCount = visibleNotifList.filter((n) => n.read).length;
   const unreadCount = visibleNotifList.filter((n) => !n.read).length;

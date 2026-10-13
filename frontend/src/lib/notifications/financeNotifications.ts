@@ -226,8 +226,8 @@ function buildCashFlowNotification(
  * Builds every finance notification for the current period, using each
  * domain's canonical calculation (never a second, locally-reimplemented
  * copy) so this can never silently disagree with what Budgets/Goals/
- * Dashboard/Reports show for the same underlying data. Capped at 8, same
- * as before this ticket — an existing, unrelated presentation limit.
+ * Dashboard/Reports show for the same underlying data. The default cap
+ * remains 8; Header can track the full active set and filter before display.
  */
 export function buildFinanceNotifications(input: {
   budgets: Budget[];
@@ -237,6 +237,8 @@ export function buildFinanceNotifications(input: {
   savings?: SavingAccount[];
   debts: Debt[];
   currentMonth: string;
+  /** Default remains 8; Header requests the full active set for read-state continuity. */
+  maxNotifications?: number;
 }): FinanceNotification[] {
   return [
     ...buildBudgetNotifications(
@@ -256,5 +258,5 @@ export function buildFinanceNotifications(input: {
       input.categories,
       input.currentMonth,
     ),
-  ].slice(0, 8);
+  ].slice(0, input.maxNotifications ?? 8);
 }
