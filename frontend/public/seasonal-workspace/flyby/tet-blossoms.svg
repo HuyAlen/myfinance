@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 196" fill="none" aria-hidden="true">
+  <g stroke="#E4A14E" stroke-width="2.6" stroke-linecap="round" opacity=".58">
+    <path d="M627 113C525 85 506 118 443 102c-77-19-106-36-176-23" stroke-dasharray="4 11"/>
+    <path d="M607 142c-41-15-64 2-101-1"/>
+  </g>
+  <g transform="translate(80 72) rotate(-15)">
+    <path d="M0-42C3-56 20-63 26-46c9-9 25-3 22 11 15 4 12 20-3 23 2 16-17 21-25 8-12 11-28 3-24-11-16-6-14-24 2-29Z" fill="#F7A9B7" stroke="#D96F87" stroke-width="2"/>
+    <circle cx="19" cy="-26" r="9" fill="#F8D87C"/>
+    <circle cx="19" cy="-26" r="3" fill="#CE7B42"/>
+    <path d="M19-17l-6 12" stroke="#B67E43" stroke-width="2.2"/>
+  </g>
+  <g transform="translate(262 109) scale(.82) rotate(12)">
+    <path d="M0-42C3-56 20-63 26-46c9-9 25-3 22 11 15 4 12 20-3 23 2 16-17 21-25 8-12 11-28 3-24-11-16-6-14-24 2-29Z" fill="#F8D16E" stroke="#D4A348" stroke-width="2"/>
+    <circle cx="19" cy="-26" r="9" fill="#FFF0B2"/>
+    <circle cx="19" cy="-26" r="3" fill="#D7A048"/>
+  </g>
+  <g transform="translate(383 45) scale(.61) rotate(28)">
+    <path d="M0-42C3-56 20-63 26-46c9-9 25-3 22 11 15 4 12 20-3 23 2 16-17 21-25 8-12 11-28 3-24-11-16-6-14-24 2-29Z" fill="#F6AFC0" stroke="#E48DA0" stroke-width="2"/>
+    <circle cx="19" cy="-26" r="9" fill="#F8D87C"/>
+  </g>
+  <g transform="translate(495 76) scale(.85)">
+    <path d="M0-25V-53" stroke="#C88737" stroke-width="3" stroke-linecap="round"/>
+    <path d="M-19-45H19" stroke="#C88737" stroke-width="4" stroke-linecap="round"/>
+    <path d="M-23-25C-30 2-25 35 0 44 25 35 30 2 23-25Z" fill="#D95558" stroke="#B83C44" stroke-width="3"/>
+    <path d="M-15-20c-6 23-5 41 15 51 20-10 21-28 15-51" stroke="#F1B961" stroke-width="3"/>
+    <path d="M-27-25h54" stroke="#F6D08A" stroke-width="7" stroke-linecap="round"/>
+    <path d="M-23 40h46" stroke="#F6D08A" stroke-width="7" stroke-linecap="round"/>
+    <path d="M0 45v16" stroke="#F0B761" stroke-width="3"/>
+    <path d="M-6 61h12M-4 66h8" stroke="#F0B761" stroke-width="2"/>
+  </g>
+  <g fill="#DF8B99" opacity=".85">
+    <ellipse cx="185" cy="45" rx="6" ry="3" transform="rotate(28 185 45)"/>
+    <ellipse cx="322" cy="144" rx="7" ry="4" transform="rotate(-31 322 144)"/>
+    <ellipse cx="588" cy="90" rx="7" ry="3" transform="rotate(32 588 90)"/>
+  </g>
+  <circle cx="219" cy="28" r="3" fill="#E8B75E"/>
+  <circle cx="449" cy="145" r="2.8" fill="#F0C770"/>
+</svg>

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./seasonal-workspace.css";
 import "./seasonal-page-atmosphere.css";
+import "./seasonal-flyby.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
 import { HouseholdProvider } from "@/src/components/household/HouseholdProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";

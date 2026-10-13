@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 184" fill="none" aria-hidden="true">
+  <g stroke="#DFA36B" stroke-linecap="round" opacity=".44">
+    <path d="M604 110C524 73 486 107 412 87S266 70 180 102" stroke-width="2.5" stroke-dasharray="3 11"/>
+    <path d="M563 141c-85-17-96 10-171-6" stroke-width="2"/>
+    <path d="M362 31c-46-4-68 6-100 27" stroke-width="2"/>
+  </g>
+  <g transform="translate(96 89) rotate(-23) scale(1.15)">
+    <path d="M0 47V12" stroke="#A65A35" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M0-41l11 19 20-10-5 23 22 6-18 12 9 18-27-3-12 16-13-17-27 4 9-20-18-12 23-7-5-23 21 11z" fill="#D77A36" stroke="#A85E34" stroke-width="2"/>
+    <path d="M0-24V24M-24-5L0 16M22-5L0 16" stroke="#F6C384" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(265 43) rotate(30) scale(.73)">
+    <path d="M0 45V8" stroke="#B06536" stroke-width="3" stroke-linecap="round"/>
+    <path d="M0-41l11 19 20-10-5 23 22 6-18 12 9 18-27-3-12 16-13-17-27 4 9-20-18-12 23-7-5-23 21 11z" fill="#F4B154" stroke="#CB813E" stroke-width="2"/>
+    <path d="M0-24V24M-24-5L0 16M22-5L0 16" stroke="#FFE2A8" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(399 111) rotate(-10) scale(.92)">
+    <path d="M0 46V8" stroke="#9B5639" stroke-width="3" stroke-linecap="round"/>
+    <path d="M0-41l11 19 20-10-5 23 22 6-18 12 9 18-27-3-12 16-13-17-27 4 9-20-18-12 23-7-5-23 21 11z" fill="#C85B38" stroke="#A75538" stroke-width="2"/>
+    <path d="M0-24V24M-24-5L0 16M22-5L0 16" stroke="#F29B66" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(517 48) rotate(38) scale(.57)">
+    <path d="M0 43V8" stroke="#B47044" stroke-width="3" stroke-linecap="round"/>
+    <path d="M0-41l11 19 20-10-5 23 22 6-18 12 9 18-27-3-12 16-13-17-27 4 9-20-18-12 23-7-5-23 21 11z" fill="#E8A04D" stroke="#BA7741" stroke-width="2"/>
+  </g>
+  <circle cx="193" cy="134" r="3" fill="#D98448" opacity=".55"/>
+  <circle cx="339" cy="70" r="2.7" fill="#E9B56C" opacity=".66"/>
+  <circle cx="571" cy="109" r="3" fill="#D98448" opacity=".53"/>
+</svg>

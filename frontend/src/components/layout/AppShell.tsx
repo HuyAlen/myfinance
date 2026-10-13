@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import SeasonalWorkspaceAmbientMotion from "./SeasonalWorkspaceAmbientMotion";
+import SeasonalWorkspaceFlyby from "./SeasonalWorkspaceFlyby";
 import MobileBottomNavScrollHide from "./MobileBottomNavScrollHide";
 import StartupShellSkeleton from "./StartupShellSkeleton";
 import AIFloatingButton from "@/src/components/ai-agent/AIFloatingButton";
@@ -267,6 +268,12 @@ export default function AppShell({ children }: AppShellProps) {
           </main>
         </div>
 
+        {/* Decorative overlay is a sibling of finance-main, never scroll content. */}
+        {!shellChromeOverlayOpen &&
+          !isGlobalFabSuppressed &&
+          !aiAgentOpen &&
+          wizardDone &&
+          tourDone && <SeasonalWorkspaceFlyby />}
         <MobileBottomNavScrollHide onMoreMenuOpenChange={setMoreMenuOpen} holdVisible={shellChromeOverlayOpen || sidebarOpen} />
 
         {SHOW_AI_FLOATING_BUTTON && !aiAgentOpen && !isGlobalFabSuppressed && !shellChromeOverlayOpen && (
