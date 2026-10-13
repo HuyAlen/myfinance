@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { supabase } from "@/src/lib/supabase";
 import HouseholdSettingsCard from "@/src/components/settings/HouseholdSettingsCard";
+import SeasonalThemeSettingsCard from "@/src/components/settings/SeasonalThemeSettingsCard";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 
 import {
@@ -1331,6 +1332,9 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </div>
+
+                <div className="border-t border-slate-100" />
+                <SeasonalThemeSettingsCard />
               </div>
             </div>
           </div>

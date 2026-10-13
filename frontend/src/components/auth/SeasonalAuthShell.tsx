@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import styles from "./SeasonalAuthShell.module.css";
+import { useSeasonalThemeEnabled } from "@/src/lib/seasonalThemePreference";
 import {
   resolveSeasonalAuthTheme,
   type SeasonalAuthTheme,
@@ -14,12 +15,13 @@ import {
  * remain unchanged.
  */
 function useSeasonalAuthTheme(): SeasonalAuthTheme {
+  const seasonalEnabled = useSeasonalThemeEnabled();
   const [season, setSeason] = useState<SeasonalAuthTheme>("off");
 
   useEffect(() => {
     const refresh = () => {
       const requested = new URLSearchParams(window.location.search).get("season");
-      setSeason(resolveSeasonalAuthTheme(new Date(), requested));
+      setSeason(seasonalEnabled ? resolveSeasonalAuthTheme(new Date(), requested) : "off");
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refresh();
@@ -38,9 +40,9 @@ function useSeasonalAuthTheme(): SeasonalAuthTheme {
       window.removeEventListener("popstate", refresh);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [seasonalEnabled]);
 
-  return season;
+  return seasonalEnabled ? season : "off";
 }
 
 export function SeasonalAuthShell({ children }: { children: ReactNode }) {

@@ -3,6 +3,10 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { resolveSeasonalAuthTheme } from "@/src/lib/seasonal-auth";
+import {
+  readSeasonalThemeEnabled,
+  useSeasonalThemeEnabled,
+} from "@/src/lib/seasonalThemePreference";
 
 /**
  * MYFINANCE-WORKSPACE-SEASONAL-ALL-PAGES-1
@@ -16,6 +20,7 @@ export default function SeasonalWorkspaceThemeController() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedSeason = searchParams?.get("season") ?? null;
+  const seasonalEnabled = useSeasonalThemeEnabled();
 
   useEffect(() => {
     let nextMidnightTimer: number | undefined;
@@ -25,9 +30,11 @@ export default function SeasonalWorkspaceThemeController() {
       const theme = resolveSeasonalAuthTheme(now, requestedSeason);
       const root = document.documentElement;
 
-      if (theme === "off") {
-        root.removeAttribute(ATTRIBUTE);
-      } else {
+      // Always consult the latest store value: a pending React effect from
+      // the previous render must never restore an already-disabled theme.
+      if (theme === "off" || !readSeasonalThemeEnabled()) {
+        if (root.hasAttribute(ATTRIBUTE)) root.removeAttribute(ATTRIBUTE);
+      } else if (root.getAttribute(ATTRIBUTE) !== theme) {
         root.setAttribute(ATTRIBUTE, theme);
       }
 
@@ -56,7 +63,7 @@ export default function SeasonalWorkspaceThemeController() {
       window.removeEventListener("pageshow", refresh);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [pathname, requestedSeason]);
+  }, [pathname, requestedSeason, seasonalEnabled]);
 
   // Only the AppShell consumes this attribute. Clear it if this controller
   // unmounts, but do not flicker the background on ordinary route changes.
