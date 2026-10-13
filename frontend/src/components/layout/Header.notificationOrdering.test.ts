@@ -66,7 +66,7 @@ describe("Header applies canonical newest-first ordering at the single source of
     );
     expect(reloadFnStart).toBeGreaterThan(-1);
     const sortIdx = source.indexOf("sortNotificationsNewestFirst(", reloadFnStart);
-    const reloadFnEnd = source.indexOf("}, []);", reloadFnStart);
+    const reloadFnEnd = source.indexOf("}, [persistNotificationFirstSeen, persistNotificationIds, readNotificationFirstSeen, readNotificationIds]);", reloadFnStart);
     expect(sortIdx).toBeGreaterThan(reloadFnStart);
     expect(sortIdx).toBeLessThan(reloadFnEnd);
   });

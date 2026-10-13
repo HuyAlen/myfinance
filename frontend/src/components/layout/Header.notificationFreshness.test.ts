@@ -30,7 +30,7 @@ describe("one canonical reload path shared by initial load and realtime reconcil
     const start = source.indexOf(
       "const reloadHeaderData = useCallback(async () => {",
     );
-    const end = source.indexOf("}, []);", start);
+    const end = source.indexOf("}, [persistNotificationFirstSeen, persistNotificationIds, readNotificationFirstSeen, readNotificationIds]);", start);
     const fnSource = source.slice(start, end);
     expect(fnSource.split("setNotifList(").length - 1).toBe(1);
 
@@ -65,7 +65,7 @@ describe("one canonical reload path shared by initial load and realtime reconcil
     const start = source.indexOf(
       "const reloadHeaderData = useCallback(async () => {",
     );
-    const end = source.indexOf("}, []);", start);
+    const end = source.indexOf("}, [persistNotificationFirstSeen, persistNotificationIds, readNotificationFirstSeen, readNotificationIds]);", start);
     const fnSource = source.slice(start, end);
     expect(fnSource).toContain("readNotificationIds()");
     expect(fnSource).toContain("read: readIds.has(notification.id)");
@@ -286,7 +286,7 @@ describe("failure semantics preserved (last-known-good, no fake empty)", () => {
     const start = source.indexOf(
       "const reloadHeaderData = useCallback(async () => {",
     );
-    const end = source.indexOf("}, []);", start);
+    const end = source.indexOf("}, [persistNotificationFirstSeen, persistNotificationIds, readNotificationFirstSeen, readNotificationIds]);", start);
     const fnSource = source.slice(start, end);
 
     const catchStart = fnSource.indexOf("} catch (error) {");

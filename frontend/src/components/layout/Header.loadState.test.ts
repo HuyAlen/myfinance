@@ -52,7 +52,7 @@ describe("Header distinguishes an unloaded search index/notification list from a
   });
 
   it("the notification list shows a loading state instead of 'Không có thông báo mới' before the first load", () => {
-    expect(normalized).toContain("visibleNotifList.length > 0 ? ( visibleNotifList.map");
+    expect(normalized).toContain("filteredNotifList.length > 0 ? ( filteredNotifList.map");
     expect(source).toContain("Đang tải thông báo...");
   });
 

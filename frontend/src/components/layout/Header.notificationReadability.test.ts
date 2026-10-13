@@ -75,17 +75,13 @@ describe("Notification row typography and spacing (NOTIF-UI-1)", () => {
     );
   });
 
-  it("each row keeps comfortable, consistent padding (py-3.5, px-4) and a slightly stronger divider than the near-invisible slate-50 it replaced", () => {
-    const rowClassStart = source.indexOf(
-      '"flex w-full items-start gap-3 border-b',
-    );
-    expect(rowClassStart).toBeGreaterThan(-1);
-    const rowClassEnd = source.indexOf('" +', rowClassStart);
-    const rowClassSource = source.slice(rowClassStart, rowClassEnd);
-
-    expect(rowClassSource).toContain("border-slate-100");
-    expect(rowClassSource).toContain("px-4 py-3.5");
-    expect(rowClassSource).not.toContain("border-slate-50");
+  it("the row is compact with two sibling buttons, no bottom padding reserved for a long text action", () => {
+    const list = source.slice(source.indexOf("{/* List */}"), source.indexOf("{/* Realtime status */}"));
+    expect(list).toContain("group flex w-full items-start border-b border-slate-100");
+    expect(list).toContain("gap-2.5 px-3 py-3 text-left");
+    expect(list).toContain("min-h-11 min-w-11 shrink-0");
+    expect(list).not.toContain("pb-12 text-left");
+    expect(list).not.toContain("absolute bottom-1 right-3");
   });
 
   it("the status dot stays small and shrink-0, only its top offset shifted to align with the now-taller title line", () => {
@@ -202,14 +198,14 @@ describe("Business-logic and query-topology guard (NOTIF-UI-1 must not touch the
     expect(occurrences).toBe(1);
   });
 
-  it("tone (warning/success/info) is read as-is for the status dot color — no new severity classification derived in the UI", () => {
+  it("read-state dot is neutral once read; priority remains on its existing chip without changing finance classification", () => {
     const start = source.indexOf("const dot =");
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf("const bg =", start);
     expect(end).toBeGreaterThan(start);
     const dotSource = source.slice(start, end).replace(/\s+/g, " ");
-    expect(dotSource).toBe(
-      'const dot = n.tone === "warning" ? "bg-amber-400" : n.tone === "success" ? "bg-emerald-500" : "bg-blue-500"; ',
-    );
+    expect(dotSource).toContain('const dot = n.read ? "bg-slate-300" : "bg-blue-500";');
+    expect(source).toContain("getActionableAlertPriorityLabel(n.priority)");
+    expect(source).toContain("data-notification-priority={n.priority}");
   });
 });

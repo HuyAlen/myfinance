@@ -22,6 +22,8 @@ import {
   ChevronRight,
   Folder,
   Landmark,
+  Mail,
+  MailOpen,
   LogOut,
   Moon,
   ReceiptText,
@@ -83,6 +85,13 @@ import {
   sortNotificationsNewestFirst,
   type NotificationFirstSeenMap,
 } from "@/src/lib/notifications/notificationOrdering";
+import {
+  buildNotificationScope,
+  filterNotificationsByRead,
+  scopedNotificationStorageKey,
+  setNotificationReadState,
+  type NotificationReadFilter,
+} from "@/src/lib/notifications/notificationReadState";
 import { runWhenIdle } from "@/src/lib/performance/runWhenIdle";
 import {
   buildDebtsHref,
@@ -444,78 +453,62 @@ const KIND_LABELS: Record<SearchResult["kind"], string> = {
   investment: "Đầu tư",
 };
 
+// Previous unscoped keys are intentionally NOT imported into v2: a shared
+// browser cannot safely attribute old read IDs to the right account.
 const NOTIFICATION_STORAGE_KEY = "myfinance_read_notifications";
+const NOTIFICATION_ORDER_STORAGE_KEY = "myfinance_notification_first_seen";
 
-function readNotificationIds(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-
+function readNotificationIdsForScope(scope: string | null): Set<string> {
+  const key = scopedNotificationStorageKey(NOTIFICATION_STORAGE_KEY, scope);
+  if (!key || typeof window === "undefined") return new Set();
   try {
-    const raw = window.localStorage.getItem(NOTIFICATION_STORAGE_KEY);
-    if (!raw) return new Set();
-
-    const parsed = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter(Boolean) : []);
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string" && id.length > 0)
+        : [],
+    );
   } catch {
     return new Set();
   }
 }
 
-function persistNotificationIds(ids: Iterable<string>) {
-  if (typeof window === "undefined") return;
-
+function persistNotificationIdsForScope(scope: string | null, ids: Iterable<string>) {
+  const key = scopedNotificationStorageKey(NOTIFICATION_STORAGE_KEY, scope);
+  if (!key || typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(
-      NOTIFICATION_STORAGE_KEY,
-      JSON.stringify(Array.from(ids)),
-    );
+    window.localStorage.setItem(key, JSON.stringify([...ids]));
   } catch {
-    // Ignore localStorage errors.
+    // localStorage can be unavailable; in-memory UI remains responsive.
   }
 }
 
-// NOTIFICATION ORDERING FIX: persists "when did this client first observe
-// this notification id" (see notificationOrdering.ts's own doc comment for
-// why this — not a database created_at, which doesn't exist for these
-// synthesized alerts — is the correct source of truth here). Kept as its
-// own key, separate from NOTIFICATION_STORAGE_KEY (read ids), since read
-// state and ordering are two independent concerns that must never
-// influence each other.
-const NOTIFICATION_ORDER_STORAGE_KEY = "myfinance_notification_first_seen";
-
-function readNotificationFirstSeen(): NotificationFirstSeenMap {
-  if (typeof window === "undefined") return {};
-
+function readNotificationFirstSeenForScope(scope: string | null): NotificationFirstSeenMap {
+  const key = scopedNotificationStorageKey(NOTIFICATION_ORDER_STORAGE_KEY, scope);
+  if (!key || typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(NOTIFICATION_ORDER_STORAGE_KEY);
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    const result: NotificationFirstSeenMap = {};
-    for (const [id, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        result[id] = value;
-      }
-    }
-    return result;
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([id, value]) => id.length > 0 && typeof value === "number" && Number.isFinite(value),
+      ),
+    );
   } catch {
     return {};
   }
 }
 
-function persistNotificationFirstSeen(map: NotificationFirstSeenMap) {
-  if (typeof window === "undefined") return;
-
+function persistNotificationFirstSeenForScope(
+  scope: string | null,
+  map: NotificationFirstSeenMap,
+) {
+  const key = scopedNotificationStorageKey(NOTIFICATION_ORDER_STORAGE_KEY, scope);
+  if (!key || typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(
-      NOTIFICATION_ORDER_STORAGE_KEY,
-      JSON.stringify(map),
-    );
+    window.localStorage.setItem(key, JSON.stringify(map));
   } catch {
-    // Ignore localStorage errors.
+    // Read-order timestamps are best-effort client preferences.
   }
 }
 
@@ -568,6 +561,12 @@ export default function Header({
 }: HeaderProps) {
   const { user } = useAuth();
   const { context: householdContext } = useHousehold();
+  const notificationScope = buildNotificationScope(user?.id, householdContext?.household?.id);
+  // Async reads must not publish another account/workspace's notification list.
+  const notificationScopeRef = useRef(notificationScope);
+  useEffect(() => {
+    notificationScopeRef.current = notificationScope;
+  }, [notificationScope]);
   const { resolvedTheme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -590,6 +589,7 @@ export default function Header({
   // UI toggles
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notificationReadFilter, setNotificationReadFilter] = useState<NotificationReadFilter>("all");
   const [searchFocus, setSearchFocus] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -603,6 +603,7 @@ export default function Header({
   // appData/notifList/hasHeaderDataLoaded.
   const [appData, setAppData] = useState<AppData>(EMPTY);
   const [notifList, setNotifList] = useState<NotificationItem[]>([]);
+  const [notifDataScope, setNotifDataScope] = useState<string | null>(notificationScope);
   const [notificationReadRevision, setNotificationReadRevision] = useState(0);
   const loadedRef = useRef(false);
   // FINANCE-DATA-1B: appData/notifList start empty until the idle load
@@ -644,12 +645,29 @@ export default function Header({
     compactName.charAt(0).toUpperCase() ||
     displayEmail.charAt(0).toUpperCase() ||
     "U";
+  // Stable callbacks read the latest authenticated scope, including after
+  // a household workspace switch, without capturing a stale scope in the
+  // existing idle/realtime notification reconciliation callback.
+  const readNotificationIds = useCallback(
+    () => readNotificationIdsForScope(notificationScopeRef.current), [],
+  );
+  const persistNotificationIds = useCallback(
+    (ids: Iterable<string>) => persistNotificationIdsForScope(notificationScopeRef.current, ids), [],
+  );
+  const readNotificationFirstSeen = useCallback(
+    () => readNotificationFirstSeenForScope(notificationScopeRef.current), [],
+  );
+  const persistNotificationFirstSeen = useCallback(
+    (map: NotificationFirstSeenMap) =>
+      persistNotificationFirstSeenForScope(notificationScopeRef.current, map), [],
+  );
+
   // HOUSEHOLD-WORKSPACE-1: pending family invites join the global bell.
   // Read state remains a client preference only; membership/authorization is
   // always resolved by the server-side household RPCs.
   const householdInviteNotifications = useMemo<NotificationItem[]>(() => {
     void notificationReadRevision;
-    const readIds = readNotificationIds();
+    const readIds = readNotificationIdsForScope(notificationScope);
     return (householdContext?.pendingInvites ?? []).map((invite) => {
       const id = `household-invite-${invite.id}`;
       const householdName = invite.householdName || "Gia đình MyFinance";
@@ -667,11 +685,20 @@ export default function Header({
         read: readIds.has(id),
       };
     });
-  }, [householdContext?.pendingInvites, notificationReadRevision]);
-  const visibleNotifList = useMemo(
-    () => [...householdInviteNotifications, ...notifList],
-    [householdInviteNotifications, notifList],
-  );
+  }, [householdContext?.pendingInvites, notificationReadRevision, notificationScope]);
+  const visibleNotifList = useMemo(() => {
+    // This changes on local actions or cross-tab storage updates.
+    void notificationReadRevision;
+    const readIds = readNotificationIdsForScope(notificationScope);
+    // Never show stale finance notifications from the previous workspace.
+    const financeNotifications = notifDataScope === notificationScope ? notifList : [];
+    return [...householdInviteNotifications, ...financeNotifications].map((notification) => ({
+      ...notification,
+      read: readIds.has(notification.id),
+    }));
+  }, [householdInviteNotifications, notifList, notifDataScope, notificationScope, notificationReadRevision]);
+  const filteredNotifList = filterNotificationsByRead(visibleNotifList, notificationReadFilter);
+  const readCount = visibleNotifList.filter((n) => n.read).length;
   const unreadCount = visibleNotifList.filter((n) => !n.read).length;
   const actionRequiredCount = visibleNotifList.filter(
     (n) => !n.read && isActionRequiredPriority(n.priority),
@@ -689,6 +716,7 @@ export default function Header({
   // is refetched together and committed atomically in one setState burst
   // per field — never a partial/hybrid snapshot.
   const reloadHeaderData = useCallback(async () => {
+    const requestedScope = notificationScopeRef.current;
     try {
       const [
         transactions,
@@ -722,6 +750,7 @@ export default function Header({
         forexAccounts,
         savings,
       };
+      if (requestedScope !== notificationScopeRef.current) return;
       setAppData(data);
 
       // NOTIFICATION ORDERING FIX: newest-first, deterministic, and
@@ -734,6 +763,7 @@ export default function Header({
       // so there is exactly one source of truth for ordering, never a
       // second sort applied anywhere else.
       const freshNotifications = buildNotifications(data);
+      const previousFirstSeen = readNotificationFirstSeen();
       const firstSeen = advanceNotificationFirstSeen(
         freshNotifications.map((notification) => notification.id),
         readNotificationFirstSeen(),
@@ -746,6 +776,16 @@ export default function Header({
       );
 
       const readIds = readNotificationIds();
+      // A finance alert that disappeared then returned is a NEW occurrence.
+      // Do not keep it silently read forever just because its ID is reused.
+      let changedReadIds = false;
+      for (const notification of orderedNotifications) {
+        if (!Object.prototype.hasOwnProperty.call(previousFirstSeen, notification.id)) {
+          changedReadIds = readIds.delete(notification.id) || changedReadIds;
+        }
+      }
+      if (changedReadIds) persistNotificationIds(readIds);
+      setNotifDataScope(requestedScope);
       setNotifList(
         orderedNotifications.map((notification) => ({
           ...notification,
@@ -756,7 +796,7 @@ export default function Header({
     } catch (error) {
       console.error("[Header] data load failed:", error);
     }
-  }, []);
+  }, [persistNotificationFirstSeen, persistNotificationIds, readNotificationFirstSeen, readNotificationIds]);
 
   const reloadHeaderDataRef = useRef(reloadHeaderData);
   useEffect(() => {
@@ -805,6 +845,30 @@ export default function Header({
       }
     };
   }, []);
+
+  // Browsers send storage to OTHER tabs only. Same-tab actions below bump
+  // notificationReadRevision explicitly; neither path fetches finance data.
+  useEffect(() => {
+    const key = scopedNotificationStorageKey(NOTIFICATION_STORAGE_KEY, notificationScope);
+    if (!key) return;
+    function onNotificationStorage(event: StorageEvent) {
+      if (event.storageArea !== window.localStorage) return;
+      if (event.key === key || event.key === null) {
+        setNotificationReadRevision((revision) => revision + 1);
+      }
+    }
+    window.addEventListener("storage", onNotificationStorage);
+    return () => window.removeEventListener("storage", onNotificationStorage);
+  }, [notificationScope]);
+
+  const lastNotificationScopeRef = useRef(notificationScope);
+  useEffect(() => {
+    if (lastNotificationScopeRef.current === notificationScope) return;
+    lastNotificationScopeRef.current = notificationScope;
+    // Scope switches may happen without any finance table realtime event.
+    const timer = window.setTimeout(requestHeaderRefresh, 0);
+    return () => window.clearTimeout(timer);
+  }, [notificationScope, requestHeaderRefresh]);
 
   // Notification dependencies and search-only entity dependencies both reuse
   // the app-level RealtimeProvider channel. Wallet/Investment/Forex edits must
@@ -1115,6 +1179,12 @@ export default function Header({
     setNotificationReadRevision((revision) => revision + 1);
     setNotifOpen(false);
     router.push(href);
+  }
+
+  function handleSetNotificationRead(id: string, read: boolean) {
+    const readIds = setNotificationReadState(readNotificationIds(), id, read);
+    persistNotificationIds(readIds);
+    setNotificationReadRevision((revision) => revision + 1);
   }
 
   function handleMarkAllRead() {
@@ -1723,38 +1793,50 @@ export default function Header({
                     )}
                   </div>
 
+                  {/* State filter; does not re-order generated alerts. */}
+                  <div role="group" aria-label="Lọc trạng thái thông báo" className="grid grid-cols-3 gap-1 border-b border-slate-100 bg-slate-50/70 px-3 py-2">
+                    {([
+                      { value: "all", label: "Tất cả", count: visibleNotifList.length },
+                      { value: "unread", label: "Chưa đọc", count: unreadCount },
+                      { value: "read", label: "Đã đọc", count: readCount },
+                    ] as const).map((tab) => (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        aria-pressed={notificationReadFilter === tab.value}
+                        onClick={() => setNotificationReadFilter(tab.value)}
+                        className={"min-h-10 rounded-xl px-1.5 text-[11px] font-bold transition sm:text-xs " +
+                          (notificationReadFilter === tab.value
+                            ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-100"
+                            : "text-slate-500 hover:bg-white/80 hover:text-slate-800")}
+                      >
+                        {tab.label} <span className="tabular-nums text-[10px]">({tab.count})</span>
+                      </button>
+                    ))}
+                  </div>
+
                   {/* List */}
                   <div className="max-h-105 overflow-y-auto">
-                    {visibleNotifList.length > 0 ? (
-                      visibleNotifList.map((n) => {
-                        const dot =
-                          n.tone === "warning"
-                            ? "bg-amber-400"
-                            : n.tone === "success"
-                              ? "bg-emerald-500"
-                              : "bg-blue-500";
-                        const bg = n.read
-                          ? ""
-                          : n.tone === "warning"
-                            ? "bg-amber-50"
-                            : n.tone === "success"
-                              ? "bg-emerald-50"
-                              : "bg-blue-50";
+                    {filteredNotifList.length > 0 ? (
+                      filteredNotifList.map((n) => {
+                        // The dot is READ STATUS, not severity. Priority is
+                        // communicated by the existing, separate priority chip.
+                        const dot = n.read ? "bg-slate-300" : "bg-blue-500";
+                        const bg = n.read ? "bg-white" : "bg-blue-50/60";
                         return (
-                          <button
+                          <div
                             key={n.id}
+                            data-notification-read-state={n.read ? "read" : "unread"}
+                            className={"group flex w-full items-start border-b border-slate-100 transition-colors " + bg}
+                          >
+                          <button
+                            type="button"
                             onClick={() => handleNotifClick(n.href, n.id)}
-                            className={
-                              "flex w-full items-start gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition hover:bg-slate-50 " +
-                              bg
-                            }
+                            className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-3 text-left transition hover:bg-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4"
                           >
                             <span
-                              className={
-                                "mt-2 size-2 shrink-0 rounded-full " +
-                                dot +
-                                (n.read ? " opacity-30" : "")
-                              }
+                              aria-hidden="true"
+                              className={"mt-2 size-2 shrink-0 rounded-full " + dot}
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
@@ -1796,9 +1878,27 @@ export default function Header({
                               ) : null}
                             </div>
                           </button>
+                          <button
+                            type="button"
+                            data-notification-read-toggle="true"
+                            onClick={() => handleSetNotificationRead(n.id, !n.read)}
+                            aria-label={(n.read ? "Đánh dấu chưa đọc: " : "Đánh dấu đã đọc: ") + n.title}
+                            title={n.read ? "Đánh dấu chưa đọc" : "Đánh dấu đã đọc"}
+                            className={
+                              "mr-1.5 mt-1.5 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-blue-100 hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 sm:mr-2 " +
+                              (n.read ? "text-slate-400" : "text-blue-600")
+                            }
+                          >
+                            {n.read ? (
+                              <Mail size={17} aria-hidden="true" />
+                            ) : (
+                              <MailOpen size={17} aria-hidden="true" />
+                            )}
+                          </button>
+                          </div>
                         );
                       })
-                    ) : !hasHeaderDataLoaded ? (
+                    ) : !hasHeaderDataLoaded || notifDataScope !== notificationScope ? (
                       <div className="flex flex-col items-center py-10">
                         <Bell size={28} className="mb-2 text-slate-200" />
                         <p className="text-sm text-slate-400">
@@ -1809,7 +1909,11 @@ export default function Header({
                       <div className="flex flex-col items-center py-10">
                         <Bell size={28} className="mb-2 text-slate-200" />
                         <p className="text-sm text-slate-400">
-                          Không có thông báo mới
+                          {notificationReadFilter === "unread"
+                            ? "Không có thông báo chưa đọc"
+                            : notificationReadFilter === "read"
+                              ? "Không có thông báo đã đọc"
+                              : "Không có thông báo mới"}
                         </p>
                       </div>
                     )}
