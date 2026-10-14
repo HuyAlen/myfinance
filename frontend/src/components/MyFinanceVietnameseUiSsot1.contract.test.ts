@@ -167,7 +167,7 @@ const checks = [
   {
     file: "settings/SettingsPage.tsx",
     forbidden: ["AI Settings", "Rule Insights", "Finance Context", "Forecast Engine", "Risk Analysis", "Goal Coach", "Investment Coach", "API Key Missing", "Connected", "Action needed", "Testing", "Ready to test", "Setup required", "No API key stored", "Reset dữ liệu demo?", "Lỗi reset dữ liệu demo", "Đã reset dữ liệu demo", "File JSON", "file backup", "OpenAI API Key", "API Key chưa đúng", "Quản lý, backup", "Frontend", "Realtime", "Active", "Online", "Connecting", "Export JSON", "Import JSON", "Khôi phục backup?", "half-restored"],
-    required: ["cài đặt AI", "Phân tích theo quy tắc", "Ngữ cảnh tài chính", "Bộ máy dự báo", "Phân tích rủi ro", "Cố vấn mục tiêu", "Cố vấn đầu tư", "Thiếu khóa API", "Đã kết nối", "Cần xử lý", "Đang kiểm tra", "Sẵn sàng kiểm tra", "Cần thiết lập", "Chưa lưu khóa API", "Đặt lại dữ liệu mẫu trong ", "Lỗi đặt lại dữ liệu mẫu", "Đã đặt lại dữ liệu mẫu", "Tệp JSON", "tệp sao lưu", "khóa API OpenAI", "Quản lý, sao lưu", "Giao diện", "Thời gian thực", "Đang hoạt động", "Trực tuyến", "Đang kết nối", "Xuất JSON", "Nhập JSON", "Khôi phục bản sao lưu?", "khôi phục dở dang"],
+    required: ["cài đặt AI", "Phân tích theo quy tắc", "Ngữ cảnh tài chính", "Bộ máy dự báo", "Phân tích rủi ro", "Cố vấn mục tiêu", "Cố vấn đầu tư", "Thiếu khóa API", "Đã kết nối", "Cần xử lý", "Đang kiểm tra", "Sẵn sàng kiểm tra", "Cần thiết lập", "Chưa lưu khóa API", "Đặt lại dữ liệu mẫu trong ", "Lỗi đặt lại dữ liệu mẫu", "Đã đặt lại dữ liệu mẫu", "Tệp JSON", "tệp sao lưu", "khóa API OpenAI", "Quản lý, sao lưu", "Giao diện", "Thời gian thực", "Đang hoạt động", "Trực tuyến", "Đang kết nối", "Xuất JSON", "Nhập JSON", "Khôi phục vào ", "khôi phục dở dang"],
   },
   {
     file: "transactions/TransactionsPage.tsx",
@@ -317,6 +317,8 @@ describe("MYFINANCE-VIETNAMESE-UI-SSOT-1", () => {
       if (check.file === "settings/SettingsPage.tsx") {
         // The confirmation names the target workspace, so it is no longer a fixed title.
         expect(source).toContain('title: `Đặt lại dữ liệu mẫu trong ${backupAccess.workspaceName}?`');
+        expect(source).toContain('title: `Khôi phục vào ${backupAccess.workspaceName}?`');
+        expect(source).toContain("restoreFinanceBackup(backup, expectedWorkspaceId)");
       }
       for (const fragment of check.forbidden) {
         expect(
