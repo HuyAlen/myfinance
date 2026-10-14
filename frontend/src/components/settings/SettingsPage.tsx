@@ -7,7 +7,6 @@ import ConfirmDialog, {
 } from "@/src/components/ui/ConfirmDialog";
 import { useToast } from "@/src/components/ui/ToastProvider";
 import { useTheme } from "@/src/components/theme/ThemeProvider";
-import { isThemePreference } from "@/src/lib/theme";
 import FormattedDateInput from "@/src/components/ui/FormattedDateInput";
 import { isDateDisplayFormat, DATE_DISPLAY_FORMAT_OPTIONS, DEFAULT_DATE_DISPLAY_FORMAT, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 import { notifyDateFormatSaved } from "@/src/lib/date/dateFormatPreference";
@@ -20,7 +19,6 @@ import {
 } from "@/src/lib/notifications/notificationPreferences";
 import { readAccountNotificationAlertThresholds } from "@/src/lib/notifications/notificationAlertThresholds";
 import {
-  NOTIFICATION_CLOUD_METADATA_KEY,
   pullNotificationCloudSettings,
   pushNotificationCloudSettings,
   toNotificationCloudSettings,
@@ -57,6 +55,8 @@ import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import { resolveBackupWorkspaceAccess } from "@/src/lib/settings/financeDataWorkspaceGuard";
 import { notifyFinancialTargetsSaved } from "@/src/lib/settings/useAccountFinancialTargets";
+import { SETTINGS_START_PAGES } from "@/src/lib/settings/effectivePreferences";
+import { saveAccountSettingsSection, type SettingsSaveSection } from "@/src/lib/settings/settingsSectionStorage";
 
 import {
   clearAllUserData,
@@ -284,12 +284,28 @@ export default function SettingsPage() {
   const [notifBudget, setNotifBudget] = useState(true);
   const [notifGoal, setNotifGoal] = useState(true);
   const [notifDebt, setNotifDebt] = useState(true);
-  const [notifInvest, setNotifInvest] = useState(false);
-  const [notifWeekly, setNotifWeekly] = useState(true);
-  const [notifMonthly, setNotifMonthly] = useState(true);
+  // Invest/weekly/monthly notifications remain unsupported; their historical
+  // snapshot fields are preserved by per-section writes, not edited here.
 
-  // Save feedback
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // Each Save owns its feedback; an AI-provider save cannot turn the financial/profile button green.
+  type SavedSection = SettingsSaveSection | "aiSettings";
+  const [savedSection, setSavedSection] = useState<SavedSection | null>(null);
+  const savedTimerRef = useRef<number | null>(null);
+  const cloudMetadataSaveRef = useRef(false);
+  // Keep unsaved drafts intact while Header refreshes notification settings.
+  const notificationDraftAccountRef = useRef<string | null>(null);
+  const financialDraftAccountRef = useRef<string | null>(null);
+  function markSectionSaved(section: SavedSection) {
+    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
+    setSavedSection(section);
+    savedTimerRef.current = window.setTimeout(() => {
+      setSavedSection(null);
+      savedTimerRef.current = null;
+    }, 2200);
+  }
+  useEffect(() => () => {
+    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
+  }, []);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
@@ -459,14 +475,6 @@ export default function SettingsPage() {
 
   const localSettingsKey = `myfinance-settings-v${SETTINGS_LOCAL_VERSION}:${user?.id ?? "anonymous"}`;
 
-  const buildLocalSettingsSnapshot = useCallback((): LocalSettingsSnapshot => ({
-    version: SETTINGS_LOCAL_VERSION,
-    profileName, profilePhone, timezone, lang, currency, dateFormat, defaultPage, theme,
-    finMonth, savingsGoal, budgetAlert, debtAlert, emergencyFund,
-    aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach,
-    notifBudget, notifGoal, notifDebt, notifInvest, notifWeekly, notifMonthly,
-  }), [profileName, profilePhone, timezone, lang, currency, dateFormat, defaultPage, theme, finMonth, savingsGoal, budgetAlert, debtAlert, emergencyFund, aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach, notifBudget, notifGoal, notifDebt, notifInvest, notifWeekly, notifMonthly]);
-
   useEffect(() => {
     if (!user?.id) return;
 
@@ -483,7 +491,7 @@ export default function SettingsPage() {
       if (typeof saved.currency === "string") setCurrency("VND");
       if (isDateDisplayFormat(saved.dateFormat)) setDateFormat(saved.dateFormat);
       if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
-      if (isThemePreference(saved.theme)) setTheme(saved.theme);
+      // ThemeProvider owns its separate immediate-persisted preference; ignore the legacy snapshot.theme.
       if (typeof saved.finMonth === "string") setFinMonth("1");
       if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
       if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
@@ -497,16 +505,15 @@ export default function SettingsPage() {
       if (typeof saved.notifBudget === "boolean") setNotifBudget(saved.notifBudget);
       if (typeof saved.notifGoal === "boolean") setNotifGoal(saved.notifGoal);
       if (typeof saved.notifDebt === "boolean") setNotifDebt(saved.notifDebt);
-      if (typeof saved.notifInvest === "boolean") setNotifInvest(saved.notifInvest);
-      if (typeof saved.notifWeekly === "boolean") setNotifWeekly(saved.notifWeekly);
-      if (typeof saved.notifMonthly === "boolean") setNotifMonthly(saved.notifMonthly);
+      // Retired unsupported notification fields intentionally remain untouched
+      // in localStorage for backward compatibility.
       } catch (error) {
         console.warn("[SettingsPage] local preferences could not be restored:", error);
       }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [authProfileName, localSettingsKey, setTheme, user?.id]);
+  }, [authProfileName, localSettingsKey, user?.id]);
 
   // Saved notification preferences are account-scoped and shared with Header.
   // Keep the editor in sync with same-tab saves and cross-tab storage updates.
@@ -515,12 +522,16 @@ export default function SettingsPage() {
     const accountId = user.id;
     const refreshNotificationToggles = () => {
       const saved = readAccountNotificationPreferences(accountId);
-      setNotifBudget(saved.notifBudget);
-      setNotifGoal(saved.notifGoal);
-      setNotifDebt(saved.notifDebt);
+      if (notificationDraftAccountRef.current !== accountId) {
+        setNotifBudget(saved.notifBudget);
+        setNotifGoal(saved.notifGoal);
+        setNotifDebt(saved.notifDebt);
+      }
       const thresholds = readAccountNotificationAlertThresholds(accountId);
-      setBudgetAlert(String(thresholds.budgetAlert));
-      setDebtAlert(String(thresholds.debtAlert));
+      if (financialDraftAccountRef.current !== accountId) {
+        setBudgetAlert(String(thresholds.budgetAlert));
+        setDebtAlert(String(thresholds.debtAlert));
+      }
     };
     const onStorage = (event: StorageEvent) => {
       if (event.key === localSettingsKey || event.key === null) refreshNotificationToggles();
@@ -886,6 +897,11 @@ export default function SettingsPage() {
   // Notification Save never validates/updates the profile. Only this
   // account's versioned notification metadata is sent to Supabase Auth.
   async function handleSaveNotifications() {
+    if (cloudMetadataSaveRef.current) {
+      toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
+      return;
+    }
+    cloudMetadataSaveRef.current = true;
     try {
       const chosen = { notifBudget, notifGoal, notifDebt };
       const cloud = toNotificationCloudSettings(
@@ -896,18 +912,83 @@ export default function SettingsPage() {
       }
       // Commit the on-device SSOT only after the cloud save succeeds.
       saveAccountNotificationPreferences(user?.id, chosen);
+      notificationDraftAccountRef.current = null;
       toast({ variant: "success", message: "Đã lưu thông báo trên tài khoản." });
     } catch (error) {
       toast({
         variant: "error",
         message: error instanceof Error
-          ? `Không thể lưu thông báo: ${error.message}`
+          ? "Không thể lưu thông báo: " + error.message
           : "Không thể lưu thông báo. Vui lòng thử lại.",
       });
+    } finally {
+      cloudMetadataSaveRef.current = false;
     }
   }
 
-  async function handleSavePrefs() {
+  async function handleSaveProfile() {
+    if (!birthDateInputValid || !isValidBirthDateInput(profileBirthDate)) {
+      toast({ variant: "error", message: "Ngày sinh không hợp lệ hoặc nằm trong tương lai." });
+      return;
+    }
+    const trimmedProfileName = profileName.trim();
+    if (trimmedProfileName.length > 80) {
+      toast({ variant: "error", message: "Họ và tên không được vượt quá 80 ký tự." });
+      return;
+    }
+    if (!user?.id) {
+      toast({ variant: "error", message: "Không có tài khoản để lưu hồ sơ." });
+      return;
+    }
+    if (cloudMetadataSaveRef.current) {
+      toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
+      return;
+    }
+    cloudMetadataSaveRef.current = true;
+    try {
+      if (user.id !== "local-ui-user") {
+        const { error: profileError } = await supabase.auth.updateUser({
+          data: { full_name: trimmedProfileName, name: trimmedProfileName, birth_date: profileBirthDate || null },
+        });
+        if (profileError) throw profileError;
+      }
+      saveAccountSettingsSection(user.id, "profile", {
+        profileName: trimmedProfileName, profilePhone, timezone: "Asia/Ho_Chi_Minh", currency: "VND",
+      });
+      setProfileName(trimmedProfileName);
+      markSectionSaved("profile");
+      toast({ variant: "success", message: "Đã lưu hồ sơ. Không thay đổi tùy chỉnh và thiết lập tài chính." });
+    } catch (error) {
+      console.error("[SettingsPage] profile save failed:", error);
+      toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu hồ sơ." });
+    } finally {
+      cloudMetadataSaveRef.current = false;
+    }
+  }
+
+  function handleSavePreferences() {
+    if (!user?.id) {
+      toast({ variant: "error", message: "Không có tài khoản để lưu tùy chỉnh." });
+      return;
+    }
+    if (!isDateDisplayFormat(dateFormat) || !SETTINGS_START_PAGES.some((path) => path === defaultPage)) {
+      toast({ variant: "error", message: "Định dạng ngày hoặc trang mặc định không hợp lệ." });
+      return;
+    }
+    try {
+      saveAccountSettingsSection(user.id, "preferences", {
+        lang: "vi", dateFormat, defaultPage,
+      });
+      notifyDateFormatSaved();
+      // ThemeProvider persists the selected theme immediately in its own SSOT.
+      markSectionSaved("preferences");
+      toast({ variant: "success", message: "Đã lưu tùy chỉnh. Giao diện được áp dụng ngay khi chọn." });
+    } catch (error) {
+      toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu tùy chỉnh." });
+    }
+  }
+
+  async function handleSaveFinancial() {
     const numericRules = [
       ["Mục tiêu tiết kiệm", savingsGoal, 0, 100],
       ["Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100],
@@ -917,32 +998,27 @@ export default function SettingsPage() {
     for (const [label, raw, min, max] of numericRules) {
       const value = Number(raw);
       if (String(raw).trim() === "" || !Number.isFinite(value) || value < min || value > max) {
-        toast({ variant: "error", message: `${label} phải nằm trong khoảng ${min}–${max}.` });
+        toast({ variant: "error", message: label + " phải nằm trong khoảng " + min + "–" + max + "." });
         return;
       }
     }
-
     if (!Number.isInteger(Number(emergencyFund))) {
       toast({ variant: "error", message: "Quỹ khẩn cấp phải là số tháng nguyên từ 1 đến 24." });
       return;
     }
-
-    if (!birthDateInputValid || !isValidBirthDateInput(profileBirthDate)) {
-      toast({ variant: "error", message: "Ngày sinh không hợp lệ hoặc nằm trong tương lai." });
+    if (!user?.id) {
+      toast({ variant: "error", message: "Không có tài khoản để lưu thiết lập tài chính." });
       return;
     }
-
-    const trimmedProfileName = profileName.trim();
-    if (trimmedProfileName.length > 80) {
-      toast({ variant: "error", message: "Họ và tên không được vượt quá 80 ký tự." });
+    if (cloudMetadataSaveRef.current) {
+      toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
       return;
     }
-
+    cloudMetadataSaveRef.current = true;
     try {
-      let preservedNotificationFlags = readAccountNotificationPreferences(user?.id);
-      if (user?.id && user.id !== "local-ui-user") {
-        // A different device may have saved newer switches: do not overwrite them
-        // while the user is only editing financial/profile settings.
+      if (user.id !== "local-ui-user") {
+        let preservedNotificationFlags = readAccountNotificationPreferences(user.id);
+        // Pull the latest CLOUD choices, never take unsaved notification toggles from this form.
         const cloudSaved = await pullNotificationCloudSettings(user.id, supabase.auth);
         if (cloudSaved) {
           preservedNotificationFlags = {
@@ -951,49 +1027,47 @@ export default function SettingsPage() {
             notifDebt: cloudSaved.notifDebt,
           };
         }
-        const { error: profileError } = await supabase.auth.updateUser({
-          data: {
-            full_name: trimmedProfileName,
-            name: trimmedProfileName,
-            birth_date: profileBirthDate || null,
-            [NOTIFICATION_CLOUD_METADATA_KEY]: toNotificationCloudSettings(
-              preservedNotificationFlags,
-              { budgetAlert: Number(budgetAlert), debtAlert: Number(debtAlert) },
-            ),
-          },
-        });
-        if (profileError) throw profileError;
+        await pushNotificationCloudSettings(
+          user.id,
+          toNotificationCloudSettings(preservedNotificationFlags, {
+            budgetAlert: Number(budgetAlert), debtAlert: Number(debtAlert),
+          }),
+          supabase.auth,
+        );
       }
-
-      const localSnapshot = {
-        ...buildLocalSettingsSnapshot(),
-        // App-wide i18n, FX conversion and off-calendar months are not implemented yet.
-        // Never preserve their old misleading selections on a successful Save.
-        lang: "vi", currency: "VND", timezone: "Asia/Ho_Chi_Minh", finMonth: "1",
-        // A different section's Save must never overwrite notification choices.
-        ...readAccountNotificationPreferences(user?.id),
-        ...preservedNotificationFlags,
-        profileName: trimmedProfileName,
-      };
-      window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
-      notifyDateFormatSaved();
+      saveAccountSettingsSection(user.id, "financial", {
+        finMonth: "1", savingsGoal, budgetAlert, debtAlert, emergencyFund,
+      });
+      financialDraftAccountRef.current = null;
+      // Notify subscribers only AFTER the local write succeeds.
       notifyNotificationPreferencesSaved();
       notifyFinancialTargetsSaved();
-      setProfileName(trimmedProfileName);
-      setSaveSuccess(true);
-      window.setTimeout(() => setSaveSuccess(false), 2200);
-      toast({ variant: "success", message: "Đã lưu hồ sơ và tùy chỉnh." });
+      markSectionSaved("financial");
+      toast({ variant: "success", message: "Đã lưu thiết lập tài chính. Không cập nhật hồ sơ hoặc tính năng AI." });
     } catch (error) {
-      console.error("[SettingsPage] profile/preferences save failed:", error);
-      toast({
-        variant: "error",
-        message:
-          error instanceof Error
-            ? `Không thể lưu hồ sơ: ${error.message}`
-            : "Không thể lưu hồ sơ. Vui lòng thử lại.",
-      });
+      console.error("[SettingsPage] financial save failed:", error);
+      toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu thiết lập tài chính." });
+    } finally {
+      cloudMetadataSaveRef.current = false;
     }
   }
+
+  function handleSaveAIFeatures() {
+    if (!user?.id) {
+      toast({ variant: "error", message: "Không có tài khoản để lưu tùy chọn AI." });
+      return;
+    }
+    try {
+      saveAccountSettingsSection(user.id, "aiFeatures", {
+        aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach,
+      });
+      markSectionSaved("aiFeatures");
+      toast({ variant: "success", message: "Đã lưu lựa chọn tính năng AI trên trình duyệt; chưa thay đổi cấu hình AI máy chủ." });
+    } catch (error) {
+      toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu lựa chọn AI." });
+    }
+  }
+
   function getAISettingsPayload() {
     return {
       provider:
@@ -1061,8 +1135,7 @@ export default function SettingsPage() {
         getAISettingsPayload(),
       );
       applyAISettings(settings);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2200);
+      markSectionSaved("aiSettings");
 
       toast({
         variant: "success",
@@ -1395,19 +1468,19 @@ export default function SettingsPage() {
               </div>
               <div className="mt-6 flex items-center gap-3">
                 <button
-                  onClick={handleSavePrefs}
+                  onClick={handleSaveProfile}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
-                    (saveSuccess
+                    (savedSection === "profile"
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
                   }
                 >
-                  {saveSuccess ? <Check size={15} /> : null}
-                  {saveSuccess ? "Đã lưu!" : "Lưu thay đổi"}
+                  {savedSection === "profile" ? <Check size={15} /> : null}
+                  {savedSection === "profile" ? "Đã lưu!" : "Lưu hồ sơ"}
                 </button>
                 <p className="text-xs text-slate-400">
-                  Họ tên và ngày sinh đồng bộ với tài khoản; các tùy chỉnh khác lưu trên trình duyệt
+                  Họ tên và ngày sinh đồng bộ tài khoản; điện thoại và lựa chọn hiển thị lưu riêng trên trình duyệt.
                 </p>
               </div>
             </div>
@@ -1542,6 +1615,10 @@ export default function SettingsPage() {
                 <div className="border-t border-slate-100" />
                 <SeasonalThemeSettingsCard />
                 <SeasonalSkinPicker />
+                <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Ngôn ngữ, định dạng ngày và trang mặc định được lưu riêng cho tài khoản này trên trình duyệt.</p>
+                <button type="button" onClick={handleSavePreferences} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                  {savedSection === "preferences" ? "Đã lưu!" : "Lưu tùy chỉnh"}
+                </button>
               </div>
             </div>
           </div>
@@ -1596,7 +1673,7 @@ export default function SettingsPage() {
                       min="0"
                       max="100"
                       value={budgetAlert}
-                      onChange={(e) => setBudgetAlert(e.target.value)}
+                      onChange={(e) => { financialDraftAccountRef.current = user?.id ?? null; setBudgetAlert(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
@@ -1615,7 +1692,7 @@ export default function SettingsPage() {
                       min="0"
                       max="200"
                       value={debtAlert}
-                      onChange={(e) => setDebtAlert(e.target.value)}
+                      onChange={(e) => { financialDraftAccountRef.current = user?.id ?? null; setDebtAlert(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
@@ -1645,16 +1722,16 @@ export default function SettingsPage() {
               </div>
               <div className="mt-6">
                 <button
-                  onClick={handleSavePrefs}
+                  onClick={handleSaveFinancial}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
-                    (saveSuccess
+                    (savedSection === "financial"
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
                   }
                 >
-                  {saveSuccess ? <Check size={15} /> : null}
-                  {saveSuccess ? "Đã lưu!" : "Lưu thiết lập"}
+                  {savedSection === "financial" ? <Check size={15} /> : null}
+                  {savedSection === "financial" ? "Đã lưu!" : "Lưu thiết lập"}
                 </button>
               </div>
             </div>
@@ -1949,17 +2026,17 @@ export default function SettingsPage() {
                       disabled={aiSettingsLoading}
                       className={
                         "inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition " +
-                        (saveSuccess
+                        (savedSection === "aiSettings"
                           ? "bg-emerald-600 shadow-emerald-200"
                           : "bg-blue-600 shadow-blue-200 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60")
                       }
                     >
-                      {saveSuccess ? (
+                      {savedSection === "aiSettings" ? (
                         <Check size={15} />
                       ) : (
                         <Sparkles size={15} />
                       )}
-                      {saveSuccess ? "Đã lưu!" : "Lưu cài đặt AI"}
+                      {savedSection === "aiSettings" ? "Đã lưu!" : "Lưu cài đặt AI"}
                     </button>
 
                     <button
@@ -2066,7 +2143,7 @@ export default function SettingsPage() {
                   Tính năng trợ lý AI
                 </h3>
                 <p className="mt-1 text-xs font-medium text-slate-400">
-                  Bật/tắt các phân hệ phân tích dùng chung cho trợ lý AI.
+                  Các công tắc này mới lưu lựa chọn trên trình duyệt; chưa bật/tắt các pipeline AI trên máy chủ.
                 </p>
               </div>
               <div className="space-y-1">
@@ -2111,7 +2188,7 @@ export default function SettingsPage() {
                   onChange={() => setAiInvestCoach((v) => !v)}
                 />
               </div>
-              <button type="button" onClick={handleSavePrefs} className="mt-4 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">Lưu tính năng AI</button>
+              <button type="button" onClick={handleSaveAIFeatures} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">{savedSection === "aiFeatures" ? "Đã lưu!" : "Lưu tính năng AI"}</button>
             </div>
           </div>
 
@@ -2132,7 +2209,7 @@ export default function SettingsPage() {
                   label="Cảnh báo ngân sách"
                   desc="Bắt đầu từ ngưỡng % đã chọn; luôn nhắc khi đạt hoặc vượt giới hạn"
                   checked={notifBudget}
-                  onChange={() => setNotifBudget((v) => !v)}
+                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifBudget((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -2140,7 +2217,7 @@ export default function SettingsPage() {
                   label="Cột mốc mục tiêu"
                   desc="Các cột mốc 25%, 50%, 75% và hoàn thành 100%"
                   checked={notifGoal}
-                  onChange={() => setNotifGoal((v) => !v)}
+                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifGoal((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -2148,7 +2225,7 @@ export default function SettingsPage() {
                   label="Cảnh báo khoản nợ"
                   desc="Nhắc nợ trả chậm và dư nợ vượt ngưỡng % thu nhập tháng"
                   checked={notifDebt}
-                  onChange={() => setNotifDebt((v) => !v)}
+                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifDebt((v) => !v); }}
                 />
                 <div data-notification-unavailable="true" className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-bold text-slate-600">Chưa hỗ trợ: Cảnh báo đầu tư · Tổng kết tuần · Báo cáo tháng</p>

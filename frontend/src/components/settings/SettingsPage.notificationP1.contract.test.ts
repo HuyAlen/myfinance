@@ -8,7 +8,7 @@ const engine = get("lib/notifications/financeNotifications.ts");
 describe("MYFINANCE-NOTIFICATION-P1 threshold + account metadata sync wiring",()=>{
   it("Settings saves notification metadata only after authenticated cloud write, and never touches profile",()=>{
     const start=settings.indexOf("async function handleSaveNotifications() {");
-    const end=settings.indexOf("async function handleSavePrefs() {",start);
+    const end=settings.indexOf("async function handleSaveProfile() {",start);
     expect(start).toBeGreaterThan(-1);
     const content=settings.slice(start,end);
     expect(content).toContain("await pushNotificationCloudSettings(");
@@ -20,8 +20,8 @@ describe("MYFINANCE-NOTIFICATION-P1 threshold + account metadata sync wiring",()
   it("financial settings save includes thresholds and prior saved toggles without inventing a separate key",()=>{
     expect(settings).toContain("toNotificationCloudSettings(");
     expect(settings).toContain("const cloudSaved = await pullNotificationCloudSettings(user.id, supabase.auth);");
-    expect(settings).toContain("...preservedNotificationFlags,");
-    expect(settings).toContain("...readAccountNotificationPreferences(user?.id)");
+    expect(settings).toContain("toNotificationCloudSettings(preservedNotificationFlags,");
+    expect(settings).toContain('saveAccountSettingsSection(user.id, "financial",');
     expect(settings).toContain("notifyNotificationPreferencesSaved()");
     expect(settings).toContain('["Ngưỡng cảnh báo nợ", debtAlert, 0, 200]');
   });

@@ -17,9 +17,12 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
   it("persists a versioned per-user local settings snapshot instead of showing fake save feedback", () => {
     expect(source).toContain("SETTINGS_LOCAL_VERSION");
     expect(source).toContain("myfinance-settings-v${SETTINGS_LOCAL_VERSION}:${user?.id ?? \"anonymous\"}");
-    const save = regionBetween("function handleSavePrefs() {", "function getAISettingsPayload()");
-    expect(save).toContain("window.localStorage.setItem(");
-    expect(save).toContain("buildLocalSettingsSnapshot()");
+    const saves = regionBetween("async function handleSaveProfile() {", "function getAISettingsPayload()");
+    for (const section of ["profile", "preferences", "financial", "aiFeatures"]) {
+      expect(saves).toContain(`saveAccountSettingsSection(user.id, "${section}"`);
+    }
+    expect(saves).not.toContain("buildLocalSettingsSnapshot()");
+    expect(saves).not.toContain("window.localStorage.setItem(");
   });
 
   it("restores profile, preferences, finance thresholds, AI modules and notification toggles from persistence", () => {
@@ -29,8 +32,12 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
       "setDateFormat", "setDefaultPage", "setTheme", "setFinMonth", "setSavingsGoal",
       "setBudgetAlert", "setDebtAlert", "setEmergencyFund", "setAiInsights", "setAiForecast",
       "setAiRisk", "setAiGoalCoach", "setAiInvestCoach", "setNotifBudget", "setNotifGoal",
-      "setNotifDebt", "setNotifInvest", "setNotifWeekly", "setNotifMonthly",
+      "setNotifDebt",
     ]) expect(source).toContain(`${setter}(`);
+    // Unsupported switches remain backward-compatible snapshot data, not editor state.
+    for (const retired of ["setNotifInvest", "setNotifWeekly", "setNotifMonthly"]) {
+      expect(source).not.toContain(`${retired}(`);
+    }
   });
 
   it("makes profile inputs controlled instead of uncontrolled placeholders", () => {
@@ -42,7 +49,7 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
   });
 
   it("validates finance preference ranges before persistence", () => {
-    const save = regionBetween("function handleSavePrefs() {", "function getAISettingsPayload()");
+    const save = regionBetween("async function handleSaveFinancial() {", "function handleSaveAIFeatures() {");
     expect(save).toContain('"Mục tiêu tiết kiệm", savingsGoal, 0, 100');
     expect(save).toContain('"Ngưỡng cảnh báo ngân sách", budgetAlert, 0, 100');
     expect(save).toContain('"Ngưỡng cảnh báo nợ", debtAlert, 0, 200');

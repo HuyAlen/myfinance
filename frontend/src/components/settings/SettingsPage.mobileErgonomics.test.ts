@@ -76,7 +76,11 @@ describe("SettingsPage iPhone navigation and control ergonomics (SETTINGS-MOBILE
     expect(source).toContain("SETTINGS_STATS_TIMEOUT_MS = 10_000");
     expect(source).toContain("SETTINGS_INITIAL_RETRY_MS = 750");
     expect(source).toContain("recoveryInFlightRef");
-    expect(source).toContain("window.localStorage.setItem");
+    // Persistence is owned by the section writer, not the page component.
+    expect(source).toContain("saveAccountSettingsSection(user.id, ");
+    const writer = readFileSync(path.resolve(__dirname, "../../lib/settings/settingsSectionStorage.ts"), "utf8");
+    expect(writer).toContain("accountSettingsKey(accountId)");
+    expect(writer).toContain("target.setItem(key, JSON.stringify(");
     expect(source).toContain("testAIFinanceConnection(accessToken)");
   });
 });

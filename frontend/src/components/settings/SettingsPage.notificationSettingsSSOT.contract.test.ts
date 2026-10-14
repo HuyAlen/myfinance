@@ -23,7 +23,7 @@ function regionBetween(source: string, from: string, to: string) {
 describe("MYFINANCE-NOTIFICATION-SETTINGS-SSOT-1 wiring", () => {
   it("Settings notification-only save never validates or updates the profile", () => {
     const handler = regionBetween(
-      settings, "function handleSaveNotifications() {", "async function handleSavePrefs() {",
+      settings, "function handleSaveNotifications() {", "async function handleSaveProfile() {",
     );
     expect(handler).toContain("saveAccountNotificationPreferences(user?.id");
     for (const forbidden of ["updateUser(", "birthDateInputValid", "numericRules", "buildLocalSettingsSnapshot()"]){
@@ -33,9 +33,11 @@ describe("MYFINANCE-NOTIFICATION-SETTINGS-SSOT-1 wiring", () => {
   });
 
   it("another Settings Save preserves persisted notification flags, not unsaved drafts", () => {
-    const handler = regionBetween(settings,"async function handleSavePrefs() {", "function getAISettingsPayload() {");
-    expect(handler).toContain("...readAccountNotificationPreferences(user?.id)");
-    expect(handler).toContain("window.localStorage.setItem(localSettingsKey");
+    const handler = regionBetween(settings,"async function handleSaveFinancial() {", "function handleSaveAIFeatures() {");
+    expect(handler).toContain('saveAccountSettingsSection(user.id, "financial",');
+    expect(handler).toContain("readAccountNotificationPreferences(user.id)");
+    expect(handler).not.toContain("saveAccountNotificationPreferences(");
+    expect(handler).not.toContain("profileName");
     expect(settings).toContain("NOTIFICATION_PREFERENCES_CHANGED");
     expect(settings).toContain('window.addEventListener("storage", onStorage)');
   });
