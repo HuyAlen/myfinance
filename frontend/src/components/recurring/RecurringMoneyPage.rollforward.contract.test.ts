@@ -18,10 +18,11 @@ describe("RECURRING-NEXT-RUN-ROLLFORWARD-1 page wiring", () => {
 
   it("renders the rolled effective next date while keeping edit form on stored anchor", () => {
     expect(source).toContain(
-      "formatDate(schedule.effectiveNextRunDate ?? schedule.nextRunDate)",
+      "formatDate(schedule.effectiveNextRunDate ?? schedule.nextRunDate,dateDisplayFormat)",
     );
     expect(source).toContain(
       "nextRunDate: schedule.nextRunDate ?? localDateKey()",
     );
+    expect(source).toContain("dateDisplayFormat={dateDisplayFormat}");
   });
 });
