@@ -21,8 +21,8 @@ describe("SETTINGS-EFFECTIVE-PREFERENCES-1 Settings SSOT", () => {
     expect(src).toContain('finMonth: "1", savingsGoal, budgetAlert, debtAlert, emergencyFund');
   });
   it("does not remove editable savings goals, emergency targets or existing notification controls", () => {
-    expect(src).toContain('onChange={(e) => setSavingsGoal(e.target.value)}');
-    expect(src).toContain('onChange={(e) => setEmergencyFund(e.target.value)}');
+    expect(src).toContain('onChange={(e) => { markDirty("financial"); setSavingsGoal(e.target.value); }}');
+    expect(src).toContain('onChange={(e) => { markDirty("financial"); setEmergencyFund(e.target.value); }}');
     expect(src).toContain('onClick={handleSaveNotifications}');
     expect(src).toContain('notifyNotificationPreferencesSaved()');
   });
