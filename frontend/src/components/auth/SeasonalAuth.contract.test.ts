@@ -28,7 +28,9 @@ describe("MYFINANCE-SEASONAL-AUTH-CINEMATIC-LIGHT-1 — auth behavior preserved"
 
   it("preserves sign-in, sign-up, reset, form submit, and route behavior", () => {
     expect(login).toContain("await signIn(email, password)");
-    expect(login).toContain('router.replace("/")');
+    expect(login).toContain("router.replace(resolvePostLoginStartPage(user.id))");
+    expect(login).toContain("router.replace(resolvePostLoginStartPage(data.user?.id))");
+    expect(login).toContain('import { resolvePostLoginStartPage } from "@/src/lib/settings/effectivePreferences"');
     expect(signup).toContain("await signUp(email, password)");
     expect(forgot).toContain("await resetPassword(email)");
     for (const page of [login, signup, forgot]) {
