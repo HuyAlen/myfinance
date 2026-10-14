@@ -23,7 +23,7 @@ describe("PROFILE-NAME-1 cloud profile name and header display", () => {
   it("keeps browser settings but makes cloud profile name authoritative", () => {
     expect(settings).toContain("const authProfileName =");
     expect(settings).toContain("!authProfileName && typeof saved.profileName");
-    expect(settings).toContain("[authProfileName, localSettingsKey, setTheme, user?.id]");
+    expect(settings).toContain("[authProfileName, localSettingsKey, user?.id]");
     expect(settings).toContain("setProfileName(authProfileName)");
   });
 
@@ -34,14 +34,16 @@ describe("PROFILE-NAME-1 cloud profile name and header display", () => {
   });
 
   it("updates the profile through an async save boundary", () => {
-    expect(settings).toContain("async function handleSavePrefs()");
+    expect(settings).toContain("async function handleSaveProfile()");
+    expect(settings).toContain('saveAccountSettingsSection(user.id, "profile",');
+    expect(settings).toContain("cloudMetadataSaveRef.current = true");
     expect(settings).toContain("if (profileError) throw profileError");
-    expect(settings).toContain("Đã lưu hồ sơ và tùy chỉnh.");
+    expect(settings).toContain("Đã lưu hồ sơ. Không thay đổi tùy chỉnh và thiết lập tài chính.");
   });
 
   it("states the real cloud-vs-browser persistence contract in the profile UI", () => {
     expect(settings).toContain(
-      "Họ tên được đồng bộ với tài khoản; các tùy chỉnh khác lưu trên trình duyệt",
+      "Họ tên và ngày sinh đồng bộ tài khoản; điện thoại và lựa chọn hiển thị lưu riêng trên trình duyệt.",
     );
   });
 
