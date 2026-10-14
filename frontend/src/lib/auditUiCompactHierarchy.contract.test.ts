@@ -50,7 +50,10 @@ describe("AUDIT-UI-1.1 compact activity hierarchy", () => {
     expect(activityPage).toContain("actorLabel");
     expect(activityPage).toContain("actorRoleLabel");
     expect(activityPage).toContain("formatEventClock(event.created_at)");
-    expect(activityPage).toContain("formatEventTime(event.created_at)");
+    // Expanded details honor the account's date-display preference.
+    expect(activityPage).toContain("formatEventTime(event.created_at,dateDisplayFormat)");
+    expect(activityPage).toContain("const dateDisplayFormat = useAccountDateFormat();");
+    expect(activityPage).toContain("formatTimestampForDisplay(value,dateDisplayFormat)");
   });
 
   it("gives true old and new values equal readable columns while preserving action-specific headings", () => {
