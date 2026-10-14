@@ -5,8 +5,8 @@ const source = readFileSync(path.resolve(__dirname, "SettingsPage.tsx"), "utf8")
 describe("SETTINGS-TRUTHFUL-UX-POLISH-1 source contracts", () => {
   it("shows distinct idle, dirty, saving, saved and error per section", () => {
     expect(source).toContain("resolveSettingsSaveOutcome(");
-    expect(source).toContain('case "saving": return "Đang lưu…"');
-    expect(source).toContain('case "dirty": return "Chưa lưu · "');
+    expect(source).toContain('saveStatus(section) === "saving" ? "Đang lưu…"');
+    expect(source).toContain('saveStatus(section) === "dirty" ? "Chưa lưu · "');
     for (const section of ["profile", "preferences", "financial", "aiFeatures", "aiSettings", "notifications"]) {
       expect(source).toContain(`markSaveStarted("${section}")`);
       expect(source).toContain(`markSaveSettled("${section}", revision, true)`);
