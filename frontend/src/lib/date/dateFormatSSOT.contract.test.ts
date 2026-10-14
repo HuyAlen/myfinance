@@ -11,7 +11,11 @@ const input=read("src/components/ui/FormattedDateInput.tsx");
 describe("MYFINANCE-DATE-FORMAT-SSOT-1 end-to-end wiring contract",()=>{
  it("retains one source in account-scoped settings snapshot",()=>{
   expect(settings).toContain("SETTINGS_LOCAL_VERSION = 1");
-  expect(settings).toContain("buildLocalSettingsSnapshot()");
+  const sectionWriter=read("src/lib/settings/settingsSectionStorage.ts");
+  expect(settings).not.toContain("buildLocalSettingsSnapshot()");
+  expect(settings).toContain('saveAccountSettingsSection(user.id, "preferences",');
+  expect(sectionWriter).toContain("accountSettingsKey(accountId)");
+  expect(sectionWriter).toContain("target.setItem(key, JSON.stringify(");
   expect(settings).toContain("notifyDateFormatSaved()");
   expect(settings).toContain("isDateDisplayFormat(saved.dateFormat)");
   expect(preference).toContain("myfinance-settings-v${SETTINGS_DATE_FORMAT_VERSION}:${accountId}");
