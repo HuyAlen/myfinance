@@ -182,7 +182,15 @@ describe("APP-DARK-MODE-1 cross-page theme contract", () => {
 
   it("exposes Light, Dark and Device choices in Settings and validates legacy saved values", () => {
     expect(settings).toContain('useTheme()');
-    expect(settings).toContain('isThemePreference(saved.theme)');
+    // ThemeProvider, not the account Settings snapshot, owns theme validation/persistence.
+    const themeProvider = readFileSync(
+      path.resolve(__dirname, "../components/theme/ThemeProvider.tsx"), "utf8",
+    );
+    expect(themeProvider).toContain("isThemePreference(stored) ? stored : fallback");
+    expect(themeProvider).toContain("window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme)");
+    expect(themeProvider).toContain('window.addEventListener("storage", onStorage)');
+    expect(settings).toContain("ThemeProvider owns its separate immediate-persisted preference");
+    expect(settings).not.toContain("setTheme(saved.theme)");
     expect(settings).toContain('{ val: "light", label: "Sáng" }');
     expect(settings).toContain('{ val: "dark", label: "Tối" }');
     expect(settings).toContain('{ val: "system", label: "Thiết bị" }');
