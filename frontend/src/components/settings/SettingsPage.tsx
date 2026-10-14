@@ -290,12 +290,12 @@ export default function SettingsPage() {
 
   // Each Save owns its feedback; revisions prevent an older request from marking new edits saved.
   type SavedSection = SettingsSaveSection | "aiSettings";
-  const [savedSection, setSavedSection] = useState<SavedSection | null>(null);
   const [saveStatuses, setSaveStatuses] = useState<Partial<Record<SavedSection | "notifications", SettingsSaveStatus>>>({});
   const revisionRef = useRef<Partial<Record<SavedSection | "notifications", number>>>({});
   function markDirty(section: SavedSection | "notifications") {
     revisionRef.current[section] = (revisionRef.current[section] ?? 0) + 1;
     setSaveStatuses((previous) => ({ ...previous, [section]: "dirty" }));
+    if (section === "aiSettings") setAiTestStatus("idle");
   }
   function saveStatus(section: SavedSection | "notifications") { return saveStatuses[section] ?? "idle"; }
   function saveLabel(section: SavedSection | "notifications", normal: string) {
@@ -311,22 +311,10 @@ export default function SettingsPage() {
     setSaveStatuses((prev) => ({ ...prev, [section]: outcome }));
     return outcome;
   }
-  const savedTimerRef = useRef<number | null>(null);
   const cloudMetadataSaveRef = useRef(false);
   // Keep unsaved drafts intact while Header refreshes notification settings.
   const notificationDraftAccountRef = useRef<string | null>(null);
   const financialDraftAccountRef = useRef<string | null>(null);
-  function markSectionSaved(section: SavedSection) {
-    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
-    setSavedSection(section);
-    savedTimerRef.current = window.setTimeout(() => {
-      setSavedSection(null);
-      savedTimerRef.current = null;
-    }, 2200);
-  }
-  useEffect(() => () => {
-    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current);
-  }, []);
   const [pendingAction, setPendingAction] = useState<PendingConfirm | null>(
     null,
   );
@@ -934,7 +922,7 @@ export default function SettingsPage() {
       }
       // Commit the on-device SSOT only after the cloud save succeeds.
       saveAccountNotificationPreferences(user?.id, chosen);
-      notificationDraftAccountRef.current = null;
+      if ((revisionRef.current.notifications ?? 0) === revision) notificationDraftAccountRef.current = null;
       if (markSaveSettled("notifications", revision, true) === "saved") toast({ variant: "success", message: user?.id === "local-ui-user" ? "Đã lưu thông báo trên trình duyệt này." : "Đã lưu thông báo trên tài khoản." });
     } catch (error) {
       markSaveSettled("notifications", revision, false);
@@ -979,9 +967,10 @@ export default function SettingsPage() {
       saveAccountSettingsSection(user.id, "profile", {
         profileName: trimmedProfileName, profilePhone, timezone: "Asia/Ho_Chi_Minh", currency: "VND",
       });
-      setProfileName(trimmedProfileName);
-      if (markSaveSettled("profile", revision, true) === "saved") markSectionSaved("profile");
-      toast({ variant: "success", message: "Đã lưu hồ sơ. Không thay đổi tùy chỉnh và thiết lập tài chính." });
+      if (markSaveSettled("profile", revision, true) === "saved") {
+        setProfileName(trimmedProfileName);
+        toast({ variant: "success", message: "Đã lưu hồ sơ. Không thay đổi tùy chỉnh và thiết lập tài chính." });
+      }
     } catch (error) {
       markSaveSettled("profile", revision, false);
       console.error("[SettingsPage] profile save failed:", error);
@@ -1007,8 +996,9 @@ export default function SettingsPage() {
       });
       notifyDateFormatSaved();
       // ThemeProvider persists the selected theme immediately in its own SSOT.
-      if (markSaveSettled("preferences", revision, true) === "saved") markSectionSaved("preferences");
-      toast({ variant: "success", message: "Đã lưu tùy chỉnh. Giao diện được áp dụng ngay khi chọn." });
+      if (markSaveSettled("preferences", revision, true) === "saved") {
+        toast({ variant: "success", message: "Đã lưu tùy chỉnh trên trình duyệt này. Giao diện được áp dụng ngay khi chọn." });
+      }
     } catch (error) {
       markSaveSettled("preferences", revision, false);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu tùy chỉnh." });
@@ -1066,12 +1056,13 @@ export default function SettingsPage() {
       saveAccountSettingsSection(user.id, "financial", {
         finMonth: "1", savingsGoal, budgetAlert, debtAlert, emergencyFund,
       });
-      financialDraftAccountRef.current = null;
+      if ((revisionRef.current.financial ?? 0) === revision) financialDraftAccountRef.current = null;
       // Notify subscribers only AFTER the local write succeeds.
       notifyNotificationPreferencesSaved();
       notifyFinancialTargetsSaved();
-      if (markSaveSettled("financial", revision, true) === "saved") markSectionSaved("financial");
-      toast({ variant: "success", message: "Đã lưu thiết lập tài chính. Không cập nhật hồ sơ hoặc tính năng AI." });
+      if (markSaveSettled("financial", revision, true) === "saved") {
+        toast({ variant: "success", message: "Đã lưu thiết lập tài chính. Không cập nhật hồ sơ hoặc tính năng AI." });
+      }
     } catch (error) {
       markSaveSettled("financial", revision, false);
       console.error("[SettingsPage] financial save failed:", error);
@@ -1091,8 +1082,9 @@ export default function SettingsPage() {
       saveAccountSettingsSection(user.id, "aiFeatures", {
         aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach,
       });
-      if (markSaveSettled("aiFeatures", revision, true) === "saved") markSectionSaved("aiFeatures");
-      toast({ variant: "success", message: "Đã lưu lựa chọn tính năng AI trên trình duyệt; chưa thay đổi cấu hình AI máy chủ." });
+      if (markSaveSettled("aiFeatures", revision, true) === "saved") {
+        toast({ variant: "success", message: "Đã lưu lựa chọn tính năng AI trên trình duyệt; chưa thay đổi cấu hình AI máy chủ." });
+      }
     } catch (error) {
       markSaveSettled("aiFeatures", revision, false);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu lựa chọn AI." });
@@ -1167,12 +1159,9 @@ export default function SettingsPage() {
         getAISettingsPayload(),
       );
       if ((revisionRef.current.aiSettings ?? 0) === revision) applyAISettings(settings);
-      if (markSaveSettled("aiSettings", revision, true) === "saved") markSectionSaved("aiSettings");
-
-      toast({
-        variant: "success",
-        message: "Đã lưu cài đặt AI an toàn qua API máy chủ.",
-      });
+      if (markSaveSettled("aiSettings", revision, true) === "saved") {
+        toast({ variant: "success", message: "Đã lưu cài đặt AI an toàn qua API máy chủ." });
+      }
     } catch (error) {
       markSaveSettled("aiSettings", revision, false);
       toast({
@@ -1505,12 +1494,12 @@ export default function SettingsPage() {
                   disabled={saveStatus("profile") === "saving"}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
-                    (savedSection === "profile"
+                    (saveStatus("profile") === "saved"
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
                   }
                 >
-                  {savedSection === "profile" ? <Check size={15} /> : null}
+                  {saveStatus("profile") === "saved" ? <Check size={15} /> : null}
                   {saveLabel("profile", "Lưu hồ sơ")}
                     <span className="sr-only" role="status" aria-live="polite">{settingsSaveMessage(saveStatus("profile"), "hồ sơ tài khoản / trình duyệt này")}</span>
                 </button>
@@ -1762,12 +1751,12 @@ export default function SettingsPage() {
                   disabled={saveStatus("financial") === "saving"}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
-                    (savedSection === "financial"
+                    (saveStatus("financial") === "saved"
                       ? "bg-emerald-600 shadow-emerald-200"
                       : "bg-blue-600 shadow-blue-200 hover:bg-blue-700")
                   }
                 >
-                  {savedSection === "financial" ? <Check size={15} /> : null}
+                  {saveStatus("financial") === "saved" ? <Check size={15} /> : null}
                   {saveLabel("financial", "Lưu thiết lập")}
                     <span className="sr-only" role="status" aria-live="polite">{settingsSaveMessage(saveStatus("financial"), "tài khoản / trình duyệt này")}</span>
                 </button>
@@ -2061,15 +2050,15 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleSaveAISettings}
-                      disabled={aiSettingsLoading}
+                      disabled={aiSettingsLoading || saveStatus("aiSettings") === "saving"}
                       className={
                         "inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition " +
-                        (savedSection === "aiSettings"
+                        (saveStatus("aiSettings") === "saved"
                           ? "bg-emerald-600 shadow-emerald-200"
                           : "bg-blue-600 shadow-blue-200 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60")
                       }
                     >
-                      {savedSection === "aiSettings" ? (
+                      {saveStatus("aiSettings") === "saved" ? (
                         <Check size={15} />
                       ) : (
                         <Sparkles size={15} />
@@ -2081,7 +2070,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleTestAIConnection}
-                      disabled={aiTestStatus === "testing"}
+                      disabled={aiSettingsLoading || aiTestStatus === "testing"}
                       className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RefreshCcw
@@ -2274,7 +2263,7 @@ export default function SettingsPage() {
               </div>
               <p className="mt-3 text-xs leading-5 text-slate-500">Đồng bộ theo tài khoản khi có mạng. Sau khi nâng cấp, hãy nhấn Lưu thông báo một lần để đưa lựa chọn cũ lên đám mây. Mở lại ứng dụng trên thiết bị khác để nhận cài đặt.</p>
               <button type="button" onClick={handleSaveNotifications} disabled={saveStatus("notifications") === "saving"} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">{saveLabel("notifications", "Lưu thông báo")}</button>
-                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("notifications"), "tài khoản")}</p>
+                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("notifications"), user?.id === "local-ui-user" ? "trình duyệt này" : "tài khoản")}</p>
             </div>
           </div>
 
