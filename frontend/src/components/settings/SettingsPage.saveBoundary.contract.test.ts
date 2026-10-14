@@ -71,11 +71,17 @@ describe("SETTINGS-SAVE-BOUNDARY-1 isolated Settings save handlers", () => {
   });
 
   it("shows feedback only for the section actually saved", () => {
-    expect(source).toContain('savedSection === "profile"');
-    expect(source).toContain('savedSection === "preferences"');
-    expect(source).toContain('savedSection === "financial"');
-    expect(source).toContain('savedSection === "aiFeatures"');
-    expect(source).toContain('savedSection === "aiSettings"');
+    for (const [section, label] of [
+      ["profile", "Lưu hồ sơ"],
+      ["preferences", "Lưu tùy chỉnh"],
+      ["financial", "Lưu thiết lập"],
+      ["aiFeatures", "Lưu tính năng AI"],
+      ["aiSettings", "Lưu cài đặt AI"],
+      ["notifications", "Lưu thông báo"],
+    ]) {
+      expect(source).toContain(`saveLabel("${section}", "${label}")`);
+      expect(source).toContain(`markSaveSettled("${section}", revision, true)`);
+    }
     expect(source).not.toContain("setSaveSuccess(");
   });
 
