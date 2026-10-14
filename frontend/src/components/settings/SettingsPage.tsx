@@ -57,6 +57,7 @@ import { resolveBackupWorkspaceAccess } from "@/src/lib/settings/financeDataWork
 import { notifyFinancialTargetsSaved } from "@/src/lib/settings/useAccountFinancialTargets";
 import { SETTINGS_START_PAGES } from "@/src/lib/settings/effectivePreferences";
 import { saveAccountSettingsSection, type SettingsSaveSection } from "@/src/lib/settings/settingsSectionStorage";
+import { resolveSettingsSaveOutcome, settingsSaveMessage, type SettingsSaveStatus } from "@/src/lib/settings/settingsSaveFeedback";
 
 import {
   clearAllUserData,
@@ -287,9 +288,29 @@ export default function SettingsPage() {
   // Invest/weekly/monthly notifications remain unsupported; their historical
   // snapshot fields are preserved by per-section writes, not edited here.
 
-  // Each Save owns its feedback; an AI-provider save cannot turn the financial/profile button green.
+  // Each Save owns its feedback; revisions prevent an older request from marking new edits saved.
   type SavedSection = SettingsSaveSection | "aiSettings";
   const [savedSection, setSavedSection] = useState<SavedSection | null>(null);
+  const [saveStatuses, setSaveStatuses] = useState<Partial<Record<SavedSection | "notifications", SettingsSaveStatus>>>({});
+  const revisionRef = useRef<Partial<Record<SavedSection | "notifications", number>>>({});
+  function markDirty(section: SavedSection | "notifications") {
+    revisionRef.current[section] = (revisionRef.current[section] ?? 0) + 1;
+    setSaveStatuses((previous) => ({ ...previous, [section]: "dirty" }));
+  }
+  function saveStatus(section: SavedSection | "notifications") { return saveStatuses[section] ?? "idle"; }
+  function saveLabel(section: SavedSection | "notifications", normal: string) {
+    return saveStatus(section) === "saving" ? "Đang lưu…" : saveStatus(section) === "dirty" ? "Chưa lưu · " + normal : saveStatus(section) === "error" ? "Thử lưu lại" : saveStatus(section) === "saved" ? "Đã lưu!" : normal;
+  }
+  function markSaveStarted(section: SavedSection | "notifications") {
+    const revision = revisionRef.current[section] ?? 0;
+    setSaveStatuses((prev) => ({...prev, [section]: "saving"}));
+    return revision;
+  }
+  function markSaveSettled(section: SavedSection | "notifications", revision: number, success: boolean) {
+    const outcome = resolveSettingsSaveOutcome(revision, revisionRef.current[section] ?? 0, success);
+    setSaveStatuses((prev) => ({ ...prev, [section]: outcome }));
+    return outcome;
+  }
   const savedTimerRef = useRef<number | null>(null);
   const cloudMetadataSaveRef = useRef(false);
   // Keep unsaved drafts intact while Header refreshes notification settings.
@@ -901,6 +922,7 @@ export default function SettingsPage() {
       toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
       return;
     }
+    const revision = markSaveStarted("notifications");
     cloudMetadataSaveRef.current = true;
     try {
       const chosen = { notifBudget, notifGoal, notifDebt };
@@ -913,8 +935,9 @@ export default function SettingsPage() {
       // Commit the on-device SSOT only after the cloud save succeeds.
       saveAccountNotificationPreferences(user?.id, chosen);
       notificationDraftAccountRef.current = null;
-      toast({ variant: "success", message: "Đã lưu thông báo trên tài khoản." });
+      if (markSaveSettled("notifications", revision, true) === "saved") toast({ variant: "success", message: user?.id === "local-ui-user" ? "Đã lưu thông báo trên trình duyệt này." : "Đã lưu thông báo trên tài khoản." });
     } catch (error) {
+      markSaveSettled("notifications", revision, false);
       toast({
         variant: "error",
         message: error instanceof Error
@@ -944,6 +967,7 @@ export default function SettingsPage() {
       toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
       return;
     }
+    const revision = markSaveStarted("profile");
     cloudMetadataSaveRef.current = true;
     try {
       if (user.id !== "local-ui-user") {
@@ -956,9 +980,10 @@ export default function SettingsPage() {
         profileName: trimmedProfileName, profilePhone, timezone: "Asia/Ho_Chi_Minh", currency: "VND",
       });
       setProfileName(trimmedProfileName);
-      markSectionSaved("profile");
+      if (markSaveSettled("profile", revision, true) === "saved") markSectionSaved("profile");
       toast({ variant: "success", message: "Đã lưu hồ sơ. Không thay đổi tùy chỉnh và thiết lập tài chính." });
     } catch (error) {
+      markSaveSettled("profile", revision, false);
       console.error("[SettingsPage] profile save failed:", error);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu hồ sơ." });
     } finally {
@@ -975,15 +1000,17 @@ export default function SettingsPage() {
       toast({ variant: "error", message: "Định dạng ngày hoặc trang mặc định không hợp lệ." });
       return;
     }
+    const revision = markSaveStarted("preferences");
     try {
       saveAccountSettingsSection(user.id, "preferences", {
         lang: "vi", dateFormat, defaultPage,
       });
       notifyDateFormatSaved();
       // ThemeProvider persists the selected theme immediately in its own SSOT.
-      markSectionSaved("preferences");
+      if (markSaveSettled("preferences", revision, true) === "saved") markSectionSaved("preferences");
       toast({ variant: "success", message: "Đã lưu tùy chỉnh. Giao diện được áp dụng ngay khi chọn." });
     } catch (error) {
+      markSaveSettled("preferences", revision, false);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu tùy chỉnh." });
     }
   }
@@ -1014,6 +1041,7 @@ export default function SettingsPage() {
       toast({ variant: "warning", message: "Một thao tác lưu tài khoản khác đang chạy. Vui lòng thử lại sau." });
       return;
     }
+    const revision = markSaveStarted("financial");
     cloudMetadataSaveRef.current = true;
     try {
       if (user.id !== "local-ui-user") {
@@ -1042,9 +1070,10 @@ export default function SettingsPage() {
       // Notify subscribers only AFTER the local write succeeds.
       notifyNotificationPreferencesSaved();
       notifyFinancialTargetsSaved();
-      markSectionSaved("financial");
+      if (markSaveSettled("financial", revision, true) === "saved") markSectionSaved("financial");
       toast({ variant: "success", message: "Đã lưu thiết lập tài chính. Không cập nhật hồ sơ hoặc tính năng AI." });
     } catch (error) {
+      markSaveSettled("financial", revision, false);
       console.error("[SettingsPage] financial save failed:", error);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu thiết lập tài chính." });
     } finally {
@@ -1057,13 +1086,15 @@ export default function SettingsPage() {
       toast({ variant: "error", message: "Không có tài khoản để lưu tùy chọn AI." });
       return;
     }
+    const revision = markSaveStarted("aiFeatures");
     try {
       saveAccountSettingsSection(user.id, "aiFeatures", {
         aiInsights, aiForecast, aiRisk, aiGoalCoach, aiInvestCoach,
       });
-      markSectionSaved("aiFeatures");
+      if (markSaveSettled("aiFeatures", revision, true) === "saved") markSectionSaved("aiFeatures");
       toast({ variant: "success", message: "Đã lưu lựa chọn tính năng AI trên trình duyệt; chưa thay đổi cấu hình AI máy chủ." });
     } catch (error) {
+      markSaveSettled("aiFeatures", revision, false);
       toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu lựa chọn AI." });
     }
   }
@@ -1128,20 +1159,22 @@ export default function SettingsPage() {
       return;
     }
 
+    const revision = markSaveStarted("aiSettings");
     try {
       setAiSettingsLoading(true);
       const settings = await saveAIFinanceSettings(
         accessToken,
         getAISettingsPayload(),
       );
-      applyAISettings(settings);
-      markSectionSaved("aiSettings");
+      if ((revisionRef.current.aiSettings ?? 0) === revision) applyAISettings(settings);
+      if (markSaveSettled("aiSettings", revision, true) === "saved") markSectionSaved("aiSettings");
 
       toast({
         variant: "success",
         message: "Đã lưu cài đặt AI an toàn qua API máy chủ.",
       });
     } catch (error) {
+      markSaveSettled("aiSettings", revision, false);
       toast({
         variant: "error",
         message:
@@ -1423,13 +1456,13 @@ export default function SettingsPage() {
                 <SettingInput
                   label="Họ và tên"
                   value={profileName}
-                  onChange={setProfileName}
+                  onChange={(v) => { markDirty("profile"); setProfileName(v); }}
                   placeholder="Nhập tên của bạn..."
                 />
                 <SettingInput
                   label="Số điện thoại"
                   value={profilePhone}
-                  onChange={setProfilePhone}
+                  onChange={(v) => { markDirty("profile"); setProfilePhone(v); }}
                   placeholder="+84 xxx xxx xxx"
                 />
                 <div className="min-w-0">
@@ -1442,7 +1475,7 @@ export default function SettingsPage() {
                     min="1900-01-01"
                     value={profileBirthDate}
                     format={dateFormat}
-                    onChange={(value) => setProfileBirthDateDraft({ accountId: user?.id ?? "", value })}
+                    onChange={(value) => { markDirty("profile"); setProfileBirthDateDraft({ accountId: user?.id ?? "", value }); }}
                     onValidityChange={(valid) => setBirthDateInvalidForAccount(valid ? null : (user?.id ?? ""))}
                     disabled={!user?.id || user?.id === "local-ui-user"}
                   />
@@ -1469,6 +1502,7 @@ export default function SettingsPage() {
               <div className="mt-6 flex items-center gap-3">
                 <button
                   onClick={handleSaveProfile}
+                  disabled={saveStatus("profile") === "saving"}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
                     (savedSection === "profile"
@@ -1477,7 +1511,8 @@ export default function SettingsPage() {
                   }
                 >
                   {savedSection === "profile" ? <Check size={15} /> : null}
-                  {savedSection === "profile" ? "Đã lưu!" : "Lưu hồ sơ"}
+                  {saveLabel("profile", "Lưu hồ sơ")}
+                    <span className="sr-only" role="status" aria-live="polite">{settingsSaveMessage(saveStatus("profile"), "hồ sơ tài khoản / trình duyệt này")}</span>
                 </button>
                 <p className="text-xs text-slate-400">
                   Họ tên và ngày sinh đồng bộ tài khoản; điện thoại và lựa chọn hiển thị lưu riêng trên trình duyệt.
@@ -1544,7 +1579,7 @@ export default function SettingsPage() {
                   </div>
                   <select
                     value={dateFormat}
-                    onChange={(e) => { if (isDateDisplayFormat(e.target.value)) setDateFormat(e.target.value); setBirthDateInvalidForAccount(null); }}
+                    onChange={(e) => { markDirty("preferences"); if (isDateDisplayFormat(e.target.value)) setDateFormat(e.target.value); setBirthDateInvalidForAccount(null); }}
                     className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     {DATE_DISPLAY_FORMAT_OPTIONS.map((option) => (
@@ -1567,7 +1602,7 @@ export default function SettingsPage() {
                   </div>
                   <select
                     value={defaultPage}
-                    onChange={(e) => setDefaultPage(e.target.value)}
+                    onChange={(e) => { markDirty("preferences"); setDefaultPage(e.target.value); }}
                     className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     <option value="/">Tổng quan</option>
@@ -1617,8 +1652,9 @@ export default function SettingsPage() {
                 <SeasonalSkinPicker />
                 <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Ngôn ngữ, định dạng ngày và trang mặc định được lưu riêng cho tài khoản này trên trình duyệt.</p>
                 <button type="button" onClick={handleSavePreferences} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
-                  {savedSection === "preferences" ? "Đã lưu!" : "Lưu tùy chỉnh"}
+                  {saveLabel("preferences", "Lưu tùy chỉnh")}
                 </button>
+                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("preferences"), "trình duyệt này")}</p>
               </div>
             </div>
           </div>
@@ -1654,7 +1690,7 @@ export default function SettingsPage() {
                       min="0"
                       max="100"
                       value={savingsGoal}
-                      onChange={(e) => setSavingsGoal(e.target.value)}
+                      onChange={(e) => { markDirty("financial"); setSavingsGoal(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
@@ -1673,7 +1709,7 @@ export default function SettingsPage() {
                       min="0"
                       max="100"
                       value={budgetAlert}
-                      onChange={(e) => { financialDraftAccountRef.current = user?.id ?? null; setBudgetAlert(e.target.value); }}
+                      onChange={(e) => { markDirty("financial"); financialDraftAccountRef.current = user?.id ?? null; setBudgetAlert(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
@@ -1692,7 +1728,7 @@ export default function SettingsPage() {
                       min="0"
                       max="200"
                       value={debtAlert}
-                      onChange={(e) => { financialDraftAccountRef.current = user?.id ?? null; setDebtAlert(e.target.value); }}
+                      onChange={(e) => { markDirty("financial"); financialDraftAccountRef.current = user?.id ?? null; setDebtAlert(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">%</span>
@@ -1711,7 +1747,7 @@ export default function SettingsPage() {
                       min="1"
                       max="24"
                       value={emergencyFund}
-                      onChange={(e) => setEmergencyFund(e.target.value)}
+                      onChange={(e) => { markDirty("financial"); setEmergencyFund(e.target.value); }}
                       className="w-24 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-base font-black sm:text-sm outline-none focus:border-blue-400"
                     />
                     <span className="text-sm font-black text-slate-500">
@@ -1723,6 +1759,7 @@ export default function SettingsPage() {
               <div className="mt-6">
                 <button
                   onClick={handleSaveFinancial}
+                  disabled={saveStatus("financial") === "saving"}
                   className={
                     "flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all sm:w-auto " +
                     (savedSection === "financial"
@@ -1731,7 +1768,8 @@ export default function SettingsPage() {
                   }
                 >
                   {savedSection === "financial" ? <Check size={15} /> : null}
-                  {savedSection === "financial" ? "Đã lưu!" : "Lưu thiết lập"}
+                  {saveLabel("financial", "Lưu thiết lập")}
+                    <span className="sr-only" role="status" aria-live="polite">{settingsSaveMessage(saveStatus("financial"), "tài khoản / trình duyệt này")}</span>
                 </button>
               </div>
             </div>
@@ -1841,7 +1879,7 @@ export default function SettingsPage() {
                     <SettingSelect
                       label="Nhà cung cấp"
                       value={aiProvider}
-                      onChange={setAiProvider}
+                      onChange={(v) => { markDirty("aiSettings"); setAiProvider(v); }}
                       options={[
                         { value: "openai", label: "OpenAI" },
                         { value: "local", label: "Chỉ AI cục bộ" },
@@ -1852,7 +1890,7 @@ export default function SettingsPage() {
                     <SettingSelect
                       label="Mô hình"
                       value={aiModel}
-                      onChange={setAiModel}
+                      onChange={(v) => { markDirty("aiSettings"); setAiModel(v); }}
                       options={AI_MODEL_OPTIONS}
                       desc="Mô hình mặc định cho trò chuyện tài chính AI."
                     />
@@ -1886,7 +1924,7 @@ export default function SettingsPage() {
                       <input
                         type="password"
                         value={aiApiKey}
-                        onChange={(e) => setAiApiKey(e.target.value)}
+                        onChange={(e) => { markDirty("aiSettings"); setAiApiKey(e.target.value); }}
                         placeholder={
                           aiHasStoredApiKey
                             ? "Nhập khóa mới để cập nhật"
@@ -1930,7 +1968,7 @@ export default function SettingsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setAiApiKey("")}
+                          onClick={() => { markDirty("aiSettings"); setAiApiKey(""); }}
                           disabled={!aiApiKey.trim()}
                           className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-500 transition hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
@@ -1976,7 +2014,7 @@ export default function SettingsPage() {
                             ? aiTemperatureNumber
                             : 0.2
                         }
-                        onChange={(e) => setAiTemperature(e.target.value)}
+                        onChange={(e) => { markDirty("aiSettings"); setAiTemperature(e.target.value); }}
                         className="mt-4 w-full accent-blue-600"
                       />
                       <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -2009,7 +2047,7 @@ export default function SettingsPage() {
                             ? aiMaxTokensNumber
                             : 4096
                         }
-                        onChange={(e) => setAiMaxTokens(e.target.value)}
+                        onChange={(e) => { markDirty("aiSettings"); setAiMaxTokens(e.target.value); }}
                         className="mt-4 w-full accent-cyan-600"
                       />
                       <div className="mt-1 flex justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -2036,7 +2074,8 @@ export default function SettingsPage() {
                       ) : (
                         <Sparkles size={15} />
                       )}
-                      {savedSection === "aiSettings" ? "Đã lưu!" : "Lưu cài đặt AI"}
+                      {saveLabel("aiSettings", "Lưu cài đặt AI")}
+                    <span className="sr-only" role="status" aria-live="polite">{settingsSaveMessage(saveStatus("aiSettings"), "máy chủ")}</span>
                     </button>
 
                     <button
@@ -2079,7 +2118,7 @@ export default function SettingsPage() {
                         label="Dự phòng cục bộ"
                         desc="Nếu OpenAI lỗi hoặc thiếu khóa API, dùng bộ máy AI cục bộ AI-5."
                         checked={aiFallbackLocal}
-                        onChange={() => setAiFallbackLocal((v) => !v)}
+                        onChange={() => { markDirty("aiSettings"); setAiFallbackLocal((v) => !v); }}
                       />
                       <ToggleRow
                         icon={<Shield size={14} />}
@@ -2087,7 +2126,7 @@ export default function SettingsPage() {
                         label="Không bịa dữ liệu"
                         desc="AI chỉ được dùng dữ liệu tài chính hiện có."
                         checked={aiNoFabrication}
-                        onChange={() => setAiNoFabrication((v) => !v)}
+                        onChange={() => { markDirty("aiSettings"); setAiNoFabrication((v) => !v); }}
                       />
                       <ToggleRow
                         icon={<Database size={14} />}
@@ -2095,7 +2134,7 @@ export default function SettingsPage() {
                         label="Ngữ cảnh tài chính"
                         desc="Cho phép gửi số liệu tổng hợp sang bộ kết nối AI."
                         checked={aiSendFinanceContext}
-                        onChange={() => setAiSendFinanceContext((v) => !v)}
+                        onChange={() => { markDirty("aiSettings"); setAiSendFinanceContext((v) => !v); }}
                       />
                       <ToggleRow
                         icon={<AlertTriangle size={14} />}
@@ -2103,7 +2142,7 @@ export default function SettingsPage() {
                         label="Phân tích theo quy tắc"
                         desc="Đính kèm cảnh báo vượt ngân sách, dòng tiền và rủi ro."
                         checked={aiSendRuleInsights}
-                        onChange={() => setAiSendRuleInsights((v) => !v)}
+                        onChange={() => { markDirty("aiSettings"); setAiSendRuleInsights((v) => !v); }}
                       />
                     </div>
                   </div>
@@ -2153,7 +2192,7 @@ export default function SettingsPage() {
                   label="Phân tích AI"
                   desc="Phân tích tài chính thông minh và gợi ý cải thiện"
                   checked={aiInsights}
-                  onChange={() => setAiInsights((v) => !v)}
+                  onChange={() => { markDirty("aiFeatures"); setAiInsights((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<Zap size={14} />}
@@ -2161,7 +2200,7 @@ export default function SettingsPage() {
                   label="Bộ máy dự báo"
                   desc="Dự báo thu chi và dòng tiền tháng tới"
                   checked={aiForecast}
-                  onChange={() => setAiForecast((v) => !v)}
+                  onChange={() => { markDirty("aiFeatures"); setAiForecast((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<AlertTriangle size={14} />}
@@ -2169,7 +2208,7 @@ export default function SettingsPage() {
                   label="Phân tích rủi ro"
                   desc="Phân tích rủi ro tài chính và cảnh báo"
                   checked={aiRisk}
-                  onChange={() => setAiRisk((v) => !v)}
+                  onChange={() => { markDirty("aiFeatures"); setAiRisk((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<ChevronRight size={14} />}
@@ -2177,7 +2216,7 @@ export default function SettingsPage() {
                   label="Cố vấn mục tiêu"
                   desc="Tư vấn chiến lược đạt mục tiêu tài chính"
                   checked={aiGoalCoach}
-                  onChange={() => setAiGoalCoach((v) => !v)}
+                  onChange={() => { markDirty("aiFeatures"); setAiGoalCoach((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<ChevronRight size={14} />}
@@ -2185,10 +2224,11 @@ export default function SettingsPage() {
                   label="Cố vấn đầu tư"
                   desc="Phân tích và gợi ý danh mục đầu tư"
                   checked={aiInvestCoach}
-                  onChange={() => setAiInvestCoach((v) => !v)}
+                  onChange={() => { markDirty("aiFeatures"); setAiInvestCoach((v) => !v); }}
                 />
               </div>
-              <button type="button" onClick={handleSaveAIFeatures} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">{savedSection === "aiFeatures" ? "Đã lưu!" : "Lưu tính năng AI"}</button>
+              <button type="button" onClick={handleSaveAIFeatures} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white">{saveLabel("aiFeatures", "Lưu tính năng AI")}</button>
+                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("aiFeatures"), "trình duyệt này")}</p>
             </div>
           </div>
 
@@ -2209,7 +2249,7 @@ export default function SettingsPage() {
                   label="Cảnh báo ngân sách"
                   desc="Bắt đầu từ ngưỡng % đã chọn; luôn nhắc khi đạt hoặc vượt giới hạn"
                   checked={notifBudget}
-                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifBudget((v) => !v); }}
+                  onChange={() => { markDirty("notifications"); notificationDraftAccountRef.current = user?.id ?? null; setNotifBudget((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -2217,7 +2257,7 @@ export default function SettingsPage() {
                   label="Cột mốc mục tiêu"
                   desc="Các cột mốc 25%, 50%, 75% và hoàn thành 100%"
                   checked={notifGoal}
-                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifGoal((v) => !v); }}
+                  onChange={() => { markDirty("notifications"); notificationDraftAccountRef.current = user?.id ?? null; setNotifGoal((v) => !v); }}
                 />
                 <ToggleRow
                   icon={<Bell size={14} />}
@@ -2225,7 +2265,7 @@ export default function SettingsPage() {
                   label="Cảnh báo khoản nợ"
                   desc="Nhắc nợ trả chậm và dư nợ vượt ngưỡng % thu nhập tháng"
                   checked={notifDebt}
-                  onChange={() => { notificationDraftAccountRef.current = user?.id ?? null; setNotifDebt((v) => !v); }}
+                  onChange={() => { markDirty("notifications"); notificationDraftAccountRef.current = user?.id ?? null; setNotifDebt((v) => !v); }}
                 />
                 <div data-notification-unavailable="true" className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-bold text-slate-600">Chưa hỗ trợ: Cảnh báo đầu tư · Tổng kết tuần · Báo cáo tháng</p>
@@ -2233,7 +2273,8 @@ export default function SettingsPage() {
                 </div>
               </div>
               <p className="mt-3 text-xs leading-5 text-slate-500">Đồng bộ theo tài khoản khi có mạng. Sau khi nâng cấp, hãy nhấn Lưu thông báo một lần để đưa lựa chọn cũ lên đám mây. Mở lại ứng dụng trên thiết bị khác để nhận cài đặt.</p>
-              <button type="button" onClick={handleSaveNotifications} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Lưu thông báo</button>
+              <button type="button" onClick={handleSaveNotifications} disabled={saveStatus("notifications") === "saving"} className="mt-4 min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">{saveLabel("notifications", "Lưu thông báo")}</button>
+                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("notifications"), "tài khoản")}</p>
             </div>
           </div>
 
