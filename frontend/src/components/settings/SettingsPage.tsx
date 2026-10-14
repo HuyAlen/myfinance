@@ -56,6 +56,7 @@ import SeasonalSkinPicker from "@/src/components/settings/SeasonalSkinPicker";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import { resolveBackupWorkspaceAccess } from "@/src/lib/settings/financeDataWorkspaceGuard";
+import { notifyFinancialTargetsSaved } from "@/src/lib/settings/useAccountFinancialTargets";
 
 import {
   clearAllUserData,
@@ -477,13 +478,13 @@ export default function SettingsPage() {
       if (saved.version !== SETTINGS_LOCAL_VERSION) return;
       if (!authProfileName && typeof saved.profileName === "string") setProfileName(saved.profileName);
       if (typeof saved.profilePhone === "string") setProfilePhone(saved.profilePhone);
-      if (typeof saved.timezone === "string") setTimezone(saved.timezone);
-      if (typeof saved.lang === "string") setLang(saved.lang);
-      if (typeof saved.currency === "string") setCurrency(saved.currency);
+      if (typeof saved.timezone === "string") setTimezone("Asia/Ho_Chi_Minh");
+      if (typeof saved.lang === "string") setLang("vi");
+      if (typeof saved.currency === "string") setCurrency("VND");
       if (isDateDisplayFormat(saved.dateFormat)) setDateFormat(saved.dateFormat);
       if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
       if (isThemePreference(saved.theme)) setTheme(saved.theme);
-      if (typeof saved.finMonth === "string") setFinMonth(saved.finMonth);
+      if (typeof saved.finMonth === "string") setFinMonth("1");
       if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
       if (typeof saved.budgetAlert === "string") setBudgetAlert(saved.budgetAlert);
       if (typeof saved.debtAlert === "string") setDebtAlert(saved.debtAlert);
@@ -915,10 +916,15 @@ export default function SettingsPage() {
     ] as const;
     for (const [label, raw, min, max] of numericRules) {
       const value = Number(raw);
-      if (!Number.isFinite(value) || value < min || value > max) {
+      if (String(raw).trim() === "" || !Number.isFinite(value) || value < min || value > max) {
         toast({ variant: "error", message: `${label} phải nằm trong khoảng ${min}–${max}.` });
         return;
       }
+    }
+
+    if (!Number.isInteger(Number(emergencyFund))) {
+      toast({ variant: "error", message: "Quỹ khẩn cấp phải là số tháng nguyên từ 1 đến 24." });
+      return;
     }
 
     if (!birthDateInputValid || !isValidBirthDateInput(profileBirthDate)) {
@@ -961,6 +967,9 @@ export default function SettingsPage() {
 
       const localSnapshot = {
         ...buildLocalSettingsSnapshot(),
+        // App-wide i18n, FX conversion and off-calendar months are not implemented yet.
+        // Never preserve their old misleading selections on a successful Save.
+        lang: "vi", currency: "VND", timezone: "Asia/Ho_Chi_Minh", finMonth: "1",
         // A different section's Save must never overwrite notification choices.
         ...readAccountNotificationPreferences(user?.id),
         ...preservedNotificationFlags,
@@ -969,6 +978,7 @@ export default function SettingsPage() {
       window.localStorage.setItem(localSettingsKey, JSON.stringify(localSnapshot));
       notifyDateFormatSaved();
       notifyNotificationPreferencesSaved();
+      notifyFinancialTargetsSaved();
       setProfileName(trimmedProfileName);
       setSaveSuccess(true);
       window.setTimeout(() => setSaveSuccess(false), 2200);
@@ -1372,22 +1382,15 @@ export default function SettingsPage() {
                   label="Múi giờ"
                   value={timezone}
                   onChange={setTimezone}
-                  options={[
-                    { value: "Asia/Ho_Chi_Minh", label: "Việt Nam (GMT+7)" },
-                    { value: "Asia/Bangkok", label: "Bangkok (GMT+7)" },
-                    { value: "Asia/Singapore", label: "Singapore (GMT+8)" },
-                    { value: "UTC", label: "UTC (GMT+0)" },
-                  ]}
+                  options={[{ value: "Asia/Ho_Chi_Minh", label: "Việt Nam (GMT+7)" }]}
+                  desc="Hiện báo cáo và kỳ tài chính dùng giờ Việt Nam. Múi giờ khác chưa được hỗ trợ toàn hệ thống."
                 />
                 <SettingSelect
                   label="Tiền tệ mặc định"
                   value={currency}
                   onChange={setCurrency}
-                  options={[
-                    { value: "VND", label: "Đồng Việt Nam (VND)" },
-                    { value: "USD", label: "Đô la Mỹ (USD)" },
-                    { value: "EUR", label: "Đồng euro (EUR)" },
-                  ]}
+                  options={[{ value: "VND", label: "Đồng Việt Nam (VND)" }]}
+                  desc="Hiện chỉ hỗ trợ VND. Chưa có quy đổi tỷ giá xuyên suốt ứng dụng cho USD/EUR."
                 />
               </div>
               <div className="mt-6 flex items-center gap-3">
@@ -1428,7 +1431,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-700">Ngôn ngữ</p>
                     <p className="text-xs text-slate-400">
-                      Ngôn ngữ giao diện ứng dụng
+                      Hiện ứng dụng chỉ hỗ trợ đầy đủ Tiếng Việt. English sẽ mở khi dịch toàn bộ màn hình.
                     </p>
                   </div>
                   <div className="flex gap-1.5">
@@ -1439,6 +1442,8 @@ export default function SettingsPage() {
                       <button
                         key={opt.val}
                         onClick={() => setLang(opt.val)}
+                        disabled={opt.val === "en"}
+                        title={opt.val === "en" ? "Chưa hỗ trợ toàn bộ giao diện English" : undefined}
                         className={
                           "min-h-11 rounded-2xl border px-4 py-2 text-sm font-bold transition-all " +
                           (lang === opt.val
@@ -1553,21 +1558,18 @@ export default function SettingsPage() {
             <div className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:mt-4 sm:rounded-4xl sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <SettingSelect
-                  label="Tháng tài chính bắt đầu"
+                  label="Ngày bắt đầu kỳ tài chính"
                   value={finMonth}
                   onChange={setFinMonth}
-                  options={Array.from({ length: 28 }, (_, i) => ({
-                    value: String(i + 1),
-                    label: "Ngày " + (i + 1),
-                  }))}
-                  desc="Ngày bắt đầu chu kỳ tài chính hàng tháng"
+                  options={[{ value: "1", label: "Ngày 1" }]}
+                  desc="Hiện báo cáo dùng tháng theo lịch (ngày 1 đến cuối tháng). Kỳ bắt đầu ngày khác chưa hỗ trợ."
                 />
                 <div>
                   <label className="mb-1.5 block text-sm font-black text-slate-700">
                     Mục tiêu tiết kiệm (%)
                   </label>
                   <p className="mb-2 text-[11px] text-slate-400">
-                    % thu nhập mục tiêu tiết kiệm mỗi tháng
+                    So sánh tỷ lệ nạp tiết kiệm trong kỳ với thu nhập tại Tổng quan. Không tính tiền nạp đầu tư.
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -1624,7 +1626,7 @@ export default function SettingsPage() {
                     Quỹ khẩn cấp (tháng)
                   </label>
                   <p className="mb-2 text-[11px] text-slate-400">
-                    Số tháng chi tiêu cần dự phòng
+                    Mục tiêu độ phủ quỹ khẩn cấp tại Tổng quan và Tiết kiệm (1–24 tháng).
                   </p>
                   <div className="flex items-center gap-2">
                     <input

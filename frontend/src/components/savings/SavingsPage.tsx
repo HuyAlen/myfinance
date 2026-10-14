@@ -1,5 +1,6 @@
 "use client";
 import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { useAccountFinancialTargets } from "@/src/lib/settings/useAccountFinancialTargets";
 import { formatStoredDateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import {
@@ -456,8 +457,9 @@ const getSignedTransactionAmount = (transaction: SavingTransaction) => {
   return transaction.amount;
 };
 
+// Interim cost assumption for this page, NOT the canonical completed-month expense baseline.
+// Dashboard uses actual completed-month expense history for its coverage KPI.
 const MONTHLY_EXPENSE_TARGET = 25_000_000;
-const EMERGENCY_MONTH_TARGET = 6;
 
 const getSavingProgress = (saving: SavingWithWallet) => {
   const days = getDaysUntil(saving.maturityDate);
@@ -485,6 +487,7 @@ export default function SavingsPage({
   savings = EMPTY_SAVINGS,
 }: SavingsPageProps) {
   const dateDisplayFormat = useAccountDateFormat();
+  const financialTargets = useAccountFinancialTargets();
   const searchParams = useSearchParams();
   const focusSavingId = parseFocusId(searchParams, "savingId");
   const [localSavings, setLocalSavings] = useState<SavingWithWallet[]>(savings);
@@ -759,7 +762,7 @@ export default function SavingsPage({
       MONTHLY_EXPENSE_TARGET > 0
         ? metrics.emergencyFund / MONTHLY_EXPENSE_TARGET
         : 0;
-    const emergencyTarget = MONTHLY_EXPENSE_TARGET * EMERGENCY_MONTH_TARGET;
+    const emergencyTarget = MONTHLY_EXPENSE_TARGET * financialTargets.emergencyFundMonths;
     const emergencyProgress =
       emergencyTarget > 0
         ? Math.min(
@@ -790,7 +793,7 @@ export default function SavingsPage({
       emergencyMonthlyTopUp,
       nextMaturity,
     };
-  }, [localSavings, metrics.emergencyFund]);
+  }, [financialTargets.emergencyFundMonths, localSavings, metrics.emergencyFund]);
 
   const savingsAnalytics = useMemo(() => {
     const allTransactions = Object.values(transactionsBySavingId).flat();
@@ -1842,7 +1845,7 @@ export default function SavingsPage({
           <HeroMetric
             label="Quỹ khẩn cấp"
             value={formatCurrency(metrics.emergencyFund)}
-            note={`${savingsExperience.emergencyMonths.toFixed(1)} / ${EMERGENCY_MONTH_TARGET} tháng`}
+            note={`${savingsExperience.emergencyMonths.toFixed(1)} / ${financialTargets.emergencyFundMonths} tháng`}
             icon={<ShieldCheck size={17} />}
             tone="emerald"
           />
@@ -2146,7 +2149,7 @@ export default function SavingsPage({
               </h2>
               <p className="mt-1 text-xs leading-5 text-[#61788F] sm:text-sm">
                 Còn {formatCurrency(savingsExperience.emergencyGap)} để đạt mục
-                tiêu {EMERGENCY_MONTH_TARGET} tháng chi phí.
+                tiêu {financialTargets.emergencyFundMonths} tháng chi phí.
               </p>
             </div>
 
@@ -2155,6 +2158,9 @@ export default function SavingsPage({
             </span>
           </div>
 
+          <p className="mt-1 text-[11px] leading-5 text-[#8CA0B3]">
+            Ước tính tại trang này theo chi phí giả định {formatCurrency(MONTHLY_EXPENSE_TARGET)}/tháng; Tổng quan dùng lịch sử chi thực tế các tháng hoàn tất.
+          </p>
           <div
             data-dark-surface="savings-emergency-progress-track"
             className="mt-3 h-2 overflow-hidden rounded-full bg-[#EAF0F6] sm:mt-4"

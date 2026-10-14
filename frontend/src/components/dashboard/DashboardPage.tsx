@@ -1,5 +1,6 @@
 "use client";
 import { useAccountDateFormat } from "@/src/lib/date/dateFormatPreference";
+import { useAccountFinancialTargets } from "@/src/lib/settings/useAccountFinancialTargets";
 import { formatDateFromDate, formatISODateForDisplay, type DateDisplayFormat } from "@/src/lib/date/dateDisplay";
 
 import { calculateEmergencyCoverageSnapshot } from "@/src/services/finance/emergencyCoverage";
@@ -614,6 +615,7 @@ function waitForDashboardRetry(delayMs: number): Promise<void> {
 
 export default function DashboardPage() {
   const dateDisplayFormat = useAccountDateFormat();
+  const financialTargets = useAccountFinancialTargets();
   const router = useRouter();
   const mountedAtRef = useRef<number | null>(null);
   const hasReportedCriticalReadyRef = useRef(false);
@@ -2232,9 +2234,9 @@ export default function DashboardPage() {
         transactions,
         categories,
         lookbackMonths: 6,
-        minimumMonths: 3,
+        minimumMonths: financialTargets.emergencyFundMonths,
       }),
-    [categories, savingsSnapshot.emergencyFund, transactions],
+    [categories, financialTargets.emergencyFundMonths, savingsSnapshot.emergencyFund, transactions],
   );
   // Downstream consumers share this one stable value. When evidence is absent,
   // scoring fails closed at zero while the visible KPI renders unavailable.
@@ -2704,13 +2706,13 @@ export default function DashboardPage() {
         ? `${formatOneDecimal(emergencyMonthsExact)} tháng`
         : "—",
       note: emergencyCoverage.isReliable
-        ? emergencyMonthsExact >= 3
-          ? `Đủ ≥3 tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
-          : `Mục tiêu ≥3 tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
+        ? emergencyMonthsExact >= financialTargets.emergencyFundMonths
+          ? `Đủ ≥${financialTargets.emergencyFundMonths} tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
+          : `Mục tiêu ≥${financialTargets.emergencyFundMonths} tháng · TB ${emergencyCoverage.completedMonthCount} tháng hoàn tất`
         : "Chưa đủ dữ liệu tháng hoàn tất",
       tone: !emergencyCoverage.isReliable
         ? "neutral"
-        : emergencyMonthsExact >= 3
+        : emergencyMonthsExact >= financialTargets.emergencyFundMonths
           ? "good"
           : "danger",
       icon: ShieldCheck,
@@ -5090,6 +5092,14 @@ export default function DashboardPage() {
                 className="rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#60778D]"
               >
                 Tỷ lệ và thanh tiến độ dùng thu nhập cùng dòng tiền phát sinh trong kỳ. Khối “Hiện có” bên dưới là số dư tài sản hiện tại để đối chiếu và không tham gia vào tỷ lệ.
+              </div>
+              <div data-settings-effective-savings-target="true" className="rounded-2xl border border-blue-100 bg-blue-50/40 px-3.5 py-3 text-xs leading-5 text-[#46647C]">
+                <p className="font-black text-[#23466F]">Mục tiêu tiết kiệm: {financialTargets.savingsGoalPercent}% thu nhập</p>
+                <p className="mt-1">
+                  {financialStructureAdjusted.income > 0
+                    ? `Tỷ lệ nạp vào tiết kiệm trong kỳ: ${financialStructureAdjusted.savingRate}% · ${financialStructureAdjusted.savingRate >= financialTargets.savingsGoalPercent ? "Đạt mục tiêu" : "Chưa đạt mục tiêu"}. Không tính khoản nạp đầu tư.`
+                    : "Chưa có thu nhập trong kỳ để đánh giá mục tiêu tiết kiệm."}
+                </p>
               </div>
               {financialStructureCards.map((item) => (
                 <div

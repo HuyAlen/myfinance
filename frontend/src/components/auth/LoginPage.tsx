@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, PiggyBank } from "lucide-react";
 import { signIn } from "@/src/lib/auth";
+import { resolvePostLoginStartPage } from "@/src/lib/settings/effectivePreferences";
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { SeasonalAuthShell } from "@/src/components/auth/SeasonalAuthShell";
 
@@ -21,7 +22,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/");
+      router.replace(resolvePostLoginStartPage(user.id));
     }
   }, [user, loading, router]);
 
@@ -30,13 +31,13 @@ export default function LoginPage() {
     setSubmitting(true);
     setError("");
 
-    const { error } = await signIn(email, password);
+    const { data, error } = await signIn(email, password);
 
     if (error) {
       setError("Email hoặc mật khẩu không đúng. Vui lòng thử lại.");
       setSubmitting(false);
     } else {
-      router.replace("/");
+      router.replace(resolvePostLoginStartPage(data.user?.id));
     }
   }
 
