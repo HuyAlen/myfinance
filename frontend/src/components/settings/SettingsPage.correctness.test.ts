@@ -41,8 +41,8 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
   });
 
   it("makes profile inputs controlled instead of uncontrolled placeholders", () => {
-    expect(normalized).toContain('label="Họ và tên" value={profileName} onChange={setProfileName}');
-    expect(normalized).toContain('label="Số điện thoại" value={profilePhone} onChange={setProfilePhone}');
+    expect(normalized).toContain('label="Họ và tên" value={profileName} onChange={(v) => { markDirty("profile"); setProfileName(v); }}');
+    expect(normalized).toContain('label="Số điện thoại" value={profilePhone} onChange={(v) => { markDirty("profile"); setProfilePhone(v); }}');
     expect(normalized).toContain('label="Múi giờ" value={timezone} onChange={setTimezone}');
     expect(source).toContain('value={value ?? ""}');
     expect(source).not.toContain("defaultValue={value}");
