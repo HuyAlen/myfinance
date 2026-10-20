@@ -98,6 +98,27 @@ describe("MYFINANCE-WORKSPACE-SEASONAL-ALL-SURFACES-1", () => {
 
 
 describe("MYFINANCE-SEASONAL-WORKSPACE-FINAL-POLISH-1", () => {
+  it("keeps seasonal sidebar artwork covering the full viewport height across skins", () => {
+    const skins = read("app/seasonal-skins.css");
+    const sidebarBackgroundSizes = (stylesheet: string) =>
+      [...stylesheet.matchAll(/\\.finance-sidebar\\s*\\{[^}]*?background-size:\\s*([^;]+);/g)]
+        .map((match) => match[1].trim());
+
+    // The SVG is 420x980: width-only sizing ends the artwork before the
+    // footer on tall desktop viewports, leaving a hard white horizontal seam.
+    expect(sidebarBackgroundSizes(css)).toEqual([
+      "100% 100%, cover, 100% 100%", // desktop/base
+      "100% 100%, cover, 100% 100%", // mobile/base
+    ]);
+    expect(sidebarBackgroundSizes(skins)).toEqual([
+      "100% 100%, cover, cover", // pastel
+      "100% 100%, cover, cover", // festival
+      "100% 100%, cover, cover", // mobile skins
+    ]);
+    expect(css).toContain("background-position: center, right top, center;");
+    expect(css).toContain("background-repeat: no-repeat;");
+  });
+
   it("makes Christmas unmistakable with evergreen needles, glass baubles, golden stars and snow", () => {
     for (const area of ["sidebar", "topbar", "page"]) {
       const asset = read(`public/seasonal-workspace/christmas-${area}.svg`);
