@@ -110,7 +110,9 @@
       transparent 96%),
     var(--finance-season-sidebar-art),
     linear-gradient(170deg, rgb(var(--finance-season-soft) / 0.78) 0%, #fbfdff 42%, #fbfdff 100%);
-  background-size: 100% 100%, 100% auto, 100% 100%;
+  /* Keep the tall seasonal SVG visible from the brand to the footer. Width-only
+   * sizing stops the illustration above the bottom on desktop viewports. */
+  background-size: 100% 100%, cover, 100% 100%;
   background-position: center, right top, center;
   background-repeat: no-repeat;
   border-right-color: rgb(var(--finance-season-primary) / 0.40);
@@ -189,7 +191,7 @@
 /* Same seasonal color cues carry into bottom navigation on an iPhone. */
 @media (max-width: 767px) {
   :root[data-finance-workspace-season] .finance-shell .finance-sidebar {
-    background-size: 100% 100%, 100% auto, 100% 100%;
+    background-size: 100% 100%, cover, 100% 100%;
   }
   :root[data-finance-workspace-season] .finance-shell .finance-header {
     background-size: 100% 100%, auto 100%, cover;
