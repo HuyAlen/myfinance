@@ -52,6 +52,7 @@ const SHOW_AI_FLOATING_BUTTON = false;
 // scroller is in motion and can make momentum scrolling feel like it catches.
 // Coalesce viewport-height writes after resize settles, and reserve the smaller
 // visual viewport for a likely software keyboard rather than browser chrome.
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "myfinance:sidebar-collapsed";
 const APP_HEIGHT_SETTLE_MS = 180;
 const IOS_KEYBOARD_VIEWPORT_DELTA_PX = 120;
 
@@ -61,6 +62,28 @@ type AppShellProps = {
 
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Restore only after hydration; the first server/client render matches.
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
+    } catch {
+      // Restricted storage must not break navigation.
+    }
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+      } catch {
+        // Persist only when browser storage is available.
+      }
+      return next;
+    });
+  };
   const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [aiAgentOpen, setAiAgentOpen] = useState(false);
@@ -235,7 +258,12 @@ export default function AppShell({ children }: AppShellProps) {
   return (
     <DateFilterProvider>
       <div className="finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)] text-[var(--finance-text)] [--mobile-bottom-nav-height:4.75rem]">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={toggleSidebarCollapsed}
+        />
 
         <div
           aria-hidden="true"
@@ -250,7 +278,10 @@ export default function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         />
 
-        <div className="flex h-full min-w-0 flex-col lg:pl-72">
+        <div className={[
+            "flex h-full min-w-0 flex-col transition-[padding] duration-300 ease-in-out motion-reduce:transition-none",
+            sidebarCollapsed ? "lg:pl-20" : "lg:pl-64",
+          ].join(" ")}>
           <Header
             onMenuOpen={() => setSidebarOpen(true)}
             sidebarOpen={sidebarOpen}
