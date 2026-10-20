@@ -16,7 +16,7 @@ describe("FINANCE-CONTENT-SCROLL-OWNER-2", () => {
       "finance-shell h-(--app-height) overflow-hidden",
     );
     expect(shell).toContain(
-      'className="flex h-full min-w-0 flex-col lg:pl-72"',
+      'sidebarCollapsed ? "lg:pl-20" : "lg:pl-64"',
     );
   });
 
