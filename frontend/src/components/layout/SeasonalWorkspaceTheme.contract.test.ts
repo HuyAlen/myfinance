@@ -101,7 +101,7 @@ describe("MYFINANCE-SEASONAL-WORKSPACE-FINAL-POLISH-1", () => {
   it("keeps seasonal sidebar artwork covering the full viewport height across skins", () => {
     const skins = read("app/seasonal-skins.css");
     const sidebarBackgroundSizes = (stylesheet: string) =>
-      [...stylesheet.matchAll(/\\.finance-sidebar\\s*\\{[^}]*?background-size:\\s*([^;]+);/g)]
+      [...stylesheet.matchAll(/\.finance-sidebar\s*\{[^}]*?background-size:\s*([^;]+);/g)]
         .map((match) => match[1].trim());
 
     // The SVG is 420x980: width-only sizing ends the artwork before the
