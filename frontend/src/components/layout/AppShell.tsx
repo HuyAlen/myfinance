@@ -66,23 +66,26 @@ export default function AppShell({ children }: AppShellProps) {
 
   // Restore only after hydration; the first server/client render matches.
   useEffect(() => {
-    try {
-      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
-    } catch {
-      // Restricted storage must not break navigation.
-    }
+    // Defer state restoration past the hydration commit; initial markup
+    // remains identical on the server and client.
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
+      } catch {
+        // Restricted storage must not break navigation.
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const toggleSidebarCollapsed = () => {
-    setSidebarCollapsed((current) => {
-      const next = !current;
-      try {
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-      } catch {
-        // Persist only when browser storage is available.
-      }
-      return next;
-    });
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+    } catch {
+      // Persist only when browser storage is available.
+    }
   };
   const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
