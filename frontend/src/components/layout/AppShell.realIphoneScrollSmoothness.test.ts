@@ -13,7 +13,7 @@ describe("FINANCE-CONTENT-SCROLL-OWNER-2 shared authenticated scroller", () => {
       'finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)]',
     );
     expect(source).toContain(
-      'className="flex h-full min-w-0 flex-col lg:pl-72"',
+      'sidebarCollapsed ? "lg:pl-20" : "lg:pl-64"',
     );
     expect(source).toContain(
       'finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto',
