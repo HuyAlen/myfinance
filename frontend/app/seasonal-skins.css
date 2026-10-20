@@ -129,7 +129,7 @@
     linear-gradient(90deg, rgb(255 255 255 / 0.98) 0%, rgb(255 255 255 / 0.92) 62%, rgb(255 255 255 / 0.50) 100%),
     var(--finance-season-sidebar-art),
     linear-gradient(160deg, rgb(var(--finance-season-soft) / 0.78), #fbfdff 66%);
-  background-size: 100% 100%, 82% auto, cover;
+  background-size: 100% 100%, cover, cover;
   background-position: center, right top, center;
   border-right-color: rgb(var(--finance-season-primary) / 0.24);
 }
@@ -163,7 +163,7 @@
     linear-gradient(90deg, rgb(255 255 255 / 0.96) 0%, rgb(255 255 255 / 0.91) 48%, rgb(255 255 255 / 0.25) 95%),
     var(--finance-season-sidebar-art),
     linear-gradient(170deg, rgb(var(--finance-season-soft) / 0.82), #fbfdff 55%);
-  background-size: 100% 100%, 125% auto, cover;
+  background-size: 100% 100%, cover, cover;
   background-position: center, right top, center;
   border-right-color: rgb(var(--finance-season-primary) / 0.60);
 }
@@ -227,7 +227,7 @@
     background-size: 75vw auto, auto, auto, cover;
   }
   :root[data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-sidebar {
-    background-size: 100% 100%, 110% auto, cover;
+    background-size: 100% 100%, cover, cover;
   }
   :root[data-finance-workspace-season][data-finance-season-skin] .finance-shell .finance-header {
     background-size: 100% 100%, auto 100%, cover;
