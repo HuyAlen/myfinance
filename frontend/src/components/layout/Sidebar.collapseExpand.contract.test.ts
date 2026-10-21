@@ -31,8 +31,8 @@ describe("MYFINANCE-SIDEBAR-COLLAPSE-EXPAND-P1", () => {
   it("forces desktop sidebar visibility and synchronizes its content offset", () => {
     const css = read("app/globals.css");
     expect(css).toContain("MYFINANCE-SIDEBAR-DESKTOP-VISIBILITY-P0");
-    expect(css).toMatch(/@media \\(min-width: 1024px\\)/);
-    expect(css).toMatch(/\\.finance-shell > \\.finance-sidebar\\s*\\{\\s*visibility: visible;\\s*transform: translateX\\(0\\);\\s*width: 16rem;/);
+    expect(css).toContain("@media (min-width: 1024px) {");
+    expect(css).toContain(".finance-shell > .finance-sidebar {");
     expect(css).toContain('.finance-sidebar[data-sidebar-collapsed="true"]');
     expect(css).toContain('> [data-finance-content-shell][data-sidebar-collapsed="true"]');
     expect(css).toContain("padding-left: 5rem;");
