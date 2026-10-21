@@ -52,7 +52,6 @@ const SHOW_AI_FLOATING_BUTTON = false;
 // scroller is in motion and can make momentum scrolling feel like it catches.
 // Coalesce viewport-height writes after resize settles, and reserve the smaller
 // visual viewport for a likely software keyboard rather than browser chrome.
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "myfinance:sidebar-collapsed";
 const APP_HEIGHT_SETTLE_MS = 180;
 const IOS_KEYBOARD_VIEWPORT_DELTA_PX = 120;
 
@@ -64,28 +63,11 @@ export default function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Restore only after hydration; the first server/client render matches.
-  useEffect(() => {
-    // Defer state restoration past the hydration commit; initial markup
-    // remains identical on the server and client.
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
-      } catch {
-        // Restricted storage must not break navigation.
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
+  // Desktop navigation starts expanded on every app entry. A previous
+  // persisted collapsed preference must never hide the navigation by default.
+  // Keep collapse/expand as a deliberate in-session desktop action.
   const toggleSidebarCollapsed = () => {
-    const next = !sidebarCollapsed;
-    setSidebarCollapsed(next);
-    try {
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-    } catch {
-      // Persist only when browser storage is available.
-    }
+    setSidebarCollapsed((current) => !current);
   };
   const [headerAccountOpen, setHeaderAccountOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -281,7 +263,7 @@ export default function AppShell({ children }: AppShellProps) {
           ].join(" ")}
         />
 
-        <div className={[
+        <div data-finance-content-shell data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"} className={[
             "flex h-full min-w-0 flex-col transition-[padding] duration-300 ease-in-out motion-reduce:transition-none",
             sidebarCollapsed ? "lg:pl-20" : "lg:pl-64",
           ].join(" ")}>

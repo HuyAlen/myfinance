@@ -18,14 +18,25 @@ describe("MYFINANCE-SIDEBAR-COLLAPSE-EXPAND-P1", () => {
     expect(sidebar).toContain("lg:w-64");
   });
 
-  it("persists the chosen width safely without changing initial hydration markup", () => {
-    expect(shell).toContain('useState(false)');
-    expect(shell).toContain('SIDEBAR_COLLAPSED_STORAGE_KEY = "myfinance:sidebar-collapsed"');
-    expect(shell).toContain("window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY)");
-    expect(shell).toContain("window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next))");
+  it("defaults to expanded on each app entry and preserves user-driven collapse", () => {
+    expect(shell).toContain("const [sidebarCollapsed, setSidebarCollapsed] = useState(false)");
+    expect(shell).toContain("setSidebarCollapsed((current) => !current)");
+    expect(shell).not.toContain("myfinance:sidebar-collapsed");
     expect(shell).toContain('sidebarCollapsed ? "lg:pl-20" : "lg:pl-64"');
     expect(shell).toContain("collapsed={sidebarCollapsed}");
     expect(shell).toContain("onToggleCollapsed={toggleSidebarCollapsed}");
+    expect(shell).toContain("data-finance-content-shell");
+  });
+
+  it("forces desktop sidebar visibility and synchronizes its content offset", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain("MYFINANCE-SIDEBAR-DESKTOP-VISIBILITY-P0");
+    expect(css).toContain("@media (min-width: 1024px) {");
+    expect(css).toContain(".finance-shell > .finance-sidebar {");
+    expect(css).toContain('.finance-sidebar[data-sidebar-collapsed="true"]');
+    expect(css).toContain('> [data-finance-content-shell][data-sidebar-collapsed="true"]');
+    expect(css).toContain("padding-left: 5rem;");
+    expect(css).toContain("padding-left: 16rem;");
   });
 
   it("keeps all destinations accessible, tooltips unclipped and active-route styling", () => {

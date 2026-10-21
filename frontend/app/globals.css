@@ -1109,3 +1109,27 @@ body.finance-app-shell-active {
     transform: none !important;
   }
 }
+
+/* MYFINANCE-SIDEBAR-DESKTOP-VISIBILITY-P0
+ * Desktop navigation and its content offset must stay paired even if the
+ * mobile drawer's hidden/translated state or responsive utility order leaks.
+ * Mobile remains an off-canvas drawer controlled by AppShell. */
+@media (min-width: 1024px) {
+  .finance-shell > .finance-sidebar {
+    visibility: visible;
+    transform: translateX(0);
+    width: 16rem;
+  }
+
+  .finance-shell > .finance-sidebar[data-sidebar-collapsed="true"] {
+    width: 5rem;
+  }
+
+  .finance-shell > [data-finance-content-shell] {
+    padding-left: 16rem;
+  }
+
+  .finance-shell > [data-finance-content-shell][data-sidebar-collapsed="true"] {
+    padding-left: 5rem;
+  }
+}
