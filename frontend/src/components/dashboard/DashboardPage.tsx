@@ -5160,7 +5160,7 @@ export default function DashboardPage() {
                   {item.currentAssets.length > 0 ? (
                     <div
                       data-dashboard-financial-structure-current-assets={item.title}
-                      className="mt-3 border-t border-slate-200/80 pt-3"
+                      className="mt-3"
                     >
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#71879A]">
                         Hiện có
