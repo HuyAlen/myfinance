@@ -43,6 +43,25 @@ export function normalizeCashFlowPointForChart(
   };
 }
 
+/**
+ * Focus the shared chart on the months surrounding actual activity.
+ * No rows are fabricated or re-ordered; the full year remains in the source.
+ * Empty years continue to show their complete T1-T12 timeline.
+ */
+export function getVisibleCashFlowPoints(data: CashFlowChartPoint[]) {
+  const firstActive = data.findIndex(hasCashFlowActivity);
+  if (firstActive === -1) return data;
+
+  let lastActive = firstActive;
+  for (let index = firstActive + 1; index < data.length; index += 1) {
+    if (hasCashFlowActivity(data[index])) lastActive = index;
+  }
+
+  // Leave one preceding month for visual context without wasting most
+  // of the plot on empty historical/future months.
+  return data.slice(Math.max(0, firstActive - 1), lastActive + 1);
+}
+
 function getCashFlowValues(data: CashFlowChartPoint[]) {
   return data.flatMap((point) =>
     [point.cashIn, point.cashOut, point.netCashMovement].filter(
@@ -125,8 +144,10 @@ export default function CashFlowChart({
 }: {
   data: CashFlowChartPoint[];
 }) {
-  const chartData = data.map(normalizeCashFlowPointForChart);
-  const activeMonthCount = chartData.filter(hasCashFlowActivity).length;
+  const chartData = getVisibleCashFlowPoints(
+    data.map(normalizeCashFlowPointForChart),
+  );
+  const activeMonthCount = data.filter(hasCashFlowActivity).length;
   const cashFlowDomain = getCashFlowDomain(chartData);
   const cashFlowTicks = getCashFlowTicks(chartData);
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -170,7 +191,7 @@ export default function CashFlowChart({
               vertical={false}
               stroke="#DCE6EF"
             />
-            <ReferenceLine y={0} stroke="#B9C9D8" strokeWidth={1.35} />
+            <ReferenceLine y={0} stroke="#91A9BE" strokeWidth={1.7} />
             <XAxis
               dataKey="label"
               axisLine={false}
@@ -225,7 +246,7 @@ export default function CashFlowChart({
               stroke="#10B981"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={18}
+              maxBarSize={24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={0}
               animationDuration={520}
@@ -238,7 +259,7 @@ export default function CashFlowChart({
               stroke="#F43F5E"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={18}
+              maxBarSize={24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={70}
               animationDuration={520}

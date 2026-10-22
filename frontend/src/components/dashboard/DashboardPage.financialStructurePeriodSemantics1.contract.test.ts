@@ -83,17 +83,17 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-PERIOD-SEMANTICS-1", () => {
     );
   });
 
-  it("makes the panel itself explicit that ratios are selected-period flow semantics", () => {
+  it("distinguishes period expense ratios from current asset-only cards", () => {
     const panel = financialStructurePanel();
 
     expect(panel).toContain(
-      'subtitle="Tỷ lệ phân bổ trong kỳ, kèm số dư tài sản hiện có để đối chiếu"',
+      'subtitle="Chi phí trong kỳ và số dư tài sản hiện có"',
     );
     expect(panel).toContain(
-      'data-dashboard-financial-structure-scope="period"',
+      'data-dashboard-financial-structure-scope="mixed"',
     );
     expect(panel).toContain(
-      "không tham gia vào tỷ lệ",
+      "hai thẻ tiết kiệm và đầu tư chỉ hiển thị số dư tài sản hiện có",
     );
   });
 

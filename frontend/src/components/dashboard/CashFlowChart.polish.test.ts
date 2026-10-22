@@ -19,19 +19,26 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain("netCashMovement: null");
   });
 
-  it("uses a rounded data-aware y scale while preserving zero as the cash-flow baseline", () => {
+  it("keeps one chart with a shared, honest scale and visible zero baseline", () => {
     expect(source).toContain("getCashFlowDomain");
     expect(source).toContain("getCashFlowTicks");
     expect(source).toContain("getNiceCashFlowStep");
     expect(source).toContain("(paddedMax - paddedMin) / 5");
     expect(source).toContain("domain={cashFlowDomain}");
     expect(source).toContain("ticks={cashFlowTicks}");
-    expect(source).not.toContain("tickCount={5}");
     expect(source).toContain("<ReferenceLine");
     expect(source).toContain("y={0}");
+    expect(source.match(/<ComposedChart/g)).toHaveLength(1);
+    expect(source).not.toContain("data-dashboard-cash-flow-gross");
+    expect(source).not.toContain("data-dashboard-cash-flow-net");
   });
 
-  it("fills the available desktop panel height without making mobile unnecessarily tall", () => {
+  it("focuses sparse years on actual months without fabricating zero values", () => {
+    expect(source).toContain("getVisibleCashFlowPoints");
+    expect(source).toContain("data.findIndex(hasCashFlowActivity)");
+    expect(source).toContain("firstActive - 1");
+    expect(source).toContain("lastActive + 1");
+    expect(source).toContain("if (firstActive === -1) return data");
     expect(source).toContain('className="mt-4 flex flex-1 flex-col"');
     expect(source).toContain('className="min-h-56 flex-1 xl:min-h-[300px]"');
     expect(source).toContain('height="100%"');
@@ -53,7 +60,7 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain('fill="#FB7185"');
     expect(source).toContain('stroke="#F43F5E"');
     expect(source).toContain('stroke="#3B82F6"');
-    expect(source).toContain("maxBarSize={18}");
+    expect(source).toContain("maxBarSize={24}");
   });
 
   it("gives the net-cash line clear visual weight", () => {

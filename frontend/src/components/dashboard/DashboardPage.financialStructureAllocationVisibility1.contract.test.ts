@@ -77,7 +77,7 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-ALLOCATION-VISIBILITY-1", () => {
     expect(adjusted).not.toContain("currentSavingInvestmentSnapshot");
   });
 
-  it("renders a dedicated current-assets block without replacing the period percentage", () => {
+  it("renders only current balances on asset cards while preserving expense ratios", () => {
     const panel = panelRegion();
 
     expect(panel).toContain(
@@ -85,8 +85,13 @@ describe("DASHBOARD-FINANCIAL-STRUCTURE-ALLOCATION-VISIBILITY-1", () => {
     );
     expect(panel).toContain("Hiện có");
     expect(panel).toContain("{formatVND(asset.value)}");
+    expect(panel).toContain("item.currentAssets.length === 0 && (");
     expect(panel).toContain("{item.value}");
     expect(panel).toContain("{item.amount}");
+    expect(panel).toContain("{item.note}");
+    expect(panel).toContain("Math.min(item.bar, 100)");
+    expect(panel).toContain("item.currentAssets.length > 0 ? (");
+    expect(panel).toContain('data-dashboard-financial-structure-scope="mixed"');
   });
 
   it("waits for the existing canonical asset snapshot before showing current balances", () => {
