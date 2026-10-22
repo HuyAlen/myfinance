@@ -43,17 +43,28 @@ export function normalizeCashFlowPointForChart(
   };
 }
 
-type CashFlowNumericKey = "cashIn" | "cashOut" | "netCashMovement";
+/**
+ * Focus the shared chart on the months surrounding actual activity.
+ * No rows are fabricated or re-ordered; the full year remains in the source.
+ * Empty years continue to show their complete T1-T12 timeline.
+ */
+export function getVisibleCashFlowPoints(data: CashFlowChartPoint[]) {
+  const firstActive = data.findIndex(hasCashFlowActivity);
+  if (firstActive === -1) return data;
 
-const GROSS_CASH_FLOW_KEYS = ["cashIn", "cashOut"] as const;
-const NET_CASH_FLOW_KEYS = ["netCashMovement"] as const;
+  let lastActive = firstActive;
+  for (let index = firstActive + 1; index < data.length; index += 1) {
+    if (hasCashFlowActivity(data[index])) lastActive = index;
+  }
 
-function getCashFlowValues(
-  data: CashFlowChartPoint[],
-  keys: readonly CashFlowNumericKey[],
-) {
+  // Leave one preceding month for visual context without wasting most
+  // of the plot on empty historical/future months.
+  return data.slice(Math.max(0, firstActive - 1), lastActive + 1);
+}
+
+function getCashFlowValues(data: CashFlowChartPoint[]) {
   return data.flatMap((point) =>
-    keys.map((key) => point[key]).filter(
+    [point.cashIn, point.cashOut, point.netCashMovement].filter(
       (value): value is number =>
         typeof value === "number" && Number.isFinite(value),
     ),
@@ -79,12 +90,8 @@ function getNiceCashFlowStep(rawStep: number) {
   return niceFactor * magnitude;
 }
 
-function getCashFlowScale(
-  data: CashFlowChartPoint[],
-  keys: readonly CashFlowNumericKey[],
-  preferredIntervals = 5,
-) {
-  const values = getCashFlowValues(data, keys);
+function getCashFlowScale(data: CashFlowChartPoint[]) {
+  const values = getCashFlowValues(data);
 
   if (values.length === 0) {
     return {
@@ -107,7 +114,7 @@ function getCashFlowScale(
   const padding = span * 0.05;
   const paddedMin = dataMin < 0 ? dataMin - padding : 0;
   const paddedMax = dataMax + padding;
-  const step = getNiceCashFlowStep((paddedMax - paddedMin) / preferredIntervals);
+  const step = getNiceCashFlowStep((paddedMax - paddedMin) / 5);
   const domainMin = dataMin < 0 ? Math.floor(paddedMin / step) * step : 0;
   const domainMax = Math.max(step, Math.ceil(paddedMax / step) * step);
 
@@ -124,22 +131,12 @@ function getCashFlowScale(
 
 export function getCashFlowDomain(
   data: CashFlowChartPoint[],
-  keys: readonly CashFlowNumericKey[] = [
-    "cashIn", "cashOut", "netCashMovement",
-  ],
-  preferredIntervals = 5,
 ): [number, number] {
-  return getCashFlowScale(data, keys, preferredIntervals).domain;
+  return getCashFlowScale(data).domain;
 }
 
-export function getCashFlowTicks(
-  data: CashFlowChartPoint[],
-  keys: readonly CashFlowNumericKey[] = [
-    "cashIn", "cashOut", "netCashMovement",
-  ],
-  preferredIntervals = 5,
-) {
-  return getCashFlowScale(data, keys, preferredIntervals).ticks;
+export function getCashFlowTicks(data: CashFlowChartPoint[]) {
+  return getCashFlowScale(data).ticks;
 }
 
 export default function CashFlowChart({
@@ -147,17 +144,17 @@ export default function CashFlowChart({
 }: {
   data: CashFlowChartPoint[];
 }) {
-  const chartData = data.map(normalizeCashFlowPointForChart);
-  const activeMonthCount = chartData.filter(hasCashFlowActivity).length;
-  const grossCashFlowDomain = getCashFlowDomain(chartData, GROSS_CASH_FLOW_KEYS);
-  const grossCashFlowTicks = getCashFlowTicks(chartData, GROSS_CASH_FLOW_KEYS);
-  const netCashFlowDomain = getCashFlowDomain(chartData, NET_CASH_FLOW_KEYS, 3);
-  const netCashFlowTicks = getCashFlowTicks(chartData, NET_CASH_FLOW_KEYS, 3);
+  const chartData = getVisibleCashFlowPoints(
+    data.map(normalizeCashFlowPointForChart),
+  );
+  const activeMonthCount = data.filter(hasCashFlowActivity).length;
+  const cashFlowDomain = getCashFlowDomain(chartData);
+  const cashFlowTicks = getCashFlowTicks(chartData);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+    <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
         <p className="text-[11px] font-bold text-slate-600">
           {activeMonthCount}/12 tháng có dòng tiền
         </p>
@@ -174,11 +171,14 @@ export default function CashFlowChart({
             <span className="h-2.5 w-2.5 rounded-[3px] bg-[#FB7185]" />
             Chi ra
           </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-[3px] w-3.5 rounded-full bg-[#3B82F6]" />
+            Dòng tiền ròng
+          </span>
         </div>
       </div>
 
-      {/* Gross operating cash flow has a zero-based scale, independent of signed net. */}
-      <div data-dashboard-cash-flow-gross="true" className="min-h-44 flex-1 xl:min-h-[220px]">
+      <div className="min-h-56 flex-1 xl:min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart
             data={chartData}
@@ -191,16 +191,16 @@ export default function CashFlowChart({
               vertical={false}
               stroke="#DCE6EF"
             />
-            <ReferenceLine y={0} stroke="#B9C9D8" strokeWidth={1.35} />
+            <ReferenceLine y={0} stroke="#91A9BE" strokeWidth={1.7} />
             <XAxis
               dataKey="label"
-              height={14}
-              tick={false}
               axisLine={false}
               tickLine={false}
               interval={0}
               fontSize={11}
               fontWeight={600}
+              tick={{ fill: "#8AA0B5" }}
+              tickMargin={10}
             />
             <YAxis
               axisLine={false}
@@ -210,8 +210,8 @@ export default function CashFlowChart({
               fontWeight={600}
               tick={{ fill: "#8AA0B5" }}
               tickFormatter={(value) => formatCompactVND(Number(value))}
-              domain={grossCashFlowDomain}
-              ticks={grossCashFlowTicks}
+              domain={cashFlowDomain}
+              ticks={cashFlowTicks}
             />
             <Tooltip
               filterNull
@@ -246,7 +246,7 @@ export default function CashFlowChart({
               stroke="#10B981"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={18}
+              maxBarSize={24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={0}
               animationDuration={520}
@@ -259,84 +259,11 @@ export default function CashFlowChart({
               stroke="#F43F5E"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={18}
+              maxBarSize={24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={70}
               animationDuration={520}
               animationEasing="ease-out"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="inline-flex items-center gap-1.5 text-[11px] font-black text-[#31536F]">
-          <span className="h-[3px] w-3.5 rounded-full bg-[#3B82F6]" />
-          Dòng tiền ròng
-        </p>
-        <p className="text-[10px] font-semibold text-slate-500">
-          Âm khi chi ra lớn hơn thu vào
-        </p>
-      </div>
-      {/* The signed net trend keeps an independent axis and visible zero line. */}
-      <div data-dashboard-cash-flow-net="true" className="h-32 shrink-0 sm:h-36 xl:h-40">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <ComposedChart
-            data={chartData}
-            margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
-          >
-            <CartesianGrid
-              strokeDasharray="2 5"
-              vertical={false}
-              stroke="#DCE6EF"
-            />
-            <ReferenceLine y={0} stroke="#B9C9D8" strokeWidth={1.35} />
-            <XAxis
-              dataKey="label"
-              axisLine={false}
-              tickLine={false}
-              interval={0}
-              fontSize={11}
-              fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
-              tickMargin={10}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              width={46}
-              fontSize={11}
-              fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
-              tickFormatter={(value) => formatCompactVND(Number(value))}
-              domain={netCashFlowDomain}
-              ticks={netCashFlowTicks}
-            />
-            <Tooltip
-              filterNull
-              cursor={{ stroke: "#B9C9D8", strokeDasharray: "3 3" }}
-              contentStyle={{
-                borderRadius: "0.9rem",
-                border: "1px solid #E3ECF5",
-                boxShadow: "0 14px 34px -18px rgb(47 128 237 / 0.22)",
-                color: "#35536F",
-                fontSize: "12px",
-                padding: "10px 12px",
-              }}
-              labelStyle={{
-                color: "#173B5E",
-                fontWeight: 700,
-                marginBottom: "4px",
-              }}
-              labelFormatter={(label) =>
-                String(label).replace(/^T(\d+)$/, "Tháng $1")
-              }
-              formatter={(value, name) => [
-                value === null || value === undefined
-                  ? "Chưa có dữ liệu"
-                  : formatVND(Number(value)),
-                String(name),
-              ]}
             />
             <Line
               type="monotone"
