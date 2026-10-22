@@ -23,17 +23,25 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain("getCashFlowDomain");
     expect(source).toContain("getCashFlowTicks");
     expect(source).toContain("getNiceCashFlowStep");
-    expect(source).toContain("(paddedMax - paddedMin) / 5");
-    expect(source).toContain("domain={cashFlowDomain}");
-    expect(source).toContain("ticks={cashFlowTicks}");
+    expect(source).toContain("GROSS_CASH_FLOW_KEYS");
+    expect(source).toContain("NET_CASH_FLOW_KEYS");
+    expect(source).toContain("domain={grossCashFlowDomain}");
+    expect(source).toContain("domain={netCashFlowDomain}");
+    expect(source).toContain('data-dashboard-cash-flow-gross="true"');
+    expect(source).toContain('data-dashboard-cash-flow-net="true"');
+    expect(source.match(/<ComposedChart/g)).toHaveLength(2);
+    expect(source).toContain("(paddedMax - paddedMin) / preferredIntervals");
+    expect(source).toContain("ticks={grossCashFlowTicks}");
+    expect(source).toContain("ticks={netCashFlowTicks}");
     expect(source).not.toContain("tickCount={5}");
     expect(source).toContain("<ReferenceLine");
     expect(source).toContain("y={0}");
   });
 
   it("fills the available desktop panel height without making mobile unnecessarily tall", () => {
-    expect(source).toContain('className="mt-4 flex flex-1 flex-col"');
-    expect(source).toContain('className="min-h-56 flex-1 xl:min-h-[300px]"');
+    expect(source).toContain('className="mt-4 flex flex-1 flex-col gap-3"');
+    expect(source).toContain('className="min-h-44 flex-1 xl:min-h-[220px]"');
+    expect(source).toContain('className="h-32 shrink-0 sm:h-36 xl:h-40"');
     expect(source).toContain('height="100%"');
   });
 
