@@ -5078,20 +5078,18 @@ export default function DashboardPage() {
 
         <Panel
           title="Cấu trúc tài chính"
-          subtitle="Tỷ lệ phân bổ trong kỳ, kèm số dư tài sản hiện có để đối chiếu"
+          subtitle="Chi phí trong kỳ và số dư tài sản hiện có"
         >
-          {/* DASH-POLISH-1: gated on financialStructureReady (union of
-              cashFlowReady + savingInvestmentReady — see that memo's own
-              comment) so a pre-fetch/mid-year-switch render cannot show
-              validated-looking percentages derived from a still-default
-              or stale-period transaction/allocation set. */}
+          {/* Keep the canonical readiness gate: expense ratios use period flow,
+              while savings/investment cards show only verified current balances.
+              Neither scope should render before its data has loaded. */}
           {financialStructureReady ? (
             <div className="mt-4 min-w-0 space-y-3">
               <div
-                data-dashboard-financial-structure-scope="period"
+                data-dashboard-financial-structure-scope="mixed"
                 className="rounded-2xl border border-[#DCE8F1] bg-[#F8FBFE] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#60778D]"
               >
-                Tỷ lệ và thanh tiến độ dùng thu nhập cùng dòng tiền phát sinh trong kỳ. Khối “Hiện có” bên dưới là số dư tài sản hiện tại để đối chiếu và không tham gia vào tỷ lệ.
+                Hai thẻ chi phí thể hiện tỷ lệ theo thu nhập trong kỳ; hai thẻ tiết kiệm và đầu tư chỉ hiển thị số dư tài sản hiện có.
               </div>
               <div data-settings-effective-savings-target="true" className="rounded-2xl border border-blue-100 bg-blue-50/40 px-3.5 py-3 text-xs leading-5 text-[#46647C]">
                 <p className="font-black text-[#23466F]">Mục tiêu tiết kiệm: {financialTargets.savingsGoalPercent}% thu nhập</p>
@@ -5111,46 +5109,54 @@ export default function DashboardPage() {
                       <p className="text-sm font-black text-[#23466F]">
                         {item.title}
                       </p>
-                      <p className="mt-1 text-xs text-slate-600">
-                        {item.amount}
-                      </p>
+                      {item.currentAssets.length === 0 && (
+                        <p className="mt-1 text-xs text-slate-600">
+                          {item.amount}
+                        </p>
+                      )}
                     </div>
-                    <p
-                      className={`text-xl font-black ${
-                        item.tone === "good"
-                          ? "text-emerald-600"
-                          : item.tone === "warning"
-                            ? "text-amber-500"
-                            : item.tone === "danger"
-                              ? "text-rose-500"
-                              : "text-[#60778D]"
-                      }`}
-                    >
-                      {item.value}
-                    </p>
+                    {item.currentAssets.length === 0 && (
+                      <p
+                        className={`text-xl font-black ${
+                          item.tone === "good"
+                            ? "text-emerald-600"
+                            : item.tone === "warning"
+                              ? "text-amber-500"
+                              : item.tone === "danger"
+                                ? "text-rose-500"
+                                : "text-[#60778D]"
+                        }`}
+                      >
+                        {item.value}
+                      </p>
+                    )}
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
-                    <div
-                      className={`h-full rounded-full ${
-                        item.tone === "good"
-                          ? "bg-emerald-500"
-                          : item.tone === "warning"
-                            ? "bg-amber-400"
-                            : item.tone === "danger"
-                              ? "bg-rose-500"
-                              : "bg-[#B8C9D7]"
-                      }`}
-                      style={{
-                        width:
-                          item.tone === "neutral"
-                            ? "0%"
-                            : `${Math.max(4, Math.min(item.bar, 100))}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-600">
-                    {item.note}
-                  </p>
+                  {item.currentAssets.length === 0 && (
+                    <>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/95">
+                        <div
+                          className={`h-full rounded-full ${
+                            item.tone === "good"
+                              ? "bg-emerald-500"
+                              : item.tone === "warning"
+                                ? "bg-amber-400"
+                                : item.tone === "danger"
+                                  ? "bg-rose-500"
+                                  : "bg-[#B8C9D7]"
+                          }`}
+                          style={{
+                            width:
+                              item.tone === "neutral"
+                                ? "0%"
+                                : `${Math.max(4, Math.min(item.bar, 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-slate-600">
+                        {item.note}
+                      </p>
+                    </>
+                  )}
                   {item.currentAssets.length > 0 ? (
                     <div
                       data-dashboard-financial-structure-current-assets={item.title}
