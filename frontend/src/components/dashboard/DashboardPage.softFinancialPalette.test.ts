@@ -79,6 +79,9 @@ describe("DASH-MOBILE-POLISH-3 — Stronger Financial Contrast & Surface Depth",
     expect(cashFlowChart).toContain('stroke="#3B82F6"');
     expect(cashFlowChart).toContain('fill="#34D399"');
     expect(cashFlowChart).toContain('fill="#FB7185"');
-    expect(cashFlowChart).toContain('tick={{ fill: "#8AA0B5" }}');
+    // Cash Flow uses darker legible chart ticks after Dashboard readability polish.
+    expect(cashFlowChart).toContain('tick={{ fill: "#3E5B74" }}');
+    expect(cashFlowChart).toContain('fill="#334F69"');
+    expect(cashFlowChart).toContain("formatCashFlowTickValue(payload.value)");
   });
 });

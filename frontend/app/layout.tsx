@@ -7,6 +7,7 @@ import "./seasonal-workspace.css";
 import "./seasonal-page-atmosphere.css";
 import "./seasonal-flyby.css";
 import "./seasonal-skins.css";
+import "./dashboard-professional-polish.css";
 import { AuthProvider } from "@/src/components/auth/AuthProvider";
 import { HouseholdProvider } from "@/src/components/household/HouseholdProvider";
 import { RealtimeProvider } from "@/src/components/realtime/RealtimeProvider";

@@ -1,0 +1,19 @@
+/* MYFINANCE DASHBOARD PROFESSIONAL POLISH P1
+ * Only chart-card spacing belongs here.
+ * The shared seasonal-workspace.css owns sidebar, header, main background,
+ * seasonal illustrations, motion, flybys, and dark-mode styling on ALL pages.
+ */
+.finance-shell:has([data-dashboard-view-switch="true"]) [data-dashboard-chart-first-grid] {
+  isolation: isolate;
+}
+.finance-shell:has([data-dashboard-view-switch="true"]) [data-dashboard-chart-first-grid] > section {
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  .finance-shell:has([data-dashboard-view-switch="true"]) [data-dashboard-chart-first-grid] {
+    gap: 0.75rem;
+  }
+  .finance-shell:has([data-dashboard-view-switch="true"]) [data-dashboard-chart-first-grid] > section {
+    padding: 0.875rem;
+  }
+}

@@ -12,7 +12,6 @@ import {
   YAxis,
 } from "recharts";
 import { formatVND } from "@/src/services/finance/financeCalculations";
-import { formatCompactVND } from "./dashboardFormat";
 import { usePrefersReducedMotion } from "@/src/lib/ui/usePrefersReducedMotion";
 
 export type CashFlowChartPoint = {
@@ -139,6 +138,28 @@ export function getCashFlowTicks(data: CashFlowChartPoint[]) {
   return getCashFlowScale(data).ticks;
 }
 
+export function formatCashFlowTickValue(value: string | number): string {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? formatVND(amount) : "";
+}
+
+function CashFlowMoneyTick({
+  x = 0,
+  y = 0,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string | number };
+}) {
+  const label = payload?.value == null ? "" : formatCashFlowTickValue(payload.value);
+  return (
+    <text x={x - 7} y={y + 3} textAnchor="end" fill="#334F69" fontSize={11} fontWeight={700}>
+      {label}
+    </text>
+  );
+}
+
 export default function CashFlowChart({
   data,
 }: {
@@ -154,13 +175,13 @@ export default function CashFlowChart({
 
   return (
     <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <p className="text-[11px] font-bold text-slate-600">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
+        <p className="text-[12px] font-bold text-[#3F5B73]">
           {activeMonthCount}/12 tháng có dòng tiền
         </p>
 
         <div
-          className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] font-semibold text-slate-600"
+          className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[12px] font-semibold text-[#3F5B73]"
           aria-label="Chú thích biểu đồ dòng tiền"
         >
           <span className="inline-flex items-center gap-1.5">
@@ -184,14 +205,14 @@ export default function CashFlowChart({
             data={chartData}
             barGap={3}
             barCategoryGap={12}
-            margin={{ top: 14, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 12, right: 7, bottom: 0, left: 2 }}
           >
             <CartesianGrid
-              strokeDasharray="2 5"
+              strokeDasharray="3 7"
               vertical={false}
-              stroke="#DCE6EF"
+              stroke="#E0EAF3"
             />
-            <ReferenceLine y={0} stroke="#91A9BE" strokeWidth={1.7} />
+            <ReferenceLine y={0} stroke="#A4B9CC" strokeWidth={1.1} />
             <XAxis
               dataKey="label"
               axisLine={false}
@@ -199,17 +220,17 @@ export default function CashFlowChart({
               interval={0}
               fontSize={11}
               fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
+              tick={{ fill: "#3E5B74" }}
               tickMargin={10}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              width={46}
-              fontSize={11}
+              width={127}
+              fontSize={10}
               fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
-              tickFormatter={(value) => formatCompactVND(Number(value))}
+              tick={<CashFlowMoneyTick />}
+              tickFormatter={(value) => formatVND(Number(value))}
               domain={cashFlowDomain}
               ticks={cashFlowTicks}
             />
