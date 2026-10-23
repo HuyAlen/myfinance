@@ -1,14 +1,18 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  getDashboardBudgetBand,
+  getDashboardBudgetScale,
+  getDashboardExpenseMosaicColumns,
+  getDashboardWalletDistribution,
+} from "./DashboardVisualMetrics";
 import type { Category, Transaction, Wallet } from "@/src/types/finance";
 import {
   buildCategorySpendingData,
   formatVND,
   type BudgetSpending,
 } from "@/src/services/finance/financeCalculations";
-import { usePrefersReducedMotion } from "@/src/lib/ui/usePrefersReducedMotion";
 import { formatCompactVND } from "./dashboardFormat";
 
 const EXPENSE_COLORS = ["#3987E8", "#72AFE9", "#F6A76D", "#70C7BF", "#A4B5DD"];
@@ -139,7 +143,6 @@ export default function DashboardVisualOverview({
   budgetSpending,
   wallets,
 }: Props) {
-  const prefersReducedMotion = usePrefersReducedMotion();
   const expenses = useMemo(
     () => groupDashboardExpenseSlices(
       buildCategorySpendingData(transactions, categories).map((item) => ({
@@ -150,11 +153,14 @@ export default function DashboardVisualOverview({
     [transactions, categories],
   );
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
+  const mosaic = getDashboardExpenseMosaicColumns(expenses);
   const budgetRows = useMemo(
     () => getDashboardBudgetVisualRows(budgetSpending, categories),
     [budgetSpending, categories],
   );
   const walletRows = useMemo(() => getDashboardWalletVisualRows(wallets), [wallets]);
+  const displayedWallets = getDashboardWalletDistribution(walletRows);
+  const budgetScale = getDashboardBudgetScale(budgetRows.slice(0, 5));
   const positiveWalletTotal = walletRows.reduce((sum, item) => sum + item.balance, 0);
   
   const negativeWalletCount = wallets.filter(
@@ -182,61 +188,27 @@ export default function DashboardVisualOverview({
         ) : totalExpense <= 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có khoản chi thực tế trong kỳ</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="expenses" className="mt-4 flex min-h-[225px] flex-1 flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col 2xl:flex-row 2xl:gap-5">
-            <div className="relative h-48 w-48 shrink-0 2xl:h-52 2xl:w-52">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <PieChart>
-                  <Pie
-                    data={expenses}
-                    nameKey="name"
-                    dataKey="value"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="69%"
-                    outerRadius="92%"
-                    strokeWidth={0}
-                    paddingAngle={2}
-                    isAnimationActive={!prefersReducedMotion}
-                  >
-                    {expenses.map((expense, index) => (
-                      <Cell key={expense.name + index} fill={EXPENSE_COLORS[index % EXPENSE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => formatVND(Number(value))}
-                    contentStyle={{
-                      border: "1px solid #DCE8F3",
-                      borderRadius: "12px",
-                      color: "#294A66",
-                      fontSize: "12px",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[10px] font-semibold text-[#71879A]">Tổng chi</span>
-                <strong className="mt-0.5 text-base font-extrabold tabular-nums text-[#294A66]">
-                  {formatCompactVND(totalExpense)}
-                </strong>
+          <div data-dashboard-visual-chart="expenses" className="mt-4 flex min-h-[260px] flex-1 flex-col gap-3">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#8A9FB2]">Tổng chi thực tế</p>
+                <p className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums text-[#183C5A]">{formatCompactVND(totalExpense)}</p>
               </div>
+              <p className="text-right text-[11px] font-semibold text-[#6A8298]">{expenses.length} nhóm chi tiêu</p>
             </div>
-            <div className="grid w-full min-w-0 max-w-[17rem] gap-2.5">
-              {expenses.map((expense, index) => (
-                <div key={expense.name + index} className="relative flex min-w-0 items-center gap-2 pb-1 text-xs">
-                  <span
-                    aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-[3px]"
-                    style={{ backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }}
-                  />
-                  <span className="min-w-0 flex-1 truncate font-semibold text-[#60778D]" title={expense.name}>
-                    {expense.name}
-                  </span>
-                  <strong className="shrink-0 tabular-nums text-[#294A66]">
-                    {Math.round((expense.value / totalExpense) * 100)}%
-                  </strong>
-                  <div className="absolute bottom-0 left-4 right-0 h-[2px] rounded-full bg-[#EFF4FA]">
-                    <div className="h-full rounded-full" style={{ width: `${(expense.value / totalExpense) * 100}%`, backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }} />
-                  </div>
+            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="flex h-[206px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:h-[228px]">
+              {mosaic.map((column, columnIndex) => (
+                <div key={columnIndex} className="flex min-w-0 flex-col gap-1.5" style={{ width: column.widthPercent + "%" }}>
+                  {column.tiles.map((item, index) => {
+                    const colorIndex = columnIndex === 0 ? index : index + 2;
+                    return (
+                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className="relative flex min-h-0 flex-col justify-end overflow-hidden rounded-xl p-2.5 text-white sm:p-3" style={{ flex: item.value, backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}>
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#102C49]/25 to-transparent" />
+                        <span className="relative truncate text-[10px] font-semibold leading-4 drop-shadow-sm sm:text-[11px]" title={item.name}>{item.name}</span>
+                        <strong className="relative mt-0.5 text-base font-extrabold tabular-nums drop-shadow-sm sm:text-lg">{Math.round(item.sharePercent)}%</strong>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -252,52 +224,33 @@ export default function DashboardVisualOverview({
         ) : budgetRows.length === 0 ? (
           <div className="mt-4"><EmptyChart>Tháng này chưa có ngân sách</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="budgets" className="mt-4 space-y-3.5">
+          <div data-dashboard-visual-chart="budgets" className="mt-4 flex flex-1 flex-col justify-center gap-3.5">
+            <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#8298AB]">
+              <span>Tỷ lệ chi so với hạn mức</span>
+              <span className="inline-flex items-center gap-3"><span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm bg-[#83B6DD]" />Trong hạn</span><span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm bg-[#EB7184]" />Vượt mức</span></span>
+            </div>
             {budgetRows.slice(0, 5).map((item) => {
-              const barColor =
-                item.status === "over" ? "#F47487" :
-                item.status === "at-limit" ? "#F29C57" :
-                item.status === "near" ? "#F2BD6C" : "#65B7D9";
+              const band = getDashboardBudgetBand(item, budgetScale);
               return (
                 <div key={item.budgetId} className="min-w-0">
                   <div className="mb-1.5 flex min-w-0 items-center justify-between gap-3">
-                    <span className="min-w-0 truncate text-xs font-bold text-[#506B81]" title={item.name}>
-                      {item.name}
-                    </span>
-                    <span
-                      className={
-                        "shrink-0 text-xs font-extrabold tabular-nums " +
-                        (item.status === "over" ? "text-rose-600" : "text-[#41627C]")
-                      }
-                      title={formatVND(item.spent) + " / " + formatVND(item.limit)}
-                    >
-                      {item.percent}%
-                      <span className="ml-2 font-semibold text-[#8296A7]">
-                        {formatCompactVND(item.spent)} / {formatCompactVND(item.limit)}
-                      </span>
+                    <span className="min-w-0 truncate text-[11px] font-bold text-[#45647D]" title={item.name}>{item.name}</span>
+                    <span className="shrink-0 text-[11px] font-bold tabular-nums">
+                      <span className={item.percent > 100 ? "text-[#D94F6A]" : "text-[#426780]"}>{item.percent}%</span>
+                      <span className="ml-2 text-[#93A4B5]">{formatCompactVND(item.spent)} / {formatCompactVND(item.limit)}</span>
                     </span>
                   </div>
-                  <div
-                    role="progressbar"
-                    aria-label={item.name + ": dùng " + item.percent + "% ngân sách"}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.min(100, item.percent)}
-                    className="h-2 overflow-hidden rounded-full bg-[#EAF1F7]"
-                  >
-                    <div
-                      className="h-full rounded-full transition-[width] duration-300"
-                      style={{ backgroundColor: barColor, width: item.fillPercent + "%" }}
-                    />
+                  <div role="progressbar" aria-label={item.name + ": đã sử dụng " + item.percent + "% ngân sách"} aria-valuemin={0} aria-valuemax={Math.max(100, item.percent)} aria-valuenow={Math.min(Math.max(item.percent, 0), Math.max(100,item.percent))} className="relative h-3.5 overflow-hidden rounded-md bg-[#EEF3F8]">
+                    {band.hasLimit ? <div aria-hidden="true" className="absolute inset-y-0 z-10 w-[2px] bg-[#486981]/70" style={{ left: Math.min(99.7, band.markerPercent) + "%" }} /> : null}
+                    <div aria-hidden="true" className="flex h-full overflow-hidden rounded-md" style={{ width: Math.min(100,band.basePercent + band.excessPercent) + "%" }}>
+                      <div className="h-full shrink-0 bg-[#8EBFE3]" style={{ width: band.basePercent / Math.max(band.basePercent + band.excessPercent, 1) * 100 + "%" }} />
+                      <div className="h-full flex-1 bg-[#EE7389]" />
+                    </div>
                   </div>
                 </div>
               );
             })}
-            {budgetRows.length > 5 ? (
-              <p className="text-[10px] font-semibold text-[#8296A7]">
-                Hiển thị 5/{budgetRows.length} danh mục
-              </p>
-            ) : null}
+            <p className="text-[10px] text-[#8B9EAF]">{budgetScale}% là mốc cao nhất trên cùng thang đo{budgetRows.length > 5 ? " · Hiển thị 5/" + budgetRows.length + " mục" : ""}</p>
           </div>
         )}
       </ChartCard>
@@ -308,43 +261,27 @@ export default function DashboardVisualOverview({
         ) : walletRows.length === 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có ví với số dư dương</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="wallets" className="mt-4 space-y-3.5">
-            {walletRows.slice(0, 5).map((wallet, index) => (
-              <div key={wallet.id} className="min-w-0">
-                <div className="mb-1.5 flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-xs font-bold text-[#506B81]" title={wallet.name}>
-                    {wallet.name}
-                  </span>
-                  <strong className="shrink-0 text-xs font-extrabold tabular-nums text-[#294A66]">
-                    {formatCompactVND(wallet.balance)} <span className="ml-1.5 font-semibold text-[#8296A7]">{Math.round(wallet.sharePercent)}%</span>
-                  </strong>
-                </div>
-                <div
-                  role="img"
-                  aria-label={wallet.name + ": " + formatVND(wallet.balance)}
-                  className="h-2 overflow-hidden rounded-full bg-[#EAF1F7]"
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: wallet.sharePercent + "%", backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }}
-                  />
-                </div>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-[#EAF0F6] pt-3 text-xs">
-              <span className="font-semibold text-[#71879A]">Tổng số dư dương</span>
-              <strong className="tabular-nums text-[#294A66]">{formatCompactVND(positiveWalletTotal)}</strong>
+          <div data-dashboard-visual-chart="wallets" className="mt-4 flex flex-1 flex-col justify-center">
+            <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#8A9FB2]">Tổng số dư dương</p>
+            <p className="mt-1 text-[26px] font-extrabold tracking-tight tabular-nums text-[#183C5A]">{formatCompactVND(positiveWalletTotal)}</p>
+            <div role="img" aria-label={"Phân bổ số dư dương: " + displayedWallets.map((w) => w.name + " " + Math.round(w.sharePercent) + "%").join(", ")} className="mt-4 flex h-[31px] w-full gap-1 overflow-hidden rounded-xl bg-[#EDF4FA] p-[3px]">
+              {displayedWallets.map((wallet, index) => (
+                <div key={wallet.id} title={wallet.name + ": " + formatVND(wallet.balance)} className="h-full min-w-0 rounded-md" style={{ width: wallet.sharePercent + "%", backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }} />
+              ))}
             </div>
-            {walletRows.length > 5 ? (
-              <p className="text-[10px] font-semibold text-[#8296A7]">
-                Hiển thị 5/{walletRows.length} ví
-              </p>
-            ) : null}
-            {negativeWalletCount > 0 ? (
-              <p className="text-[10px] font-semibold text-amber-700">
-                {negativeWalletCount} ví số dư âm không nằm trong biểu đồ cột dương
-              </p>
-            ) : null}
+            <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+              {displayedWallets.map((wallet, index) => (
+                <div key={wallet.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-[#E8EFF6] bg-[#F9FBFE] px-2.5 py-2">
+                  <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[4px]" style={{ backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }} />
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#5C7389]" title={wallet.name}>{wallet.name}</span>
+                  <span className="shrink-0 text-right">
+                    <strong className="block text-[11px] font-extrabold tabular-nums text-[#244C68]">{formatCompactVND(wallet.balance)}</strong>
+                    <span className="block text-[10px] font-semibold tabular-nums text-[#94A5B6]">{Math.round(wallet.sharePercent)}%</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            {negativeWalletCount > 0 ? <p className="mt-3 text-[10px] font-semibold text-amber-700">{negativeWalletCount} ví số dư âm không nằm trong tổng số dư dương</p> : null}
           </div>
         )}
       </ChartCard>
