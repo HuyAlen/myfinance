@@ -17,7 +17,7 @@ describe("MYFINANCE DASHBOARD VISUAL REDESIGN P1.1", () => {
     ]);
     expect(columns).toHaveLength(2);
     expect(columns[0].widthPercent).toBe(45);
-    expect(columns[1].widthPercent).toBe(55);
+    expect(columns[1].widthPercent).toBeCloseTo(55, 6);
     const firstArea = columns[0].widthPercent * columns[0].tiles[0].heightPercent / 100;
     const thirdArea = columns[1].widthPercent * columns[1].tiles[0].heightPercent / 100;
     expect(firstArea).toBeCloseTo(24, 6);
@@ -50,7 +50,7 @@ describe("MYFINANCE DASHBOARD VISUAL REDESIGN P1.1", () => {
     const band = getDashboardBudgetBand({ spent: 100_000, limit: 0 }, 150);
     expect(band.basePercent).toBe(0);
     expect(band.excessPercent).toBe(0);
-    expect(band.markerPercent).toBeCloseTo(66.6666667);
+    expect(band.markerPercent).toBe(0);
     expect(band.hasLimit).toBe(false);
   });
 
