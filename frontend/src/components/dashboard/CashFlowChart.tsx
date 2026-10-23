@@ -138,6 +138,11 @@ export function getCashFlowTicks(data: CashFlowChartPoint[]) {
   return getCashFlowScale(data).ticks;
 }
 
+export function formatCashFlowTickValue(value: string | number): string {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? formatVND(amount) : "";
+}
+
 function CashFlowMoneyTick({
   x = 0,
   y = 0,
@@ -147,9 +152,9 @@ function CashFlowMoneyTick({
   y?: number;
   payload?: { value?: string | number };
 }) {
-  const label = String(payload?.value ?? "");
+  const label = payload?.value == null ? "" : formatCashFlowTickValue(payload.value);
   return (
-    <text x={x - 7} y={y + 3} textAnchor="end" fill="#516A80" fontSize={10} fontWeight={700}>
+    <text x={x - 7} y={y + 3} textAnchor="end" fill="#334F69" fontSize={11} fontWeight={700}>
       {label}
     </text>
   );
@@ -171,12 +176,12 @@ export default function CashFlowChart({
   return (
     <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
-        <p className="text-[11px] font-bold text-slate-600">
+        <p className="text-[12px] font-bold text-[#3F5B73]">
           {activeMonthCount}/12 tháng có dòng tiền
         </p>
 
         <div
-          className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[11px] font-semibold text-slate-600"
+          className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[12px] font-semibold text-[#3F5B73]"
           aria-label="Chú thích biểu đồ dòng tiền"
         >
           <span className="inline-flex items-center gap-1.5">
@@ -205,7 +210,7 @@ export default function CashFlowChart({
             <CartesianGrid
               strokeDasharray="3 7"
               vertical={false}
-              stroke="#E8EFF5"
+              stroke="#E0EAF3"
             />
             <ReferenceLine y={0} stroke="#A4B9CC" strokeWidth={1.1} />
             <XAxis
@@ -215,7 +220,7 @@ export default function CashFlowChart({
               interval={0}
               fontSize={11}
               fontWeight={600}
-              tick={{ fill: "#516A80" }}
+              tick={{ fill: "#3E5B74" }}
               tickMargin={10}
             />
             <YAxis
