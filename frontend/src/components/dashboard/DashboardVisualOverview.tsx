@@ -111,8 +111,8 @@ function ChartCard({
         className
       }
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-sm font-extrabold text-[#294A66] sm:text-base">{title}</h3>
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[#EFF3F8] pb-2.5">
+        <h3 className="text-[13px] font-extrabold tracking-tight text-[#294A66] sm:text-[15px]">{title}</h3>
         {hint ? (
           <span className="text-[10px] font-semibold text-[#71879A] sm:text-[11px]">
             {hint}
@@ -176,13 +176,13 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Chi tiêu theo danh mục" hint="Kỳ đang chọn" className="xl:col-span-5">
+      <ChartCard title="Chi tiêu theo danh mục" hint="Kỳ đang chọn" className="lg:col-span-5">
         {!spendingReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : totalExpense <= 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có khoản chi thực tế trong kỳ</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="expenses" className="mt-4 flex h-full min-h-[225px] flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col 2xl:flex-row 2xl:gap-5">
+          <div data-dashboard-visual-chart="expenses" className="mt-4 flex min-h-[225px] flex-1 flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col 2xl:flex-row 2xl:gap-5">
             <div className="relative h-48 w-48 shrink-0 2xl:h-52 2xl:w-52">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
@@ -252,7 +252,7 @@ export default function DashboardVisualOverview({
         ) : budgetRows.length === 0 ? (
           <div className="mt-4"><EmptyChart>Tháng này chưa có ngân sách</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="budgets" className="mt-4 space-y-4">
+          <div data-dashboard-visual-chart="budgets" className="mt-4 space-y-3.5">
             {budgetRows.slice(0, 5).map((item) => {
               const barColor =
                 item.status === "over" ? "#F47487" :
@@ -283,7 +283,7 @@ export default function DashboardVisualOverview({
                     aria-valuemin={0}
                     aria-valuemax={100}
                     aria-valuenow={Math.min(100, item.percent)}
-                    className="h-2.5 overflow-hidden rounded-full bg-[#EBF2F8]"
+                    className="h-2 overflow-hidden rounded-full bg-[#EAF1F7]"
                   >
                     <div
                       className="h-full rounded-full transition-[width] duration-300"
@@ -302,13 +302,13 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Số dư theo ví" hint="Số dư hiện tại" className="xl:col-span-5">
+      <ChartCard title="Số dư theo ví" hint="Số dư hiện tại" className="lg:col-span-5">
         {!walletsReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : walletRows.length === 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có ví với số dư dương</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="wallets" className="mt-4 space-y-4">
+          <div data-dashboard-visual-chart="wallets" className="mt-4 space-y-3.5">
             {walletRows.slice(0, 5).map((wallet, index) => (
               <div key={wallet.id} className="min-w-0">
                 <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -322,7 +322,7 @@ export default function DashboardVisualOverview({
                 <div
                   role="img"
                   aria-label={wallet.name + ": " + formatVND(wallet.balance)}
-                  className="h-2.5 overflow-hidden rounded-full bg-[#EBF2F8]"
+                  className="h-2 overflow-hidden rounded-full bg-[#EAF1F7]"
                 >
                   <div
                     className="h-full rounded-full"
