@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import SeasonalWorkspaceAmbientMotion from "./SeasonalWorkspaceAmbientMotion";
@@ -85,7 +85,6 @@ export default function AppShell({ children }: AppShellProps) {
   const [isGlobalFabSuppressed, setGlobalFabSuppressed] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const { wizardDone, tourDone } = useOnboarding();
   const shellChromeOverlayOpen =
     sidebarOpen || headerAccountOpen || moreMenuOpen;
@@ -243,7 +242,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <DateFilterProvider>
-      <div data-finance-route={pathname === "/" ? "dashboard" : "other"} className="finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)] text-[var(--finance-text)] [--mobile-bottom-nav-height:4.75rem]">
+      <div className="finance-shell h-(--app-height) overflow-hidden bg-[var(--finance-page)] text-[var(--finance-text)] [--mobile-bottom-nav-height:4.75rem]">
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
