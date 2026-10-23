@@ -4017,7 +4017,7 @@ export default function DashboardPage() {
 
       <div data-dashboard-view-switch="true" className="flex items-center justify-between gap-3">
         <span className="text-sm font-extrabold text-[#294A66]">Tổng quan tài chính</span>
-        <div role="group" aria-label="Chế độ hiển thị Dashboard" className="inline-flex rounded-xl border border-[#D7E5F1] bg-[#F4F8FC] p-1">
+        <div role="group" aria-label="Chế độ hiển thị Tổng quan" className="inline-flex rounded-xl border border-[#D7E5F1] bg-[#F4F8FC] p-1">
           <button type="button" aria-pressed={dashboardDisplayMode === "charts"} onClick={() => setDashboardDisplayMode("charts")} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${dashboardDisplayMode === "charts" ? "bg-white text-[#2F80ED] shadow-sm" : "text-[#688097]"}`}>Biểu đồ</button>
           <button type="button" aria-pressed={dashboardDisplayMode === "details"} onClick={() => setDashboardDisplayMode("details")} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${dashboardDisplayMode === "details" ? "bg-white text-[#2F80ED] shadow-sm" : "text-[#688097]"}`}>Chi tiết</button>
         </div>
