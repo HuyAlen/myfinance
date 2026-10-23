@@ -261,13 +261,16 @@ describe("MYFINANCE-VIETNAMESE-UI-ROUTE-AUDIT-2", () => {
     }
   });
 
+  // The AST audit parses 29 TSX surfaces; parallel full-suite execution on
+  // Windows can exceed Vitest's 5s default despite a passing isolated run.
+  // Keep all assertions, but give this CPU-heavy audit its own time budget.
   it("rejects mixed English product copy in rendered/static UI contexts", () => {
     const violations = [...ROUTE_SURFACES, ...GLOBAL_SURFACES].flatMap(auditSurface);
     expect(
       violations,
       `Vietnamese route audit found ${violations.length} mixed-copy violation(s):\n${violations.slice(0, 80).join("\n")}`,
     ).toEqual([]);
-  });
+  }, 30_000);
 
   it("keeps a narrow technical allowlist for names and finance/engineering acronyms", () => {
     for (const token of ["MyFinance", "AI", "API", "CSV", "JSON", "SQL", "OpenAI", "Supabase", "ETF", "FIRE", "2FA", "GMT", "UTC", "BYOK", "MoM", "QoQ", "YoY", "GPT"]) {
