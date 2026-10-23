@@ -204,7 +204,10 @@ export default function DashboardVisualOverview({
                       <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className="relative flex min-h-0 flex-col justify-end overflow-hidden rounded-xl p-2.5 text-white sm:p-3" style={{ flex: item.value, backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}>
                         <div className="absolute inset-0 bg-gradient-to-t from-[#102C49]/25 to-transparent" />
                         <span className="relative truncate text-[10px] font-semibold leading-4 drop-shadow-sm sm:text-[11px]" title={item.name}>{item.name}</span>
-                        <strong className="relative mt-0.5 text-base font-extrabold tabular-nums drop-shadow-sm sm:text-lg">{Math.round(item.sharePercent)}%</strong>
+                        <div className="relative mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 drop-shadow-sm">
+                          <strong className="text-base font-extrabold tabular-nums sm:text-lg">{Math.round(item.sharePercent)}%</strong>
+                          <span data-dashboard-expense-amount="true" className="min-w-0 text-[10px] font-bold tabular-nums leading-tight sm:text-[11px]">{formatVND(item.value)}</span>
+                        </div>
                       </div>
                     );
                   })}
