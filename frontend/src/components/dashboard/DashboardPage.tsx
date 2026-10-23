@@ -202,6 +202,10 @@ const NetWorthTrendChart = dynamic(() => import("./NetWorthTrendChart"), {
     <div className="mt-3 h-44 animate-pulse rounded-2xl bg-slate-100" />
   ),
 });
+const DashboardVisualOverview = dynamic(() => import("./DashboardVisualOverview"), {
+  ssr: false,
+  loading: () => <div className="h-80 animate-pulse rounded-3xl bg-[#F0F6FC]" />,
+});
 const CashFlowChart = dynamic(() => import("./CashFlowChart"), {
   ssr: false,
   loading: () => (
@@ -617,6 +621,7 @@ export default function DashboardPage() {
   const dateDisplayFormat = useAccountDateFormat();
   const financialTargets = useAccountFinancialTargets();
   const router = useRouter();
+  const [dashboardDisplayMode, setDashboardDisplayMode] = useState<"charts" | "details">("charts");
   const mountedAtRef = useRef<number | null>(null);
   const hasReportedCriticalReadyRef = useRef(false);
   useEffect(() => {
@@ -4010,6 +4015,30 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <div data-dashboard-view-switch="true" className="flex items-center justify-between gap-3">
+        <span className="text-sm font-extrabold text-[#294A66]">Tổng quan tài chính</span>
+        <div role="group" aria-label="Chế độ hiển thị Tổng quan" className="inline-flex rounded-xl border border-[#D7E5F1] bg-[#F4F8FC] p-1">
+          <button type="button" aria-pressed={dashboardDisplayMode === "charts"} onClick={() => setDashboardDisplayMode("charts")} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${dashboardDisplayMode === "charts" ? "bg-white text-[#2F80ED] shadow-sm" : "text-[#688097]"}`}>Biểu đồ</button>
+          <button type="button" aria-pressed={dashboardDisplayMode === "details"} onClick={() => setDashboardDisplayMode("details")} className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${dashboardDisplayMode === "details" ? "bg-white text-[#2F80ED] shadow-sm" : "text-[#688097]"}`}>Chi tiết</button>
+        </div>
+      </div>
+      {dashboardDisplayMode === "charts" && (
+        <DashboardVisualOverview
+          cashFlowChart={<CashFlowChart data={cashFlowData} />}
+          cashFlowReady={cashMovementReady}
+          spendingReady={cashFlowReady}
+          budgetReady={budgetAttentionReady}
+          walletsReady={isDashboardReady}
+          monthMode={isDashboardMonthMode}
+          year={selectedYear}
+          month={selectedMonth}
+          categories={categories}
+          transactions={nonTransferFilteredTransactions}
+          budgetSpending={budgetSpendingSnapshot}
+          wallets={snapshotWallets}
+        />
+      )}
+
       {/* Finance action center — pinned decision surface, not a customizable
           supporting section. It consumes the same canonical finance rules as
           Header notifications and only selects/ranks work-to-do for display. */}
@@ -4146,6 +4175,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <div data-dashboard-detail-mode="true" className={dashboardDisplayMode === "details" ? "contents" : "hidden"}>
       {/* DASHBOARD-MOBILE-CUSTOMIZATION-COMPACT-1: mobile keeps the same customization semantics with denser presentation. */}
       <div
         data-dashboard-customization-toolbar="true"
@@ -6102,6 +6132,7 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+      </div>
       </div>
     </div>
   );
