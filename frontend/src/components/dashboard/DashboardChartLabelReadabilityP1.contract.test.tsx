@@ -13,7 +13,7 @@ const labels = [
   "Con Cái (Sữa + Tã + Phát Sinh)",
   "Đi lại",
 ];
-const amounts = [6_600_000, 5_604_169, 4_464_000, 4_307_175, 5_609_113];
+const amounts = [6_600_000, 5_604_169, 4_464_000, 4_307_175, 1_000_000];
 const categories: Category[] = labels.map((name, i) => ({
   id: "category-" + i,
   name,
