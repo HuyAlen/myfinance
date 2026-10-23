@@ -49,4 +49,41 @@ describe("MYFINANCE DASHBOARD FULL VND DISPLAY P1", () => {
     expect(source).toContain("tickFormatter={(value) => formatVND(Number(value))}");
     expect(source).not.toContain("formatCompactVND");
   });
+
+  it("renders the exact amount as visible text inside every expense mosaic tile, including the other category", () => {
+    const categoryData: Category[] = [
+      { id: "home", name: "Nhà ở", type: "expense" },
+      { id: "food", name: "Ăn uống", type: "expense" },
+      { id: "family", name: "Gia đình", type: "expense" },
+      { id: "kids", name: "Con cái", type: "expense" },
+      { id: "other", name: "Di chuyển", type: "expense" },
+    ];
+    const money = [6_345_678, 5_234_567, 4_123_456, 3_012_345, 2_001_234];
+    const expenseData: Transaction[] = categoryData.map((category, index) => ({
+      id: "tx-" + index,
+      type: "expense",
+      amount: money[index],
+      categoryId: category.id,
+      walletId: "cash",
+      note: "",
+      date: "2026-10-10",
+    }));
+    const html = renderToStaticMarkup(
+      React.createElement(DashboardVisualOverview, {
+        cashFlowChart: null,
+        cashFlowReady: true, spendingReady: true, budgetReady: true, walletsReady: true,
+        monthMode: true, year: 2026, month: 10,
+        categories: categoryData, transactions: expenseData, budgetSpending: [], wallets: [],
+      }),
+    );
+    const tileAmounts = [...html.matchAll(/<span[^>]*data-dashboard-expense-amount="true"[^>]*>([^<]+)<\\/span>/g)].map((match) => match[1]);
+    expect(tileAmounts).toEqual([
+      "6.345.678 đ",
+      "5.234.567 đ",
+      "4.123.456 đ",
+      "3.012.345 đ",
+      "2.001.234 đ",
+    ]);
+    expect(html).toContain("Danh mục khác");
+  });
 });
