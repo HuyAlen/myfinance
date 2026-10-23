@@ -69,13 +69,15 @@ export function getDashboardBudgetVisualRows(
             ? 100
             : 0,
     }))
+    .map((row) => ({ ...row, fillPercent: Math.min(100, row.percent) }))
     .sort((a, b) => b.percent - a.percent || b.spent - a.spent);
 }
 
 export function getDashboardWalletVisualRows(wallets: Wallet[]) {
-  return wallets
-    .filter((wallet) => Number.isFinite(wallet.balance) && wallet.balance > 0)
-    .slice()
+  const positive = wallets.filter((wallet) => Number.isFinite(wallet.balance) && wallet.balance > 0);
+  const total = positive.reduce((sum, wallet) => sum + wallet.balance, 0);
+  return positive
+    .map((wallet) => ({ ...wallet, sharePercent: total > 0 ? (wallet.balance / total) * 100 : 0 }))
     .sort((a, b) => b.balance - a.balance);
 }
 
@@ -105,7 +107,7 @@ function ChartCard({
   return (
     <section
       className={
-        "min-w-0 rounded-3xl border border-[#DCE8F3] bg-white p-4 shadow-[0_7px_22px_-13px_rgba(42,95,143,0.24)] sm:p-5 " +
+        "min-w-0 overflow-hidden rounded-[22px] border border-[#D9E5EF] bg-white/95 p-4 shadow-[0_8px_30px_-20px_rgba(28,75,120,0.26)] transition-shadow duration-200 hover:shadow-[0_16px_36px_-24px_rgba(28,75,120,0.30)] sm:p-5 " +
         className
       }
     >
@@ -154,7 +156,7 @@ export default function DashboardVisualOverview({
   );
   const walletRows = useMemo(() => getDashboardWalletVisualRows(wallets), [wallets]);
   const positiveWalletTotal = walletRows.reduce((sum, item) => sum + item.balance, 0);
-  const walletMax = walletRows[0]?.balance ?? 1;
+  
   const negativeWalletCount = wallets.filter(
     (wallet) => Number.isFinite(wallet.balance) && wallet.balance < 0,
   ).length;
@@ -162,9 +164,9 @@ export default function DashboardVisualOverview({
   return (
     <div
       data-dashboard-chart-first-grid="true"
-      className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-12 xl:gap-4"
+      className="grid min-w-0 grid-cols-1 items-stretch gap-3 lg:grid-cols-12 lg:gap-4"
     >
-      <ChartCard title={"Thu – chi năm " + year} hint="Dòng tiền hoạt động" className="flex flex-col xl:col-span-7">
+      <ChartCard title={"Thu – chi năm " + year} hint="Dòng tiền hoạt động" className="flex flex-col lg:col-span-7">
         {cashFlowReady && cashFlowChart ? (
           <div data-dashboard-visual-chart="cash-flow" className="flex min-h-[275px] flex-1 flex-col">
             {cashFlowChart}
@@ -180,8 +182,8 @@ export default function DashboardVisualOverview({
         ) : totalExpense <= 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có khoản chi thực tế trong kỳ</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="expenses" className="mt-3 flex flex-col items-center gap-3 sm:flex-row sm:justify-center xl:flex-col 2xl:flex-row">
-            <div className="relative h-44 w-44 shrink-0">
+          <div data-dashboard-visual-chart="expenses" className="mt-4 flex h-full min-h-[225px] flex-col items-center justify-center gap-4 sm:flex-row lg:flex-col 2xl:flex-row 2xl:gap-5">
+            <div className="relative h-48 w-48 shrink-0 2xl:h-52 2xl:w-52">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
                   <Pie
@@ -190,8 +192,8 @@ export default function DashboardVisualOverview({
                     dataKey="value"
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={81}
+                    innerRadius="69%"
+                    outerRadius="92%"
                     strokeWidth={0}
                     paddingAngle={2}
                     isAnimationActive={!prefersReducedMotion}
@@ -218,9 +220,9 @@ export default function DashboardVisualOverview({
                 </strong>
               </div>
             </div>
-            <div className="grid w-full min-w-0 max-w-xs gap-2.5">
+            <div className="grid w-full min-w-0 max-w-[17rem] gap-2.5">
               {expenses.map((expense, index) => (
-                <div key={expense.name + index} className="flex min-w-0 items-center gap-2 text-xs">
+                <div key={expense.name + index} className="relative flex min-w-0 items-center gap-2 pb-1 text-xs">
                   <span
                     aria-hidden="true"
                     className="size-2.5 shrink-0 rounded-[3px]"
@@ -232,6 +234,9 @@ export default function DashboardVisualOverview({
                   <strong className="shrink-0 tabular-nums text-[#294A66]">
                     {Math.round((expense.value / totalExpense) * 100)}%
                   </strong>
+                  <div className="absolute bottom-0 left-4 right-0 h-[2px] rounded-full bg-[#EFF4FA]">
+                    <div className="h-full rounded-full" style={{ width: `${(expense.value / totalExpense) * 100}%`, backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -239,7 +244,7 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Mức dùng ngân sách" hint={monthMode ? "Tháng " + month + "/" + year : "Theo tháng"} className="xl:col-span-7">
+      <ChartCard title="Mức dùng ngân sách" hint={monthMode ? "Tháng " + month + "/" + year : "Theo tháng"} className="lg:col-span-7">
         {!monthMode ? (
           <div className="mt-4"><EmptyChart>Chọn bộ lọc Tháng để xem ngân sách</EmptyChart></div>
         ) : !budgetReady ? (
@@ -282,7 +287,7 @@ export default function DashboardVisualOverview({
                   >
                     <div
                       className="h-full rounded-full transition-[width] duration-300"
-                      style={{ backgroundColor: barColor, width: Math.min(100, item.percent) + "%" }}
+                      style={{ backgroundColor: barColor, width: item.fillPercent + "%" }}
                     />
                   </div>
                 </div>
@@ -311,7 +316,7 @@ export default function DashboardVisualOverview({
                     {wallet.name}
                   </span>
                   <strong className="shrink-0 text-xs font-extrabold tabular-nums text-[#294A66]">
-                    {formatCompactVND(wallet.balance)}
+                    {formatCompactVND(wallet.balance)} <span className="ml-1.5 font-semibold text-[#8296A7]">{Math.round(wallet.sharePercent)}%</span>
                   </strong>
                 </div>
                 <div
@@ -321,7 +326,7 @@ export default function DashboardVisualOverview({
                 >
                   <div
                     className="h-full rounded-full"
-                    style={{ width: Math.max(0, (wallet.balance / walletMax) * 100) + "%", backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }}
+                    style={{ width: wallet.sharePercent + "%", backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }}
                   />
                 </div>
               </div>
