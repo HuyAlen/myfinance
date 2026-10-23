@@ -13,7 +13,6 @@ import {
   formatVND,
   type BudgetSpending,
 } from "@/src/services/finance/financeCalculations";
-import { formatCompactVND } from "./dashboardFormat";
 
 const EXPENSE_COLORS = ["#3987E8", "#72AFE9", "#F6A76D", "#70C7BF", "#A4B5DD"];
 const WALLET_COLORS = ["#3987E8", "#72AFE9", "#91C6EC", "#70C7BF", "#A4B5DD"];
@@ -192,7 +191,7 @@ export default function DashboardVisualOverview({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#8A9FB2]">Tổng chi thực tế</p>
-                <p className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums text-[#183C5A]">{formatCompactVND(totalExpense)}</p>
+                <p className="mt-1 break-words text-xl font-extrabold tracking-tight tabular-nums text-[#183C5A] sm:text-2xl">{formatVND(totalExpense)}</p>
               </div>
               <p className="text-right text-[11px] font-semibold text-[#6A8298]">{expenses.length} nhóm chi tiêu</p>
             </div>
@@ -233,11 +232,11 @@ export default function DashboardVisualOverview({
               const band = getDashboardBudgetBand(item, budgetScale);
               return (
                 <div key={item.budgetId} className="min-w-0">
-                  <div className="mb-1.5 flex min-w-0 items-center justify-between gap-3">
+                  <div className="mb-1.5 flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <span className="min-w-0 truncate text-[11px] font-bold text-[#45647D]" title={item.name}>{item.name}</span>
-                    <span className="shrink-0 text-[11px] font-bold tabular-nums">
+                    <span className="min-w-0 text-right text-[11px] font-bold tabular-nums">
                       <span className={item.percent > 100 ? "text-[#D94F6A]" : "text-[#426780]"}>{item.percent}%</span>
-                      <span className="ml-2 text-[#93A4B5]">{formatCompactVND(item.spent)} / {formatCompactVND(item.limit)}</span>
+                      <span className="ml-2 inline-block text-[#93A4B5]">{formatVND(item.spent)} / {formatVND(item.limit)}</span>
                     </span>
                   </div>
                   <div role="progressbar" aria-label={item.name + ": đã sử dụng " + item.percent + "% ngân sách"} aria-valuemin={0} aria-valuemax={Math.max(100, item.percent)} aria-valuenow={Math.min(Math.max(item.percent, 0), Math.max(100,item.percent))} className="relative h-3.5 overflow-hidden rounded-md bg-[#EEF3F8]">
@@ -263,7 +262,7 @@ export default function DashboardVisualOverview({
         ) : (
           <div data-dashboard-visual-chart="wallets" className="mt-4 flex flex-1 flex-col justify-center">
             <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#8A9FB2]">Tổng số dư dương</p>
-            <p className="mt-1 text-[26px] font-extrabold tracking-tight tabular-nums text-[#183C5A]">{formatCompactVND(positiveWalletTotal)}</p>
+            <p className="mt-1 break-words text-xl font-extrabold tracking-tight tabular-nums text-[#183C5A] sm:text-[24px]">{formatVND(positiveWalletTotal)}</p>
             <div role="img" aria-label={"Phân bổ số dư dương: " + displayedWallets.map((w) => w.name + " " + Math.round(w.sharePercent) + "%").join(", ")} className="mt-4 flex h-[31px] w-full gap-1 overflow-hidden rounded-xl bg-[#EDF4FA] p-[3px]">
               {displayedWallets.map((wallet, index) => (
                 <div key={wallet.id} title={wallet.name + ": " + formatVND(wallet.balance)} className="h-full min-w-0 rounded-md" style={{ width: wallet.sharePercent + "%", backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }} />
@@ -274,8 +273,8 @@ export default function DashboardVisualOverview({
                 <div key={wallet.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-[#E8EFF6] bg-[#F9FBFE] px-2.5 py-2">
                   <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[4px]" style={{ backgroundColor: WALLET_COLORS[index % WALLET_COLORS.length] }} />
                   <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#5C7389]" title={wallet.name}>{wallet.name}</span>
-                  <span className="shrink-0 text-right">
-                    <strong className="block text-[11px] font-extrabold tabular-nums text-[#244C68]">{formatCompactVND(wallet.balance)}</strong>
+                  <span className="min-w-0 shrink-0 text-right">
+                    <strong className="block text-[10px] font-extrabold tabular-nums text-[#244C68] sm:text-[11px]">{formatVND(wallet.balance)}</strong>
                     <span className="block text-[10px] font-semibold tabular-nums text-[#94A5B6]">{Math.round(wallet.sharePercent)}%</span>
                   </span>
                 </div>
