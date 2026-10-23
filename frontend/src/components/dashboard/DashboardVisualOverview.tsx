@@ -195,18 +195,17 @@ export default function DashboardVisualOverview({
               </div>
               <p className="text-right text-[11px] font-semibold text-[#6A8298]">{expenses.length} nhóm chi tiêu</p>
             </div>
-            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="flex h-[206px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:h-[228px]">
+            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="flex h-[252px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:h-[268px]">
               {mosaic.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex min-w-0 flex-col gap-1.5" style={{ width: column.widthPercent + "%" }}>
                   {column.tiles.map((item, index) => {
                     const colorIndex = columnIndex === 0 ? index : index + 2;
                     return (
-                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className="relative flex min-h-0 flex-col justify-end overflow-hidden rounded-xl p-2.5 text-white sm:p-3" style={{ flex: item.value, backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}>
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#102C49]/25 to-transparent" />
-                        <span className="relative truncate text-[10px] font-semibold leading-4 drop-shadow-sm sm:text-[11px]" title={item.name}>{item.name}</span>
-                        <div className="relative mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 drop-shadow-sm">
-                          <strong className="text-base font-extrabold tabular-nums sm:text-lg">{Math.round(item.sharePercent)}%</strong>
-                          <span data-dashboard-expense-amount="true" className="min-w-0 text-[10px] font-bold tabular-nums leading-tight sm:text-[11px]">{formatVND(item.value)}</span>
+                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className="relative flex min-h-0 flex-col justify-between gap-1 overflow-hidden rounded-xl bg-[#2F80C3] p-2.5 text-white sm:p-3" style={{ flex: item.value, backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}>
+                        <span data-dashboard-expense-name="true" className="relative min-w-0 whitespace-normal break-words text-[11px] font-bold leading-[1.25] text-white sm:text-[12px]" title={item.name}>{item.name}</span>
+                        <div className="relative mt-auto min-w-0">
+                          <strong className="block text-[15px] font-extrabold leading-tight tabular-nums text-white sm:text-[18px]">{Math.round(item.sharePercent)}%</strong>
+                          <span data-dashboard-expense-amount="true" className="mt-0.5 block min-w-0 whitespace-normal break-words text-[10px] font-bold leading-4 tabular-nums text-white sm:text-[11px]">{formatVND(item.value)}</span>
                         </div>
                       </div>
                     );
