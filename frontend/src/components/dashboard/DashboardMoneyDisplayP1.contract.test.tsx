@@ -76,7 +76,7 @@ describe("MYFINANCE DASHBOARD FULL VND DISPLAY P1", () => {
         categories: categoryData, transactions: expenseData, budgetSpending: [], wallets: [],
       }),
     );
-    const tileAmounts = [...html.matchAll(/<span[^>]*data-dashboard-expense-amount="true"[^>]*>([^<]+)<\\/span>/g)].map((match) => match[1]);
+    const tileAmounts = [...html.matchAll(/data-dashboard-expense-amount="true"[^>]*>([^<]+)</g)].map((match) => match[1]);
     expect(tileAmounts).toEqual([
       "6.345.678 đ",
       "5.234.567 đ",
