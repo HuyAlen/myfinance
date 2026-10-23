@@ -138,6 +138,23 @@ export function getCashFlowTicks(data: CashFlowChartPoint[]) {
   return getCashFlowScale(data).ticks;
 }
 
+function CashFlowMoneyTick({
+  x = 0,
+  y = 0,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string | number };
+}) {
+  const label = String(payload?.value ?? "");
+  return (
+    <text x={x - 7} y={y + 3} textAnchor="end" fill="#516A80" fontSize={10} fontWeight={700}>
+      {label}
+    </text>
+  );
+}
+
 export default function CashFlowChart({
   data,
 }: {
@@ -198,16 +215,16 @@ export default function CashFlowChart({
               interval={0}
               fontSize={11}
               fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
+              tick={{ fill: "#516A80" }}
               tickMargin={10}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              width={116}
+              width={127}
               fontSize={10}
               fontWeight={600}
-              tick={{ fill: "#8AA0B5" }}
+              tick={<CashFlowMoneyTick />}
               tickFormatter={(value) => formatVND(Number(value))}
               domain={cashFlowDomain}
               ticks={cashFlowTicks}
