@@ -12,7 +12,6 @@ import {
   YAxis,
 } from "recharts";
 import { formatVND } from "@/src/services/finance/financeCalculations";
-import { formatCompactVND } from "./dashboardFormat";
 import { usePrefersReducedMotion } from "@/src/lib/ui/usePrefersReducedMotion";
 
 export type CashFlowChartPoint = {
@@ -184,7 +183,7 @@ export default function CashFlowChart({
             data={chartData}
             barGap={3}
             barCategoryGap={12}
-            margin={{ top: 12, right: 7, bottom: 0, left: 0 }}
+            margin={{ top: 12, right: 7, bottom: 0, left: 2 }}
           >
             <CartesianGrid
               strokeDasharray="3 7"
@@ -205,11 +204,11 @@ export default function CashFlowChart({
             <YAxis
               axisLine={false}
               tickLine={false}
-              width={46}
-              fontSize={11}
+              width={116}
+              fontSize={10}
               fontWeight={600}
               tick={{ fill: "#8AA0B5" }}
-              tickFormatter={(value) => formatCompactVND(Number(value))}
+              tickFormatter={(value) => formatVND(Number(value))}
               domain={cashFlowDomain}
               ticks={cashFlowTicks}
             />
