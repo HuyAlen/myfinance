@@ -35,7 +35,7 @@ export function getDashboardBudgetBand(row: BudgetValue, scale: number) {
   if (!hasLimit) {
     return {
       hasLimit: false,
-      markerPercent: scale > 0 && Number.isFinite(row.spent) ? Math.min(100, Math.max(0, (row.spent / scale) * 100)) : 0,
+      markerPercent: 0,
       basePercent: 0,
       excessPercent: 0,
     };
