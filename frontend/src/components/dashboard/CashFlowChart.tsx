@@ -153,8 +153,8 @@ export default function CashFlowChart({
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+    <div data-dashboard-chart-motion="cash-flow" className="mt-2 flex min-h-0 flex-1 flex-col">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
         <p className="text-[11px] font-bold text-slate-600">
           {activeMonthCount}/12 tháng có dòng tiền
         </p>
@@ -178,20 +178,20 @@ export default function CashFlowChart({
         </div>
       </div>
 
-      <div className="min-h-56 flex-1 xl:min-h-[300px]">
+      <div className="min-h-[225px] flex-1 xl:min-h-[265px]">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart
             data={chartData}
             barGap={3}
             barCategoryGap={12}
-            margin={{ top: 14, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 12, right: 7, bottom: 0, left: 0 }}
           >
             <CartesianGrid
-              strokeDasharray="2 5"
+              strokeDasharray="3 7"
               vertical={false}
-              stroke="#DCE6EF"
+              stroke="#E8EFF5"
             />
-            <ReferenceLine y={0} stroke="#91A9BE" strokeWidth={1.7} />
+            <ReferenceLine y={0} stroke="#A4B9CC" strokeWidth={1.1} />
             <XAxis
               dataKey="label"
               axisLine={false}
@@ -246,7 +246,7 @@ export default function CashFlowChart({
               stroke="#10B981"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={24}
+              maxBarSize={27}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={0}
               animationDuration={520}
@@ -270,7 +270,7 @@ export default function CashFlowChart({
               dataKey="netCashMovement"
               name="Dòng tiền ròng"
               stroke="#3B82F6"
-              strokeWidth={3.75}
+              strokeWidth={2.8}
               strokeLinecap="round"
               strokeLinejoin="round"
               connectNulls={false}
