@@ -153,7 +153,7 @@ export default function CashFlowChart({
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <div data-dashboard-chart-motion="cash-flow" className="mt-2 flex min-h-0 flex-1 flex-col">
+    <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
         <p className="text-[11px] font-bold text-slate-600">
           {activeMonthCount}/12 tháng có dòng tiền
@@ -178,7 +178,7 @@ export default function CashFlowChart({
         </div>
       </div>
 
-      <div className="min-h-[225px] flex-1 xl:min-h-[265px]">
+      <div className="min-h-56 flex-1 xl:min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart
             data={chartData}
@@ -246,7 +246,7 @@ export default function CashFlowChart({
               stroke="#10B981"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={27}
+              maxBarSize={24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={0}
               animationDuration={520}
@@ -270,7 +270,7 @@ export default function CashFlowChart({
               dataKey="netCashMovement"
               name="Dòng tiền ròng"
               stroke="#3B82F6"
-              strokeWidth={2.8}
+              strokeWidth={3.75}
               strokeLinecap="round"
               strokeLinejoin="round"
               connectNulls={false}
