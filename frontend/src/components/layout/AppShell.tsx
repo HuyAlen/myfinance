@@ -275,7 +275,7 @@ export default function AppShell({ children }: AppShellProps) {
 
           <main
             data-mobile-chrome-overlay-open={shellChromeOverlayOpen ? "true" : undefined}
-            className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto data-[mobile-chrome-overlay-open=true]:overflow-y-hidden data-[mobile-chrome-overlay-open=true]:overscroll-none px-3 py-4 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:pb-6"
+            className="finance-main min-h-0 flex-1 overflow-x-clip overflow-y-auto data-[mobile-chrome-overlay-open=true]:overflow-y-hidden data-[mobile-chrome-overlay-open=true]:overscroll-none px-3 py-3.5 pb-[calc(var(--mobile-bottom-nav-height)+env(safe-area-inset-bottom)+1rem)] sm:px-6 sm:py-6 lg:px-8 lg:pb-6"
           >
             <SeasonalWorkspaceAmbientMotion area="page" />
             <FabSuppressionProvider setSuppressed={setGlobalFabSuppressed}>
