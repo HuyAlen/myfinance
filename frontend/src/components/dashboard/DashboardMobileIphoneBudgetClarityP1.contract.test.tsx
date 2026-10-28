@@ -23,7 +23,7 @@ const budgets: BudgetSpending[] = [
     isOverBudget: true, overAmount: 1_555_569, status: "over" },
   { budgetId: "unset", categoryId: "unset", month: "2026-10", limit: 0,
     spent: 0, remaining: 0, usagePercent: 0, isOverBudget: false,
-    overAmount: 0, status: "healthy" },
+    overAmount: 0, status: "no-spend" },
 ];
 
 function render(rows = budgets) {
@@ -63,7 +63,7 @@ describe("MYFINANCE MOBILE IPHONE BUDGET CLARITY P1", () => {
   it("separates spent and limit across mobile-safe columns and explains remaining money", () => {
     const html = render([{
       ...budgets[1], spent: 3_000_000, remaining: 2_000_000, overAmount: 0,
-      isOverBudget: false, usagePercent: 60, status: "healthy",
+      isOverBudget: false, usagePercent: 60, status: "on-track",
     }]);
     expect(html).toContain("Còn 2.000.000 đ");
     expect(html).toContain('data-dashboard-budget-limit="true"');
