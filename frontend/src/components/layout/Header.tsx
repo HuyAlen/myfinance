@@ -1310,7 +1310,7 @@ export default function Header({
   return (
     <header className="finance-header sticky top-0 z-30 h-auto shrink-0 border-b border-[#DDE7F0] bg-white/95 px-3 backdrop-blur-xl sm:px-6 lg:h-18 lg:px-8">
       <SeasonalWorkspaceAmbientMotion area="topbar" />
-      <div className="flex h-18 items-center justify-between gap-3 sm:gap-5 lg:h-full">
+      <div className="flex h-14 items-center justify-between gap-2 sm:h-18 sm:gap-5 lg:h-full">
         {/* ══ LEFT ══ */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           {/* Hamburger mobile */}
@@ -2135,7 +2135,7 @@ export default function Header({
       </div>
 
       {/* Mobile/PWA period picker */}
-      <div className="border-t border-[#E2EAF2] bg-white/95 pb-3 pt-2 md:hidden">
+      <div className="border-t border-[#E2EAF2] bg-white/95 pb-2 pt-1.5 md:hidden">
         <div className="flex items-center gap-2">
           <button
             type="button"
