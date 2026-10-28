@@ -2,8 +2,6 @@
 
 import { useMemo, type ReactNode } from "react";
 import {
-  getDashboardBudgetBand,
-  getDashboardBudgetScale,
   getDashboardExpenseMosaicColumns,
   getDashboardWalletDistribution,
 } from "./DashboardVisualMetrics";
@@ -68,9 +66,7 @@ export function getDashboardBudgetVisualRows(
       percent:
         row.limit > 0
           ? Math.max(0, Math.round((row.spent / row.limit) * 100))
-          : row.spent > 0
-            ? 100
-            : 0,
+          : 0,
     }))
     .map((row) => ({ ...row, fillPercent: Math.min(100, row.percent) }))
     .sort((a, b) => b.percent - a.percent || b.spent - a.spent);
@@ -159,7 +155,7 @@ export default function DashboardVisualOverview({
   );
   const walletRows = useMemo(() => getDashboardWalletVisualRows(wallets), [wallets]);
   const displayedWallets = getDashboardWalletDistribution(walletRows);
-  const budgetScale = getDashboardBudgetScale(budgetRows.slice(0, 5));
+  const overBudgetCount = budgetRows.filter((item) => item.limit > 0 && item.spent > item.limit).length;
   const positiveWalletTotal = walletRows.reduce((sum, item) => sum + item.balance, 0);
   
   const negativeWalletCount = wallets.filter(
@@ -195,7 +191,26 @@ export default function DashboardVisualOverview({
               </div>
               <p className="text-right text-[12px] font-semibold text-[#4E6880]">{expenses.length} nhóm chi tiêu</p>
             </div>
-            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="flex h-[252px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:h-[268px]">
+
+            {/* iPhone: a proportional list is readable even when a tile would be shorter than its label. */}
+            <div data-dashboard-mobile-expense-list="true" role="list" aria-label="Chi tiêu theo danh mục" className="grid min-w-0 gap-2 sm:hidden">
+              {expenses.map((item, index) => {
+                const share = (item.value / totalExpense) * 100;
+                return (
+                  <div role="listitem" key={item.name + index} className="min-w-0 rounded-xl border border-[#DFE9F2] bg-[#F9FCFF] px-3 py-2.5">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <span data-dashboard-mobile-expense-name="true" className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-bold leading-[1.4] text-[#294A66]">{item.name}</span>
+                      <strong className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#335C7C]">{Math.round(share)}%</strong>
+                    </div>
+                    <p data-dashboard-mobile-expense-amount="true" className="mt-1 break-words text-[13px] font-semibold tabular-nums text-[#44647D]">{formatVND(item.value)}</p>
+                    <div aria-hidden="true" className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#E6EEF6]">
+                      <div className="h-full rounded-full" style={{ width: Math.min(100, share) + "%", backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="hidden h-[252px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:flex sm:h-[268px]">
               {mosaic.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex min-w-0 flex-col gap-1.5" style={{ width: column.widthPercent + "%" }}>
                   {column.tiles.map((item, index) => {
@@ -225,33 +240,51 @@ export default function DashboardVisualOverview({
         ) : budgetRows.length === 0 ? (
           <div className="mt-4"><EmptyChart>Tháng này chưa có ngân sách</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="budgets" className="mt-4 flex flex-1 flex-col justify-center gap-3.5">
-            <div data-dashboard-budget-caption="true" className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-semibold text-[#48647B]">
-              <span>Tỷ lệ chi so với hạn mức</span>
-              <span className="inline-flex flex-wrap items-center gap-3"><span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm bg-[#358ECA]" />Trong hạn</span><span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm bg-[#DB526B]" />Vượt mức</span></span>
+          <div data-dashboard-visual-chart="budgets" className="mt-3 flex min-w-0 flex-col gap-2.5">
+            <div data-dashboard-budget-caption="true" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] font-semibold leading-5 text-[#48647B]">
+              <span>Mỗi thanh thể hiện 0–100% hạn mức</span>
+              <span className={overBudgetCount > 0 ? "font-bold text-[#B83E57]" : "text-[#37688A]"}>{overBudgetCount}/{budgetRows.length} danh mục vượt mức</span>
             </div>
             {budgetRows.slice(0, 5).map((item) => {
-              const band = getDashboardBudgetBand(item, budgetScale);
+              const hasLimit = item.limit > 0;
+              const isOverBudget = hasLimit && item.spent > item.limit;
+              const isAtLimit = hasLimit && item.spent === item.limit;
               return (
-                <div key={item.budgetId} className="min-w-0">
-                  <div className="mb-1.5 flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                    <span data-dashboard-budget-name="true" className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-bold leading-[1.3] text-[#314F68]" title={item.name}>{item.name}</span>
-                    <span className="min-w-0 text-right text-[13px] font-extrabold tabular-nums text-[#324F68]">
-                      <span className={item.percent > 100 ? "text-[#D94F6A]" : "text-[#426780]"}>{item.percent}%</span>
-                      <span data-dashboard-budget-value="true" className="ml-2 inline-block text-[13px] font-bold text-[#435E75]">{formatVND(item.spent)} / {formatVND(item.limit)}</span>
+                <div data-dashboard-budget-row="true" key={item.budgetId} className="min-w-0 rounded-xl border border-[#E0EAF2] bg-[#F9FCFF] px-3 py-2.5">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                    <span data-dashboard-budget-name="true" className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-extrabold leading-[1.4] text-[#294A66]" title={item.name}>{item.name}</span>
+                    <span data-dashboard-budget-percent="true" className={"shrink-0 rounded-lg px-2 py-0.5 text-[12px] font-extrabold tabular-nums " + (isOverBudget ? "bg-[#FCE8EC] text-[#B83E57]" : isAtLimit ? "bg-[#FFF2D8] text-[#9F671E]" : hasLimit ? "bg-[#EAF4FC] text-[#2F719E]" : "bg-[#E9EFF5] text-[#526A80]")}>
+                      {hasLimit ? item.percent + "% đã dùng" : "Chưa đặt hạn mức"}
                     </span>
                   </div>
-                  <div role="progressbar" aria-label={item.name + ": đã sử dụng " + item.percent + "% ngân sách"} aria-valuemin={0} aria-valuemax={Math.max(100, item.percent)} aria-valuenow={Math.min(Math.max(item.percent, 0), Math.max(100,item.percent))} className="relative h-3.5 overflow-hidden rounded-md bg-[#E5EDF5]">
-                    {band.hasLimit ? <div aria-hidden="true" className="absolute inset-y-0 z-10 w-[2px] bg-[#486981]/70" style={{ left: Math.min(99.7, band.markerPercent) + "%" }} /> : null}
-                    <div aria-hidden="true" className="flex h-full overflow-hidden rounded-md" style={{ width: Math.min(100,band.basePercent + band.excessPercent) + "%" }}>
-                      <div className="h-full shrink-0 bg-[#4A99D0]" style={{ width: band.basePercent / Math.max(band.basePercent + band.excessPercent, 1) * 100 + "%" }} />
-                      <div className="h-full flex-1 bg-[#DE5C78]" />
+                  <div className="mt-2 grid min-w-0 grid-cols-2 gap-x-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#587189]">Đã chi</p>
+                      <span data-dashboard-budget-value="true" className="block min-w-0 break-words text-[13px] font-extrabold leading-5 tabular-nums text-[#2F506C]">{formatVND(item.spent)}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-[#587189]">Hạn mức</p>
+                      <span data-dashboard-budget-limit="true" className="block min-w-0 break-words text-[13px] font-extrabold leading-5 tabular-nums text-[#2F506C]">{hasLimit ? formatVND(item.limit) : "Chưa thiết lập"}</span>
                     </div>
                   </div>
+                  <div
+                    role="progressbar"
+                    aria-label={item.name + ": mức dùng ngân sách"}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={item.fillPercent}
+                    aria-valuetext={hasLimit ? item.percent + "% đã dùng, " + (isOverBudget ? "vượt " + formatVND(item.overAmount) : "còn " + formatVND(Math.max(0, item.remaining))) : "Chưa đặt hạn mức"}
+                    className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#E3EDF5]"
+                  >
+                    <div aria-hidden="true" className={"h-full rounded-full " + (isOverBudget ? "bg-[#DB526B]" : isAtLimit ? "bg-[#E8AD49]" : "bg-[#4298CE]")} style={{ width: item.fillPercent + "%" }} />
+                  </div>
+                  <p data-dashboard-budget-explanation="true" className={"mt-1.5 text-[12px] font-bold leading-5 tabular-nums " + (isOverBudget ? "text-[#B83E57]" : isAtLimit ? "text-[#9F671E]" : "text-[#426780]")}>
+                    {!hasLimit ? "Chưa có hạn mức để so sánh" : isOverBudget ? "Vượt " + formatVND(item.overAmount) : isAtLimit ? "Đã dùng hết hạn mức" : "Còn " + formatVND(Math.max(0, item.remaining))}
+                  </p>
                 </div>
               );
             })}
-            <p className="text-[12px] font-semibold leading-4 text-[#4F687F]">{budgetScale}% là mốc cao nhất trên cùng thang đo{budgetRows.length > 5 ? " · Hiển thị 5/" + budgetRows.length + " mục" : ""}</p>
+            {budgetRows.length > 5 ? <p className="text-[12px] font-semibold text-[#536F86]">Đang hiển thị 5/{budgetRows.length} danh mục có ngân sách</p> : null}
           </div>
         )}
       </ChartCard>
