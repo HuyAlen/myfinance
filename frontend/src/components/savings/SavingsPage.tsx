@@ -856,8 +856,7 @@ export default function SavingsPage({
           localSavings.find((saving) => saving.id === transaction.savingId)
             ?.name ?? "Khoản tiết kiệm",
       }))
-      .sort((left, right) => right.date.localeCompare(left.date))
-      ;
+      .sort((left, right) => right.date.localeCompare(left.date));
 
     const averageBalance =
       localSavings.length > 0 ? metrics.totalSavings / localSavings.length : 0;
