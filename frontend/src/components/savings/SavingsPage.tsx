@@ -50,6 +50,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 import { supabase } from "@/src/lib/supabase";
 import SavingsInternalTransferModal from "@/src/components/savings/SavingsInternalTransferModal";
+import { paginateSavingsActivity } from "@/src/lib/savings/savingsActivityHistory";
 
 type SavingWithWallet = SavingAccount & {
   walletId?: string;
@@ -532,6 +533,7 @@ export default function SavingsPage({
     null,
   );
   const [historySavingId, setHistorySavingId] = useState<string | null>(null);
+  const [activityPage, setActivityPage] = useState(1);
   const [transferSourceId, setTransferSourceId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SavingWithWallet | null>(
     null,
@@ -855,7 +857,7 @@ export default function SavingsPage({
             ?.name ?? "Khoản tiết kiệm",
       }))
       .sort((left, right) => right.date.localeCompare(left.date))
-      .slice(0, 8);
+      ;
 
     const averageBalance =
       localSavings.length > 0 ? metrics.totalSavings / localSavings.length : 0;
@@ -883,6 +885,8 @@ export default function SavingsPage({
     metrics.totalSavings,
     savingsExperience.averageRate,
   ]);
+
+  const activityPagination = paginateSavingsActivity(savingsAnalytics.recentTransactions, activityPage);
 
   const isEditing = editingSavingId !== null;
   // A failed wallet load means this lookup miss is unknown, not a real
@@ -2413,8 +2417,8 @@ export default function SavingsPage({
         </div>
 
         <div className="mt-3 divide-y divide-[#E8EEF4]">
-          {savingsAnalytics.recentTransactions.length > 0 ? (
-            savingsAnalytics.recentTransactions.map((transaction) => {
+          {activityPagination.items.length > 0 ? (
+            activityPagination.items.map((transaction) => {
               const signedAmount = getSignedTransactionAmount(transaction);
               const isPositive = signedAmount > 0;
               const isInternalTransfer = Boolean(transaction.transferReference);
@@ -2472,6 +2476,28 @@ export default function SavingsPage({
             </p>
           )}
         </div>
+        {activityPagination.total > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[#E8EEF4] pt-3">
+            <p className="text-xs font-semibold text-[#61788F]">
+              Hiển thị {activityPagination.from}-{activityPagination.to} / {activityPagination.total} hoạt động
+            </p>
+            <nav className="flex items-center gap-2" aria-label="Phân trang hoạt động tiết kiệm">
+              <button type="button" onClick={() => setActivityPage((page) => Math.max(1, page - 1))}
+                disabled={activityPagination.page === 1}
+                className="min-h-10 rounded-xl border border-[#DCE6EF] px-3 text-xs font-bold text-[#36536B] disabled:opacity-40">
+                Trước
+              </button>
+              <span className="min-w-16 text-center text-xs font-bold text-[#36536B]">
+                {activityPagination.page}/{activityPagination.pageCount}
+              </span>
+              <button type="button" onClick={() => setActivityPage((page) => Math.min(activityPagination.pageCount, page + 1))}
+                disabled={activityPagination.page === activityPagination.pageCount}
+                className="min-h-10 rounded-xl border border-[#DCE6EF] px-3 text-xs font-bold text-[#36536B] disabled:opacity-40">
+                Sau
+              </button>
+            </nav>
+          </div>
+        ) : null}
       </section>
 
       {/* SAVINGS-UX-1: create/edit metadata is intentionally separate from money movement and history. */}
