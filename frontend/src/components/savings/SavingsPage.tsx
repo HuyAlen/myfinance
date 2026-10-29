@@ -87,6 +87,7 @@ type SavingTransaction = {
   amount: number;
   date: string;
   note: string;
+  walletId?: string;
   transferReference?: string;
   transferDirection?: "out" | "in";
 };
@@ -166,9 +167,30 @@ const mapTransactionRowToTransaction = (
     amount: Number(row.amount ?? 0),
     date: row.transaction_date,
     note: transfer?.displayNote ?? row.note ?? getTransactionLabel(row.type),
+    walletId: row.wallet_id ?? undefined,
     transferReference: transfer?.reference,
     transferDirection: transfer?.direction,
   };
+};
+
+const getSavingTransactionWalletLabel = (
+  transaction: SavingTransaction,
+  wallets: WalletType[],
+): string | null => {
+  // Internal transfers move directly between savings; interest has no wallet leg.
+  if (transaction.transferReference || transaction.type === "interest") {
+    return null;
+  }
+
+  // Use the wallet recorded with this movement, never the saving's current wallet.
+  const linkedWallet = transaction.walletId
+    ? wallets.find((wallet) => wallet.id === transaction.walletId)
+    : null;
+  const walletName = linkedWallet?.name || "Không xác định";
+
+  if (transaction.type === "deposit") return `Nạp từ ví: ${walletName}`;
+  if (transaction.type === "withdraw") return `Rút về ví: ${walletName}`;
+  return `Tất toán về ví: ${walletName}`;
 };
 
 const groupTransactionsBySavingId = (transactions: SavingTransaction[]) =>
@@ -1645,6 +1667,7 @@ export default function SavingsPage({
       savingId: selectedSaving.id,
       type: transactionForm.type,
       amount,
+      walletId: activeWallet.id,
       date: todayInputValue(),
       note:
         note ||
@@ -2395,6 +2418,7 @@ export default function SavingsPage({
               const signedAmount = getSignedTransactionAmount(transaction);
               const isPositive = signedAmount > 0;
               const isInternalTransfer = Boolean(transaction.transferReference);
+              const walletLabel = getSavingTransactionWalletLabel(transaction, wallets);
 
               return (
                 <div
@@ -2417,6 +2441,14 @@ export default function SavingsPage({
                       <p className="truncate text-sm font-black text-[#36536B]">
                         {transaction.savingName}
                       </p>
+                      {walletLabel ? (
+                        <p
+                          className="mt-0.5 truncate text-[11px] font-bold text-[#426789] sm:text-xs"
+                          title={walletLabel}
+                        >
+                          {walletLabel}
+                        </p>
+                      ) : null}
                       <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8CA0B3] sm:text-xs">
                         {isInternalTransfer ? "Chuyển nội bộ · " : ""}
                         {transaction.note} · {formatDate(transaction.date,dateDisplayFormat)}
@@ -3103,6 +3135,7 @@ export default function SavingsPage({
                   selectedTransactions.map((transaction) => {
                     const signedAmount = getSignedTransactionAmount(transaction);
                     const isIncome = signedAmount > 0;
+                    const walletLabel = getSavingTransactionWalletLabel(transaction, wallets);
 
                     return (
                       <div
@@ -3123,6 +3156,11 @@ export default function SavingsPage({
                             <p className="wrap-anywhere text-sm font-black text-slate-800">
                               {transaction.note}
                             </p>
+                            {walletLabel ? (
+                              <p className="mt-1 wrap-anywhere text-xs font-bold text-blue-700">
+                                {walletLabel}
+                              </p>
+                            ) : null}
                             <p className="mt-1 text-xs font-bold text-slate-400">
                               {formatDate(transaction.date,dateDisplayFormat)} ·{" "}
                               {transaction.transferReference
