@@ -26,7 +26,7 @@ describe("SAVINGS-ACTIVITY-PAGINATION-P2", () => {
 
   it("loads every database batch, deduplicating overlapping IDs", async () => {
     const pageRequests: number[] = [];
-    const fetchPage = async (from: number, _to: number) => {
+    const fetchPage = async (from: number) => {
       pageRequests.push(from);
       const data = from === 0 ? rows.slice(0, 10) :
         from === 10 ? [rows[9], ...rows.slice(10, 17)] : [];
