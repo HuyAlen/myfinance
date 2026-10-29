@@ -50,7 +50,7 @@ import {
 } from "@/src/services/finance/financeStorage";
 import { supabase } from "@/src/lib/supabase";
 import SavingsInternalTransferModal from "@/src/components/savings/SavingsInternalTransferModal";
-import { paginateSavingsActivity } from "@/src/lib/savings/savingsActivityHistory";
+import { loadCompleteSavingsLedger, paginateSavingsActivity } from "@/src/lib/savings/savingsActivityHistory";
 
 type SavingWithWallet = SavingAccount & {
   walletId?: string;
@@ -1004,13 +1004,26 @@ export default function SavingsPage({
             "id,user_id,name,type,balance,wallet_id,interest_rate,maturity_date,notes,created_at,updated_at",
           )
           .order("created_at", { ascending: false }),
-        supabase
-          .from("saving_transactions")
-          .select(
-            "id,saving_id,user_id,type,amount,wallet_id,transaction_date,note,created_at",
-          )
-          .order("transaction_date", { ascending: false })
-          .order("created_at", { ascending: false }),
+        loadCompleteSavingsLedger<SavingTransactionRow>(async (from, to) => {
+          const { data, error } = await supabase
+            .from("saving_transactions")
+            .select(
+              "id,saving_id,user_id,type,amount,wallet_id,transaction_date,note,created_at",
+            )
+            .order("transaction_date", { ascending: false })
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to);
+          return { data: data as SavingTransactionRow[] | null, error };
+        }).then(
+          (data) => ({ data, error: null }),
+          (error: unknown) => ({
+            data: null,
+            error: {
+              message: error instanceof Error ? error.message : "Không thể tải toàn bộ lịch sử tiết kiệm.",
+            },
+          }),
+        ),
       ]);
 
       if (!savingsPageMountedRef.current) return;
