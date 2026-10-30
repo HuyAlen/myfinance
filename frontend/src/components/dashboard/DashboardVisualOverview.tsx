@@ -526,13 +526,21 @@ export default function DashboardVisualOverview({
                 );
               })}
             </div>
-            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="hidden h-[252px] min-h-0 w-full gap-2 overflow-hidden rounded-[20px] border border-[#EDF3F8] bg-[#FBFDFF] p-2.5 sm:flex sm:h-[268px]">
+            {/* Stretch to the cash-flow card's row height instead of leaving
+                a large blank footer. Keep a minimum tile height when the
+                mosaic has three stacked categories so VND never clips. */}
+            <div
+              data-dashboard-expense-mosaic="stretch"
+              role="img"
+              aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")}
+              className={"hidden min-h-0 min-w-0 w-full gap-2 overflow-hidden rounded-[20px] border border-[#EDF3F8] bg-[#FBFDFF] p-2.5 sm:flex sm:flex-1 " + (mosaic.some((column) => column.tiles.length > 2) ? "sm:min-h-[400px]" : "sm:min-h-[280px]")}
+            >
               {mosaic.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex min-w-0 flex-col gap-2" style={{ width: column.widthPercent + "%" }}>
                   {column.tiles.map((item, index) => {
                     const colorIndex = columnIndex === 0 ? index : index + 2;
                     return (
-                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className={"relative flex min-h-0 flex-col justify-between gap-1 overflow-hidden rounded-[16px] border border-white/60 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors duration-200 hover:brightness-[0.975] sm:p-3 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface} style={{ flex: item.value }}>
+                      <div data-dashboard-expense-tile="true" key={item.name + index} title={item.name + ": " + formatVND(item.value)} className={"relative flex min-h-0 min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-[16px] border border-white/60 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors duration-200 hover:brightness-[0.975] sm:p-2.5 xl:p-3 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface} style={{ flex: item.value }}>
                         <span data-dashboard-expense-name="true" className={"relative min-w-0 whitespace-normal break-words text-[12px] font-bold leading-[1.25] sm:text-[13px] " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].ink} title={item.name}>{item.name}</span>
                         <div className="relative mt-auto min-w-0">
                           <strong className="block text-[17px] font-extrabold leading-tight tabular-nums text-[#254B6B] sm:text-[20px]">{Math.round(item.sharePercent)}%</strong>
