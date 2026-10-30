@@ -408,7 +408,7 @@ export default function DashboardVisualOverview({
                   aria-label={"Xem ví " + wallet.name + ": " + formatVND(wallet.balance)}
                   className="group flex min-h-[62px] min-w-0 items-center gap-2.5 rounded-xl border border-[#DCE8F2] bg-[#FCFEFF] px-2.5 py-2.5 transition-colors duration-200 hover:border-[#B1CEEA] hover:bg-[#F3F9FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3987E8] focus-visible:ring-offset-2"
                 >
-                  <WalletCategoryGlyph type={"type" in wallet ? wallet.type : undefined} index={index} />
+                  <WalletCategoryGlyph type={wallet.id === "dashboard-wallet-other" ? undefined : wallets.find((item) => item.id === wallet.id)?.type} index={index} />
                   <span data-dashboard-wallet-name="true" className="min-w-0 flex-1 break-words text-[13px] font-bold leading-[1.3] text-[#324F67]" title={wallet.name}>{wallet.name}</span>
                   <div className="flex min-w-[91px] shrink-0 flex-col items-end gap-0.5">
                     <span data-dashboard-wallet-percent="true" className="text-[12px] font-bold leading-4 tabular-nums text-[#587791]">{Math.round(wallet.sharePercent)}%</span>
