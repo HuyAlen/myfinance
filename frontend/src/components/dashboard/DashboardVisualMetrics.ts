@@ -64,7 +64,7 @@ export function getDashboardWalletDistribution(rows: WalletShare[], maxWallets =
 
 /** Only observed operating-flow months count; unavailable future months are null. */
 export function getDashboardObservedCashFlowTotals(
-  data: { cashIn: number | null; cashOut: number | null; netCashMovement: number | null }[],
+  data: { label?: string; cashIn: number | null; cashOut: number | null; netCashMovement: number | null }[],
 ) {
   const observed = data.filter((row) =>
     [row.cashIn, row.cashOut, row.netCashMovement].some(
