@@ -40,8 +40,11 @@ describe("DASHBOARD-PROFESSIONAL-POLISH-1", () => {
     expect(dashboard).toContain(">Vượt</p>");
   });
 
-  it("keeps KPI and daily cards neutral while reserving semantic color for values/icons", () => {
-    expect(dashboard.split('border: "border-[#DCE8F1]"').length - 1).toBe(4);
+  it("keeps KPI money values readable while maintaining semantic colors for supporting icons and notes", () => {
+    expect(dashboard).toContain('data-dashboard-polish-kpi="true"');
+    expect(dashboard).toContain('value: "text-[#214967]"');
+    expect(dashboard).toContain('icon: "bg-[#E8F8F0] text-[#159A73]"');
+    expect(dashboard).toContain('icon: "bg-[#FDEAEF] text-[#D75B73]"');
     expect(dashboard).toContain('card: "border-[#DCE8F1] bg-[#FCFEFF]"');
   });
 
