@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { buildTransactionsHref } from "@/src/lib/navigation/financeNavigation";
 import {
   getDashboardExpenseMosaicColumns,
   getDashboardWalletDistribution,
@@ -250,7 +253,14 @@ export default function DashboardVisualOverview({
               const isOverBudget = hasLimit && item.spent > item.limit;
               const isAtLimit = hasLimit && item.spent === item.limit;
               return (
-                <div data-dashboard-budget-row="true" key={item.budgetId} className="min-w-0 rounded-xl border border-[#E0EAF2] bg-[#F9FCFF] px-3 py-2.5">
+                <Link
+                  data-dashboard-budget-row="true"
+                  data-dashboard-budget-drilldown="transactions"
+                  key={item.budgetId}
+                  href={buildTransactionsHref({ categoryId: item.categoryId, month: item.month })}
+                  aria-label={`Xem giao dịch danh mục ${item.name} tháng ${item.month.slice(5, 7)}/${item.month.slice(0, 4)}`}
+                  className="group block min-w-0 rounded-xl border border-[#E0EAF2] bg-[#F9FCFF] px-3 py-2.5 transition-colors duration-200 hover:border-[#A9CAE5] hover:bg-[#F4FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3987E8] focus-visible:ring-offset-2"
+                >
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
                     <span data-dashboard-budget-name="true" className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-extrabold leading-[1.4] text-[#294A66]" title={item.name}>{item.name}</span>
                     <span data-dashboard-budget-percent="true" className={"shrink-0 rounded-lg px-2 py-0.5 text-[12px] font-extrabold tabular-nums " + (isOverBudget ? "bg-[#FCE8EC] text-[#B83E57]" : isAtLimit ? "bg-[#FFF2D8] text-[#9F671E]" : hasLimit ? "bg-[#EAF4FC] text-[#2F719E]" : "bg-[#E9EFF5] text-[#526A80]")}>
@@ -278,10 +288,16 @@ export default function DashboardVisualOverview({
                   >
                     <div aria-hidden="true" className={"h-full rounded-full " + (isOverBudget ? "bg-[#DB526B]" : isAtLimit ? "bg-[#E8AD49]" : "bg-[#4298CE]")} style={{ width: item.fillPercent + "%" }} />
                   </div>
-                  <p data-dashboard-budget-explanation="true" className={"mt-1.5 text-[12px] font-bold leading-5 tabular-nums " + (isOverBudget ? "text-[#B83E57]" : isAtLimit ? "text-[#9F671E]" : "text-[#426780]")}>
-                    {!hasLimit ? "Chưa có hạn mức để so sánh" : isOverBudget ? "Vượt " + formatVND(item.overAmount) : isAtLimit ? "Đã dùng hết hạn mức" : "Còn " + formatVND(Math.max(0, item.remaining))}
-                  </p>
-                </div>
+                  <div className="mt-1.5 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <p data-dashboard-budget-explanation="true" className={"text-[12px] font-bold leading-5 tabular-nums " + (isOverBudget ? "text-[#B83E57]" : isAtLimit ? "text-[#9F671E]" : "text-[#426780]")}>
+                      {!hasLimit ? "Chưa có hạn mức để so sánh" : isOverBudget ? "Vượt " + formatVND(item.overAmount) : isAtLimit ? "Đã dùng hết hạn mức" : "Còn " + formatVND(Math.max(0, item.remaining))}
+                    </p>
+                    <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#3977A6] transition-colors group-hover:text-[#1B619C]">
+                      Xem giao dịch
+                      <ArrowUpRight size={13} />
+                    </span>
+                  </div>
+                </Link>
               );
             })}
             {budgetRows.length > 5 ? <p className="text-[12px] font-semibold text-[#536F86]">Đang hiển thị 5/{budgetRows.length} danh mục có ngân sách</p> : null}
