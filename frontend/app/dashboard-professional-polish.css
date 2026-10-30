@@ -76,3 +76,22 @@
 :root[data-theme="dark"] .finance-shell [data-dashboard-polish-kpi] [data-dashboard-number="kpi"] {
   color: #e9f3fc;
 }
+
+/* CASHFLOW-EXPENSE-VISUAL-P2: scope to the two insight cards only. */
+:root[data-theme="dark"] .finance-shell [data-dashboard-insight-surface],
+:root[data-theme="dark"] .finance-shell [data-dashboard-visual-chart="expenses"] > div:first-child {
+  background-color: #213545;
+  border-color: #385268;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-cashflow-summary] > div {
+  background: #233a4b;
+  border-color: #35566c;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-cashflow-summary] strong,
+:root[data-theme="dark"] .finance-shell [data-dashboard-cashflow-summary] p {
+  color: #e4f0fa;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-insight-card="expenses"] [data-dashboard-expense-name="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-insight-card="expenses"] [data-dashboard-expense-amount="true"] {
+  color: #183b56;
+}

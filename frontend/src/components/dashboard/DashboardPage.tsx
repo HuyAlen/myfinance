@@ -4025,6 +4025,7 @@ export default function DashboardPage() {
       {dashboardDisplayMode === "charts" && (
         <DashboardVisualOverview
           cashFlowChart={<CashFlowChart data={cashFlowData} />}
+          cashFlowData={cashFlowData}
           cashFlowReady={cashMovementReady}
           spendingReady={cashFlowReady}
           budgetReady={budgetAttentionReady}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
+import type { CashFlowChartPoint } from "./CashFlowChart";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -26,6 +27,7 @@ import {
 } from "@/src/lib/navigation/financeNavigation";
 import {
   getDashboardExpenseMosaicColumns,
+  getDashboardObservedCashFlowTotals,
   getDashboardWalletDistribution,
 } from "./DashboardVisualMetrics";
 import type { Category, Transaction, Wallet } from "@/src/types/finance";
@@ -36,12 +38,23 @@ import {
 } from "@/src/services/finance/financeCalculations";
 
 const EXPENSE_COLORS = ["#3987E8", "#72AFE9", "#F6A76D", "#70C7BF", "#A4B5DD"];
+
+// Muted surfaces with dark ink: full VND labels remain readable on the
+// smallest mosaic tiles, while area/percentage continue to be data-driven.
+const EXPENSE_TILE_TONES = [
+  { surface: "bg-[#E0EDFF]", ink: "text-[#275787]" },
+  { surface: "bg-[#FCE6D8]", ink: "text-[#8D4D2C]" },
+  { surface: "bg-[#DCF3ED]", ink: "text-[#286F65]" },
+  { surface: "bg-[#E8EAF9]", ink: "text-[#505D91]" },
+  { surface: "bg-[#E4EDF6]", ink: "text-[#365E7D]" },
+] as const;
 const WALLET_COLORS = ["#3987E8", "#72AFE9", "#91C6EC", "#70C7BF", "#A4B5DD"];
 
 type ExpenseSlice = { name: string; value: number };
 
 type Props = {
   cashFlowChart: ReactNode;
+  cashFlowData?: CashFlowChartPoint[];
   cashFlowReady: boolean;
   spendingReady: boolean;
   budgetReady: boolean;
@@ -182,6 +195,7 @@ function ChartCard({
   icon,
   children,
   className = "",
+  insight,
 }: {
   title: string;
   hint?: string;
@@ -189,19 +203,29 @@ function ChartCard({
   icon?: ReactNode;
   children: ReactNode;
   className?: string;
+  insight?: "cash-flow" | "expenses";
 }) {
   return (
     <section
       data-dashboard-polish-panel="true"
+      data-dashboard-insight-card={insight}
       className={
-        "min-w-0 overflow-hidden rounded-[22px] border border-[#CFDEEA] bg-white p-3.5 shadow-[0_10px_28px_-20px_rgba(28,75,120,0.30)] transition-shadow duration-200 hover:shadow-[0_16px_36px_-24px_rgba(28,75,120,0.32)] sm:p-5 " +
+        (insight
+          ? "min-w-0 overflow-hidden rounded-[24px] border border-[#D9E6F2] bg-white p-3.5 shadow-[0_12px_30px_-18px_rgba(37,84,124,0.28)] transition-shadow duration-200 hover:shadow-[0_18px_38px_-22px_rgba(37,84,124,0.30)] sm:p-5 "
+          : "min-w-0 overflow-hidden rounded-[22px] border border-[#CFDEEA] bg-white p-3.5 shadow-[0_10px_28px_-20px_rgba(28,75,120,0.30)] transition-shadow duration-200 hover:shadow-[0_16px_36px_-24px_rgba(28,75,120,0.32)] sm:p-5 ") +
         className
       }
     >
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2.5 border-b border-[#EFF3F8] pb-3">
+      <div
+        data-dashboard-insight-header={insight ? "true" : undefined}
+        className={"flex min-w-0 flex-wrap items-start justify-between gap-2.5 border-b pb-3 " + (insight ? "border-[#EEF3F8] sm:pb-3.5" : "border-[#EFF3F8]")}
+      >
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
           {icon ? (
-            <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EAF2FF] text-[#357DDF]">
+            <span aria-hidden="true" className={insight
+              ? "flex size-10 shrink-0 items-center justify-center rounded-2xl bg-[#EDF4FF] text-[#357DDF]"
+              : "flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EAF2FF] text-[#357DDF]"
+            }>
               {icon}
             </span>
           ) : null}
@@ -213,7 +237,7 @@ function ChartCard({
           </div>
         </div>
         {hint ? (
-          <span data-dashboard-polish-hint="true" className="inline-flex min-h-8 max-w-full shrink-0 items-center rounded-lg border border-[#E0EAF3] bg-[#F8FBFE] px-2.5 text-[11px] font-bold text-[#54708A] sm:text-[12px]">
+          <span data-dashboard-polish-hint="true" className={"inline-flex min-h-8 max-w-full shrink-0 items-center border border-[#E0EAF3] bg-[#F8FBFE] px-2.5 text-[11px] font-bold text-[#54708A] sm:text-[12px] " + (insight ? "rounded-xl" : "rounded-lg")}>
             {hint}
           </span>
         ) : null}
@@ -226,6 +250,7 @@ function ChartCard({
 /** Chart-first summary. All inputs are loaded/readied by DashboardPage. */
 export default function DashboardVisualOverview({
   cashFlowChart,
+  cashFlowData,
   cashFlowReady,
   spendingReady,
   budgetReady,
@@ -249,6 +274,10 @@ export default function DashboardVisualOverview({
   );
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
   const mosaic = getDashboardExpenseMosaicColumns(expenses);
+  const cashFlowTotals = useMemo(
+    () => getDashboardObservedCashFlowTotals(cashFlowData ?? []),
+    [cashFlowData],
+  );
   const budgetRows = useMemo(
     () => getDashboardBudgetVisualRows(budgetSpending, categories),
     [budgetSpending, categories],
@@ -425,29 +454,58 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Dòng tiền hoạt động" subtitle={"Thu – chi năm " + year} hint={"Năm " + year} icon={<BarChart3 size={18} />} className="flex flex-col lg:col-span-7">
+      <ChartCard
+        title="Dòng tiền hoạt động"
+        subtitle={"Thu – chi năm " + year}
+        hint={"Năm " + year}
+        icon={<BarChart3 size={18} />}
+        insight="cash-flow"
+        className="flex min-w-0 flex-col lg:col-span-7"
+      >
         {cashFlowReady && cashFlowChart ? (
-          <div data-dashboard-visual-chart="cash-flow" className="flex min-h-[275px] flex-1 flex-col">
-            {cashFlowChart}
+          <div data-dashboard-visual-chart="cash-flow" className="flex min-w-0 flex-1 flex-col">
+            {cashFlowTotals ? (
+              <div data-dashboard-cashflow-summary="true" className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
+                {([
+                  { key: "in", label: "Thu vào", amount: cashFlowTotals.cashIn, tone: "border-[#D9EEE5] bg-[#F2FBF7] text-[#158364]" },
+                  { key: "out", label: "Chi ra", amount: cashFlowTotals.cashOut, tone: "border-[#F3E0E4] bg-[#FFF5F7] text-[#C8536A]" },
+                  { key: "net", label: "Dòng tiền ròng", amount: cashFlowTotals.netCashMovement, tone: "border-[#DCEAF9] bg-[#F2F7FF] text-[#2874BF]" },
+                ] as const).map((metric) => (
+                  <div
+                    data-dashboard-cashflow-metric={metric.key}
+                    key={metric.key}
+                    className={"min-w-0 rounded-xl border px-3 py-2.5 last:col-span-2 sm:last:col-span-1 " + metric.tone}
+                  >
+                    <p className="text-[11px] font-bold leading-4">{metric.label}</p>
+                    <strong data-dashboard-cashflow-amount={metric.key} className="mt-1 block min-w-0 break-words text-[13px] font-extrabold leading-5 tracking-tight tabular-nums sm:text-[14px]">
+                      {metric.amount === null ? "—" : formatVND(metric.amount)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div data-dashboard-insight-surface="cash-flow" className="mt-3 flex min-w-0 flex-1 flex-col rounded-[18px] border border-[#EDF3F8] bg-[#FBFDFF] p-2.5 sm:p-3">
+              {cashFlowChart}
+            </div>
           </div>
         ) : (
           <div className="mt-4"><LoadingChart height="h-64" /></div>
         )}
       </ChartCard>
 
-      <ChartCard title="Chi tiêu theo danh mục" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} className="flex flex-col lg:col-span-5">
+      <ChartCard title="Chi tiêu theo danh mục" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
         {!spendingReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : totalExpense <= 0 ? (
           <div className="mt-4"><EmptyChart>Chưa có khoản chi thực tế trong kỳ</EmptyChart></div>
         ) : (
-          <div data-dashboard-visual-chart="expenses" className="mt-4 flex min-h-[260px] flex-1 flex-col gap-3">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-[12px] font-bold uppercase tracking-[.10em] text-[#456078]">Tổng chi thực tế</p>
+          <div data-dashboard-visual-chart="expenses" className="mt-3 flex min-h-[260px] min-w-0 flex-1 flex-col gap-3">
+            <div className="flex min-w-0 flex-wrap items-end justify-between gap-3 rounded-2xl border border-[#E5EDF6] bg-[#F7FAFE] p-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[.08em] text-[#607B91]">Tổng chi thực tế</p>
                 <p className="mt-1 break-words text-xl font-extrabold tracking-tight tabular-nums text-[#183C5A] sm:text-2xl">{formatVND(totalExpense)}</p>
               </div>
-              <p className="text-right text-[12px] font-semibold text-[#4E6880]">{expenses.length} nhóm chi tiêu</p>
+              <span className="shrink-0 rounded-xl border border-[#DEEAF4] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#486782]">{expenses.length} nhóm chi tiêu</span>
             </div>
 
             {/* iPhone: a proportional list is readable even when a tile would be shorter than its label. */}
@@ -468,17 +526,17 @@ export default function DashboardVisualOverview({
                 );
               })}
             </div>
-            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="hidden h-[252px] min-h-0 w-full gap-1.5 overflow-hidden rounded-2xl sm:flex sm:h-[268px]">
+            <div role="img" aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")} className="hidden h-[252px] min-h-0 w-full gap-2 overflow-hidden rounded-[20px] border border-[#EDF3F8] bg-[#FBFDFF] p-2.5 sm:flex sm:h-[268px]">
               {mosaic.map((column, columnIndex) => (
-                <div key={columnIndex} className="flex min-w-0 flex-col gap-1.5" style={{ width: column.widthPercent + "%" }}>
+                <div key={columnIndex} className="flex min-w-0 flex-col gap-2" style={{ width: column.widthPercent + "%" }}>
                   {column.tiles.map((item, index) => {
                     const colorIndex = columnIndex === 0 ? index : index + 2;
                     return (
-                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className="relative flex min-h-0 flex-col justify-between gap-1 overflow-hidden rounded-xl bg-[#2F80C3] p-2.5 text-white sm:p-3" style={{ flex: item.value, backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}>
-                        <span data-dashboard-expense-name="true" className="relative min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-[1.25] text-white sm:text-[13px]" title={item.name}>{item.name}</span>
+                      <div key={item.name + index} title={item.name + ": " + formatVND(item.value)} className={"relative flex min-h-0 flex-col justify-between gap-1 overflow-hidden rounded-[16px] border border-white/60 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors duration-200 hover:brightness-[0.975] sm:p-3 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface} style={{ flex: item.value }}>
+                        <span data-dashboard-expense-name="true" className={"relative min-w-0 whitespace-normal break-words text-[12px] font-bold leading-[1.25] sm:text-[13px] " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].ink} title={item.name}>{item.name}</span>
                         <div className="relative mt-auto min-w-0">
-                          <strong className="block text-[15px] font-extrabold leading-tight tabular-nums text-white sm:text-[18px]">{Math.round(item.sharePercent)}%</strong>
-                          <span data-dashboard-expense-amount="true" className="mt-0.5 block min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-4 tabular-nums text-white sm:text-[13px]">{formatVND(item.value)}</span>
+                          <strong className="block text-[17px] font-extrabold leading-tight tabular-nums text-[#254B6B] sm:text-[20px]">{Math.round(item.sharePercent)}%</strong>
+                          <span data-dashboard-expense-amount="true" className="mt-0.5 block min-w-0 whitespace-normal break-words text-[12px] font-bold leading-4 tabular-nums text-[#355976] sm:text-[13px]">{formatVND(item.value)}</span>
                         </div>
                       </div>
                     );

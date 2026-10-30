@@ -61,3 +61,22 @@ export function getDashboardWalletDistribution(rows: WalletShare[], maxWallets =
     sharePercent: tail.reduce((sum, row) => sum + row.sharePercent, 0),
   }];
 }
+
+/** Only observed operating-flow months count; unavailable future months are null. */
+export function getDashboardObservedCashFlowTotals(
+  data: { cashIn: number | null; cashOut: number | null; netCashMovement: number | null }[],
+) {
+  const observed = data.filter((row) =>
+    [row.cashIn, row.cashOut, row.netCashMovement].some(
+      (value) => typeof value === "number" && Number.isFinite(value),
+    ),
+  );
+  if (observed.length === 0) return null;
+  const sum = (key: "cashIn" | "cashOut" | "netCashMovement") => {
+    const values = observed.map((row) => row[key]).filter(
+      (value): value is number => typeof value === "number" && Number.isFinite(value),
+    );
+    return values.length > 0 ? values.reduce((total, value) => total + value, 0) : null;
+  };
+  return { cashIn: sum("cashIn"), cashOut: sum("cashOut"), netCashMovement: sum("netCashMovement") };
+}
