@@ -592,11 +592,23 @@ export default function TransactionsPage() {
   }, [reloadTransactionReviewAcknowledgements]);
 
   const [keyword, setKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [walletFilter, setWalletFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  // Seed the first render from the URL: a Dashboard/Budget drill-down must
+  // never briefly show the previous category or an unfiltered ledger.
+  const [typeFilter, setTypeFilter] = useState<TransactionDisplayFilter>(
+    () => urlTransactionsContext?.type ?? "all",
+  );
+  const [dateFrom, setDateFrom] = useState(
+    () => urlTransactionsContext?.dateFrom ?? "",
+  );
+  const [dateTo, setDateTo] = useState(
+    () => urlTransactionsContext?.dateTo ?? "",
+  );
+  const [walletFilter, setWalletFilter] = useState(
+    () => urlTransactionsContext?.walletId ?? "",
+  );
+  const [categoryFilter, setCategoryFilter] = useState(
+    () => urlTransactionsContext?.categoryId ?? "",
+  );
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -1560,19 +1572,29 @@ export default function TransactionsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const appliedContextKeyRef = useRef<string | null>(null);
+  // Only filter fields belong to this key. Review-workspace URL changes must
+  // not reset a category the user has manually selected.
+  const filterContextKey = JSON.stringify({
+    walletId: urlTransactionsContext?.walletId,
+    categoryId: urlTransactionsContext?.categoryId,
+    dateFrom: urlTransactionsContext?.dateFrom,
+    dateTo: urlTransactionsContext?.dateTo,
+    type: urlTransactionsContext?.type,
+  });
 
-  // Contextual drill-down from Budgets/Wallets/Dashboard/Header: seed the
-  // existing filter state from URL params once per distinct navigation.
-  // Params are intentionally left in the URL (not stripped) so a refresh or
-  // a copied link reproduces the same filtered view — see clearFilters()
-  // for how the URL is cleaned up once the user explicitly clears filters.
+  // Contextual drill-down from Budgets/Wallets/Dashboard/Header. The URL
+  // supplies the initial filter state above; this effect handles subsequent
+  // in-page navigations to another category/month. The key is marked applied
+  // ONLY after the deferred setters run: in React Strict Mode the first effect
+  // is cleaned up immediately, so marking before setTimeout would cancel the
+  // only update and leave the ledger on the wrong category.
   useEffect(() => {
-    if (!hasTransactionsContext(searchParams)) return;
-
-    const parsed = parseTransactionsContext(searchParams);
-    const key = JSON.stringify(parsed);
-    if (appliedContextKeyRef.current === key) return;
-    appliedContextKeyRef.current = key;
+    const parsed = JSON.parse(filterContextKey) as ReturnType<typeof parseTransactionsContext>;
+    if (Object.keys(parsed).length === 0) {
+      appliedContextKeyRef.current = null;
+      return;
+    }
+    if (appliedContextKeyRef.current === filterContextKey) return;
 
     const timer = window.setTimeout(() => {
       if (parsed.walletId) setWalletFilter(parsed.walletId);
@@ -1580,9 +1602,10 @@ export default function TransactionsPage() {
       if (parsed.dateFrom) setDateFrom(parsed.dateFrom);
       if (parsed.dateTo) setDateTo(parsed.dateTo);
       if (parsed.type) setTypeFilter(parsed.type);
+      appliedContextKeyRef.current = filterContextKey;
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [searchParams]);
+  }, [filterContextKey]);
 
   function openReviewTarget(transactionId?: string) {
     const next = new URLSearchParams(searchParams.toString());

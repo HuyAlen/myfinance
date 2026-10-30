@@ -46,7 +46,7 @@ describe("MYFINANCE DASHBOARD BUDGET DRILLDOWN P1", () => {
     expect((html.match(/data-dashboard-budget-row="true"/g) ?? [])).toHaveLength(3);
 
     for (const row of budgets) {
-      const href = buildTransactionsHref({ categoryId: row.categoryId, month: row.month });
+      const href = buildTransactionsHref({ categoryId: row.categoryId, month: row.month, type: "expense" });
       expect(html).toContain('href="' + href.replaceAll("&", "&amp;") + '"');
     }
     expect(html).not.toContain("budgetId=");
@@ -54,16 +54,16 @@ describe("MYFINANCE DASHBOARD BUDGET DRILLDOWN P1", () => {
 
   it("uses the budget record month rather than deriving it from the display header", () => {
     const html = renderBudgetCards([{ ...budgets[0], month: "2026-09" }]);
-    expect(html).toContain('href="/transactions?categoryId=family&amp;month=2026-09"');
-    expect(html).not.toContain('href="/transactions?categoryId=family&amp;month=2026-10"');
+    expect(html).toContain('href="/transactions?categoryId=family&amp;month=2026-09&amp;type=expense"');
+    expect(html).not.toContain('href="/transactions?categoryId=family&amp;month=2026-10&amp;type=expense"');
   });
 
   it("reuses the destination parser and effective range, including a historical month", () => {
-    const href = buildTransactionsHref({ categoryId: "family", month: "2026-10" });
+    const href = buildTransactionsHref({ categoryId: "family", month: "2026-10", type: "expense" });
     const url = new URL(href, "https://example.invalid");
     const context = parseTransactionsContext(url.searchParams);
     expect(context).toEqual({
-      categoryId: "family", dateFrom: "2026-10-01", dateTo: "2026-10-31",
+      categoryId: "family", dateFrom: "2026-10-01", dateTo: "2026-10-31", type: "expense",
     });
     expect(resolveTransactionsEffectiveRange({
       startDate: "2026-08-01", endDate: "2026-08-31",

@@ -257,7 +257,7 @@ export default function DashboardVisualOverview({
                   data-dashboard-budget-row="true"
                   data-dashboard-budget-drilldown="transactions"
                   key={item.budgetId}
-                  href={buildTransactionsHref({ categoryId: item.categoryId, month: item.month })}
+                  href={buildTransactionsHref({ categoryId: item.categoryId, month: item.month, type: "expense" })}
                   aria-label={`Xem giao dịch danh mục ${item.name} tháng ${item.month.slice(5, 7)}/${item.month.slice(0, 4)}`}
                   className="group block min-w-0 rounded-xl border border-[#E0EAF2] bg-[#F9FCFF] px-3 py-2.5 transition-colors duration-200 hover:border-[#A9CAE5] hover:bg-[#F4FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3987E8] focus-visible:ring-offset-2"
                 >
