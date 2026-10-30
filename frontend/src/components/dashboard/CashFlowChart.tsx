@@ -143,6 +143,19 @@ export function formatCashFlowTickValue(value: string | number): string {
   return Number.isFinite(amount) ? formatVND(amount) : "";
 }
 
+/**
+ * Reserve only enough space for the actual fully-formatted VND axis labels.
+ * The former fixed 127px gutter wasted plot width for ordinary values.
+ * Scale the gutter for unusually large/negative values so labels stay intact.
+ */
+export function getCashFlowYAxisWidth(ticks: number[]): number {
+  const longestLabelLength = ticks.reduce(
+    (maxLength, value) => Math.max(maxLength, formatCashFlowTickValue(value).length),
+    0,
+  );
+  return Math.max(88, Math.ceil(longestLabelLength * 6 + 16));
+}
+
 function CashFlowMoneyTick({
   x = 0,
   y = 0,
@@ -154,7 +167,7 @@ function CashFlowMoneyTick({
 }) {
   const label = payload?.value == null ? "" : formatCashFlowTickValue(payload.value);
   return (
-    <text x={x - 7} y={y + 3} textAnchor="end" fill="#334F69" fontSize={11} fontWeight={700}>
+    <text x={x - 4} y={y + 3} textAnchor="end" fill="#334F69" fontSize={10} fontWeight={700}>
       {label}
     </text>
   );
@@ -171,13 +184,19 @@ export default function CashFlowChart({
   const activeMonthCount = data.filter(hasCashFlowActivity).length;
   const cashFlowDomain = getCashFlowDomain(chartData);
   const cashFlowTicks = getCashFlowTicks(chartData);
+  const cashFlowAxisWidth = getCashFlowYAxisWidth(cashFlowTicks);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
     <div data-dashboard-chart-motion="cash-flow" className="mt-4 flex flex-1 flex-col">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1">
-        <p className="text-[12px] font-bold text-[#3F5B73]">
-          {activeMonthCount}/12 tháng có dòng tiền
+        <p
+          data-dashboard-cash-flow-months="compact"
+          aria-label={`${activeMonthCount}/12 tháng có dòng tiền`}
+          title={`${activeMonthCount}/12 tháng có dòng tiền`}
+          className="inline-flex min-h-7 shrink-0 items-center rounded-lg border border-[#DEEAF4] bg-white px-2.5 text-[11px] font-bold text-[#496983]"
+        >
+          {activeMonthCount}/12 tháng
         </p>
 
         <div
@@ -205,7 +224,7 @@ export default function CashFlowChart({
             data={chartData}
             barGap={3}
             barCategoryGap={12}
-            margin={{ top: 12, right: 7, bottom: 0, left: 2 }}
+            margin={{ top: 12, right: 4, bottom: 0, left: 0 }}
           >
             <CartesianGrid
               strokeDasharray="3 7"
@@ -226,7 +245,7 @@ export default function CashFlowChart({
             <YAxis
               axisLine={false}
               tickLine={false}
-              width={127}
+              width={cashFlowAxisWidth}
               fontSize={10}
               fontWeight={600}
               tick={<CashFlowMoneyTick />}
