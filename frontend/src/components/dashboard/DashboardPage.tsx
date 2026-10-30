@@ -6271,54 +6271,63 @@ function KpiCard({
 }) {
   const toneStyles = {
     good: {
-      value: "text-emerald-600",
-      icon: "bg-[#EDF9F4] text-emerald-600",
-      border: "border-[#DCE8F1]",
+      value: "text-[#214967]",
+      note: "text-[#188766]",
+      icon: "bg-[#E8F8F0] text-[#159A73]",
+      surface: "from-white to-[#F5FCF9]",
+      border: "border-[#D6E8DF]",
     },
     warning: {
-      value: "text-amber-600",
-      icon: "bg-[#FFF8E8] text-amber-600",
-      border: "border-[#DCE8F1]",
+      value: "text-[#214967]",
+      note: "text-[#9B742C]",
+      icon: "bg-[#FFF3E2] text-[#C88834]",
+      surface: "from-white to-[#FFF9F0]",
+      border: "border-[#EADFCF]",
     },
     danger: {
-      value: "text-rose-500",
-      icon: "bg-[#FFF1F3] text-rose-500",
-      border: "border-[#DCE8F1]",
+      value: "text-[#214967]",
+      note: "text-[#C44D66]",
+      icon: "bg-[#FDEAEF] text-[#D75B73]",
+      surface: "from-white to-[#FFF7F9]",
+      border: "border-[#EBD9E2]",
     },
     neutral: {
-      value: "text-[#31536F]",
-      icon: "bg-[#EEF5FA] text-[#60778D]",
-      border: "border-[#DCE8F1]",
+      value: "text-[#214967]",
+      note: "text-[#5D788D]",
+      icon: "bg-[#EAF2FF] text-[#357EE1]",
+      surface: "from-white to-[#F5F9FF]",
+      border: "border-[#D7E5F3]",
     },
   } as const;
   const styles = toneStyles[tone];
 
   const content = (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex min-w-0 items-start gap-3">
+      <span
+        aria-hidden="true"
+        className={"flex size-10 shrink-0 items-center justify-center rounded-2xl sm:size-11 " + styles.icon}
+      >
+        <Icon size={20} strokeWidth={2} />
+      </span>
       <div className="min-w-0 flex-1">
-        <p className="whitespace-nowrap text-[10px] font-bold tracking-[-0.02em] text-slate-600 sm:text-xs sm:tracking-normal" title={title}>{title}</p>
+        <p className="text-[10px] font-bold leading-4 tracking-[-0.02em] text-[#567088] sm:text-xs sm:tracking-normal" title={title}>{title}</p>
         {isLoading ? (
           <>
-            <div className="mt-2 h-5 w-20 animate-pulse rounded-lg bg-slate-200/80" />
-            <div className="mt-2 h-3 w-28 animate-pulse rounded-md bg-slate-100" />
+            <div className="mt-2 h-5 w-20 max-w-full animate-pulse rounded-lg bg-slate-200/80" />
+            <div className="mt-2 h-3 w-28 max-w-full animate-pulse rounded-md bg-slate-100" />
           </>
         ) : (
           <>
             <p
               data-dashboard-number="kpi"
-              className={`mt-2 whitespace-nowrap text-[clamp(15px,4vw,20px)] font-black leading-none tracking-[-0.04em] tabular-nums ${styles.value}`}
+              className={"mt-1.5 min-w-0 break-words text-[clamp(15px,4vw,20px)] font-black leading-6 tracking-[-0.035em] tabular-nums " + styles.value}
               title={value}
             >
               {value}
             </p>
-            <p className="mt-1 truncate text-[10px] text-slate-500 sm:text-xs" title={note}>{note}</p>
+            <p className={"mt-1 line-clamp-2 text-[10px] font-semibold leading-4 sm:text-[11px] " + styles.note} title={note}>{note}</p>
           </>
         )}
-      </div>
-      <div
-        className={`flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-10 ${styles.icon}`}
-      >
-        <Icon size={18} />
       </div>
     </div>
   );
@@ -6330,7 +6339,8 @@ function KpiCard({
         onClick={onClick}
         aria-label={`Xem chi tiết: ${title}`}
         data-dashboard-depth-card="kpi"
-        className={`min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] p-3.5 text-left shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 ${styles.border}`}
+        data-dashboard-polish-kpi="true"
+        className={`min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3.5 text-left shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-18px_rgba(45,76,102,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 ${styles.border} ${styles.surface}`}
       >
         {content}
       </button>
@@ -6340,7 +6350,8 @@ function KpiCard({
   return (
     <div
       data-dashboard-depth-card="kpi"
-      className={`min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] p-3.5 shadow-[0_5px_16px_rgba(45,76,102,0.06)] transition-all duration-200 hover:shadow-md sm:p-4 ${styles.border}`}
+      data-dashboard-polish-kpi="true"
+      className={`min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3.5 shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 sm:p-4 ${styles.border} ${styles.surface}`}
     >
       {content}
     </div>

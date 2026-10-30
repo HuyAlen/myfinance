@@ -17,3 +17,62 @@
     padding: 0.875rem;
   }
 }
+
+/* DASHBOARD-VISUAL-LAYOUT-P1: retain light, compact iPhone density.
+ * Presentation only: no selectors depend on the financial amount. */
+.finance-shell [data-dashboard-polish-panel] {
+  min-width: 0;
+}
+.finance-shell [data-dashboard-polish-row] {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .finance-shell [data-dashboard-polish-kpi] {
+    min-height: 112px;
+  }
+  .finance-shell [data-dashboard-budget-row="true"] {
+    column-gap: 0.625rem;
+  }
+}
+
+/* Dark mode is [data-theme], not the OS preference. The polished custom
+ * blue-white surfaces should not remain bright on a dark finance dashboard. */
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-panel] {
+  border-color: #30485d;
+  background: #172734;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-panel] h3,
+:root[data-theme="dark"] .finance-shell [data-dashboard-budget-name="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-wallet-name="true"] {
+  color: #e0eef9;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-hint="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-summary="true"] {
+  border-color: #3a5469;
+  background: #1d3546;
+  color: #d0e4f4;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-row="true"] {
+  border-color: #344e62;
+  background: #203343;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-row="true"]:hover {
+  border-color: #5684a6;
+  background: #29465d;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-row="true"] [role="progressbar"] {
+  background: #344e60;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-amount="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-budget-value="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-budget-limit="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-wallet-amount="true"] {
+  color: #e9f3fc;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-kpi] {
+  border-color: #33495d;
+  background: #1b2e3e;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-polish-kpi] [data-dashboard-number="kpi"] {
+  color: #e9f3fc;
+}
