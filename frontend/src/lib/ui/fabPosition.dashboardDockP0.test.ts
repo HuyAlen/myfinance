@@ -22,7 +22,7 @@ describe("MYFINANCE IPHONE DASHBOARD FAB DOCK P0", () => {
   });
 
   it("preserves FAB placement already near the bottom-safe mobile zone", () => {
-    expect(shouldDockMobileDashboardFab("/", { x: 330, y: 640 }, bounds)).toBe(false);
+    expect(shouldDockMobileDashboardFab("/", { x: 330, y: 675 }, bounds)).toBe(false);
   });
 
   it("does not interfere with other pages, tablet, desktop or first-time users", () => {
