@@ -6302,31 +6302,51 @@ function KpiCard({
   } as const;
   const styles = toneStyles[tone];
 
+  // iPhone: the icon/title occupy the first row and the full VND amount
+  // owns the second row. The previous one-line flex layout left only ~70px
+  // beside the icon on 320-390px screens, breaking a number before "đ".
+  // Desktop keeps the original icon-left, metric-right hierarchy.
   const content = (
-    <div className="flex min-w-0 items-start gap-3">
+    <div
+      data-dashboard-kpi-layout="mobile-compact"
+      className="grid min-w-0 grid-cols-[36px_minmax(0,1fr)] items-start gap-x-2 gap-y-1.5 sm:grid-cols-[44px_minmax(0,1fr)] sm:gap-x-3"
+    >
       <span
         aria-hidden="true"
-        className={"flex size-10 shrink-0 items-center justify-center rounded-2xl sm:size-11 " + styles.icon}
+        className={"col-start-1 row-start-1 flex size-9 shrink-0 items-center justify-center rounded-xl sm:row-span-2 sm:size-11 sm:rounded-2xl " + styles.icon}
       >
-        <Icon size={20} strokeWidth={2} />
+        <Icon size={19} strokeWidth={2} />
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold leading-4 tracking-[-0.02em] text-[#567088] sm:text-xs sm:tracking-normal" title={title}>{title}</p>
+      <p
+        data-dashboard-kpi-title="true"
+        className="col-start-2 row-start-1 min-w-0 break-words text-[11px] font-bold leading-4 tracking-[-0.02em] text-[#567088] sm:text-xs sm:tracking-normal"
+        title={title}
+      >
+        {title}
+      </p>
+      <div className="col-span-2 row-start-2 min-w-0 sm:col-span-1 sm:col-start-2">
         {isLoading ? (
           <>
-            <div className="mt-2 h-5 w-20 max-w-full animate-pulse rounded-lg bg-slate-200/80" />
+            <div className="mt-1 h-5 w-20 max-w-full animate-pulse rounded-lg bg-slate-200/80" />
             <div className="mt-2 h-3 w-28 max-w-full animate-pulse rounded-md bg-slate-100" />
           </>
         ) : (
           <>
             <p
               data-dashboard-number="kpi"
-              className={"mt-1.5 min-w-0 break-words text-[clamp(15px,4vw,20px)] font-black leading-6 tracking-[-0.035em] tabular-nums " + styles.value}
+              data-dashboard-kpi-value="full-vnd"
+              className={"mt-0.5 block max-w-full overflow-x-auto whitespace-nowrap text-[clamp(12px,3.4vw,17px)] font-black leading-6 tracking-[-0.04em] tabular-nums [scrollbar-width:none] sm:mt-1 sm:text-[clamp(15px,1.3vw,20px)] " + styles.value}
               title={value}
             >
               {value}
             </p>
-            <p className={"mt-1 line-clamp-2 text-[10px] font-semibold leading-4 sm:text-[11px] " + styles.note} title={note}>{note}</p>
+            <p
+              data-dashboard-kpi-note="true"
+              className={"mt-1 min-w-0 break-words text-[10px] font-semibold leading-4 sm:line-clamp-2 sm:text-[11px] " + styles.note}
+              title={note}
+            >
+              {note}
+            </p>
           </>
         )}
       </div>
@@ -6341,7 +6361,7 @@ function KpiCard({
         aria-label={`Xem chi tiết: ${title}`}
         data-dashboard-depth-card="kpi"
         data-dashboard-polish-kpi="true"
-        className={`min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3.5 text-left shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-18px_rgba(45,76,102,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 ${styles.border} ${styles.surface}`}
+        className={`min-w-0 max-w-full cursor-pointer overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3 text-left shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-18px_rgba(45,76,102,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 sm:p-4 ${styles.border} ${styles.surface}`}
       >
         {content}
       </button>
@@ -6352,7 +6372,7 @@ function KpiCard({
     <div
       data-dashboard-depth-card="kpi"
       data-dashboard-polish-kpi="true"
-      className={`min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3.5 shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 sm:p-4 ${styles.border} ${styles.surface}`}
+      className={`min-w-0 max-w-full overflow-hidden last:col-span-2 md:last:col-span-1 rounded-2xl border bg-[#FCFEFF] bg-linear-to-br p-3 shadow-[0_7px_22px_-16px_rgba(45,76,102,0.32)] transition-all duration-200 sm:p-4 ${styles.border} ${styles.surface}`}
     >
       {content}
     </div>

@@ -50,6 +50,26 @@ export function clampFabPosition(
 }
 
 /**
+ * An old draggable FAB coordinate in the middle of the iPhone Dashboard can
+ * obscure KPI titles and amounts after responsive layout changes. Restore the
+ * conventional bottom-right dock on Dashboard only when the saved coordinate
+ * is outside the lower 32px-adjusted safe zone. Other routes, tablets and
+ * intentional dragging during the current session retain normal behavior.
+ */
+export function shouldDockMobileDashboardFab(
+  pathname: string,
+  position: FabPosition | null,
+  bounds: FabPositionBounds,
+): boolean {
+  if (pathname !== "/" || bounds.viewportWidth >= 640 || position === null) {
+    return false;
+  }
+  const lowerSafeZoneStart =
+    bounds.viewportHeight - bounds.marginBottom - bounds.fabSize - 32;
+  return position.y < lowerSafeZoneStart;
+}
+
+/**
  * Parses a raw localStorage value into a valid FabPosition, or null if it's
  * missing, malformed, shaped wrong, or contains non-finite numbers — never
  * trust old/foreign stored data blindly (a previous app version, a

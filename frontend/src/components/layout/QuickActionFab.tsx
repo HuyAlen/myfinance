@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
   ChartPie,
@@ -26,6 +26,7 @@ import {
   exceedsDragThreshold,
   parseStoredFabPosition,
   shouldCloseMobileMenuOnOutsidePointerDown,
+  shouldDockMobileDashboardFab,
   type FabPosition,
 } from "@/src/lib/ui/fabPosition";
 
@@ -174,7 +175,12 @@ function readStoredPosition(): FabPosition | null {
     const parsed = parseStoredFabPosition(
       window.localStorage.getItem(POSITION_STORAGE_KEY),
     );
-    return parsed ? clampFabPosition(parsed, getViewportBounds()) : null;
+    if (!parsed) return null;
+    const bounds = getViewportBounds();
+    const restored = clampFabPosition(parsed, bounds);
+    return shouldDockMobileDashboardFab(window.location.pathname, restored, bounds)
+      ? null
+      : restored;
   } catch {
     return null;
   }
@@ -235,6 +241,7 @@ type DragState = {
  */
 export default function QuickActionFab() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
   const [position, setPosition] = useState<FabPosition | null>(() =>
     readStoredPosition(),
@@ -261,6 +268,17 @@ export default function QuickActionFab() {
   // handleClick's own doc comment for why this is the mechanism, not
   // e.preventDefault() or skipping onClick entirely.
   const suppressNextClickRef = useRef(false);
+
+  // A saved drag from an older dashboard layout may sit on top of a KPI.
+  // Re-dock on navigation to Dashboard (even if QuickActionFab stays mounted
+  // across routes); the current session's deliberate drag still works.
+  useEffect(() => {
+    if (pathname !== "/") return;
+    const bounds = getViewportBounds();
+    setPosition((current) =>
+      shouldDockMobileDashboardFab(pathname, current, bounds) ? null : current,
+    );
+  }, [pathname]);
 
   // Keep a dragged/restored position inside the viewport across resizes and
   // orientation changes. A no-op while still on the original CSS-anchored

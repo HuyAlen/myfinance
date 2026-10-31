@@ -48,7 +48,7 @@ describe("REAL-IPHONE-NO-OVERLAP-NOWRAP-1", () => {
     );
     expect(dashboard).toContain("last:col-span-2 md:last:col-span-1");
     expect(dashboard).toContain(
-      'className="text-[10px] font-bold leading-4 tracking-[-0.02em] text-[#567088] sm:text-xs sm:tracking-normal"',
+      'data-dashboard-kpi-title="true"',
     );
   });
 
