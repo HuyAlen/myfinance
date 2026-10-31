@@ -274,10 +274,16 @@ export default function QuickActionFab() {
   // across routes); the current session's deliberate drag still works.
   useEffect(() => {
     if (pathname !== "/") return;
-    const bounds = getViewportBounds();
-    setPosition((current) =>
-      shouldDockMobileDashboardFab(pathname, current, bounds) ? null : current,
-    );
+    // Defer the route correction to a frame callback: setting state directly
+    // during effect setup violates React's set-state-in-effect contract.
+    // Initial load is already docked synchronously by readStoredPosition().
+    const frame = window.requestAnimationFrame(() => {
+      const bounds = getViewportBounds();
+      setPosition((current) =>
+        shouldDockMobileDashboardFab(pathname, current, bounds) ? null : current,
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
   // Keep a dragged/restored position inside the viewport across resizes and
