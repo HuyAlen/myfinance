@@ -62,7 +62,7 @@ describe("MYFINANCE DASHBOARD PROFESSIONAL POLISH P1 visual semantics", () => {
     const grouped = groupDashboardExpenseSlices(items);
     expect(grouped).toEqual([
       ...items.slice(0, 4),
-      { name: "Danh mục khác", value: 100 },
+      { name: "Danh mục khác", value: 100, aggregateCount: 2 },
     ]);
   });
 });

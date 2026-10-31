@@ -95,3 +95,20 @@
 :root[data-theme="dark"] .finance-shell [data-dashboard-insight-card="expenses"] [data-dashboard-expense-amount="true"] {
   color: #183b56;
 }
+
+/* EXPENSE-SHARE-CLARITY-P1: scoped dark-mode semantics for the compact
+ * mobile 100% composition chart. Budget status colors are not reused. */
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-guide] {
+  background: #223C51;
+  border-color: #3D596F;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-row] {
+  background: #1E3345;
+  border-color: #395268;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-guide] p,
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-row] [data-dashboard-mobile-expense-name="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-row] [data-dashboard-mobile-expense-amount="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-row] [data-dashboard-mobile-expense-percent="true"] {
+  color: #E3F0F9;
+}

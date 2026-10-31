@@ -37,7 +37,9 @@ import {
   type BudgetSpending,
 } from "@/src/services/finance/financeCalculations";
 
-const EXPENSE_COLORS = ["#3987E8", "#72AFE9", "#F6A76D", "#70C7BF", "#A4B5DD"];
+// Same category order as the desktop mosaic: color is identity, not a
+// budget-status signal. One 100% stacked bar shows how all shares add up.
+const EXPENSE_COLORS = ["#3987E8", "#E99B69", "#43A996", "#8D91CA", "#94A9C6"];
 
 // Muted surfaces with dark ink: full VND labels remain readable on the
 // smallest mosaic tiles, while area/percentage continue to be data-driven.
@@ -50,7 +52,7 @@ const EXPENSE_TILE_TONES = [
 ] as const;
 const WALLET_COLORS = ["#3987E8", "#72AFE9", "#91C6EC", "#70C7BF", "#A4B5DD"];
 
-type ExpenseSlice = { name: string; value: number };
+type ExpenseSlice = { name: string; value: number; aggregateCount?: number };
 
 type Props = {
   cashFlowChart: ReactNode;
@@ -81,7 +83,7 @@ export function groupDashboardExpenseSlices(
     .slice(maxCategories)
     .reduce((sum, item) => sum + item.value, 0);
   return remainder > 0
-    ? [...head, { name: "Danh mục khác", value: remainder }]
+    ? [...head, { name: "Danh mục khác", value: remainder, aggregateCount: positive.length - maxCategories }]
     : head;
 }
 
@@ -274,6 +276,7 @@ export default function DashboardVisualOverview({
   );
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
   const mosaic = getDashboardExpenseMosaicColumns(expenses);
+  const otherExpenseCount = expenses.find((item) => item.aggregateCount)?.aggregateCount ?? 0;
   const cashFlowTotals = useMemo(
     () => getDashboardObservedCashFlowTotals(cashFlowData ?? []),
     [cashFlowData],
@@ -493,7 +496,7 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Chi tiêu theo danh mục" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
+      <ChartCard title="Chi tiêu theo danh mục" subtitle="Tỷ trọng trong tổng chi" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
         {!spendingReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : totalExpense <= 0 ? (
@@ -505,26 +508,93 @@ export default function DashboardVisualOverview({
                 <p className="text-[11px] font-bold uppercase tracking-[.08em] text-[#607B91]">Tổng chi thực tế</p>
                 <p className="mt-1 break-words text-xl font-extrabold tracking-tight tabular-nums text-[#183C5A] sm:text-2xl">{formatVND(totalExpense)}</p>
               </div>
-              <span className="shrink-0 rounded-xl border border-[#DEEAF4] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#486782]">{expenses.length} nhóm chi tiêu</span>
+              <span className="shrink-0 rounded-xl border border-[#DEEAF4] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#486782]" data-dashboard-expense-group-count="true">{otherExpenseCount > 0 ? (expenses.length - 1) + " nhóm chính + Khác" : expenses.length + " nhóm chi tiêu"}</span>
             </div>
 
-            {/* iPhone: a proportional list is readable even when a tile would be shorter than its label. */}
-            <div data-dashboard-mobile-expense-list="true" role="list" aria-label="Chi tiêu theo danh mục" className="grid min-w-0 gap-2 sm:hidden">
-              {expenses.map((item, index) => {
-                const share = (item.value / totalExpense) * 100;
-                return (
-                  <div role="listitem" key={item.name + index} className="min-w-0 rounded-xl border border-[#DFE9F2] bg-[#F9FCFF] px-3 py-2.5">
-                    <div className="flex min-w-0 items-start justify-between gap-2">
-                      <span data-dashboard-mobile-expense-name="true" className="min-w-0 flex-1 whitespace-normal break-words text-[13px] font-bold leading-[1.4] text-[#294A66]">{item.name}</span>
-                      <strong className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#335C7C]">{Math.round(share)}%</strong>
+            {/* iPhone: a single 100% composition bar makes it clear that
+                category colors are identifiers, not budget health statuses.
+                Compact rows show the exact money and their share of ALL spending. */}
+            <div
+              data-dashboard-expense-mobile-breakdown="true"
+              className="flex min-w-0 flex-col gap-2.5 sm:hidden"
+            >
+              <div
+                data-dashboard-expense-share-guide="true"
+                className="rounded-xl border border-[#DFE9F4] bg-[#F4F8FD] px-3 py-2.5"
+              >
+                <p className="text-[12px] font-extrabold leading-5 text-[#2B5C85]">
+                  Cơ cấu tổng chi <span className="font-bold text-[#58758E]">· 100%</span>
+                </p>
+                <p className="mt-0.5 text-[11px] font-medium leading-4 text-[#5A7289]">
+                  Mỗi màu là một nhóm chi. % là phần của tổng tiền đã chi, không phải mức dùng ngân sách.
+                </p>
+                <div
+                  data-dashboard-expense-composition="100"
+                  role="img"
+                  aria-label={"Cơ cấu 100% tổng chi: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")}
+                  className="mt-2.5 flex h-3.5 w-full overflow-hidden rounded-full bg-[#E1EAF4]"
+                >
+                  {expenses.map((item, index) => (
+                    <span
+                      data-dashboard-expense-composition-segment="true"
+                      key={item.name + index}
+                      aria-hidden="true"
+                      className="h-full min-w-0"
+                      style={{
+                        width: (item.value / totalExpense) * 100 + "%",
+                        backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div data-dashboard-mobile-expense-list="true" role="list" aria-label="Chi tiêu theo danh mục" className="grid min-w-0 gap-2">
+                {expenses.map((item, index) => {
+                  const share = (item.value / totalExpense) * 100;
+                  return (
+                    <div
+                      data-dashboard-expense-share-row="true"
+                      role="listitem"
+                      aria-label={item.name + ": " + formatVND(item.value) + ", " + Math.round(share) + "% tổng chi"}
+                      key={item.name + index}
+                      className="min-w-0 rounded-xl border border-[#DFE9F2] bg-[#FCFEFF] px-3 py-2.5"
+                    >
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className="mt-1.5 size-3 shrink-0 rounded-[4px]"
+                          style={{ backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <span
+                            data-dashboard-mobile-expense-name="true"
+                            className="block min-w-0 whitespace-normal break-words text-[13px] font-bold leading-[1.4] text-[#294A66]"
+                          >
+                            {item.name}
+                          </span>
+                          {item.aggregateCount ? (
+                            <p data-dashboard-expense-aggregate="true" className="mt-0.5 text-[11px] font-medium leading-4 text-[#607990]">
+                              Gộp {item.aggregateCount} danh mục còn lại
+                            </p>
+                          ) : null}
+                          <p data-dashboard-mobile-expense-amount="true" className="mt-1 min-w-0 break-words text-[13px] font-semibold leading-5 tabular-nums text-[#44647D]">
+                            {formatVND(item.value)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-0.5">
+                          <strong data-dashboard-mobile-expense-percent="true" title={share.toFixed(1) + "% tổng chi"} className="whitespace-nowrap text-[15px] font-extrabold leading-5 tabular-nums text-[#285D8B]">
+                            {Math.round(share)}%
+                          </strong>
+                          <span className="text-[10px] font-semibold leading-4 text-[#678097]">tổng chi</span>
+                        </div>
+                      </div>
                     </div>
-                    <p data-dashboard-mobile-expense-amount="true" className="mt-1 break-words text-[13px] font-semibold tabular-nums text-[#44647D]">{formatVND(item.value)}</p>
-                    <div aria-hidden="true" className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#E6EEF6]">
-                      <div className="h-full rounded-full" style={{ width: Math.min(100, share) + "%", backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <p className="px-0.5 text-[11px] font-medium leading-4 text-[#6A8297]">
+                Tỷ lệ hiển thị được làm tròn đến số nguyên.
+              </p>
             </div>
             {/* Stretch to the cash-flow card's row height instead of leaving
                 a large blank footer. Keep a minimum tile height when the
