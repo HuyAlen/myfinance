@@ -64,7 +64,7 @@ describe("MYFINANCE DASHBOARD MOSAIC LABEL READABILITY P1", () => {
 
   it("draws all Y-axis currency ticks on one SVG line without Recharts auto-wrapping the final đồng sign", () => {
     const source = readFileSync(path.resolve(__dirname, "CashFlowChart.tsx"), "utf8");
-    expect(source).toContain("tick={<CashFlowMoneyTick />}");
+    expect(source).toContain("tick={<CashFlowMoneyTick compact={compactAxis} />}");
     expect(source).toContain('textAnchor="end"');
     expect(source).toContain("tickFormatter={(value) => formatVND(Number(value))}");
   });

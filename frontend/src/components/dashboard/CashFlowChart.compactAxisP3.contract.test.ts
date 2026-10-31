@@ -28,11 +28,11 @@ describe("MYFINANCE DASHBOARD CASH-FLOW COMPACT AXIS P3", () => {
   });
 
   it("keeps one readable full-VND SVG tick instead of using clipped or abbreviated axis labels", () => {
-    expect(source).toContain('tick={<CashFlowMoneyTick />}');
+    expect(source).toContain('tick={<CashFlowMoneyTick compact={compactAxis} />}');
     expect(source).toContain('width={cashFlowAxisWidth}');
     expect(source).toContain('tickFormatter={(value) => formatVND(Number(value))}');
     expect(source).toContain('textAnchor="end"');
-    expect(source).toContain('fontSize={10}');
+    expect(source).toContain('fontSize={compact ? 9 : 10}');
     expect(source).not.toContain('width={127}');
     expect(source).not.toContain("truncate");
     expect(source).not.toContain("formatCompactVND");

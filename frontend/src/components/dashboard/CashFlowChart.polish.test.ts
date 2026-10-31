@@ -60,7 +60,7 @@ describe("CashFlowChart dashboard polish contract", () => {
     expect(source).toContain('fill="#FB7185"');
     expect(source).toContain('stroke="#F43F5E"');
     expect(source).toContain('stroke="#3B82F6"');
-    expect(source).toContain("maxBarSize={24}");
+    expect(source).toContain("maxBarSize={compactAxis ? 30 : 24}");
   });
 
   it("gives the net-cash line clear visual weight", () => {

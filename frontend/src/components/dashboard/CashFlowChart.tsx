@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -156,20 +157,78 @@ export function getCashFlowYAxisWidth(ticks: number[]): number {
   return Math.max(88, Math.ceil(longestLabelLength * 6 + 16));
 }
 
+
+/**
+ * Mobile axis labels are concise but represent the SAME tick values.
+ * Exact VND (including sign and currency) remains in the SVG accessible
+ * label and the existing chart tooltip. Desktop retains full VND ticks.
+ */
+export function formatCashFlowMobileTickValue(value: string | number): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  if (amount === 0) return "0";
+
+  const format = (number: number) =>
+    new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(number);
+  const magnitude = Math.abs(amount);
+
+  if (magnitude >= 1_000_000_000) return format(amount / 1_000_000_000) + "tỷ";
+  if (magnitude >= 1_000_000) return format(amount / 1_000_000) + "tr";
+  if (magnitude >= 1_000) return format(amount / 1_000) + "k";
+  return format(amount) + "đ";
+}
+
+export function getCashFlowMobileYAxisWidth(ticks: number[]): number {
+  const maxLength = ticks.reduce(
+    (length, tick) => Math.max(length, formatCashFlowMobileTickValue(tick).length),
+    0,
+  );
+  return Math.max(42, Math.ceil(maxLength * 5.5 + 12));
+}
+
+const COMPACT_CASH_FLOW_MEDIA = "(max-width: 639px)";
+
+function subscribeCompactCashFlow(onChange: () => void): () => void {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const query = window.matchMedia(COMPACT_CASH_FLOW_MEDIA);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function getCompactCashFlowSnapshot(): boolean {
+  return typeof window !== "undefined" &&
+    Boolean(window.matchMedia?.(COMPACT_CASH_FLOW_MEDIA).matches);
+}
+
+function getServerCompactCashFlowSnapshot(): boolean {
+  return false;
+}
+
 function CashFlowMoneyTick({
   x = 0,
   y = 0,
   payload,
+  compact = false,
 }: {
   x?: number;
   y?: number;
   payload?: { value?: string | number };
+  compact?: boolean;
 }) {
-  const label = payload?.value == null ? "" : formatCashFlowTickValue(payload.value);
+  const fullVND = payload?.value == null ? "" : formatCashFlowTickValue(payload.value);
+  const visible = payload?.value == null
+    ? ""
+    : compact
+      ? formatCashFlowMobileTickValue(payload.value)
+      : fullVND;
+
   return (
-    <text x={x - 4} y={y + 3} textAnchor="end" fill="#334F69" fontSize={10} fontWeight={700}>
-      {label}
-    </text>
+    <g role="img" aria-label={fullVND}>
+      <title>{fullVND}</title>
+      <text x={x - 4} y={y + 3} textAnchor="end" fill="#334F69" fontSize={compact ? 9 : 10} fontWeight={700}>
+        {visible}
+      </text>
+    </g>
   );
 }
 
@@ -184,7 +243,14 @@ export default function CashFlowChart({
   const activeMonthCount = data.filter(hasCashFlowActivity).length;
   const cashFlowDomain = getCashFlowDomain(chartData);
   const cashFlowTicks = getCashFlowTicks(chartData);
-  const cashFlowAxisWidth = getCashFlowYAxisWidth(cashFlowTicks);
+  const compactAxis = useSyncExternalStore(
+    subscribeCompactCashFlow,
+    getCompactCashFlowSnapshot,
+    getServerCompactCashFlowSnapshot,
+  );
+  const cashFlowAxisWidth = compactAxis
+    ? getCashFlowMobileYAxisWidth(cashFlowTicks)
+    : getCashFlowYAxisWidth(cashFlowTicks);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
@@ -223,7 +289,7 @@ export default function CashFlowChart({
           <ComposedChart
             data={chartData}
             barGap={3}
-            barCategoryGap={12}
+            barCategoryGap={compactAxis ? 8 : 12}
             margin={{ top: 12, right: 4, bottom: 0, left: 0 }}
           >
             <CartesianGrid
@@ -246,9 +312,9 @@ export default function CashFlowChart({
               axisLine={false}
               tickLine={false}
               width={cashFlowAxisWidth}
-              fontSize={10}
+              fontSize={compactAxis ? 9 : 10}
               fontWeight={600}
-              tick={<CashFlowMoneyTick />}
+              tick={<CashFlowMoneyTick compact={compactAxis} />}
               tickFormatter={(value) => formatVND(Number(value))}
               domain={cashFlowDomain}
               ticks={cashFlowTicks}
@@ -286,7 +352,7 @@ export default function CashFlowChart({
               stroke="#10B981"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={24}
+              maxBarSize={compactAxis ? 30 : 24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={0}
               animationDuration={520}
@@ -299,7 +365,7 @@ export default function CashFlowChart({
               stroke="#F43F5E"
               strokeWidth={0.9}
               radius={[6, 6, 2, 2]}
-              maxBarSize={24}
+              maxBarSize={compactAxis ? 30 : 24}
               isAnimationActive={!prefersReducedMotion}
               animationBegin={70}
               animationDuration={520}
