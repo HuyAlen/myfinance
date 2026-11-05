@@ -26,7 +26,7 @@ describe("RECURRING-REAL-IPHONE-CARD-OVERFLOW-1", () => {
 
   it("uses a two-column mobile action footer with delete spanning the row", () => {
     expect(source).toContain(
-      'className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3"',
+      'className="mt-auto grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3"',
     );
     expect(source).toContain("col-span-2 inline-flex min-h-10 min-w-0");
     expect(source).toContain("sm:col-span-1");

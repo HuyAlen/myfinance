@@ -35,7 +35,7 @@ describe("RECURRING-DESKTOP-CONTENT-WIDTH-1", () => {
     expect(recurring).toContain("Dòng tiền định kỳ");
     expect(recurring).toContain("Thêm khoản định kỳ");
     expect(recurring).toContain('["all", "Tất cả"]');
-    expect(recurring).toContain('<section className="grid gap-3 lg:grid-cols-2">');
+    expect(recurring).toContain('<section data-recurring-schedule-grid="true" className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">');
   });
 
   it("does not disturb the real-iPhone VisualViewport modal hardening", () => {

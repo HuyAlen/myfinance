@@ -34,3 +34,11 @@ For income-only months, prioritize income figures. Mixed income+expense plans ar
 - GitHub Quality Gate: TypeScript, ESLint, Vitest, production build must pass.
 - Browser QA desktop and iPhone with selected month and verified money amounts, screenshot evidence; do not call browser QA PASS based only on source tests.
 - Keep on feature branch until release verification. Merge only after authorization.
+
+## P2 layout polish — three recurring schedule cards on desktop
+- List grid: 1 column under lg; 2 at lg; 3 at xl and above. No horizontal scrolling.
+- Loading skeleton uses the same responsive columns, adding a third skeleton at xl to avoid reflow.
+- Cards fill the grid row height, with action buttons anchored to the bottom for consistent visual alignment.
+- The long title and wallet/category labels truncate safely in narrow three-column cards, with native title tooltip retaining full text.
+- Mobile action footer stays in two columns with full-width delete; desktop remains three compact buttons.
+- QA: verify three monthly plans fit one row at 1280/1440/1712 desktop; one column at phone width; no clipped amount or action; long Vietnamese category title; disabled/recorded cards and load/error states.

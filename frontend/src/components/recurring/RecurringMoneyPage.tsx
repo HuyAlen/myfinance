@@ -738,9 +738,10 @@ export default function RecurringMoneyPage() {
       </section>
 
       {isLoading ? (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
           <div className="h-36 animate-pulse rounded-3xl bg-slate-100" />
           <div className="h-36 animate-pulse rounded-3xl bg-slate-100" />
+          <div className="hidden h-36 animate-pulse rounded-3xl bg-slate-100 xl:block" />
         </div>
       ) : loadError ? (
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
@@ -752,7 +753,7 @@ export default function RecurringMoneyPage() {
         filteredSchedules.length === 0 ? (
           <EmptyState onCreate={openCreate} />
         ) : (
-          <section className="grid gap-3 lg:grid-cols-2">
+          <section data-recurring-schedule-grid="true" className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             {filteredSchedules.map((schedule) => (
               <ScheduleCard
                 key={schedule.id}
@@ -1107,16 +1108,16 @@ function ScheduleCard({
   onClear: () => void;
 }) {
   return (
-    <article className={`min-w-0 rounded-3xl border bg-white p-4 shadow-sm sm:p-5 ${schedule.issues.length > 0 ? "border-amber-200" : "border-slate-200/80"}`}>
+    <article data-recurring-schedule-card="true" className={`flex h-full min-w-0 flex-col rounded-3xl border bg-white p-4 shadow-sm sm:p-5 xl:p-4 ${schedule.issues.length > 0 ? "border-amber-200" : "border-slate-200/80"}`}>
       <div className="flex min-w-0 flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`flex size-9 items-center justify-center rounded-xl ${schedule.type === "income" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${schedule.type === "income" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
               {schedule.type === "income" ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />}
             </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-[#294A66]">{schedule.title}</p>
-              <p className="mt-0.5 truncate text-xs text-[#71879A]">{schedule.categoryName} · {schedule.walletName}</p>
+            <div className="min-w-0 flex-1">
+              <p title={schedule.title} className="truncate text-sm font-black text-[#294A66]">{schedule.title}</p>
+              <p title={`${schedule.categoryName} · ${schedule.walletName}`} className="mt-0.5 truncate text-xs text-[#71879A]">{schedule.categoryName} · {schedule.walletName}</p>
             </div>
           </div>
         </div>
@@ -1211,7 +1212,7 @@ function ScheduleCard({
         <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700/90"><CheckCircle2 size={13} /> Đủ dữ liệu cho dự báo</div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3">
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-slate-100 pt-3.5 sm:grid-cols-3">
         <button type="button" onClick={onToggle} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 text-xs font-bold text-slate-600 transition hover:bg-slate-100 active:scale-[.99]">{schedule.enabled ? <PauseCircle size={15} /> : <PlayCircle size={15} />}{schedule.enabled ? "Dừng" : "Bật"}</button>
         <button type="button" onClick={onEdit} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 text-xs font-bold text-blue-700 transition hover:bg-blue-100 active:scale-[.99]"><Pencil size={14} /> Sửa</button>
         <button type="button" onClick={onClear} className="col-span-2 inline-flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 text-xs font-bold text-rose-600 transition hover:bg-rose-100 active:scale-[.99] sm:col-span-1"><Trash2 size={14} /> Xóa lịch</button>
