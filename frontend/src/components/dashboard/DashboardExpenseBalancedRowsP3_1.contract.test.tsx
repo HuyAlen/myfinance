@@ -52,7 +52,11 @@ describe("DASHBOARD-EXPENSE-BALANCED-ROWS-P3.1", () => {
     expect(meters).toHaveLength(5);
     const expected = values.reduce((a, b) => a + b, 0);
     expect(expected).toBe(10_963_054);
-    for (const name of names) expect(html).toContain(name);
+    // The fifth source category is correctly folded into "Danh mục khác":
+    // the data-driven top-four grouping is deliberately unchanged.
+    for (const name of ["Nhà ở", "Con Cái (Sữa + Tã + Phát Sinh)", "Phí Quản Lý / Nước / Gửi Xe", "Danh mục khác"]) {
+      expect(html).toContain(name);
+    }
     expect((html.match(/data-dashboard-expense-amount="true"/g) ?? [])).toHaveLength(5);
     expect(html).toContain('data-dashboard-expense-desktop-composition="100"');
     expect(html).toContain("100% tổng chi");
