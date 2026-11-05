@@ -81,6 +81,6 @@ describe("MYFINANCE EXPENSE SHARE CLARITY P1", () => {
     expect(html).toContain('role="listitem"');
     expect(html).toContain("Tỷ lệ hiển thị được làm tròn đến số nguyên");
     expect(html).toContain('aria-label="Cơ cấu 100% tổng chi:');
-    expect(html).toContain('data-dashboard-expense-mosaic="stretch"');
+    expect(html).toContain('data-dashboard-expense-mosaic="balanced"');
   });
 });

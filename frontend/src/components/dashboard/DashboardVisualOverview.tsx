@@ -26,7 +26,6 @@ import {
   buildWalletsHref,
 } from "@/src/lib/navigation/financeNavigation";
 import {
-  getDashboardExpenseMosaicColumns,
   getDashboardObservedCashFlowTotals,
   getDashboardWalletDistribution,
 } from "./DashboardVisualMetrics";
@@ -37,8 +36,8 @@ import {
   type BudgetSpending,
 } from "@/src/services/finance/financeCalculations";
 
-// Same category order as the desktop mosaic: color is identity, not a
-// budget-status signal. One 100% stacked bar shows how all shares add up.
+// Same category order across balanced desktop rows and 100% bars. Colors
+// identify groups; bar lengths encode actual shares, never budget usage.
 const EXPENSE_COLORS = ["#3987E8", "#E99B69", "#43A996", "#8D91CA", "#94A9C6"];
 
 // The colour is a category identity, not an over/under-budget signal.
@@ -275,7 +274,6 @@ export default function DashboardVisualOverview({
     [transactions, categories],
   );
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
-  const mosaic = getDashboardExpenseMosaicColumns(expenses);
   const otherExpenseCount = expenses.find((item) => item.aggregateCount)?.aggregateCount ?? 0;
   const dominantExpenseIndex = expenses.reduce(
     (largest, item, index) => item.value > (expenses[largest]?.value ?? -1) ? index : largest,
@@ -664,82 +662,90 @@ export default function DashboardVisualOverview({
                 Tỷ lệ hiển thị được làm tròn đến số nguyên.
               </p>
             </div>
-            {/* Stretch to the cash-flow card's row height instead of leaving
-                a large blank footer. Keep a minimum tile height when the
-                mosaic has three stacked categories so VND never clips. */}
+            {/* Balanced category rows: each label has equal reading space.
+                The exact ratio lives in the 100% rail and each row meter;
+                area is intentionally NOT encoded by tile size. */}
             <div
-              data-dashboard-expense-mosaic="stretch"
-              role="img"
-              aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")}
-              className={"hidden min-h-0 min-w-0 w-full gap-2.5 overflow-hidden rounded-[20px] border border-[#E6EEF7] bg-[#F8FBFE] p-2.5 sm:flex sm:flex-1 " + (mosaic.some((column) => column.tiles.length > 2) ? "sm:min-h-[400px]" : "sm:min-h-[280px]")}
+              data-dashboard-expense-mosaic="balanced"
+              data-dashboard-expense-layout="equal-height-rows"
+              role="list"
+              aria-label="Chi tiêu theo danh mục, tỷ trọng của từng nhóm"
+              className="hidden min-w-0 flex-1 flex-col gap-2 rounded-[20px] border border-[#E6EEF7] bg-[#F8FBFE] p-2.5 sm:flex sm:min-h-[330px]"
             >
-              {mosaic.map((column, columnIndex) => (
-                <div key={columnIndex} className="flex min-w-0 flex-col gap-2" style={{ width: column.widthPercent + "%" }}>
-                  {column.tiles.map((item, index) => {
-                    const colorIndex = columnIndex === 0 ? index : index + 2;
-                    return (
-                      <div
-                        data-dashboard-expense-tile="true"
-                        data-dashboard-expense-dominant={colorIndex === dominantExpenseIndex ? "true" : undefined}
-                        key={item.name + index}
-                        title={item.name + ": " + formatVND(item.value)}
-                        className={"group relative flex min-h-0 min-w-0 flex-col justify-between gap-2 overflow-hidden rounded-[18px] border border-white/90 p-3 shadow-[0_7px_18px_-15px_rgba(32,73,115,0.38)] transition-all duration-200 hover:brightness-[0.985] hover:shadow-[0_10px_21px_-14px_rgba(32,73,115,0.38)] xl:p-3.5 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface}
-                        style={{ flex: item.value }}
-                      >
+              {expenses.map((item, index) => {
+                const share = (item.value / totalExpense) * 100;
+                const isLargest = index === dominantExpenseIndex;
+                return (
+                  <div
+                    key={item.name + index}
+                    data-dashboard-expense-tile="true"
+                    data-dashboard-expense-dominant={isLargest ? "true" : undefined}
+                    data-dashboard-expense-balanced-row="true"
+                    role="listitem"
+                    aria-label={item.name + ": " + formatVND(item.value) + ", " + Math.round(share) + "% tổng chi"}
+                    className={"group flex min-h-[64px] min-w-0 flex-1 flex-col justify-center gap-2 rounded-[15px] border border-white/90 px-3 py-2.5 shadow-[0_6px_18px_-15px_rgba(35,80,125,0.30)] transition-colors duration-200 hover:brightness-[0.985] " + EXPENSE_TILE_TONES[index % EXPENSE_TILE_TONES.length].surface}
+                  >
+                    <div className="flex min-w-0 items-center justify-between gap-2.5">
+                      <div className="flex min-w-0 flex-1 items-start gap-2">
                         <span
                           aria-hidden="true"
-                          className="pointer-events-none absolute inset-x-0 top-0 h-1"
-                          style={{ backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}
+                          className="mt-1.5 size-2.5 shrink-0 rounded-[4px]"
+                          style={{ backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }}
                         />
-                        {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
-                          <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 size-44 rounded-full border-[22px] border-white/25" />
-                        ) : null}
-                        <div className="relative flex min-w-0 items-start gap-2">
-                          <span
-                            aria-hidden="true"
-                            className="mt-1 size-2.5 shrink-0 rounded-[4px]"
-                            style={{ backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}
-                          />
+                        <div className="min-w-0">
                           <span
                             data-dashboard-expense-name="true"
-                            className={"relative min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-[1.25] sm:text-[13px] " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].ink}
                             title={item.name}
+                            className={"block min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-[1.3] sm:text-[13px] " + EXPENSE_TILE_TONES[index % EXPENSE_TILE_TONES.length].ink}
                           >
                             {item.name}
                           </span>
-                        </div>
-                        <div className="relative mt-auto min-w-0">
-                          {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
-                            <span className="mb-1.5 inline-flex rounded-full border border-white/60 bg-white/55 px-2 py-0.5 text-[10px] font-bold text-[#476781]">
+                          {item.aggregateCount ? (
+                            <span className="mt-0.5 block text-[10px] font-medium leading-3 text-[#607990]">
+                              Gộp {item.aggregateCount} danh mục
+                            </span>
+                          ) : null}
+                          {isLargest && share >= 35 ? (
+                            <span className="mt-0.5 block text-[10px] font-bold leading-3 text-[#356FAD]">
                               Nhóm chi lớn nhất
                             </span>
                           ) : null}
-                          <strong className="block text-[20px] font-extrabold leading-tight tabular-nums tracking-tight text-[#254B6B] sm:text-[22px]">
-                            {Math.round(item.sharePercent)}%
-                          </strong>
-                          <span
-                            data-dashboard-expense-amount="true"
-                            className="mt-0.5 block min-w-0 whitespace-normal break-words text-[12px] font-bold leading-4 tabular-nums text-[#355976] sm:text-[13px]"
-                          >
-                            {formatVND(item.value)}
-                          </span>
-                          {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
-                            <div data-dashboard-expense-dominant-meter="true" aria-hidden="true" className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/65">
-                              <span
-                                className="block h-full rounded-full"
-                                style={{
-                                  width: item.sharePercent + "%",
-                                  backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length],
-                                }}
-                              />
-                            </div>
-                          ) : null}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
+                      <div className="flex min-w-0 shrink-0 flex-col items-end text-right">
+                        <strong className="text-[17px] font-extrabold leading-5 tabular-nums text-[#254B6B] sm:text-[19px]">
+                          {Math.round(share)}%
+                        </strong>
+                        <span
+                          data-dashboard-expense-amount="true"
+                          className="block max-w-full whitespace-normal break-words text-[11px] font-bold leading-4 tabular-nums text-[#355976] sm:text-[12px]"
+                        >
+                          {formatVND(item.value)}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      data-dashboard-expense-category-meter="true"
+                      role="progressbar"
+                      aria-label={item.name + ": tỷ trọng tổng chi"}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={share}
+                      aria-valuetext={share.toFixed(1) + "% tổng chi"}
+                      className="h-1.5 w-full overflow-hidden rounded-full bg-white/70"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="block h-full rounded-full"
+                        style={{
+                          width: share + "%",
+                          backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

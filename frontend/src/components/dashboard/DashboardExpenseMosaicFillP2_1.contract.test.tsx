@@ -41,29 +41,35 @@ function render(count: number) {
 }
 
 function getMosaicOpeningTag(html: string) {
-  const marker = 'data-dashboard-expense-mosaic="stretch"';
+  const marker = 'data-dashboard-expense-mosaic="balanced"';
   const index = html.indexOf(marker);
   expect(index).toBeGreaterThan(0);
   return html.slice(html.lastIndexOf("<", index), html.indexOf(">", index) + 1);
 }
 
 describe("MYFINANCE DASHBOARD EXPENSE MOSAIC FILL P2.1", () => {
-  it("stretches the desktop treemap with the adjacent cash-flow card instead of fixing its height", () => {
+  it("keeps equal-height desktop rows and stretches to the adjacent cash-flow card", () => {
     const html = render(5);
     const opening = getMosaicOpeningTag(html);
     expect(opening).toContain("sm:flex");
-    expect(opening).toContain("sm:flex-1");
-    expect(opening).toContain("sm:min-h-[400px]");
+    expect(opening).toContain("flex-1");
+    expect(opening).toContain("sm:min-h-[330px]");
     expect(opening).not.toContain("sm:h-[268px]");
-    expect(opening).not.toContain("h-[252px]");
+    expect(html).toContain('data-dashboard-expense-layout="equal-height-rows"');
     expect(html).toContain('data-dashboard-visual-chart="cash-flow"');
   });
 
-  it("keeps a shorter responsive minimum when there are only two categories", () => {
-    const opening = getMosaicOpeningTag(render(2));
-    expect(opening).toContain("sm:flex-1");
-    expect(opening).toContain("sm:min-h-[280px]");
-    expect(opening).not.toContain("sm:min-h-[400px]");
+  it("preserves equal height for two and five categories without shrinking a smaller group", () => {
+    for (const count of [2, 5]) {
+      const html = render(count);
+      const rows = [...html.matchAll(/<div[^>]*data-dashboard-expense-balanced-row="true"[^>]*>/g)];
+      expect(rows).toHaveLength(count);
+      for (const row of rows) {
+        expect(row[0]).toContain("min-h-[64px]");
+        expect(row[0]).toContain("flex-1");
+        expect(row[0]).not.toContain("flex:");
+      }
+    }
   });
 
   it("keeps the full amount and label for the previously clipped Con Cái tile", () => {
@@ -74,7 +80,7 @@ describe("MYFINANCE DASHBOARD EXPENSE MOSAIC FILL P2.1", () => {
     expect((html.match(/data-dashboard-expense-amount="true"/g) ?? [])).toHaveLength(5);
   });
 
-  it("keeps category proportions data driven; only visual height and spacing change", () => {
+  it("keeps exact data-driven proportions in the metric helper and new row meters", () => {
     const columns = getDashboardExpenseMosaicColumns(names.map((name, index) => ({
       name, value: amounts[index],
     })));
@@ -83,14 +89,16 @@ describe("MYFINANCE DASHBOARD EXPENSE MOSAIC FILL P2.1", () => {
     expect(columns.flatMap((column) => column.tiles).every((item) => item.sharePercent > 0)).toBe(true);
     const html = render(5);
     expect(html).toContain("32.407.498 đ");
+    expect((html.match(/data-dashboard-expense-category-meter="true"/g) ?? [])).toHaveLength(5);
     expect(html).toContain('data-dashboard-mobile-expense-list="true"');
   });
 
-  it("retains the existing accessible treemap and mobile-only breakdown", () => {
+  it("preserves accessible ranked rows and separate mobile breakdown", () => {
     const html = render(5);
-    expect(getMosaicOpeningTag(html)).toContain('role="img"');
-    expect(getMosaicOpeningTag(html)).toContain("Cơ cấu chi tiêu");
-    expect(html).toContain('role="list"');
+    expect(getMosaicOpeningTag(html)).toContain('role="list"');
+    expect(getMosaicOpeningTag(html)).toContain("Chi tiêu theo danh mục");
+    expect(html).toContain('role="listitem"');
     expect(html).toContain('aria-label="Chi tiêu theo danh mục"');
+    expect(html).toContain('role="progressbar"');
   });
 });

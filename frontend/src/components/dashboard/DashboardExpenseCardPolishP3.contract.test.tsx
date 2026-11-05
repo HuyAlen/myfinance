@@ -65,9 +65,9 @@ describe("DASHBOARD-EXPENSE-CATEGORY-UI-POLISH-P3", () => {
     expect(html).toContain("không phải mức dùng ngân sách");
   });
 
-  it("preserves exact tile area, amounts, long Vietnamese labels and readable mobile rows", () => {
+  it("preserves exact proportional bars, amounts, readable labels and mobile rows", () => {
     const html = render();
-    expect(html).toContain('data-dashboard-expense-mosaic="stretch"');
+    expect(html).toContain('data-dashboard-expense-mosaic="balanced"');
     expect((html.match(/data-dashboard-expense-tile="true"/g) ?? [])).toHaveLength(5);
     expect((html.match(/data-dashboard-expense-amount="true"/g) ?? [])).toHaveLength(5);
     expect(html).toContain("Con Cái (Sữa + Tã + Phát Sinh)");
@@ -76,7 +76,8 @@ describe("DASHBOARD-EXPENSE-CATEGORY-UI-POLISH-P3", () => {
     expect(html).toContain("997.650 đ");
     expect(html).toContain("1.088.000 đ");
     expect(html).toContain('data-dashboard-expense-dominant="true"');
-    expect(html).toContain('data-dashboard-expense-dominant-meter="true"');
+    expect(html).toContain('data-dashboard-expense-layout="equal-height-rows"');
+    expect((html.match(/data-dashboard-expense-category-meter="true"/g) ?? [])).toHaveLength(5);
     expect(html).toContain('data-dashboard-mobile-expense-list="true"');
     expect((html.match(/data-dashboard-expense-mobile-meter="true"/g) ?? [])).toHaveLength(5);
   });
@@ -86,7 +87,7 @@ describe("DASHBOARD-EXPENSE-CATEGORY-UI-POLISH-P3", () => {
     expect(html).toContain("Chưa có khoản chi thực tế trong kỳ");
     expect(html).not.toContain('data-dashboard-expense-total="true"');
     expect(html).not.toContain('data-dashboard-expense-desktop-composition="100"');
-    expect(html).not.toContain('data-dashboard-expense-dominant-meter="true"');
+    expect(html).not.toContain('data-dashboard-expense-category-meter="true"');
   });
 
   it("adds dark-mode contrast without touching cash-flow colours or budget data", () => {
@@ -97,7 +98,7 @@ describe("DASHBOARD-EXPENSE-CATEGORY-UI-POLISH-P3", () => {
     expect(css).toContain('[data-dashboard-expense-summary="true"]');
     expect(css).toContain('[data-dashboard-expense-desktop-guide="true"]');
     const code = readFileSync(path.resolve(__dirname, "DashboardVisualOverview.tsx"), "utf8");
-    expect(code).toContain("getDashboardExpenseMosaicColumns(expenses)");
+    expect(code).toContain('data-dashboard-expense-layout="equal-height-rows"');
     expect(code).toContain("buildCategorySpendingData(transactions, categories)");
     expect(code).toContain("data-dashboard-expense-amount");
     expect(code).not.toContain("Math.random()");

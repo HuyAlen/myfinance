@@ -35,3 +35,18 @@ while remaining labels, percentages and VND amounts crowd small tiles.
 - GitHub Quality Gate: TypeScript, ESLint, Vitest, production build.
 - Browser QA desktop (1366/1440/1728), iPhone (~390px), dark theme, no truncation;
   QA not claimed until actual browser screenshots are checked.
+
+## P3.1 — Balanced category row hotfix
+- The P3 proportional-area treemap made the dominant 59% housing rectangle very
+  tall and the 11% child-expense rectangle too short to read.
+- Replace desktop/small-tablet treemap with FIVE equal-height, full-width
+  category rows. All labels and exact VND values have equal reading space.
+- The composition rail above still uses the **exact** portion of total spending;
+  each row also has a progress meter with width equal to actual amount / total.
+- The tile footprint is not financial magnitude; visual emphasis for the
+  largest group is text and bar length, not an oversized rectangle.
+- Retain source grouping (top 4 + Other), chronological period and empty states,
+  original mobile-only row list, all category colours and wallet data integrity.
+- Update previous P2 treemap contracts to reflect balanced row semantics while
+  retaining isolated legacy mosaic-helper geometry tests.
+- Never merge before CI and user visual confirmation.
