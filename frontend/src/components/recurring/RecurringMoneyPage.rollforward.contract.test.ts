@@ -8,12 +8,12 @@ const source = readFileSync(
 ).replace(/\r\n/g, "\n");
 
 describe("RECURRING-NEXT-RUN-ROLLFORWARD-1 page wiring", () => {
-  it("uses one local calendar reference for read model and 30-day projection", () => {
-    expect(source).toContain("const todayKey = localDateKey();");
-    expect(source).toContain("referenceDate: todayKey");
-    expect(source).toContain(
-      "expandRecurringScheduleOccurrences(forecastSchedules, todayKey, 30)",
-    );
+  it("uses the selected header month for schedules and projected occurrences", () => {
+    expect(source).toContain("const { selectedMonth, filterMode: globalFilterMode } = useDateFilter();");
+    expect(source).toContain("buildRecurringMonthView(selectedMonth, todayKey)");
+    expect(source).toContain("referenceDate: viewMonth.startDate");
+    expect(source).toContain("projectSelectedRecurringMonth({");
+    expect(source).toContain("data-recurring-view-month={viewMonth.monthKey}");
   });
 
   it("renders the rolled effective next date while keeping edit form on stored anchor", () => {

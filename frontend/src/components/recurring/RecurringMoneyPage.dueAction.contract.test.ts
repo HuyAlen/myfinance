@@ -9,6 +9,7 @@ const source = readFileSync(
 
 describe("RECURRING-DUE-ACTION-1 page wiring", () => {
   it("builds due reminders from the same canonical schedules and transactions", () => {
+    expect(source).toContain("viewMonth.isCurrentMonth");
     expect(source).toContain("buildRecurringDueActions");
     expect(source).toContain("referenceDate: todayKey");
     expect(source).toContain("upcomingDays: 3");

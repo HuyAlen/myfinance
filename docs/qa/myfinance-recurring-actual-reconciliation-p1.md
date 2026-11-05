@@ -25,3 +25,11 @@
 - Verify edit/delete via /transactions recomputes status and dashboard forecast.
 - Verify duplicate legacy schedules are flagged instead of auto-matching.
 - Do not merge to main before CI and browser QA pass.
+
+## Hotfix: selected month integrity (2026-11-05)
+- The global DateFilterProvider selectedMonth drives recurring schedule read-model, monthly reconciliation, status and selected-month planned occurrences.
+- Only occurrences within the selected calendar month enter the recurring month projection; already-recorded ones are excluded from forecast, not counted as future expenses.
+- Due-today alerts remain aligned with the real current calendar month only. Browsing historical/future months never fabricates "due today" reminders.
+- Actual entry remains explicit; historical/future selected months default the transaction date to the occurrence date. A changed month invalidates an open draft until reopened.
+- Month/quarter/year/custom are global navigation modes. The recurring workspace shows the first calendar month for non-month modes with a visible explanation rather than incorrectly implying aggregation across the entire range.
+- No new SQL, migrations or mutations to main. Execute CI and desktop/iPhone browser QA before merge.

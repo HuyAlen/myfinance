@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { useRealtimeTable } from "@/src/components/realtime/RealtimeProvider";
+import { useDateFilter } from "@/src/components/layout/DateFilterProvider";
 import { useSuppressGlobalFabsWhileOpen } from "@/src/components/layout/FabVisibilityProvider";
 import ConfirmDialog, { type PendingConfirm } from "@/src/components/ui/ConfirmDialog";
 import { SaveError } from "@/src/components/ui/SaveError";
@@ -43,7 +44,10 @@ import {
   toRecurringScheduleInputs,
   type RecurringMoneySchedule,
 } from "@/src/lib/recurring/recurringMoney";
-import { expandRecurringScheduleOccurrences } from "@/src/lib/dashboard/dashboardIntelligence";
+import {
+  buildRecurringMonthView,
+  projectSelectedRecurringMonth,
+} from "@/src/lib/recurring/recurringMonthView";
 import {
   buildRecurringDueActions,
   type RecurringDueAction,
@@ -115,6 +119,7 @@ function emptyEditor(categories: Category[], wallets: Wallet[]): EditorState {
 
 export default function RecurringMoneyPage() {
   const dateDisplayFormat = useAccountDateFormat();
+  const { selectedMonth, filterMode: globalFilterMode } = useDateFilter();
   const router = useRouter();
   const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -215,15 +220,22 @@ export default function RecurringMoneyPage() {
   });
 
   const todayKey = localDateKey();
+  const viewMonth = useMemo(
+    () => buildRecurringMonthView(selectedMonth, todayKey),
+    [selectedMonth, todayKey],
+  );
+  // The header period is the authority for history/reconciliation. "Due today"
+  // reminders stay pinned to the actual calendar and are never simulated in
+  // a historical or future selected month.
   const schedules = useMemo(
     () =>
       buildRecurringMoneySchedules({
         categories,
         transactions,
         wallets,
-        referenceDate: todayKey,
+        referenceDate: viewMonth.startDate,
       }),
-    [categories, transactions, wallets, todayKey],
+    [categories, transactions, wallets, viewMonth.startDate],
   );
   const monthlyStatus = useMemo(
     () => new Map(schedules.map((schedule) => [
@@ -232,28 +244,32 @@ export default function RecurringMoneyPage() {
         schedule,
         schedules,
         transactions,
-        referenceDate: todayKey,
+        referenceDate: viewMonth.startDate,
       }),
     ])),
-    [schedules, transactions, todayKey],
+    [schedules, transactions, viewMonth.startDate],
   );
   const forecastSchedules = useMemo(
     () => toRecurringScheduleInputs(schedules),
     [schedules],
   );
   const occurrences = useMemo(
-    () => expandRecurringScheduleOccurrences(forecastSchedules, todayKey, 30),
-    [forecastSchedules, todayKey],
+    () => projectSelectedRecurringMonth({
+      viewMonth, forecastSchedules, schedules, transactions,
+    }),
+    [viewMonth, forecastSchedules, schedules, transactions],
   );
   const dueActions = useMemo(
     () =>
-      buildRecurringDueActions({
-        schedules,
-        transactions,
-        referenceDate: todayKey,
-        upcomingDays: 3,
-      }),
-    [schedules, todayKey, transactions],
+      viewMonth.isCurrentMonth
+        ? buildRecurringDueActions({
+            schedules,
+            transactions,
+            referenceDate: todayKey,
+            upcomingDays: 3,
+          })
+        : [],
+    [schedules, todayKey, transactions, viewMonth.isCurrentMonth],
   );
   const dueActionByScheduleId = useMemo(
     () => new Map(dueActions.map((item) => [item.scheduleId, item])),
@@ -444,13 +460,16 @@ export default function RecurringMoneyPage() {
   function openRecordActual(schedule: RecurringMoneySchedule, dueDate?: string) {
     if (!schedule.enabled || schedule.issues.length > 0) return;
     const currentPeriod = reconcileCurrentMonthlyOccurrence({
-      schedule, schedules, transactions, referenceDate: todayKey,
+      schedule, schedules, transactions, referenceDate: viewMonth.startDate,
     });
     const effectiveDate = dueDate ??
       (currentPeriod?.status === "pending" ? currentPeriod.dueDate : undefined) ??
-      schedule.effectiveNextRunDate ?? schedule.nextRunDate ?? todayKey;
-    const currentMonth = todayKey.slice(0, 7);
-    const recordDate = effectiveDate.slice(0, 7) === currentMonth ? todayKey : effectiveDate;
+      schedule.effectiveNextRunDate ?? schedule.nextRunDate ?? viewMonth.startDate;
+    if (effectiveDate.slice(0, 7) !== viewMonth.monthKey) {
+      toast({ variant: "warning", message: "Không có kỳ định kỳ trong tháng đang xem." });
+      return;
+    }
+    const recordDate = viewMonth.isCurrentMonth ? todayKey : effectiveDate;
     const existing = reconcileRecurringOccurrence({
       schedule, schedules, transactions, dueDate: effectiveDate,
     });
@@ -477,6 +496,10 @@ export default function RecurringMoneyPage() {
     if (dueAction.status !== "due-today") return;
     if (!actualDraft || actualDraft.schedule.id !== schedule.id) return;
     const draft = actualDraft;
+    if (draft.dueDate.slice(0, 7) !== viewMonth.monthKey) {
+      setActualError("Tháng đang xem đã thay đổi. Vui lòng mở lại giao dịch.");
+      return;
+    }
     const amount = Number(draft.amount);
     if (!Number.isSafeInteger(amount) || amount <= 0) {
       setActualError("Số tiền thực tế phải là số nguyên dương.");
@@ -608,11 +631,19 @@ export default function RecurringMoneyPage() {
           </button>
         </div>
 
-        <div className="relative mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="relative mt-4 rounded-xl bg-blue-50/70 px-3 py-2 text-xs font-bold text-blue-800" data-recurring-view-month={viewMonth.monthKey}>
+          Đối chiếu tháng {viewMonth.monthLabel} · Số tiền dự tính và giao dịch thực tế được tính theo tháng đang chọn.
+          {globalFilterMode !== "month" && (
+            <span className="mt-1 block font-medium text-amber-700">
+              Với bộ lọc quý, năm hoặc tùy chỉnh, Định kỳ hiển thị tháng đầu tiên của khoảng lọc. Chọn chế độ Tháng để xem từng kỳ.
+            </span>
+          )}
+        </div>
+        <div className="relative mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <SummaryCard label="Đang hoạt động" value={String(overview.active)} tone="blue" />
-          <SummaryCard label="Dự tính thu 30 ngày" value={formatVND(overview.income30)} tone="green" />
-          <SummaryCard label="Dự tính chi 30 ngày" value={formatVND(overview.expense30)} tone="rose" />
-          <SummaryCard label="Dự tính ròng 30 ngày" value={`${overview.net30 >= 0 ? "+" : ""}${formatVND(overview.net30)}`} tone={overview.net30 >= 0 ? "blue" : "rose"} />
+          <SummaryCard label={`Dự tính thu · ${viewMonth.monthLabel}`} value={formatVND(overview.income30)} tone="green" />
+          <SummaryCard label={`Dự tính chi · ${viewMonth.monthLabel}`} value={formatVND(overview.expense30)} tone="rose" />
+          <SummaryCard label={`Dự tính ròng · ${viewMonth.monthLabel}`} value={`${overview.net30 >= 0 ? "+" : ""}${formatVND(overview.net30)}`} tone={overview.net30 >= 0 ? "blue" : "rose"} />
         </div>
       </section>
 
@@ -638,7 +669,7 @@ export default function RecurringMoneyPage() {
           </div>
           <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 sm:w-64">
             <button type="button" onClick={() => setViewMode("list")} className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-black ${viewMode === "list" ? "bg-white text-[#294A66] shadow-sm" : "text-[#71879A]"}`}><List size={14} /> Danh sách</button>
-            <button type="button" onClick={() => setViewMode("calendar")} className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-black ${viewMode === "calendar" ? "bg-white text-[#294A66] shadow-sm" : "text-[#71879A]"}`}><CalendarDays size={14} /> 30 ngày</button>
+            <button type="button" onClick={() => setViewMode("calendar")} className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-black ${viewMode === "calendar" ? "bg-white text-[#294A66] shadow-sm" : "text-[#71879A]"}`}><CalendarDays size={14} /> Lịch tháng</button>
           </div>
         </div>
       </section>
@@ -666,6 +697,12 @@ export default function RecurringMoneyPage() {
                 dateDisplayFormat={dateDisplayFormat}
                 dueAction={dueActionByScheduleId.get(schedule.id)}
                 monthlyStatus={monthlyStatus.get(schedule.id)}
+                monthLabel={viewMonth.monthLabel}
+                canRecordInMonth={
+                  schedule.recurrence === "monthly"
+                    ? monthlyStatus.get(schedule.id)?.status === "pending"
+                    : (schedule.effectiveNextRunDate ?? "").slice(0, 7) === viewMonth.monthKey
+                }
                 onRecord={(dueAction) => openRecordActual(schedule, dueAction.dueDate)}
                 onRecordActual={() => openRecordActual(schedule)}
                 onEdit={() => openEdit(schedule)}
@@ -962,7 +999,7 @@ function EmptyState({ onCreate, calendar = false }: { onCreate: () => void; cale
   return (
     <section className="rounded-3xl border border-dashed border-[#C9DCEB] bg-white/80 p-8 text-center">
       <Repeat2 className="mx-auto text-[#8ABBE8]" size={28} />
-      <p className="mt-3 text-base font-black text-[#294A66]">{calendar ? "Chưa có khoản đến hạn trong 30 ngày" : "Chưa có lịch định kỳ phù hợp"}</p>
+      <p className="mt-3 text-base font-black text-[#294A66]">{calendar ? "Không có khoản dự tính chưa ghi nhận trong tháng đã chọn" : "Chưa có lịch định kỳ phù hợp"}</p>
       <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-[#71879A]">Tạo lịch từ một danh mục thu/chi để Có thể chi an toàn và Dự báo thanh khoản có dữ liệu dự báo đáng tin hơn.</p>
       <button type="button" onClick={onCreate} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-50 px-4 text-sm font-black text-blue-700"><Plus size={16} /> Thêm khoản định kỳ</button>
     </section>
@@ -974,6 +1011,8 @@ function ScheduleCard({
   dateDisplayFormat,
   dueAction,
   monthlyStatus,
+  monthLabel,
+  canRecordInMonth,
   onRecord,
   onRecordActual,
   onEdit,
@@ -984,6 +1023,8 @@ function ScheduleCard({
   dateDisplayFormat: DateDisplayFormat;
   dueAction?: RecurringDueAction;
   monthlyStatus?: ReturnType<typeof reconcileCurrentMonthlyOccurrence>;
+  monthLabel: string;
+  canRecordInMonth: boolean;
   onRecord: (dueAction: RecurringDueAction) => void;
   onRecordActual: () => void;
   onEdit: () => void;
@@ -1022,7 +1063,7 @@ function ScheduleCard({
 
       {monthlyStatus?.status === "recorded" && (
         <div data-recurring-actual-status="recorded" className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
-          <div className="flex items-center gap-2 text-xs font-black text-emerald-700"><CheckCircle2 size={15} /> Đã ghi nhận trong tháng</div>
+          <div className="flex items-center gap-2 text-xs font-black text-emerald-700"><CheckCircle2 size={15} /> Đã ghi nhận tháng {monthLabel}</div>
           <p className="mt-1 text-sm font-bold text-slate-800">
             Thực tế {formatVND(monthlyStatus.actualAmount)} · {monthlyStatus.transactionCount} giao dịch
           </p>
@@ -1074,7 +1115,7 @@ function ScheduleCard({
           ) : null}
         </div>
       ) : null}
-      {schedule.enabled && schedule.issues.length === 0 &&
+      {schedule.enabled && schedule.issues.length === 0 && canRecordInMonth &&
         monthlyStatus?.status !== "recorded" && dueAction?.status !== "due-today" && (
           <button type="button" onClick={onRecordActual} className="mt-3 min-h-10 w-full rounded-xl bg-blue-50 text-xs font-black text-blue-700">
             Ghi giao dịch thực tế

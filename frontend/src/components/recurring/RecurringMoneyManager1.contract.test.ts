@@ -40,7 +40,7 @@ describe("RECURRING-MONEY-MANAGER-1 product wiring", () => {
     expect(page).toContain("Tạm dừng");
     expect(page).toContain("Đã bật lịch định kỳ");
     expect(page).toContain("Xóa lịch định kỳ?");
-    expect(page).toContain("30 ngày");
+    expect(page).toContain("Lịch tháng");
   });
 
   it("makes Dashboard consume the same canonical recurring read model", () => {
