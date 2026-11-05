@@ -34,7 +34,9 @@ describe("RECURRING-SELECTED-MONTH-CONTEXT-HOTFIX-P1 wiring", () => {
   it("labels single-month projections honestly and avoids reporting a quarter as one month", () => {
     expect(page).toContain("Đối chiếu tháng {viewMonth.monthLabel}");
     expect(page).toContain('globalFilterMode !== "month"');
-    expect(page).toContain("Dự tính thu ·");
+    expect(page).toContain("buildRecurringMonthSummary({ viewMonth, schedules, transactions })");
+    expect(page).toContain('data-recurring-summary-month={viewMonth.monthKey}');
+    expect(page).toContain("Tổng chi dự tính");
     expect(page).toContain("Lịch tháng");
   });
 });

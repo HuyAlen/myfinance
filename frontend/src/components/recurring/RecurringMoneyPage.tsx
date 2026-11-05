@@ -48,6 +48,7 @@ import {
   buildRecurringMonthView,
   projectSelectedRecurringMonth,
 } from "@/src/lib/recurring/recurringMonthView";
+import { buildRecurringMonthSummary } from "@/src/lib/recurring/recurringSummaryP2";
 import {
   buildRecurringDueActions,
   type RecurringDueAction,
@@ -276,22 +277,33 @@ export default function RecurringMoneyPage() {
     [dueActions],
   );
 
-  const overview = useMemo(() => {
-    const income30 = occurrences
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + item.amount, 0);
-    const expense30 = occurrences
-      .filter((item) => item.type === "expense")
-      .reduce((sum, item) => sum + item.amount, 0);
-    return {
-      active: schedules.filter((item) => item.enabled && item.issues.length === 0).length,
-      paused: schedules.filter((item) => !item.enabled).length,
-      issues: schedules.filter((item) => item.issues.length > 0).length,
-      income30,
-      expense30,
-      net30: income30 - expense30,
-    };
-  }, [occurrences, schedules]);
+  const summary = useMemo(
+    () => buildRecurringMonthSummary({ viewMonth, schedules, transactions }),
+    [viewMonth, schedules, transactions],
+  );
+  const overview = useMemo(() => ({
+    paused: schedules.filter((item) => !item.enabled).length,
+    issues: schedules.filter((item) => item.issues.length > 0).length,
+  }), [schedules]);
+  // Expense is the primary value when both income and expense schedules exist.
+  // For income-only plans, the cards switch to income as the main metric.
+  const expensePrimary = summary.estimatedExpense > 0 || summary.estimatedIncome === 0;
+  const primaryEstimated = expensePrimary ? summary.estimatedExpense : summary.estimatedIncome;
+  const primaryActual = expensePrimary ? summary.actualExpense : summary.actualIncome;
+  const primaryDifference = expensePrimary ? summary.expenseDifference : summary.incomeDifference;
+  const primaryRecorded = expensePrimary ? summary.recordedExpenseCount : summary.recordedIncomeCount;
+  const hasSecondary = expensePrimary ? summary.estimatedIncome > 0 : summary.estimatedExpense > 0;
+  const signedAmount = (amount: number) =>
+    amount < 0 ? `−${formatVND(Math.abs(amount))}` : amount > 0 ? `+${formatVND(amount)}` : formatVND(0);
+  const differenceTone =
+    primaryRecorded === 0 || primaryDifference === 0
+      ? "blue"
+      : (expensePrimary ? primaryDifference < 0 : primaryDifference > 0)
+        ? "green"
+        : "rose";
+  const differenceNote = primaryRecorded === 0
+    ? "Chưa có kỳ ghi nhận để đối chiếu"
+    : `${expensePrimary ? "Chi" : "Thu"} ${primaryDifference === 0 ? "đúng" : primaryDifference < 0 ? "thấp hơn" : "cao hơn"} dự tính · ${primaryRecorded} kỳ`;
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter((schedule) => {
@@ -639,12 +651,63 @@ export default function RecurringMoneyPage() {
             </span>
           )}
         </div>
-        <div className="relative mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-          <SummaryCard label="Đang hoạt động" value={String(overview.active)} tone="blue" />
-          <SummaryCard label={`Dự tính thu · ${viewMonth.monthLabel}`} value={formatVND(overview.income30)} tone="green" />
-          <SummaryCard label={`Dự tính chi · ${viewMonth.monthLabel}`} value={formatVND(overview.expense30)} tone="rose" />
-          <SummaryCard label={`Dự tính ròng · ${viewMonth.monthLabel}`} value={`${overview.net30 >= 0 ? "+" : ""}${formatVND(overview.net30)}`} tone={overview.net30 >= 0 ? "blue" : "rose"} />
+        <div className="relative mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4" data-recurring-summary-month={viewMonth.monthKey}>
+          {isLoading || loadError ? (
+            [0, 1, 2, 3].map((index) => (
+              <div
+                key={index}
+                aria-hidden="true"
+                className="h-26 animate-pulse rounded-2xl border border-slate-100 bg-slate-50"
+              />
+            ))
+          ) : (
+            <>
+              <SummaryCard
+                id="recorded"
+                label="Kỳ đã ghi nhận"
+                value={`${summary.recordedCount}/${summary.totalCount}`}
+                note={summary.totalCount === 0
+                  ? "Không có kỳ hợp lệ trong tháng"
+                  : summary.pendingCount > 0
+                    ? `Còn ${summary.pendingCount} kỳ chưa ghi nhận`
+                    : "Đã đối chiếu tất cả các kỳ"}
+                tone={summary.totalCount > 0 && summary.pendingCount === 0 ? "green" : "blue"}
+              />
+              <SummaryCard
+                id="estimate"
+                label={expensePrimary ? "Tổng chi dự tính" : "Tổng thu dự tính"}
+                value={formatVND(primaryEstimated)}
+                note={hasSecondary
+                  ? `${expensePrimary ? "Thu" : "Chi"} dự tính: ${formatVND(expensePrimary ? summary.estimatedIncome : summary.estimatedExpense)}`
+                  : "Theo kế hoạch trong tháng"}
+                tone="blue"
+              />
+              <SummaryCard
+                id="actual"
+                label={expensePrimary ? "Tổng chi thực tế" : "Tổng thu thực tế"}
+                value={formatVND(primaryActual)}
+                note={hasSecondary
+                  ? `${expensePrimary ? "Thu" : "Chi"} thực tế: ${formatVND(expensePrimary ? summary.actualIncome : summary.actualExpense)}`
+                  : "Từ giao dịch đã ghi nhận"}
+                tone={expensePrimary ? "rose" : "green"}
+              />
+              <SummaryCard
+                id="difference"
+                label={expensePrimary ? "Chênh lệch chi" : "Chênh lệch thu"}
+                value={primaryRecorded > 0 ? signedAmount(primaryDifference) : "—"}
+                note={hasSecondary
+                  ? `${differenceNote} · ${expensePrimary ? "Thu" : "Chi"}: ${(expensePrimary ? summary.recordedIncomeCount : summary.recordedExpenseCount) > 0
+                    ? signedAmount(expensePrimary ? summary.incomeDifference : summary.expenseDifference)
+                    : "chưa ghi nhận"}`
+                  : differenceNote}
+                tone={differenceTone}
+              />
+            </>
+          )}
         </div>
+        <p className="relative mt-2 text-[11px] font-medium text-slate-500">
+          Chênh lệch chỉ so các kỳ đã ghi nhận; khoản chưa thanh toán không được xem là tiết kiệm.
+        </p>
       </section>
 
       <section className="rounded-3xl border border-slate-200/80 bg-white/95 p-3 shadow-sm sm:rounded-4xl sm:p-4">
@@ -985,12 +1048,24 @@ export default function RecurringMoneyPage() {
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "rose" }) {
+function SummaryCard({
+  id, label, value, note, tone,
+}: {
+  id: "recorded" | "estimate" | "actual" | "difference";
+  label: string;
+  value: string;
+  note: string;
+  tone: "blue" | "green" | "rose";
+}) {
   const toneClass = tone === "green" ? "text-emerald-600" : tone === "rose" ? "text-rose-500" : "text-[#2F80ED]";
   return (
-    <div className="rounded-2xl border border-[#DCE8F1] bg-[#FCFEFF] p-3.5">
+    <div
+      data-recurring-summary-card={id}
+      className="flex min-w-0 flex-col justify-between rounded-2xl border border-[#DCE8F1] bg-[#FCFEFF] p-3.5"
+    >
       <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[#71879A]">{label}</p>
-      <p className={`mt-1.5 whitespace-nowrap text-[clamp(14px,4vw,20px)] font-black tabular-nums ${toneClass}`}>{value}</p>
+      <p className={`mt-1.5 max-w-full break-words text-[clamp(14px,1.6vw,22px)] font-black leading-tight tabular-nums ${toneClass}`}>{value}</p>
+      <p className="mt-1.5 text-[11px] font-medium leading-4 text-slate-500">{note}</p>
     </div>
   );
 }
