@@ -65,6 +65,7 @@ import {
 import { buildCashFlowForecast } from "@/src/lib/finance/cashFlowForecast";
 import {
   buildRecurringMoneySchedules,
+  excludeRecordedRecurringOccurrences,
   toRecurringScheduleInputs,
 } from "@/src/lib/recurring/recurringMoney";
 import {
@@ -3025,13 +3026,16 @@ export default function DashboardPage() {
   );
 
   const recurringOccurrences = useMemo(
-    () =>
-      expandRecurringScheduleOccurrences(
+    () => excludeRecordedRecurringOccurrences({
+      occurrences: expandRecurringScheduleOccurrences(
         recurringSchedules,
         recurringReferenceDate,
         90,
       ),
-    [recurringReferenceDate, recurringSchedules],
+      schedules: recurringMoneySchedules,
+      transactions,
+    }),
+    [recurringReferenceDate, recurringSchedules, recurringMoneySchedules, transactions],
   );
 
   const allUpcomingMoneyEvents = useMemo(() => {

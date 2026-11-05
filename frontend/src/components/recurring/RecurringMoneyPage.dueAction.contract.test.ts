@@ -22,7 +22,7 @@ describe("RECURRING-DUE-ACTION-1 page wiring", () => {
 
   it("uses the canonical addTransaction boundary and does not persist recurrence metadata on the realized transaction", () => {
     expect(source).toContain("await addTransaction(transaction)");
-    expect(source).toContain("date: dueAction.dueDate");
+    expect(source).toContain("date: draft.date");
     expect(source).not.toContain("isRecurring: true");
   });
 

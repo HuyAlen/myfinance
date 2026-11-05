@@ -36,6 +36,8 @@ import {
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import {
   buildRecurringMoneySchedules,
+  reconcileCurrentMonthlyOccurrence,
+  reconcileRecurringOccurrence,
   getRecurringIssueLabel,
   toRecurringScheduleInputs,
   type RecurringMoneySchedule,
@@ -54,6 +56,15 @@ import type {
 
 type ViewMode = "list" | "calendar";
 type FilterMode = "all" | "income" | "expense" | "paused" | "issues";
+
+type ActualDraft = {
+  schedule: RecurringMoneySchedule;
+  dueDate: string;
+  amount: string;
+  walletId: string;
+  date: string;
+  note: string;
+};
 
 type EditorState = {
   source: "category" | "transaction";
@@ -116,8 +127,10 @@ export default function RecurringMoneyPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [actualDraft, setActualDraft] = useState<ActualDraft | null>(null);
+  const [actualError, setActualError] = useState<string | null>(null);
 
-  useSuppressGlobalFabsWhileOpen(Boolean(editor) || Boolean(pendingConfirm));
+  useSuppressGlobalFabsWhileOpen(Boolean(editor) || Boolean(pendingConfirm) || Boolean(actualDraft));
 
   // RECURRING-MOBILE-VISUAL-VIEWPORT-1:
   // iOS Safari's layout viewport can remain taller than the actually visible
@@ -210,6 +223,18 @@ export default function RecurringMoneyPage() {
         referenceDate: todayKey,
       }),
     [categories, transactions, wallets, todayKey],
+  );
+  const monthlyStatus = useMemo(
+    () => new Map(schedules.map((schedule) => [
+      schedule.id,
+      reconcileCurrentMonthlyOccurrence({
+        schedule,
+        schedules,
+        transactions,
+        referenceDate: todayKey,
+      }),
+    ])),
+    [schedules, transactions, todayKey],
   );
   const forecastSchedules = useMemo(
     () => toRecurringScheduleInputs(schedules),
@@ -415,48 +440,101 @@ export default function RecurringMoneyPage() {
     toast({ variant: "success", message: next.enabled ? "Đã bật lịch định kỳ." : "Đã tạm dừng lịch định kỳ." });
   }
 
+  function openRecordActual(schedule: RecurringMoneySchedule, dueDate?: string) {
+    if (!schedule.enabled || schedule.issues.length > 0) return;
+    const effectiveDate = dueDate ?? schedule.effectiveNextRunDate ?? schedule.nextRunDate ?? todayKey;
+    const currentMonth = todayKey.slice(0, 7);
+    const recordDate = effectiveDate.slice(0, 7) === currentMonth ? todayKey : effectiveDate;
+    const existing = reconcileRecurringOccurrence({
+      schedule, schedules, transactions, dueDate: effectiveDate,
+    });
+    if (existing.status !== "pending") {
+      toast({ variant: "warning", message: "Kỳ này đã có giao dịch thực tế hoặc cần đối chiếu." });
+      return;
+    }
+    setActualError(null);
+    setActualDraft({
+      schedule,
+      dueDate: effectiveDate,
+      amount: String(schedule.amount),
+      walletId: schedule.walletId,
+      date: recordDate,
+      note: schedule.title,
+    });
+  }
+
   function requestRecordDueTransaction(
     schedule: RecurringMoneySchedule,
     dueAction: RecurringDueAction,
   ) {
+    // Legacy contract: explicit confirmation still uses the same addTransaction boundary.
     if (dueAction.status !== "due-today") return;
-
+    if (!actualDraft || actualDraft.schedule.id !== schedule.id) return;
+    const draft = actualDraft;
+    const amount = Number(draft.amount);
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setActualError("Số tiền thực tế phải là số nguyên dương.");
+      return;
+    }
+    if (!wallets.some((wallet) => wallet.id === draft.walletId)) {
+      setActualError("Vui lòng chọn ví hợp lệ.");
+      return;
+    }
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(draft.date)) {
+      setActualError("Vui lòng chọn ngày giao dịch.");
+      return;
+    }
+    if (
+      reconcileRecurringOccurrence({
+        schedule, schedules, transactions, dueDate: draft.dueDate,
+      }).status !== "pending" ||
+      !isDateInsideRecurringOccurrence(schedule, draft.dueDate, draft.date)
+    ) {
+      setActualError("Giao dịch không thuộc kỳ này hoặc đã được ghi nhận.");
+      return;
+    }
     setPendingConfirm({
       title: `Ghi giao dịch “${schedule.title}”?`,
-      description:
-        schedule.type === "income"
-          ? `Ghi nhận khoản thu ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate,dateDisplayFormat)}. MyFinance chỉ tạo giao dịch sau khi bạn xác nhận.`
-          : `Ghi nhận khoản chi ${formatVND(schedule.amount)} vào ngày ${formatDate(dueAction.dueDate,dateDisplayFormat)}. MyFinance chỉ trừ ví sau khi bạn xác nhận.`,
+      description: `Thực tế ${formatVND(amount)} · ${formatDate(draft.date, dateDisplayFormat)}. Chỉ ghi một giao dịch sau khi bạn xác nhận.`,
       confirmText: "Ghi giao dịch",
       variant: schedule.type === "expense" ? "danger" : "info",
       onConfirm: async () => {
+        const latestTransactions = await getTransactions();
+        const latestMatch = reconcileRecurringOccurrence({
+          schedule, schedules, transactions: latestTransactions, dueDate: draft.dueDate,
+        });
+        if (latestMatch.status !== "pending") {
+          toast({ variant: "warning", message: "Kỳ này đã được ghi nhận. Không tạo giao dịch trùng." });
+          await reloadData();
+          setActualDraft(null);
+          return;
+        }
         const transaction: Transaction = {
           id: crypto.randomUUID(),
           type: schedule.type,
-          amount: schedule.amount,
+          amount,
           categoryId: schedule.categoryId,
-          walletId: schedule.walletId,
-          note: schedule.title,
-          date: dueAction.dueDate,
+          walletId: draft.walletId,
+          note: draft.note.trim() || schedule.title,
+          date: draft.date,
         };
-
         const result = await addTransaction(transaction);
         if (result.error) {
           toast({ variant: "error", message: result.error });
           return;
         }
-
+        setActualDraft(null);
         await reloadData();
         toast({
           variant: "success",
-          message:
-            schedule.type === "income"
-              ? "Đã ghi nhận khoản thu định kỳ."
-              : "Đã ghi nhận khoản chi định kỳ.",
+          message: schedule.type === "income"
+            ? "Đã ghi nhận khoản thu thực tế."
+            : "Đã ghi nhận khoản chi thực tế.",
         });
       },
     });
   }
+
   function requestClear(schedule: RecurringMoneySchedule) {
     setPendingConfirm({
       title: "Xóa lịch định kỳ?",
@@ -526,9 +604,9 @@ export default function RecurringMoneyPage() {
 
         <div className="relative mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           <SummaryCard label="Đang hoạt động" value={String(overview.active)} tone="blue" />
-          <SummaryCard label="30 ngày thu" value={formatVND(overview.income30)} tone="green" />
-          <SummaryCard label="30 ngày chi" value={formatVND(overview.expense30)} tone="rose" />
-          <SummaryCard label="30 ngày ròng" value={`${overview.net30 >= 0 ? "+" : ""}${formatVND(overview.net30)}`} tone={overview.net30 >= 0 ? "blue" : "rose"} />
+          <SummaryCard label="Dự tính thu 30 ngày" value={formatVND(overview.income30)} tone="green" />
+          <SummaryCard label="Dự tính chi 30 ngày" value={formatVND(overview.expense30)} tone="rose" />
+          <SummaryCard label="Dự tính ròng 30 ngày" value={`${overview.net30 >= 0 ? "+" : ""}${formatVND(overview.net30)}`} tone={overview.net30 >= 0 ? "blue" : "rose"} />
         </div>
       </section>
 
@@ -581,9 +659,9 @@ export default function RecurringMoneyPage() {
                 schedule={schedule}
                 dateDisplayFormat={dateDisplayFormat}
                 dueAction={dueActionByScheduleId.get(schedule.id)}
-                onRecord={(dueAction) =>
-                  requestRecordDueTransaction(schedule, dueAction)
-                }
+                monthlyStatus={monthlyStatus.get(schedule.id)}
+                onRecord={(dueAction) => openRecordActual(schedule, dueAction.dueDate)}
+                onRecordActual={() => openRecordActual(schedule)}
                 onEdit={() => openEdit(schedule)}
                 onToggle={() => void handleToggle(schedule)}
                 onClear={() => requestClear(schedule)}
@@ -620,6 +698,87 @@ export default function RecurringMoneyPage() {
             </div>
           ))}
         </section>
+      )}
+
+      {actualDraft && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/55 p-3" data-recurring-actual-editor="true">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const current = actualDraft;
+              if (!current) return;
+              requestRecordDueTransaction(current.schedule, {
+                scheduleId: current.schedule.id,
+                sourceId: current.schedule.sourceId,
+                title: current.schedule.title,
+                type: current.schedule.type,
+                amount: current.schedule.amount,
+                categoryId: current.schedule.categoryId,
+                walletId: current.schedule.walletId,
+                dueDate: current.dueDate,
+                daysUntilDue: 0,
+                status: "due-today",
+              });
+            }}
+            className="flex w-full max-w-md flex-col gap-3 rounded-3xl bg-white p-5 shadow-2xl"
+          >
+            <h2 className="text-lg font-black text-slate-900">Ghi giao dịch thực tế</h2>
+            <p className="text-xs text-slate-500">
+              {actualDraft.schedule.title} · Dự tính {formatVND(actualDraft.schedule.amount)}
+            </p>
+            <label className="text-sm font-bold text-slate-700">
+              Số tiền thực tế (₫)
+              <input
+                inputMode="numeric"
+                value={formatRecurringAmountInput(actualDraft.amount)}
+                onChange={(event) => setActualDraft((previous) =>
+                  previous ? { ...previous, amount: event.target.value.replace(/[^0-9]/g, "") } : previous,
+                )}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-base"
+                required
+              />
+            </label>
+            <label className="text-sm font-bold text-slate-700">
+              Ví thực tế
+              <select
+                value={actualDraft.walletId}
+                onChange={(event) => setActualDraft((previous) =>
+                  previous ? { ...previous, walletId: event.target.value } : previous,
+                )}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 p-3"
+              >
+                {wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
+              </select>
+            </label>
+            <label className="text-sm font-bold text-slate-700">
+              Ngày giao dịch
+              <input
+                type="date"
+                value={actualDraft.date}
+                onChange={(event) => setActualDraft((previous) =>
+                  previous ? { ...previous, date: event.target.value } : previous,
+                )}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 p-3"
+                required
+              />
+            </label>
+            <label className="text-sm font-bold text-slate-700">
+              Ghi chú
+              <input
+                value={actualDraft.note}
+                onChange={(event) => setActualDraft((previous) =>
+                  previous ? { ...previous, note: event.target.value } : previous,
+                )}
+                className="mt-1.5 w-full rounded-xl border border-slate-200 p-3"
+              />
+            </label>
+            {actualError && <p role="alert" className="text-xs font-bold text-rose-600">{actualError}</p>}
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <button type="button" className="min-h-11 rounded-xl border border-slate-200 font-bold" onClick={() => setActualDraft(null)}>Hủy</button>
+              <button type="submit" className="min-h-11 rounded-xl bg-blue-600 font-bold text-white">Tiếp tục ghi nhận</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {editor && (
@@ -808,7 +967,9 @@ function ScheduleCard({
   schedule,
   dateDisplayFormat,
   dueAction,
+  monthlyStatus,
   onRecord,
+  onRecordActual,
   onEdit,
   onToggle,
   onClear,
@@ -816,7 +977,9 @@ function ScheduleCard({
   schedule: RecurringMoneySchedule;
   dateDisplayFormat: DateDisplayFormat;
   dueAction?: RecurringDueAction;
+  monthlyStatus?: ReturnType<typeof reconcileCurrentMonthlyOccurrence>;
   onRecord: (dueAction: RecurringDueAction) => void;
+  onRecordActual: () => void;
   onEdit: () => void;
   onToggle: () => void;
   onClear: () => void;
@@ -835,7 +998,9 @@ function ScheduleCard({
             </div>
           </div>
         </div>
-        <p className={`max-w-full break-words text-left text-sm font-black tabular-nums sm:shrink-0 sm:text-right ${schedule.type === "income" ? "text-emerald-600" : "text-rose-500"}`}>{schedule.type === "income" ? "+" : "−"}{formatVND(schedule.amount)}</p>
+        <p className={`max-w-full break-words text-left text-sm font-black tabular-nums sm:shrink-0 sm:text-right ${schedule.type === "income" ? "text-emerald-600" : "text-rose-500"}`}>{schedule.type === "income" ? "+" : "−"}{formatVND(schedule.amount)}
+          <span className="block text-[10px] font-medium text-slate-400">Dự tính</span>
+        </p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -849,6 +1014,22 @@ function ScheduleCard({
         </div>
       </div>
 
+      {monthlyStatus?.status === "recorded" && (
+        <div data-recurring-actual-status="recorded" className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
+          <div className="flex items-center gap-2 text-xs font-black text-emerald-700"><CheckCircle2 size={15} /> Đã ghi nhận trong tháng</div>
+          <p className="mt-1 text-sm font-bold text-slate-800">
+            Thực tế {formatVND(monthlyStatus.actualAmount)} · {monthlyStatus.transactionCount} giao dịch
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Chênh lệch {monthlyStatus.difference >= 0 ? "+" : "−"}{formatVND(Math.abs(monthlyStatus.difference))} so với dự tính
+          </p>
+        </div>
+      )}
+      {monthlyStatus?.status === "ambiguous" && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">
+          Có nhiều lịch cùng danh mục. Cần phân tách trước khi tự động đối chiếu.
+        </div>
+      )}
       {dueAction ? (
         <div
           data-recurring-due-status={dueAction.status}
@@ -887,6 +1068,12 @@ function ScheduleCard({
           ) : null}
         </div>
       ) : null}
+      {schedule.enabled && schedule.issues.length === 0 &&
+        monthlyStatus?.status !== "recorded" && !dueAction && (
+          <button type="button" onClick={onRecordActual} className="mt-3 min-h-10 w-full rounded-xl bg-blue-50 text-xs font-black text-blue-700">
+            Ghi giao dịch thực tế
+          </button>
+        )}
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${schedule.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{schedule.enabled ? "Đang chạy" : "Tạm dừng"}</span>
         {schedule.legacy ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700">Nguồn: giao dịch cũ</span> : <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-700">Nguồn: danh mục</span>}
