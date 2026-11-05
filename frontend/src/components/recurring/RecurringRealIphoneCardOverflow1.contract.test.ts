@@ -33,6 +33,6 @@ describe("RECURRING-REAL-IPHONE-CARD-OVERFLOW-1", () => {
   });
 
   it("keeps the schedule card itself shrinkable inside the page grid", () => {
-    expect(source).toContain("min-w-0 rounded-3xl border bg-white");
+    expect(source).toContain("flex h-full min-w-0 flex-col rounded-3xl border bg-white");
   });
 });
