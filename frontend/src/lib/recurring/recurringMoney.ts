@@ -12,7 +12,8 @@ export type RecurringMoneyIssue =
   | "missing-wallet-reference"
   | "missing-category-reference"
   | "missing-recurrence"
-  | "missing-next-date";
+  | "missing-next-date"
+  | "ambiguous-category-schedule";
 
 export type RecurringMoneySchedule = {
   id: string;
@@ -125,22 +126,85 @@ function nextCalendarDateKey(value: string): string | undefined {
   });
 }
 
+/**
+ * RECURRING-ACTUAL-RECONCILIATION-P1
+ * A schedule amount/wallet is a PLAN, not a receipt. Actual income/expense
+ * is matched by immutable category + transaction type + the occurrence period.
+ * Monthly payments can be earlier/later than the due day within that month.
+ * Weekly uses a non-overlapping seven-day window from its scheduled date;
+ * daily uses the scheduled day; annual uses its scheduled calendar month.
+ */
 export function isRecordedRecurringOccurrence(
-  schedule: Pick<
-    RecurringMoneySchedule,
-    "type" | "amount" | "categoryId" | "walletId"
-  >,
+  schedule: Pick<RecurringMoneySchedule, "type" | "categoryId" | "recurrence">,
   dueDate: string,
   transaction: Transaction,
-) {
-  return (
-    transaction.date === dueDate &&
-    transaction.type === schedule.type &&
-    transaction.categoryId === schedule.categoryId &&
-    transaction.walletId === schedule.walletId &&
-    Math.round(Math.abs(Number(transaction.amount) || 0)) ===
-      Math.round(Math.abs(Number(schedule.amount) || 0))
+): boolean {
+  if (
+    transaction.type !== schedule.type ||
+    transaction.categoryId !== schedule.categoryId ||
+    !(Number(transaction.amount) > 0)
+  ) return false;
+
+  const actual = parseCalendarDate(transaction.date);
+  const due = parseCalendarDate(dueDate);
+  if (!actual || !due) return false;
+
+  if (schedule.recurrence === "monthly" || schedule.recurrence === "yearly") {
+    return actual.year === due.year && actual.month === due.month;
+  }
+  if (schedule.recurrence === "weekly") {
+    const days = calendarOrdinal(actual) - calendarOrdinal(due);
+    return days >= 0 && days < 7;
+  }
+  return transaction.date === dueDate;
+}
+
+export type RecurringOccurrenceReconciliation = {
+  status: "pending" | "recorded" | "ambiguous";
+  estimatedAmount: number;
+  actualAmount: number;
+  difference: number;
+  transactionIds: string[];
+  transactionCount: number;
+};
+
+/**
+ * Category-based linking is safe ONLY for one active, valid schedule per
+ * category/type. Multiple legacy/category schedules sharing a category are
+ * ambiguous without a durable transaction-to-schedule ID; never allocate the
+ * same transaction to multiple schedules or silently count them as settled.
+ */
+export function reconcileRecurringOccurrence(input: {
+  schedule: RecurringMoneySchedule;
+  schedules: RecurringMoneySchedule[];
+  transactions: Transaction[];
+  dueDate: string;
+}): RecurringOccurrenceReconciliation {
+  const matches = input.transactions.filter((transaction) =>
+    isRecordedRecurringOccurrence(input.schedule, input.dueDate, transaction),
   );
+  const actualAmount = matches.reduce(
+    (sum, transaction) => sum + Math.abs(Number(transaction.amount) || 0),
+    0,
+  );
+  const overlappingSchedules = input.schedules.filter(
+    (other) =>
+      other.enabled &&
+      other.type === input.schedule.type &&
+      other.categoryId === input.schedule.categoryId &&
+      other.issues.every((issue) => issue === "ambiguous-category-schedule"),
+  );
+  const ambiguous =
+    input.schedule.issues.includes("ambiguous-category-schedule") ||
+    overlappingSchedules.length > 1;
+  return {
+    status: ambiguous ? "ambiguous" : matches.length > 0 ? "recorded" : "pending",
+    estimatedAmount: input.schedule.amount,
+    actualAmount,
+    difference: actualAmount - input.schedule.amount,
+    transactionIds: matches.map((transaction) => transaction.id),
+    transactionCount: matches.length,
+  };
 }
 
 function resolveEffectiveNextUnrecordedRunDate(input: {
@@ -257,6 +321,32 @@ export function resolveEffectiveNextRunDate(
   }
   return candidate;
 }
+/** Read-only status for the current calendar month, independent of next-run
+ * rollforward. An early payment in November still realizes November even if
+ * the scheduled day is later; it never realizes December. */
+export function reconcileCurrentMonthlyOccurrence(input: {
+  schedule: RecurringMoneySchedule;
+  schedules: RecurringMoneySchedule[];
+  transactions: Transaction[];
+  referenceDate: string;
+}): (RecurringOccurrenceReconciliation & { dueDate: string }) | null {
+  const { schedule, referenceDate } = input;
+  if (!schedule.enabled || schedule.recurrence !== "monthly") return null;
+  if (!parseCalendarDate(referenceDate)) return null;
+  const dueDate = resolveEffectiveNextRunDate(
+    schedule.nextRunDate,
+    "monthly",
+    referenceDate.slice(0, 7) + "-01",
+  );
+  if (!dueDate || dueDate.slice(0, 7) !== referenceDate.slice(0, 7)) {
+    return null;
+  }
+  return {
+    ...reconcileRecurringOccurrence({ ...input, dueDate }),
+    dueDate,
+  };
+}
+
 function exactMirrorKey(schedule: RecurringMoneySchedule) {
   return [
     schedule.type,
@@ -399,7 +489,32 @@ export function buildRecurringMoneySchedules(input: {
     legacySchedules.push(schedule);
   }
 
-  return [...categorySchedules, ...legacySchedules].sort((a, b) => {
+  const allSchedules = [...categorySchedules, ...legacySchedules];
+  const validActiveByCategory = new Map<string, number>();
+  for (const schedule of allSchedules) {
+    if (!schedule.enabled || schedule.issues.length > 0) continue;
+    const key = schedule.type + "|" + schedule.categoryId;
+    validActiveByCategory.set(key, (validActiveByCategory.get(key) ?? 0) + 1);
+  }
+  for (const schedule of allSchedules) {
+    if (
+      schedule.enabled &&
+      schedule.issues.length === 0 &&
+      (validActiveByCategory.get(schedule.type + "|" + schedule.categoryId) ?? 0) > 1
+    ) {
+      schedule.issues.push("ambiguous-category-schedule");
+      // Do not infer that a payment belongs to either colliding schedule.
+      if (input.referenceDate) {
+        schedule.effectiveNextRunDate = resolveEffectiveNextRunDate(
+          schedule.nextRunDate,
+          schedule.recurrence,
+          input.referenceDate,
+        );
+      }
+    }
+  }
+
+  return allSchedules.sort((a, b) => {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
     const aDate =
       a.effectiveNextRunDate ?? a.nextRunDate ?? "9999-12-31";
@@ -430,6 +545,37 @@ export function toRecurringScheduleInputs(schedules: RecurringMoneySchedule[]) {
     }));
 }
 
+/**
+ * A 90-day forecast can contain several occurrences. Filtering only the
+ * first due date is insufficient when a later period was paid early too.
+ * Read-only exclusion keeps actual wallet mutations exclusively in addTransaction.
+ */
+export function excludeRecordedRecurringOccurrences<T extends {
+  scheduleId: string;
+  date: Date;
+}>(input: {
+  occurrences: T[];
+  schedules: RecurringMoneySchedule[];
+  transactions: Transaction[];
+}): T[] {
+  const byId = new Map(input.schedules.map((schedule) => [schedule.id, schedule]));
+  return input.occurrences.filter((occurrence) => {
+    const schedule = byId.get(occurrence.scheduleId);
+    if (!schedule) return true;
+    const dueDate = calendarDateKey({
+      year: occurrence.date.getFullYear(),
+      month: occurrence.date.getMonth() + 1,
+      day: occurrence.date.getDate(),
+    });
+    return reconcileRecurringOccurrence({
+      schedule,
+      schedules: input.schedules,
+      transactions: input.transactions,
+      dueDate,
+    }).status !== "recorded";
+  });
+}
+
 export function getRecurringIssueLabel(issue: RecurringMoneyIssue) {
   switch (issue) {
     case "missing-amount":
@@ -444,5 +590,7 @@ export function getRecurringIssueLabel(issue: RecurringMoneyIssue) {
       return "Thiếu tần suất";
     case "missing-next-date":
       return "Thiếu ngày chạy tiếp";
+    case "ambiguous-category-schedule":
+      return "Nhiều lịch dùng chung danh mục; cần tách hoặc chỉnh lịch";
   }
 }

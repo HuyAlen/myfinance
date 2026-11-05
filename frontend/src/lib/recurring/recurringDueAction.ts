@@ -1,6 +1,6 @@
 import type { Transaction } from "@/src/types/finance";
 import {
-  isRecordedRecurringOccurrence,
+  reconcileRecurringOccurrence,
   type RecurringMoneySchedule,
 } from "./recurringMoney";
 
@@ -70,10 +70,13 @@ export function buildRecurringDueActions(input: {
       const daysUntilDue = dueOrdinal - referenceOrdinal;
       if (daysUntilDue < 0 || daysUntilDue > upcomingDays) return [];
 
-      const recorded = input.transactions.some((transaction) =>
-        isRecordedRecurringOccurrence(schedule, dueDate, transaction),
-      );
-      if (recorded) return [];
+      const reconciliation = reconcileRecurringOccurrence({
+        schedule,
+        schedules: input.schedules,
+        transactions: input.transactions,
+        dueDate,
+      });
+      if (reconciliation.status !== "pending") return [];
 
       return [
         {
