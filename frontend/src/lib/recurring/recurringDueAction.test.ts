@@ -119,8 +119,8 @@ describe("RECURRING-DUE-ACTION-1", () => {
   it("summarizes today vs upcoming without claiming overdue state", () => {
     const actions = buildRecurringDueActions({
       schedules: [
-        schedule({ id: "today", effectiveNextRunDate: "2026-10-02" }),
-        schedule({ id: "soon", effectiveNextRunDate: "2026-10-04" }),
+        schedule({ id: "today", categoryId: "rent", effectiveNextRunDate: "2026-10-02" }),
+        schedule({ id: "soon", categoryId: "internet", effectiveNextRunDate: "2026-10-04" }),
       ],
       transactions: [],
       referenceDate: "2026-10-02",
