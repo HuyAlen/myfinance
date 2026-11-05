@@ -41,14 +41,14 @@ import {
 // budget-status signal. One 100% stacked bar shows how all shares add up.
 const EXPENSE_COLORS = ["#3987E8", "#E99B69", "#43A996", "#8D91CA", "#94A9C6"];
 
-// Muted surfaces with dark ink: full VND labels remain readable on the
-// smallest mosaic tiles, while area/percentage continue to be data-driven.
+// The colour is a category identity, not an over/under-budget signal.
+// Light gradients add depth without reducing label readability on small tiles.
 const EXPENSE_TILE_TONES = [
-  { surface: "bg-[#E0EDFF]", ink: "text-[#275787]" },
-  { surface: "bg-[#FCE6D8]", ink: "text-[#8D4D2C]" },
-  { surface: "bg-[#DCF3ED]", ink: "text-[#286F65]" },
-  { surface: "bg-[#E8EAF9]", ink: "text-[#505D91]" },
-  { surface: "bg-[#E4EDF6]", ink: "text-[#365E7D]" },
+  { surface: "bg-linear-to-br from-[#E7F1FF] to-[#D9E9FF]", ink: "text-[#235482]" },
+  { surface: "bg-linear-to-br from-[#FFF0E6] to-[#FBE2D3]", ink: "text-[#8B4E2D]" },
+  { surface: "bg-linear-to-br from-[#E4F7F0] to-[#D3F0E6]", ink: "text-[#286F65]" },
+  { surface: "bg-linear-to-br from-[#EDF0FF] to-[#E0E5FA]", ink: "text-[#505D91]" },
+  { surface: "bg-linear-to-br from-[#EAF2FA] to-[#DCE9F5]", ink: "text-[#365E7D]" },
 ] as const;
 const WALLET_COLORS = ["#3987E8", "#72AFE9", "#91C6EC", "#70C7BF", "#A4B5DD"];
 
@@ -277,6 +277,14 @@ export default function DashboardVisualOverview({
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
   const mosaic = getDashboardExpenseMosaicColumns(expenses);
   const otherExpenseCount = expenses.find((item) => item.aggregateCount)?.aggregateCount ?? 0;
+  const dominantExpenseIndex = expenses.reduce(
+    (largest, item, index) => item.value > (expenses[largest]?.value ?? -1) ? index : largest,
+    0,
+  );
+  const dominantExpense = expenses[dominantExpenseIndex];
+  const dominantExpenseShare = dominantExpense && totalExpense > 0
+    ? Math.round((dominantExpense.value / totalExpense) * 100)
+    : 0;
   const cashFlowTotals = useMemo(
     () => getDashboardObservedCashFlowTotals(cashFlowData ?? []),
     [cashFlowData],
@@ -503,12 +511,66 @@ export default function DashboardVisualOverview({
           <div className="mt-4"><EmptyChart>Chưa có khoản chi thực tế trong kỳ</EmptyChart></div>
         ) : (
           <div data-dashboard-visual-chart="expenses" className="mt-3 flex min-h-[260px] min-w-0 flex-1 flex-col gap-3">
-            <div className="flex min-w-0 flex-wrap items-end justify-between gap-3 rounded-2xl border border-[#E5EDF6] bg-[#F7FAFE] p-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-[.08em] text-[#607B91]">Tổng chi thực tế</p>
-                <p className="mt-1 break-words text-xl font-extrabold tracking-tight tabular-nums text-[#183C5A] sm:text-2xl">{formatVND(totalExpense)}</p>
+            <div
+              data-dashboard-expense-summary="true"
+              className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-2xl border border-[#DEEAF5] bg-linear-to-br from-[#F4F9FF] via-white to-[#F6FAFE] p-3.5 shadow-[0_8px_22px_-19px_rgba(32,82,130,0.35)] sm:p-4"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-[.09em] text-[#607B91]">Tổng chi thực tế</p>
+                <p
+                  data-dashboard-expense-total="true"
+                  className="mt-1 break-words text-[clamp(21px,2vw,28px)] font-extrabold leading-tight tracking-tight tabular-nums text-[#183C5A]"
+                >
+                  {formatVND(totalExpense)}
+                </p>
+                {dominantExpense ? (
+                  <p data-dashboard-expense-primary="true" className="mt-2 flex min-w-0 items-start gap-1.5 text-[11px] font-medium leading-4 text-[#5A7289]">
+                    <span
+                      aria-hidden="true"
+                      className="mt-1 size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: EXPENSE_COLORS[dominantExpenseIndex % EXPENSE_COLORS.length] }}
+                    />
+                    <span className="min-w-0 break-words">
+                      Chi nhiều nhất: <strong className="font-extrabold text-[#315979]">{dominantExpense.name}</strong> · {dominantExpenseShare}% tổng chi
+                    </span>
+                  </p>
+                ) : null}
               </div>
-              <span className="shrink-0 rounded-xl border border-[#DEEAF4] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#486782]" data-dashboard-expense-group-count="true">{otherExpenseCount > 0 ? (expenses.length - 1) + " nhóm chính + Khác" : expenses.length + " nhóm chi tiêu"}</span>
+              <span data-dashboard-expense-group-count="true" className="inline-flex shrink-0 items-center rounded-full border border-[#DCE8F4] bg-white px-3 py-1.5 text-[11px] font-bold text-[#486782] shadow-sm">
+                {otherExpenseCount > 0 ? (expenses.length - 1) + " nhóm chính + Khác" : expenses.length + " nhóm chi tiêu"}
+              </span>
+            </div>
+
+            {/* Desktop: one exact 100% composition rail explains the colours
+                before the proportional mosaic without implying budget use. */}
+            <div data-dashboard-expense-desktop-guide="true" className="hidden min-w-0 rounded-2xl border border-[#E4EDF6] bg-[#FCFEFF] px-3.5 py-3 sm:block">
+              <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-[#536F87]">
+                <span>Cơ cấu tổng chi</span>
+                <span className="shrink-0 tabular-nums text-[#315E84]">100% tổng chi</span>
+              </div>
+              <div
+                data-dashboard-expense-desktop-composition="100"
+                role="img"
+                aria-label={"Cơ cấu 100% tổng chi: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")}
+                className="mt-2 flex h-3 w-full min-w-0 gap-[2px] overflow-hidden rounded-full bg-[#E6EFF7]"
+              >
+                {expenses.map((item, index) => (
+                  <span
+                    data-dashboard-expense-desktop-segment="true"
+                    key={item.name + index}
+                    aria-hidden="true"
+                    className="h-full min-w-0 rounded-[3px]"
+                    title={item.name + ": " + formatVND(item.value)}
+                    style={{
+                      width: (item.value / totalExpense) * 100 + "%",
+                      backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length],
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10px] font-medium leading-4 text-[#71869A]">
+                Mỗi màu là một nhóm chi, tỷ lệ được tính trên tổng chi thực tế.
+              </p>
             </div>
 
             {/* iPhone: a single 100% composition bar makes it clear that
@@ -557,7 +619,7 @@ export default function DashboardVisualOverview({
                       role="listitem"
                       aria-label={item.name + ": " + formatVND(item.value) + ", " + Math.round(share) + "% tổng chi"}
                       key={item.name + index}
-                      className="min-w-0 rounded-xl border border-[#DFE9F2] bg-[#FCFEFF] px-3 py-2.5"
+                      className="min-w-0 rounded-2xl border border-[#E1EBF5] bg-white px-3 py-3 shadow-[0_8px_18px_-16px_rgba(35,80,125,0.35)]"
                     >
                       <div className="flex min-w-0 items-start gap-2.5">
                         <span
@@ -588,6 +650,12 @@ export default function DashboardVisualOverview({
                           <span className="text-[10px] font-semibold leading-4 text-[#678097]">tổng chi</span>
                         </div>
                       </div>
+                      <div data-dashboard-expense-mobile-meter="true" aria-hidden="true" className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#EAF1F8]">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{ width: share + "%", backgroundColor: EXPENSE_COLORS[index % EXPENSE_COLORS.length] }}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -603,18 +671,69 @@ export default function DashboardVisualOverview({
               data-dashboard-expense-mosaic="stretch"
               role="img"
               aria-label={"Cơ cấu chi tiêu: " + expenses.map((item) => item.name + " " + Math.round(item.value / totalExpense * 100) + "%").join(", ")}
-              className={"hidden min-h-0 min-w-0 w-full gap-2 overflow-hidden rounded-[20px] border border-[#EDF3F8] bg-[#FBFDFF] p-2.5 sm:flex sm:flex-1 " + (mosaic.some((column) => column.tiles.length > 2) ? "sm:min-h-[400px]" : "sm:min-h-[280px]")}
+              className={"hidden min-h-0 min-w-0 w-full gap-2.5 overflow-hidden rounded-[20px] border border-[#E6EEF7] bg-[#F8FBFE] p-2.5 sm:flex sm:flex-1 " + (mosaic.some((column) => column.tiles.length > 2) ? "sm:min-h-[400px]" : "sm:min-h-[280px]")}
             >
               {mosaic.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex min-w-0 flex-col gap-2" style={{ width: column.widthPercent + "%" }}>
                   {column.tiles.map((item, index) => {
                     const colorIndex = columnIndex === 0 ? index : index + 2;
                     return (
-                      <div data-dashboard-expense-tile="true" key={item.name + index} title={item.name + ": " + formatVND(item.value)} className={"relative flex min-h-0 min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-[16px] border border-white/60 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors duration-200 hover:brightness-[0.975] sm:p-2.5 xl:p-3 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface} style={{ flex: item.value }}>
-                        <span data-dashboard-expense-name="true" className={"relative min-w-0 whitespace-normal break-words text-[12px] font-bold leading-[1.25] sm:text-[13px] " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].ink} title={item.name}>{item.name}</span>
+                      <div
+                        data-dashboard-expense-tile="true"
+                        data-dashboard-expense-dominant={colorIndex === dominantExpenseIndex ? "true" : undefined}
+                        key={item.name + index}
+                        title={item.name + ": " + formatVND(item.value)}
+                        className={"group relative flex min-h-0 min-w-0 flex-col justify-between gap-2 overflow-hidden rounded-[18px] border border-white/90 p-3 shadow-[0_7px_18px_-15px_rgba(32,73,115,0.38)] transition-all duration-200 hover:brightness-[0.985] hover:shadow-[0_10px_21px_-14px_rgba(32,73,115,0.38)] xl:p-3.5 " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].surface}
+                        style={{ flex: item.value }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-x-0 top-0 h-1"
+                          style={{ backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}
+                        />
+                        {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
+                          <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 size-44 rounded-full border-[22px] border-white/25" />
+                        ) : null}
+                        <div className="relative flex min-w-0 items-start gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="mt-1 size-2.5 shrink-0 rounded-[4px]"
+                            style={{ backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length] }}
+                          />
+                          <span
+                            data-dashboard-expense-name="true"
+                            className={"relative min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-[1.25] sm:text-[13px] " + EXPENSE_TILE_TONES[colorIndex % EXPENSE_TILE_TONES.length].ink}
+                            title={item.name}
+                          >
+                            {item.name}
+                          </span>
+                        </div>
                         <div className="relative mt-auto min-w-0">
-                          <strong className="block text-[17px] font-extrabold leading-tight tabular-nums text-[#254B6B] sm:text-[20px]">{Math.round(item.sharePercent)}%</strong>
-                          <span data-dashboard-expense-amount="true" className="mt-0.5 block min-w-0 whitespace-normal break-words text-[12px] font-bold leading-4 tabular-nums text-[#355976] sm:text-[13px]">{formatVND(item.value)}</span>
+                          {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
+                            <span className="mb-1.5 inline-flex rounded-full border border-white/60 bg-white/55 px-2 py-0.5 text-[10px] font-bold text-[#476781]">
+                              Nhóm chi lớn nhất
+                            </span>
+                          ) : null}
+                          <strong className="block text-[20px] font-extrabold leading-tight tabular-nums tracking-tight text-[#254B6B] sm:text-[22px]">
+                            {Math.round(item.sharePercent)}%
+                          </strong>
+                          <span
+                            data-dashboard-expense-amount="true"
+                            className="mt-0.5 block min-w-0 whitespace-normal break-words text-[12px] font-bold leading-4 tabular-nums text-[#355976] sm:text-[13px]"
+                          >
+                            {formatVND(item.value)}
+                          </span>
+                          {colorIndex === dominantExpenseIndex && item.sharePercent >= 35 ? (
+                            <div data-dashboard-expense-dominant-meter="true" aria-hidden="true" className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/65">
+                              <span
+                                className="block h-full rounded-full"
+                                style={{
+                                  width: item.sharePercent + "%",
+                                  backgroundColor: EXPENSE_COLORS[colorIndex % EXPENSE_COLORS.length],
+                                }}
+                              />
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     );

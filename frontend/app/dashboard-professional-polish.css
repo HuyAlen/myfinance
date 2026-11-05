@@ -112,3 +112,25 @@
 :root[data-theme="dark"] .finance-shell [data-dashboard-expense-share-row] [data-dashboard-mobile-expense-percent="true"] {
   color: #E3F0F9;
 }
+
+/* DASHBOARD-EXPENSE-CATEGORY-UI-POLISH-P3:
+ * chart summary/desktop composition are a single expense panel concern.
+ * In dark mode keep the readable dark surface for top metrics while mosaic
+ * tiles retain their pale, contrasting category-identity backgrounds. */
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-summary="true"] {
+  background: linear-gradient(135deg, #21394c 0%, #1c3143 100%);
+  border-color: #3b5a70;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-summary="true"] [data-dashboard-expense-total="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-summary="true"] [data-dashboard-expense-primary="true"],
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-summary="true"] [data-dashboard-expense-primary="true"] strong {
+  color: #e8f3fc;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-desktop-guide="true"] {
+  background: #1e3446;
+  border-color: #39566d;
+}
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-desktop-guide="true"] p,
+:root[data-theme="dark"] .finance-shell [data-dashboard-expense-desktop-guide="true"] span {
+  color: #dcecf9;
+}
