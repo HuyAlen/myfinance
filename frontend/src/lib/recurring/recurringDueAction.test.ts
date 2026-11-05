@@ -87,13 +87,21 @@ describe("RECURRING-DUE-ACTION-1", () => {
     ).toEqual([]);
   });
 
-  it("does not hide a due item because of an unrelated transaction", () => {
+  it("recognizes actual payment from another wallet or with a different amount", () => {
     const actions = buildRecurringDueActions({
       schedules: [schedule()],
-      transactions: [tx({ walletId: "cash" })],
+      transactions: [tx({ walletId: "cash", amount: 5_800_000, date: "2026-10-02" })],
       referenceDate: "2026-10-05",
     });
-    expect(actions).toHaveLength(1);
+    expect(actions).toEqual([]);
+  });
+
+  it("keeps due reminder for other category or month", () => {
+    expect(buildRecurringDueActions({
+      schedules: [schedule()],
+      transactions: [tx({ categoryId: "food" }), tx({ date: "2026-09-30" })],
+      referenceDate: "2026-10-05",
+    })).toHaveLength(1);
   });
 
   it("ignores paused and invalid schedules", () => {

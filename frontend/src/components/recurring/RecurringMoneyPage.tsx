@@ -36,6 +36,7 @@ import {
 import { formatVND } from "@/src/services/finance/financeCalculations";
 import {
   buildRecurringMoneySchedules,
+  isDateInsideRecurringOccurrence,
   reconcileCurrentMonthlyOccurrence,
   reconcileRecurringOccurrence,
   getRecurringIssueLabel,
@@ -442,7 +443,12 @@ export default function RecurringMoneyPage() {
 
   function openRecordActual(schedule: RecurringMoneySchedule, dueDate?: string) {
     if (!schedule.enabled || schedule.issues.length > 0) return;
-    const effectiveDate = dueDate ?? schedule.effectiveNextRunDate ?? schedule.nextRunDate ?? todayKey;
+    const currentPeriod = reconcileCurrentMonthlyOccurrence({
+      schedule, schedules, transactions, referenceDate: todayKey,
+    });
+    const effectiveDate = dueDate ??
+      (currentPeriod?.status === "pending" ? currentPeriod.dueDate : undefined) ??
+      schedule.effectiveNextRunDate ?? schedule.nextRunDate ?? todayKey;
     const currentMonth = todayKey.slice(0, 7);
     const recordDate = effectiveDate.slice(0, 7) === currentMonth ? todayKey : effectiveDate;
     const existing = reconcileRecurringOccurrence({
@@ -1069,7 +1075,7 @@ function ScheduleCard({
         </div>
       ) : null}
       {schedule.enabled && schedule.issues.length === 0 &&
-        monthlyStatus?.status !== "recorded" && !dueAction && (
+        monthlyStatus?.status !== "recorded" && dueAction?.status !== "due-today" && (
           <button type="button" onClick={onRecordActual} className="mt-3 min-h-10 w-full rounded-xl bg-blue-50 text-xs font-black text-blue-700">
             Ghi giao dịch thực tế
           </button>

@@ -159,6 +159,23 @@ export function isRecordedRecurringOccurrence(
   return transaction.date === dueDate;
 }
 
+/** Validate an editable actual transaction date against the selected occurrence. */
+export function isDateInsideRecurringOccurrence(
+  schedule: Pick<RecurringMoneySchedule, "type" | "categoryId" | "recurrence">,
+  dueDate: string,
+  actualDate: string,
+): boolean {
+  return isRecordedRecurringOccurrence(schedule, dueDate, {
+    id: "__date-validation__",
+    type: schedule.type,
+    categoryId: schedule.categoryId,
+    amount: 1,
+    date: actualDate,
+    walletId: "",
+    note: "",
+  });
+}
+
 export type RecurringOccurrenceReconciliation = {
   status: "pending" | "recorded" | "ambiguous";
   estimatedAmount: number;
