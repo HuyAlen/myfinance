@@ -486,7 +486,7 @@ export default function RecurringMoneyPage() {
       setActualError("Vui lòng chọn ví hợp lệ.");
       return;
     }
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(draft.date)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) {
       setActualError("Vui lòng chọn ngày giao dịch.");
       return;
     }
