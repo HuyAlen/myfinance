@@ -32,6 +32,7 @@ import {
 import type { Category, Transaction, Wallet } from "@/src/types/finance";
 import {
   buildCategorySpendingData,
+  getTotalIncome,
   formatVND,
   type BudgetSpending,
 } from "@/src/services/finance/financeCalculations";
@@ -275,6 +276,8 @@ export default function DashboardVisualOverview({
   const fixedExpense = categorySpending.reduce((sum, item) => sum + (item.planningGroup === "fixed" ? item.value : 0), 0);
   const variableExpense = categorySpending.reduce((sum, item) => sum + (item.planningGroup === "variable" ? item.value : 0), 0);
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
+  const totalIncome = getTotalIncome(transactions);
+  const incomeShare = (amount: number) => totalIncome > 0 ? Math.round(amount / totalIncome * 100) + "% thu nhập" : "—";
   const otherExpenseCount = expenses.find((item) => item.aggregateCount)?.aggregateCount ?? 0;
   const dominantExpenseIndex = expenses.reduce(
     (largest, item, index) => item.value > (expenses[largest]?.value ?? -1) ? index : largest,
@@ -503,7 +506,7 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Chi tiêu theo danh mục" subtitle="Tỷ trọng trong tổng chi" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
+      <ChartCard title="Chi tiêu theo danh mục" subtitle="Chi tiêu so với thu nhập · cơ cấu danh mục theo tổng chi" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
         {!spendingReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : totalExpense <= 0 ? (
@@ -522,6 +525,7 @@ export default function DashboardVisualOverview({
                 >
                   {formatVND(totalExpense)}
                 </p>
+                <p data-dashboard-expense-income-share="true" className="mt-1 text-[12px] font-bold text-[#37688A]">{incomeShare(totalExpense)}</p>
                 {dominantExpense ? (
                   <p data-dashboard-expense-primary="true" className="mt-2 flex min-w-0 items-start gap-1.5 text-[11px] font-medium leading-4 text-[#5A7289]">
                     <span
@@ -544,12 +548,12 @@ export default function DashboardVisualOverview({
               <div className="min-w-0 rounded-2xl border border-[#D8E6F7] bg-[#F1F7FF] p-3">
                 <p className="text-[11px] font-bold text-[#456B91]">Chi tiêu cố định</p>
                 <p data-dashboard-expense-fixed="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#24537D] sm:text-[17px]">{formatVND(fixedExpense)}</p>
-                <p className="mt-1 text-[11px] font-semibold text-[#5D7992]">{Math.round(fixedExpense / totalExpense * 100)}% tổng chi</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#5D7992]">{incomeShare(fixedExpense)}</p>
               </div>
               <div className="min-w-0 rounded-2xl border border-[#F1E1D6] bg-[#FFF7F1] p-3">
                 <p className="text-[11px] font-bold text-[#98633E]">Chi tiêu biến đổi</p>
                 <p data-dashboard-expense-variable="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#87532F] sm:text-[17px]">{formatVND(variableExpense)}</p>
-                <p className="mt-1 text-[11px] font-semibold text-[#9A765C]">{Math.round(variableExpense / totalExpense * 100)}% tổng chi</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#9A765C]">{incomeShare(variableExpense)}</p>
               </div>
               {totalExpense > fixedExpense + variableExpense ? (
                 <p data-dashboard-expense-unclassified="true" className="col-span-2 text-[11px] font-medium text-[#657C90]">
