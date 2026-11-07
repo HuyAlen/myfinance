@@ -264,15 +264,16 @@ export default function DashboardVisualOverview({
   budgetSpending,
   wallets,
 }: Props) {
-  const expenses = useMemo(
-    () => groupDashboardExpenseSlices(
-      buildCategorySpendingData(transactions, categories).map((item) => ({
-        name: item.name,
-        value: item.value,
-      })),
-    ),
+  const categorySpending = useMemo(
+    () => buildCategorySpendingData(transactions, categories),
     [transactions, categories],
   );
+  const expenses = useMemo(
+    () => groupDashboardExpenseSlices(categorySpending.map((item) => ({ name: item.name, value: item.value }))),
+    [categorySpending],
+  );
+  const fixedExpense = categorySpending.reduce((sum, item) => sum + (item.planningGroup === "fixed" ? item.value : 0), 0);
+  const variableExpense = categorySpending.reduce((sum, item) => sum + (item.planningGroup === "variable" ? item.value : 0), 0);
   const totalExpense = expenses.reduce((sum, item) => sum + item.value, 0);
   const otherExpenseCount = expenses.find((item) => item.aggregateCount)?.aggregateCount ?? 0;
   const dominantExpenseIndex = expenses.reduce(
@@ -537,6 +538,24 @@ export default function DashboardVisualOverview({
               <span data-dashboard-expense-group-count="true" className="inline-flex shrink-0 items-center rounded-full border border-[#DCE8F4] bg-white px-3 py-1.5 text-[11px] font-bold text-[#486782] shadow-sm">
                 {otherExpenseCount > 0 ? (expenses.length - 1) + " nhóm chính + Khác" : expenses.length + " nhóm chi tiêu"}
               </span>
+            </div>
+
+            <div data-dashboard-expense-planning-summary="true" className="grid min-w-0 grid-cols-2 gap-2">
+              <div className="min-w-0 rounded-2xl border border-[#D8E6F7] bg-[#F1F7FF] p-3">
+                <p className="text-[11px] font-bold text-[#456B91]">Chi tiêu cố định</p>
+                <p data-dashboard-expense-fixed="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#24537D] sm:text-[17px]">{formatVND(fixedExpense)}</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#5D7992]">{Math.round(fixedExpense / totalExpense * 100)}% tổng chi</p>
+              </div>
+              <div className="min-w-0 rounded-2xl border border-[#F1E1D6] bg-[#FFF7F1] p-3">
+                <p className="text-[11px] font-bold text-[#98633E]">Chi tiêu biến đổi</p>
+                <p data-dashboard-expense-variable="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#87532F] sm:text-[17px]">{formatVND(variableExpense)}</p>
+                <p className="mt-1 text-[11px] font-semibold text-[#9A765C]">{Math.round(variableExpense / totalExpense * 100)}% tổng chi</p>
+              </div>
+              {totalExpense > fixedExpense + variableExpense ? (
+                <p data-dashboard-expense-unclassified="true" className="col-span-2 text-[11px] font-medium text-[#657C90]">
+                  Chi tiêu chưa thuộc nhóm cố định/biến đổi: {formatVND(totalExpense - fixedExpense - variableExpense)}
+                </p>
+              ) : null}
             </div>
 
             {/* Desktop: one exact 100% composition rail explains the colours
