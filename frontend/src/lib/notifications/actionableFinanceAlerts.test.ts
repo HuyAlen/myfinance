@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { buildFinanceActionCenter } from "@/src/lib/dashboard/financeActionCenter";
+import type { Budget, Category, Transaction } from "@/src/types/finance";
+import { buildFinanceNotifications } from "./financeNotifications";
 import {
   buildActionableFinanceAlerts,
   getActionableAlertPriorityLabel,
@@ -64,8 +67,8 @@ describe("ACTIONABLE-FINANCE-ALERTS-1 — canonical alert enrichment", () => {
     });
 
     expect(alerts.map((item) => [item.id, item.priority, item.actionLabel])).toEqual([
-      ["batlimit-b1", "action", "Xem ngân sách"],
-      ["bnear-b2", "action", "Xem ngân sách"],
+      ["batlimit-b1", "info", "Xem ngân sách"],
+      ["bnear-b2", "info", "Xem ngân sách"],
       ["cashflow", "urgent", "Xem dòng tiền"],
       ["drisk-d1", "action", "Xem khoản nợ"],
       ["gdone-g1", "info", "Xem mục tiêu"],
@@ -172,5 +175,96 @@ describe("action-required semantics", () => {
     expect(getActionableAlertPriorityLabel("urgent")).toBe("Ưu tiên cao");
     expect(getActionableAlertPriorityLabel("action")).toBe("Cần xử lý");
     expect(getActionableAlertPriorityLabel("info")).toBe("Theo dõi");
+  });
+});
+
+describe("MYFINANCE budget actions — only strictly over-budget needs handling", () => {
+  const category: Category = {
+    id: "cat-housing",
+    name: "Nhà ở",
+    type: "expense",
+    planningGroup: "fixed",
+  };
+  const budget: Budget = {
+    id: "budget-housing",
+    categoryId: category.id,
+    month: "2026-11",
+    limitAmount: 1_000_000,
+  };
+
+  function evaluateBudget(spent: number, budgetAlertPercent?: number) {
+    // Offset expenses with income to isolate budget alerts from an unrelated
+    // negative-cash-flow action, while exercising the real canonical engine.
+    const transactions: Transaction[] = [
+      {
+        id: "expense-housing",
+        type: "expense",
+        amount: spent,
+        categoryId: category.id,
+        walletId: "wallet-1",
+        note: "",
+        date: "2026-11-12",
+      },
+      {
+        id: "income-salary",
+        type: "income",
+        amount: 2_000_000,
+        categoryId: "cat-salary",
+        walletId: "wallet-1",
+        note: "",
+        date: "2026-11-12",
+      },
+    ];
+    const notifications = buildFinanceNotifications({
+      budgets: [budget],
+      transactions,
+      categories: [category],
+      goals: [],
+      debts: [],
+      currentMonth: "2026-11",
+      maxNotifications: 100,
+      budgetAlertPercent,
+    });
+    const alerts = buildActionableFinanceAlerts({
+      baseNotifications: notifications,
+      reviewInbox: emptyReview,
+      invalidRecurringScheduleCount: 0,
+      currentMonth: "2026-11",
+    });
+    return { notifications, alerts, center: buildFinanceActionCenter(alerts) };
+  }
+
+  it.each([
+    { label: "79% under notification threshold", spent: 790_000, id: null, priority: null, count: 0 },
+    { label: "97% near-limit", spent: 970_000, id: "bnear-budget-housing", priority: "info", count: 0 },
+    { label: "99.7% rounded to a displayed 100%", spent: 997_000, id: "bnear-budget-housing", priority: "info", count: 0 },
+    { label: "exactly 100% at limit", spent: 1_000_000, id: "batlimit-budget-housing", priority: "info", count: 0 },
+    { label: "100.01% strictly over limit", spent: 1_000_100, id: "bover-budget-housing", priority: "urgent", count: 1 },
+  ])("$label: notification remains, only real overspend appears in work-to-do", ({ spent, id, priority, count }) => {
+    const { notifications, alerts, center } = evaluateBudget(spent);
+    expect(notifications.map((item) => item.id)).toEqual(id ? [id] : []);
+    expect(alerts.map((item) => item.priority)).toEqual(priority ? [priority] : []);
+    expect(center.actionRequiredCount).toBe(count);
+    expect(center.items.map((item) => item.id)).toEqual(count > 0 ? [id] : []);
+    expect(center.hiddenCount).toBe(0);
+  });
+
+  it("keeps user-configured early-warning notifications informational", () => {
+    const { notifications, alerts, center } = evaluateBudget(810_000, 80);
+    expect(notifications.map((item) => item.id)).toEqual(["bnear-budget-housing"]);
+    expect(alerts[0].priority).toBe("info");
+    expect(alerts[0].actionLabel).toBe("Xem ngân sách");
+    expect(center.items).toEqual([]);
+    expect(center.actionRequiredCount).toBe(0);
+  });
+
+  it("does not let at-limit and near-limit reminders inflate the count beside a true overspend", () => {
+    const near = evaluateBudget(970_000).alerts[0];
+    const exact = evaluateBudget(1_000_000).alerts[0];
+    const over = evaluateBudget(1_000_100).alerts[0];
+    const center = buildFinanceActionCenter([near, exact, over]);
+    expect(center.items.map((item) => item.id)).toEqual(["bover-budget-housing"]);
+    expect(center.actionRequiredCount).toBe(1);
+    expect(center.hiddenCount).toBe(0);
   });
 });
