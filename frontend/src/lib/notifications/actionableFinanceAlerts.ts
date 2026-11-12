@@ -37,13 +37,17 @@ function baseNotificationActionMeta(notification: FinanceNotification): ActionMe
     };
   }
 
+  // Near-limit and exact-limit budgets are reminders, not work to do.
+  // Only canonical "bover-" notifications (spent > limit) are actionable.
+  // Keep these alerts in the Header feed, but exclude them from the
+  // Dashboard Action Center and its "cần xử lý" count.
   if (
     notification.id.startsWith("batlimit-") ||
     notification.id.startsWith("bnear-")
   ) {
     return {
       actionLabel: "Xem ngân sách",
-      priority: "action",
+      priority: "info",
       kind: "budget",
     };
   }
