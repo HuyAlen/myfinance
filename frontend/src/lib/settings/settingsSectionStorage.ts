@@ -93,4 +93,17 @@ export function saveAccountSettingsSection<S extends SettingsSaveSection>(
     previous = decoded as Record<string, unknown>;
   }
   target.setItem(key, JSON.stringify({ ...previous, version: SETTINGS_DATE_FORMAT_VERSION, ...draft }));
+  // A successful setItem call alone is not proof that the new values persisted.
+  // Verify the exact section without overwriting other account settings.
+  const persistedRaw = target.getItem(key);
+  if (persistedRaw === null) throw new Error("Không thể xác nhận cài đặt đã được lưu.");
+  const persisted: unknown = JSON.parse(persistedRaw);
+  if (!persisted || typeof persisted !== "object" || Array.isArray(persisted)) {
+    throw new Error("Dữ liệu cài đặt sau khi lưu không hợp lệ.");
+  }
+  const saved = persisted as Record<string, unknown>;
+  if (saved.version !== SETTINGS_DATE_FORMAT_VERSION ||
+      keys.some((field) => saved[field] !== (draft as Record<string, unknown>)[field])) {
+    throw new Error("Cài đặt chưa được lưu chính xác. Vui lòng thử lại.");
+  }
 }
