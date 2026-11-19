@@ -25,7 +25,7 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
     // Direct snapshot writes are forbidden; the two allowed setItem calls only
     // restore previously saved values if the unified preferences save fails.
     expect(saves).not.toContain("window.localStorage.setItem(localSettingsKey, JSON.stringify(");
-    expect(saves.match(/window\\.localStorage\\.setItem\\(/g)).toHaveLength(2);
+    expect(saves.split("window.localStorage.setItem(")).toHaveLength(3);
     expect(saves).toContain("else window.localStorage.setItem(key, oldValue);");
     expect(saves).toContain("else window.localStorage.setItem(localSettingsKey, preferencesBackup);");
   });
