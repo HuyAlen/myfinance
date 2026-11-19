@@ -506,7 +506,7 @@ export default function DashboardVisualOverview({
         )}
       </ChartCard>
 
-      <ChartCard title="Chi tiêu theo danh mục" subtitle="Chi tiêu so với thu nhập · cơ cấu danh mục theo tổng chi" hint="Kỳ đang chọn" icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
+      <ChartCard title="Chi tiêu theo danh mục" subtitle="Chi tiêu so với thu nhập · cơ cấu danh mục theo tổng chi" hint={monthMode ? "Tháng " + month + "/" + year : "Năm " + year} icon={<ChartPie size={18} />} insight="expenses" className="flex min-w-0 flex-col lg:col-span-5">
         {!spendingReady ? (
           <div className="mt-4"><LoadingChart /></div>
         ) : totalExpense <= 0 ? (
