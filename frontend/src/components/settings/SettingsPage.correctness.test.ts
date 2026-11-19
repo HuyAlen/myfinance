@@ -30,6 +30,15 @@ describe("SettingsPage persisted preferences, safe mutations and recoverable rea
     expect(saves).toContain("else window.localStorage.setItem(localSettingsKey, preferencesBackup);");
   });
 
+  it("does not block seasonal-only saves on unrelated legacy page preferences", () => {
+    const save = regionBetween("function handleSavePreferences() {", "async function handleSaveFinancial() {");
+    expect(save).toContain("const savePreferenceFields = preferenceFieldsDirty || !hasSeasonalDrafts");
+    expect(save).toContain("if (savePreferenceFields) {");
+    expect(save).toContain("setPreferencesSaveError(message)");
+    expect(source).toContain("setPreferenceFieldsDirty(true)");
+    expect(source).toContain('data-seasonal-save-error="true"');
+  });
+
   it("restores profile, preferences, finance thresholds, AI modules and notification toggles from persistence", () => {
     expect(source).toContain("window.localStorage.getItem(localSettingsKey)");
     for (const setter of [

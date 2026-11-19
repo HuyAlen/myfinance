@@ -304,6 +304,10 @@ export default function SettingsPage() {
   // Unsaved schedule changes for all seasons are committed by the single "Lưu tùy chỉnh" button.
   const [seasonalScheduleDrafts, setSeasonalScheduleDrafts] = useState<SeasonalScheduleDrafts>({});
   const [seasonalSkinDrafts, setSeasonalSkinDrafts] = useState<SeasonalSkinDrafts>({});
+  // A seasonal-only Save must not rewrite unrelated legacy preferences.
+  const [preferenceFieldsDirty, setPreferenceFieldsDirty] = useState(false);
+  const [preferencesSaveError, setPreferencesSaveError] = useState<string | null>(null);
+  const [seasonalSaveRevision, setSeasonalSaveRevision] = useState(0);
 
   // Each Save owns its feedback; revisions prevent an older request from marking new edits saved.
   type SavedSection = SettingsSaveSection | "aiSettings";
@@ -516,7 +520,9 @@ export default function SettingsPage() {
       if (typeof saved.lang === "string") setLang("vi");
       if (typeof saved.currency === "string") setCurrency("VND");
       if (isDateDisplayFormat(saved.dateFormat)) setDateFormat(saved.dateFormat);
-      if (typeof saved.defaultPage === "string") setDefaultPage(saved.defaultPage);
+      if (typeof saved.defaultPage === "string") {
+        setDefaultPage(SETTINGS_START_PAGES.some((path) => path === saved.defaultPage) ? saved.defaultPage : "/");
+      }
       // ThemeProvider owns its separate immediate-persisted preference; ignore the legacy snapshot.theme.
       if (typeof saved.finMonth === "string") setFinMonth("1");
       if (typeof saved.savingsGoal === "string") setSavingsGoal(saved.savingsGoal);
@@ -1003,8 +1009,15 @@ export default function SettingsPage() {
       return;
     }
     const revision = markSaveStarted("preferences");
+    setPreferencesSaveError(null);
+    // When only a seasonal skin/date changed, do not block it on an unrelated
+    // legacy account preference snapshot that may need a separate repair.
+    const hasSeasonalDrafts = Object.keys(seasonalScheduleDrafts).length > 0 ||
+      Object.keys(seasonalSkinDrafts).length > 0;
+    const savePreferenceFields = preferenceFieldsDirty || !hasSeasonalDrafts;
     try {
-      if (!isDateDisplayFormat(dateFormat) || !SETTINGS_START_PAGES.some((path) => path === defaultPage)) {
+      if (savePreferenceFields &&
+          (!isDateDisplayFormat(dateFormat) || !SETTINGS_START_PAGES.some((path) => path === defaultPage))) {
         throw new Error("Định dạng ngày hoặc trang mặc định không hợp lệ.");
       }
       // Reject invalid dates and overlapping seasons before touching any saved preference.
@@ -1025,15 +1038,19 @@ export default function SettingsPage() {
         key: seasonalSkinKey(value),
         oldValue: window.localStorage.getItem(seasonalSkinKey(value)),
       }));
-      const preferencesBackup = window.localStorage.getItem(localSettingsKey);
+      const preferencesBackup = savePreferenceFields
+        ? window.localStorage.getItem(localSettingsKey)
+        : null;
       let schedulesCommitted = false;
       try {
         saveSeasonalScheduleDrafts(seasonalScheduleDrafts);
         schedulesCommitted = true;
         saveSeasonalSkinDrafts(seasonalSkinDrafts);
-        saveAccountSettingsSection(user.id, "preferences", {
-          lang: "vi", dateFormat, defaultPage,
-        });
+        if (savePreferenceFields) {
+          saveAccountSettingsSection(user.id, "preferences", {
+            lang: "vi", dateFormat, defaultPage,
+          });
+        }
       } catch (error) {
         if (schedulesCommitted) {
           let rollbackError = false;
@@ -1045,11 +1062,13 @@ export default function SettingsPage() {
               rollbackError = true;
             }
           }
-          try {
-            if (preferencesBackup === null) window.localStorage.removeItem(localSettingsKey);
-            else window.localStorage.setItem(localSettingsKey, preferencesBackup);
-          } catch {
-            rollbackError = true;
+          if (savePreferenceFields) {
+            try {
+              if (preferencesBackup === null) window.localStorage.removeItem(localSettingsKey);
+              else window.localStorage.setItem(localSettingsKey, preferencesBackup);
+            } catch {
+              rollbackError = true;
+            }
           }
           window.dispatchEvent(new Event(SEASONAL_SCHEDULE_CHANGED));
           refreshSeasonalSkinFromStorage();
@@ -1059,14 +1078,22 @@ export default function SettingsPage() {
       }
       setSeasonalScheduleDrafts({});
       setSeasonalSkinDrafts({});
-      notifyDateFormatSaved();
-      // ThemeProvider and skin previews persist immediately in their own SSOT.
+      if (savePreferenceFields) {
+        setPreferenceFieldsDirty(false);
+        notifyDateFormatSaved();
+      }
+      // Dismiss a temporary ?season= preview after a successful save so the
+      // newly saved date window becomes the active workspace season immediately.
+      setSeasonalSaveRevision((current) => current + 1);
+      // ThemeProvider keeps the Light/Dark/System selection independent.
       if (markSaveSettled("preferences", revision, true) === "saved") {
         toast({ variant: "success", message: "Đã lưu tùy chỉnh, skin và lịch theo mùa trên trình duyệt này." });
       }
     } catch (error) {
       markSaveSettled("preferences", revision, false);
-      toast({ variant: "error", message: error instanceof Error ? error.message : "Không thể lưu tùy chỉnh." });
+      const message = error instanceof Error ? error.message : "Không thể lưu tùy chỉnh.";
+      setPreferencesSaveError(message);
+      toast({ variant: "error", message });
     }
   }
 
@@ -1633,7 +1660,7 @@ export default function SettingsPage() {
                   </div>
                   <select
                     value={dateFormat}
-                    onChange={(e) => { markDirty("preferences"); if (isDateDisplayFormat(e.target.value)) setDateFormat(e.target.value); setBirthDateInvalidForAccount(null); }}
+                    onChange={(e) => { if (isDateDisplayFormat(e.target.value)) { markDirty("preferences"); setPreferenceFieldsDirty(true); setPreferencesSaveError(null); setDateFormat(e.target.value); } setBirthDateInvalidForAccount(null); }}
                     className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     {DATE_DISPLAY_FORMAT_OPTIONS.map((option) => (
@@ -1656,7 +1683,7 @@ export default function SettingsPage() {
                   </div>
                   <select
                     value={defaultPage}
-                    onChange={(e) => { markDirty("preferences"); setDefaultPage(e.target.value); }}
+                    onChange={(e) => { markDirty("preferences"); setPreferenceFieldsDirty(true); setPreferencesSaveError(null); setDefaultPage(e.target.value); }}
                     className="rounded-2xl border border-slate-200 bg-slate-50 min-h-11 px-3 py-2 text-sm font-bold outline-none focus:border-blue-400"
                   >
                     <option value="/">Tổng quan</option>
@@ -1705,8 +1732,10 @@ export default function SettingsPage() {
                 <SeasonalThemeSettingsCard />
                 <SeasonalSkinPicker
                   scheduleDrafts={seasonalScheduleDrafts}
+                  saveRevision={seasonalSaveRevision}
                   onScheduleChange={(season, draft) => {
                     setSeasonalScheduleDrafts((current) => ({ ...current, [season]: draft }));
+                    setPreferencesSaveError(null);
                     markDirty("preferences");
                   }}
                   skinDrafts={seasonalSkinDrafts}
@@ -1717,6 +1746,7 @@ export default function SettingsPage() {
                       else next[season] = skin;
                       return next;
                     });
+                    setPreferencesSaveError(null);
                     markDirty("preferences");
                   }}
                 />
@@ -1724,7 +1754,13 @@ export default function SettingsPage() {
                 <button type="button" onClick={handleSavePreferences} disabled={saveStatus("preferences") === "saving"} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
                   {saveLabel("preferences", "Lưu tùy chỉnh")}
                 </button>
-                <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("preferences"), "trình duyệt này")}</p>
+                {saveStatus("preferences") === "error" && preferencesSaveError ? (
+                  <p role="alert" data-seasonal-save-error="true" className="mt-2 text-xs font-medium leading-5 text-red-700">
+                    Không thể lưu skin/lịch: {preferencesSaveError}
+                  </p>
+                ) : (
+                  <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("preferences"), "trình duyệt này")}</p>
+                )}
               </div>
             </div>
           </div>
