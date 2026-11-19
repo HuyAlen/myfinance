@@ -142,6 +142,8 @@ export function useSeasonalSkin(season: SeasonalSkinSeason): SeasonalSkin {
 
 /** Optional date window per season; absent means the original automatic calendar. */
 export type SeasonalDateWindow = { start: string; end: string };
+/** Unsaved per-season overrides. null means restore the automatic calendar. */
+export type SeasonalScheduleDrafts = Partial<Record<SeasonalSkinSeason, SeasonalDateWindow | null>>;
 export const SEASONAL_SCHEDULE_PREFIX = "myfinance-seasonal-date-window-v1:";
 export const SEASONAL_SCHEDULE_CHANGED = "myfinance:seasonal-schedule-changed";
 const datePattern = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -196,4 +198,73 @@ export function resolveScheduledSeason(now: Date): SeasonalSkinSeason | null {
     if (window && window.start <= today && today <= window.end) return value;
   }
   return null;
+}
+
+
+/** Validate all pending seasons against the effective calendar before any writes. */
+export function validateSeasonalScheduleDrafts(drafts: SeasonalScheduleDrafts): string | null {
+  const windows = readAllSeasonalDateWindows();
+  for (const { value, label } of SKIN_SEASONS) {
+    if (!Object.prototype.hasOwnProperty.call(drafts, value)) continue;
+    const candidate = drafts[value];
+    if (candidate == null) {
+      delete windows[value];
+    } else if (!isValidSeasonalDateWindow(candidate)) {
+      return "Ngày bắt đầu/kết thúc của mùa " + label + " không hợp lệ.";
+    } else {
+      windows[value] = candidate;
+    }
+  }
+  for (let i = 0; i < SKIN_SEASONS.length; i++) {
+    for (let j = i + 1; j < SKIN_SEASONS.length; j++) {
+      const a = SKIN_SEASONS[i];
+      const b = SKIN_SEASONS[j];
+      const first = windows[a.value];
+      const second = windows[b.value];
+      if (first && second && first.start <= second.end && second.start <= first.end) {
+        return "Lịch mùa " + a.label + " bị trùng với " + b.label + ".";
+      }
+    }
+  }
+  return null;
+}
+
+/** Persist a complete pending schedule edit in one verified batch, with rollback. */
+export function saveSeasonalScheduleDrafts(drafts: SeasonalScheduleDrafts): void {
+  const changed = SKIN_SEASONS.filter(({ value }) => Object.prototype.hasOwnProperty.call(drafts, value));
+  if (changed.length === 0) return;
+  if (typeof window === "undefined") throw new Error("Bộ nhớ lịch chưa sẵn sàng.");
+  const error = validateSeasonalScheduleDrafts(drafts);
+  if (error) throw new Error(error);
+
+  const storage = window.localStorage;
+  const before = changed.map(({ value }) => {
+    const key = SEASONAL_SCHEDULE_PREFIX + value;
+    return { key, original: storage.getItem(key) };
+  });
+  try {
+    for (const { value } of changed) {
+      const key = SEASONAL_SCHEDULE_PREFIX + value;
+      const next = drafts[value] ?? null;
+      if (next) storage.setItem(key, JSON.stringify(next));
+      else storage.removeItem(key);
+      const written = storage.getItem(key);
+      if (next === null ? written !== null : written !== JSON.stringify(next)) {
+        throw new Error("Không xác nhận được lịch đã lưu cho mùa " + value + ".");
+      }
+    }
+  } catch (error) {
+    let rollbackFailed = false;
+    for (const { key, original } of before) {
+      try {
+        if (original === null) storage.removeItem(key);
+        else storage.setItem(key, original);
+      } catch {
+        rollbackFailed = true;
+      }
+    }
+    if (rollbackFailed) throw new Error("Lưu lịch thất bại và chưa thể khôi phục hoàn toàn dữ liệu cũ.");
+    throw error;
+  }
+  window.dispatchEvent(new Event(SEASONAL_SCHEDULE_CHANGED));
 }
