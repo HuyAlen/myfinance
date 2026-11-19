@@ -12,39 +12,45 @@ import {
   SKIN_SEASONS,
   setSeasonalSkin,
   useSeasonalSkin,
-  readSeasonalDateWindow,
-  saveSeasonalDateWindow,
-  isValidSeasonalDateWindow,
-  getSeasonalScheduleConflict,
+  readAllSeasonalDateWindows,
   SEASONAL_SCHEDULE_CHANGED,
+  type SeasonalDateWindow,
+  type SeasonalScheduleDrafts,
   type SeasonalSkinSeason,
 } from "@/src/lib/seasonalThemeSkins";
 
+/** Date changes remain drafts until the single Settings > Tùy chỉnh Save button. */
+type SeasonalSkinPickerProps = {
+  scheduleDrafts: SeasonalScheduleDrafts;
+  onScheduleChange: (season: SeasonalSkinSeason, value: SeasonalDateWindow | null) => void;
+};
+
 /** Compact seasonal skin picker, nested under Settings > Tùy chỉnh. */
-export default function SeasonalSkinPicker() {
+export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }: SeasonalSkinPickerProps) {
   const router = useRouter();
   const { user } = useAuth();
   const accountBirthDate = readAccountBirthDate(user?.user_metadata);
   const [previewOverride, setPreviewOverride] = useState<string | null>(null);
-  const [scheduleStart, setScheduleStart] = useState("");
-  const [scheduleEnd, setScheduleEnd] = useState("");
-  const [scheduleMessage, setScheduleMessage] = useState("");
+  const [savedSchedules, setSavedSchedules] = useState<Partial<Record<SeasonalSkinSeason, SeasonalDateWindow>>>({});
   // Fixed initial value on SSR prevents hydration mismatch across timezones.
   const [selectedSeason, setSelectedSeason] = useState<SeasonalSkinSeason>("spring");
   const [calendarSeason, setCalendarSeason] = useState<SeasonalSkinSeason | null>(null);
   const enabled = useSeasonalThemeEnabled();
   useEffect(() => {
-    const refresh = () => {
-      const saved = readSeasonalDateWindow(selectedSeason);
-      setScheduleStart(saved?.start ?? "");
-      setScheduleEnd(saved?.end ?? "");
-      setScheduleMessage("");
-    };
+    const refresh = () => setSavedSchedules(readAllSeasonalDateWindows());
     const timer = window.setTimeout(refresh, 0);
     window.addEventListener("storage", refresh);
     window.addEventListener(SEASONAL_SCHEDULE_CHANGED, refresh);
-    return () => { window.clearTimeout(timer); window.removeEventListener("storage", refresh); window.removeEventListener(SEASONAL_SCHEDULE_CHANGED, refresh); };
-  }, [selectedSeason]);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(SEASONAL_SCHEDULE_CHANGED, refresh);
+    };
+  }, []);
+  const currentSchedule = Object.prototype.hasOwnProperty.call(scheduleDrafts, selectedSeason)
+    ? (scheduleDrafts[selectedSeason] ?? null)
+    : (savedSchedules[selectedSeason] ?? null);
+  const customSchedule = currentSchedule !== null;
   const selectedSkin = useSeasonalSkin(selectedSeason);
   const seasonMeta = SKIN_SEASONS.find((season) => season.value === selectedSeason) ?? SKIN_SEASONS[0];
 
@@ -145,28 +151,57 @@ export default function SeasonalSkinPicker() {
       </div>
 
 
-      <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3" data-seasonal-schedule="true">
-        <div className="text-xs font-bold text-slate-700">Lịch áp dụng · {seasonMeta.label}</div>
-        <p className="text-[11px] text-slate-500">Để trống cả hai ngày để sử dụng lịch mùa tự động. Lịch tùy chỉnh áp dụng từ 00:00 ngày bắt đầu đến hết ngày kết thúc (giờ Việt Nam).</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <label className="space-y-1 text-xs font-medium text-slate-600">Ngày bắt đầu
-            <input type="date" value={scheduleStart} onChange={(event) => { setScheduleStart(event.target.value); setScheduleMessage(""); }} className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
-          </label>
-          <label className="space-y-1 text-xs font-medium text-slate-600">Ngày kết thúc
-            <input type="date" value={scheduleEnd} min={scheduleStart || undefined} onChange={(event) => { setScheduleEnd(event.target.value); setScheduleMessage(""); }} className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
-          </label>
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3" data-seasonal-schedule="true">
+        <div>
+          <div className="text-xs font-bold text-slate-700">Tùy chọn lịch · {seasonMeta.label}</div>
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">Chọn cách áp dụng skin cho mùa này. Thay đổi sẽ lưu cùng nút “Lưu tùy chỉnh” ở cuối mục.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-50" disabled={!scheduleStart || !scheduleEnd} onClick={() => {
-            const candidate = { start: scheduleStart, end: scheduleEnd };
-            if (!isValidSeasonalDateWindow(candidate)) { setScheduleMessage("Ngày bắt đầu/kết thúc không hợp lệ."); return; }
-            const conflict = getSeasonalScheduleConflict(selectedSeason, candidate);
-            if (conflict) { setScheduleMessage("Lịch bị trùng với mùa " + (SKIN_SEASONS.find((s) => s.value === conflict)?.label ?? conflict) + "."); return; }
-            setScheduleMessage(saveSeasonalDateWindow(selectedSeason, candidate) ? "Đã lưu lịch áp dụng." : "Không thể lưu lịch. Vui lòng thử lại.");
-          }}>Lưu lịch</button>
-          <button type="button" className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600" onClick={() => setScheduleMessage(saveSeasonalDateWindow(selectedSeason, null) ? "Đã trở về lịch tự động." : "Không thể cập nhật lịch.")}>Dùng lịch tự động</button>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label={`Tùy chọn lịch mùa ${seasonMeta.label}`}>
+          <button
+            type="button"
+            aria-pressed={!customSchedule}
+            disabled={!customSchedule}
+            data-seasonal-schedule-mode="auto"
+            onClick={() => onScheduleChange(selectedSeason, null)}
+            className={`min-h-10 rounded-lg border px-2 text-xs font-semibold ${!customSchedule ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
+          >Theo mùa tự động</button>
+          <button
+            type="button"
+            aria-pressed={customSchedule}
+            disabled={customSchedule}
+            data-seasonal-schedule-mode="custom"
+            onClick={() => onScheduleChange(selectedSeason, currentSchedule ?? savedSchedules[selectedSeason] ?? { start: "", end: "" })}
+            className={`min-h-10 rounded-lg border px-2 text-xs font-semibold ${customSchedule ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
+          >Tùy chọn ngày</button>
         </div>
-        {scheduleMessage ? <p role="status" className="text-xs text-slate-600">{scheduleMessage}</p> : null}
+        {customSchedule ? (
+          <>
+            <p className="text-[11px] leading-4 text-slate-500">Áp dụng từ 00:00 ngày bắt đầu đến hết ngày kết thúc, theo giờ Việt Nam.</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="space-y-1 text-xs font-medium text-slate-600">Ngày bắt đầu
+                <input
+                  type="date"
+                  data-seasonal-schedule-start="true"
+                  value={currentSchedule.start}
+                  onChange={(event) => onScheduleChange(selectedSeason, { ...currentSchedule, start: event.target.value })}
+                  className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-slate-600">Ngày kết thúc
+                <input
+                  type="date"
+                  data-seasonal-schedule-end="true"
+                  min={currentSchedule.start || undefined}
+                  value={currentSchedule.end}
+                  onChange={(event) => onScheduleChange(selectedSeason, { ...currentSchedule, end: event.target.value })}
+                  className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+                />
+              </label>
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-slate-500">Skin sẽ dùng lịch mùa mặc định.</p>
+        )}
       </div>
       {selectedSeason === "birthday" ? (
         <p className="text-[11px] leading-4 text-slate-500">

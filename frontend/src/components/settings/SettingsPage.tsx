@@ -51,6 +51,14 @@ import { supabase } from "@/src/lib/supabase";
 import HouseholdSettingsCard from "@/src/components/settings/HouseholdSettingsCard";
 import SeasonalThemeSettingsCard from "@/src/components/settings/SeasonalThemeSettingsCard";
 import SeasonalSkinPicker from "@/src/components/settings/SeasonalSkinPicker";
+import {
+  SKIN_SEASONS,
+  SEASONAL_SCHEDULE_CHANGED,
+  SEASONAL_SCHEDULE_PREFIX,
+  saveSeasonalScheduleDrafts,
+  validateSeasonalScheduleDrafts,
+  type SeasonalScheduleDrafts,
+} from "@/src/lib/seasonalThemeSkins";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
 import { resolveBackupWorkspaceAccess } from "@/src/lib/settings/financeDataWorkspaceGuard";
@@ -287,6 +295,9 @@ export default function SettingsPage() {
   const [notifDebt, setNotifDebt] = useState(true);
   // Invest/weekly/monthly notifications remain unsupported; their historical
   // snapshot fields are preserved by per-section writes, not edited here.
+
+  // Unsaved schedule changes for all seasons are committed by the single "Lưu tùy chỉnh" button.
+  const [seasonalScheduleDrafts, setSeasonalScheduleDrafts] = useState<SeasonalScheduleDrafts>({});
 
   // Each Save owns its feedback; revisions prevent an older request from marking new edits saved.
   type SavedSection = SettingsSaveSection | "aiSettings";
@@ -985,19 +996,58 @@ export default function SettingsPage() {
       toast({ variant: "error", message: "Không có tài khoản để lưu tùy chỉnh." });
       return;
     }
-    if (!isDateDisplayFormat(dateFormat) || !SETTINGS_START_PAGES.some((path) => path === defaultPage)) {
-      toast({ variant: "error", message: "Định dạng ngày hoặc trang mặc định không hợp lệ." });
-      return;
-    }
     const revision = markSaveStarted("preferences");
     try {
-      saveAccountSettingsSection(user.id, "preferences", {
-        lang: "vi", dateFormat, defaultPage,
-      });
+      if (!isDateDisplayFormat(dateFormat) || !SETTINGS_START_PAGES.some((path) => path === defaultPage)) {
+        throw new Error("Định dạng ngày hoặc trang mặc định không hợp lệ.");
+      }
+      // Reject invalid dates and overlapping seasons before touching any saved preference.
+      const scheduleError = validateSeasonalScheduleDrafts(seasonalScheduleDrafts);
+      if (scheduleError) throw new Error(scheduleError);
+
+      // Both groups of settings share one explicit Save. Preserve the former
+      // schedules so a preferences storage failure does not leave a partial save.
+      const scheduleBackup = SKIN_SEASONS.filter(({ value }) =>
+        Object.prototype.hasOwnProperty.call(seasonalScheduleDrafts, value)
+      ).map(({ value }) => ({
+        key: SEASONAL_SCHEDULE_PREFIX + value,
+        oldValue: window.localStorage.getItem(SEASONAL_SCHEDULE_PREFIX + value),
+      }));
+      const preferencesBackup = window.localStorage.getItem(localSettingsKey);
+      let schedulesCommitted = false;
+      try {
+        saveSeasonalScheduleDrafts(seasonalScheduleDrafts);
+        schedulesCommitted = true;
+        saveAccountSettingsSection(user.id, "preferences", {
+          lang: "vi", dateFormat, defaultPage,
+        });
+      } catch (error) {
+        if (schedulesCommitted) {
+          let rollbackError = false;
+          for (const { key, oldValue } of scheduleBackup) {
+            try {
+              if (oldValue === null) window.localStorage.removeItem(key);
+              else window.localStorage.setItem(key, oldValue);
+            } catch {
+              rollbackError = true;
+            }
+          }
+          try {
+            if (preferencesBackup === null) window.localStorage.removeItem(localSettingsKey);
+            else window.localStorage.setItem(localSettingsKey, preferencesBackup);
+          } catch {
+            rollbackError = true;
+          }
+          window.dispatchEvent(new Event(SEASONAL_SCHEDULE_CHANGED));
+          if (rollbackError) throw new Error("Không thể lưu tùy chỉnh và chưa khôi phục được toàn bộ dữ liệu cũ.");
+        }
+        throw error;
+      }
+      setSeasonalScheduleDrafts({});
       notifyDateFormatSaved();
-      // ThemeProvider persists the selected theme immediately in its own SSOT.
+      // ThemeProvider and skin previews persist immediately in their own SSOT.
       if (markSaveSettled("preferences", revision, true) === "saved") {
-        toast({ variant: "success", message: "Đã lưu tùy chỉnh trên trình duyệt này. Giao diện được áp dụng ngay khi chọn." });
+        toast({ variant: "success", message: "Đã lưu tùy chỉnh và lịch theo mùa trên trình duyệt này." });
       }
     } catch (error) {
       markSaveSettled("preferences", revision, false);
@@ -1638,9 +1688,15 @@ export default function SettingsPage() {
 
                 <div className="border-t border-slate-100" />
                 <SeasonalThemeSettingsCard />
-                <SeasonalSkinPicker />
-                <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Ngôn ngữ, định dạng ngày và trang mặc định được lưu riêng cho tài khoản này trên trình duyệt.</p>
-                <button type="button" onClick={handleSavePreferences} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                <SeasonalSkinPicker
+                  scheduleDrafts={seasonalScheduleDrafts}
+                  onScheduleChange={(season, draft) => {
+                    setSeasonalScheduleDrafts((current) => ({ ...current, [season]: draft }));
+                    markDirty("preferences");
+                  }}
+                />
+                <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Định dạng ngày, trang mặc định và tùy chọn lịch được lưu bằng nút Lưu tùy chỉnh trên trình duyệt này.</p>
+                <button type="button" onClick={handleSavePreferences} disabled={saveStatus("preferences") === "saving"} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
                   {saveLabel("preferences", "Lưu tùy chỉnh")}
                 </button>
                 <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">{settingsSaveMessage(saveStatus("preferences"), "trình duyệt này")}</p>
