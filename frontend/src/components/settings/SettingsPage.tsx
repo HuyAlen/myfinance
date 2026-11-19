@@ -54,6 +54,7 @@ import SeasonalSkinPicker from "@/src/components/settings/SeasonalSkinPicker";
 import {
   SKIN_SEASONS,
   SEASONAL_SCHEDULE_CHANGED,
+  SEASONAL_SCHEDULE_PREFIX,
   saveSeasonalScheduleDrafts,
   validateSeasonalScheduleDrafts,
   type SeasonalScheduleDrafts,
@@ -1009,8 +1010,8 @@ export default function SettingsPage() {
       const scheduleBackup = SKIN_SEASONS.filter(({ value }) =>
         Object.prototype.hasOwnProperty.call(seasonalScheduleDrafts, value)
       ).map(({ value }) => ({
-        key: `myfinance-seasonal-date-window-v1:${value}`,
-        oldValue: window.localStorage.getItem(`myfinance-seasonal-date-window-v1:${value}`),
+        key: SEASONAL_SCHEDULE_PREFIX + value,
+        oldValue: window.localStorage.getItem(SEASONAL_SCHEDULE_PREFIX + value),
       }));
       let schedulesCommitted = false;
       try {
@@ -1687,7 +1688,7 @@ export default function SettingsPage() {
                     markDirty("preferences");
                   }}
                 />
-                <p className="text-xs leading-5 text-slate-500">Giao diện và skin xem trước áp dụng ngay khi chọn. Định dạng ngày, trang mặc định và tùy chọn lịch được lưu bằng một nút bên dưới, trên trình duyệt này.</p>
+                <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Định dạng ngày, trang mặc định và tùy chọn lịch được lưu bằng nút Lưu tùy chỉnh trên trình duyệt này.</p>
                 <button type="button" onClick={handleSavePreferences} disabled={saveStatus("preferences") === "saving"} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
                   {saveLabel("preferences", "Lưu tùy chỉnh")}
                 </button>
