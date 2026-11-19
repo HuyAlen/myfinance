@@ -8,6 +8,10 @@ import { readAccountBirthDate, resolveAccountSeasonalTheme } from "@/src/lib/acc
 import {
   handleSeasonalSkinStorage,
   syncSeasonalSkinForDocument,
+  resolveScheduledSeason,
+  readAllSeasonalDateWindows,
+  vietnamDate,
+  SEASONAL_SCHEDULE_CHANGED,
 } from "@/src/lib/seasonalThemeSkins";
 import {
   readSeasonalThemeEnabled,
@@ -36,7 +40,11 @@ export default function SeasonalWorkspaceThemeController() {
     const refresh = () => {
       const now = new Date();
       const calendarTheme = resolveSeasonalAuthTheme(now, requestedSeason);
-      const theme = resolveAccountSeasonalTheme(calendarTheme, now, requestedSeason, accountBirthDate);
+      const automatic = resolveAccountSeasonalTheme(calendarTheme, now, requestedSeason, accountBirthDate);
+      const today = vietnamDate(now);
+      const schedules = readAllSeasonalDateWindows();
+      const scheduled = requestedSeason ? null : resolveScheduledSeason(now);
+      const theme = requestedSeason ? automatic : scheduled ?? (automatic !== "off" && schedules[automatic] && !(schedules[automatic]!.start <= today && today <= schedules[automatic]!.end) ? "off" : automatic);
       const root = document.documentElement;
 
       // Always consult the latest store value: a pending React effect from
@@ -66,7 +74,8 @@ export default function SeasonalWorkspaceThemeController() {
       if (document.visibilityState === "visible") refresh();
     };
 
-    const onSkinStorage = (event: StorageEvent) => handleSeasonalSkinStorage(event);
+    const onSkinStorage = (event: StorageEvent) => { handleSeasonalSkinStorage(event); refresh(); };
+    const onScheduleChange = () => refresh();
     // The existing seasonal on/off setter updates the season attribute before
     // dispatching this event. Apply the saved skin in the same event turn.
     const onPreferenceChange = () => syncSeasonalSkinForDocument();
@@ -74,6 +83,7 @@ export default function SeasonalWorkspaceThemeController() {
     refresh();
     window.addEventListener("pageshow", refresh);
     window.addEventListener("storage", onSkinStorage);
+    window.addEventListener(SEASONAL_SCHEDULE_CHANGED, onScheduleChange);
     window.addEventListener("myfinance:seasonal-theme-preference-changed", onPreferenceChange);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 
@@ -81,6 +91,7 @@ export default function SeasonalWorkspaceThemeController() {
       if (nextMidnightTimer !== undefined) window.clearTimeout(nextMidnightTimer);
       window.removeEventListener("pageshow", refresh);
       window.removeEventListener("storage", onSkinStorage);
+      window.removeEventListener(SEASONAL_SCHEDULE_CHANGED, onScheduleChange);
       window.removeEventListener("myfinance:seasonal-theme-preference-changed", onPreferenceChange);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
