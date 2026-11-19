@@ -189,7 +189,13 @@ export function saveSeasonalDateWindow(season: SeasonalSkinSeason, dateWindow: S
 }
 /** Asia/Ho_Chi_Minh is UTC+7 without daylight-saving transitions. */
 export function vietnamDate(now: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  // formatToParts avoids locale-dependent order/separators on iOS Safari.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 export function resolveScheduledSeason(now: Date): SeasonalSkinSeason | null {
   const today = vietnamDate(now);
