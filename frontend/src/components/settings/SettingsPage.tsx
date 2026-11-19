@@ -57,7 +57,12 @@ import {
   SEASONAL_SCHEDULE_PREFIX,
   saveSeasonalScheduleDrafts,
   validateSeasonalScheduleDrafts,
+  readSeasonalSkin,
+  seasonalSkinKey,
+  saveSeasonalSkinDrafts,
+  refreshSeasonalSkinFromStorage,
   type SeasonalScheduleDrafts,
+  type SeasonalSkinDrafts,
 } from "@/src/lib/seasonalThemeSkins";
 import { useRealtime } from "@/src/components/realtime/RealtimeProvider";
 import { useHousehold } from "@/src/components/household/HouseholdProvider";
@@ -298,6 +303,7 @@ export default function SettingsPage() {
 
   // Unsaved schedule changes for all seasons are committed by the single "Lưu tùy chỉnh" button.
   const [seasonalScheduleDrafts, setSeasonalScheduleDrafts] = useState<SeasonalScheduleDrafts>({});
+  const [seasonalSkinDrafts, setSeasonalSkinDrafts] = useState<SeasonalSkinDrafts>({});
 
   // Each Save owns its feedback; revisions prevent an older request from marking new edits saved.
   type SavedSection = SettingsSaveSection | "aiSettings";
@@ -1013,18 +1019,25 @@ export default function SettingsPage() {
         key: SEASONAL_SCHEDULE_PREFIX + value,
         oldValue: window.localStorage.getItem(SEASONAL_SCHEDULE_PREFIX + value),
       }));
+      const skinBackup = SKIN_SEASONS.filter(({ value }) =>
+        Object.prototype.hasOwnProperty.call(seasonalSkinDrafts, value)
+      ).map(({ value }) => ({
+        key: seasonalSkinKey(value),
+        oldValue: window.localStorage.getItem(seasonalSkinKey(value)),
+      }));
       const preferencesBackup = window.localStorage.getItem(localSettingsKey);
       let schedulesCommitted = false;
       try {
         saveSeasonalScheduleDrafts(seasonalScheduleDrafts);
         schedulesCommitted = true;
+        saveSeasonalSkinDrafts(seasonalSkinDrafts);
         saveAccountSettingsSection(user.id, "preferences", {
           lang: "vi", dateFormat, defaultPage,
         });
       } catch (error) {
         if (schedulesCommitted) {
           let rollbackError = false;
-          for (const { key, oldValue } of scheduleBackup) {
+          for (const { key, oldValue } of [...scheduleBackup, ...skinBackup]) {
             try {
               if (oldValue === null) window.localStorage.removeItem(key);
               else window.localStorage.setItem(key, oldValue);
@@ -1039,15 +1052,17 @@ export default function SettingsPage() {
             rollbackError = true;
           }
           window.dispatchEvent(new Event(SEASONAL_SCHEDULE_CHANGED));
+          refreshSeasonalSkinFromStorage();
           if (rollbackError) throw new Error("Không thể lưu tùy chỉnh và chưa khôi phục được toàn bộ dữ liệu cũ.");
         }
         throw error;
       }
       setSeasonalScheduleDrafts({});
+      setSeasonalSkinDrafts({});
       notifyDateFormatSaved();
       // ThemeProvider and skin previews persist immediately in their own SSOT.
       if (markSaveSettled("preferences", revision, true) === "saved") {
-        toast({ variant: "success", message: "Đã lưu tùy chỉnh và lịch theo mùa trên trình duyệt này." });
+        toast({ variant: "success", message: "Đã lưu tùy chỉnh, skin và lịch theo mùa trên trình duyệt này." });
       }
     } catch (error) {
       markSaveSettled("preferences", revision, false);
@@ -1694,8 +1709,18 @@ export default function SettingsPage() {
                     setSeasonalScheduleDrafts((current) => ({ ...current, [season]: draft }));
                     markDirty("preferences");
                   }}
+                  skinDrafts={seasonalSkinDrafts}
+                  onSkinChange={(season, skin) => {
+                    setSeasonalSkinDrafts((current) => {
+                      const next = { ...current };
+                      if (readSeasonalSkin(season) === skin) delete next[season];
+                      else next[season] = skin;
+                      return next;
+                    });
+                    markDirty("preferences");
+                  }}
                 />
-                <p className="text-xs leading-5 text-slate-500">Giao diện và skin áp dụng ngay khi chọn. Định dạng ngày, trang mặc định và tùy chọn lịch được lưu bằng nút Lưu tùy chỉnh trên trình duyệt này.</p>
+                <p className="text-xs leading-5 text-slate-500">Giao diện theo mùa bật/tắt ngay khi chọn. Skin được xem trước và lưu cùng định dạng ngày, trang mặc định, tùy chọn lịch bằng nút Lưu tùy chỉnh trên trình duyệt này.</p>
                 <button type="button" onClick={handleSavePreferences} disabled={saveStatus("preferences") === "saving"} className="min-h-11 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
                   {saveLabel("preferences", "Lưu tùy chỉnh")}
                 </button>

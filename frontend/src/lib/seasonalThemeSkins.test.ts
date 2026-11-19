@@ -8,6 +8,8 @@ import {
   isSkinSeason,
   parseSeasonalSkin,
   readSeasonalSkin,
+  previewSeasonalSkinDrafts,
+  saveSeasonalSkinDrafts,
   seasonalSkinKey,
   setSeasonalSkin,
   syncSeasonalSkinForDocument,
@@ -23,6 +25,8 @@ function setup() {
   const attributes = new Map<string, string>();
   const changes: string[] = [];
   const writes: string[] = [];
+  let failureKey: string | null = null;
+  let ignoredKey: string | null = null;
   class FakeEvent { constructor(public type: string) {} }
   vi.stubGlobal("Event", FakeEvent);
   vi.stubGlobal("document", {
@@ -35,11 +39,26 @@ function setup() {
   vi.stubGlobal("window", {
     localStorage: {
       getItem: (key: string) => saved.get(key) ?? null,
-      setItem: (key: string, value: string) => { saved.set(key, value); },
+      setItem: (key: string, value: string) => {
+        if (key === failureKey) {
+          failureKey = null;
+          throw new Error("Simulated storage failure");
+        }
+        if (key === ignoredKey) {
+          ignoredKey = null;
+          return;
+        }
+        saved.set(key, value);
+      },
+      removeItem: (key: string) => { saved.delete(key); },
     },
     dispatchEvent: (e: FakeEvent) => { changes.push(e.type); return true; },
   });
-  return { saved, attributes, changes, writes };
+  return {
+    saved, attributes, changes, writes,
+    failNextWrite: (key: string) => { failureKey = key; },
+    ignoreNextWrite: (key: string) => { ignoredKey = key; },
+  };
 }
 
 describe("MYFINANCE-SEASONAL-SKINS-1", () => {
@@ -124,6 +143,41 @@ describe("MYFINANCE-SEASONAL-SKINS-1", () => {
     expect(isSeasonalSkinStorageKey("myfinance-theme-preference")).toBe(false);
     expect(isSeasonalSkinStorageKey(seasonalSkinKey("tet"))).toBe(true);
     expect(isSeasonalSkinStorageKey(null)).toBe(true);
+  });
+
+  it("previews without saving until one Settings Save commits all skins", () => {
+    const runtime = setup();
+    runtime.attributes.set("data-finance-workspace-season", "spring");
+    previewSeasonalSkinDrafts({ spring: "festival", christmas: "pastel" });
+    expect(runtime.attributes.get(SKIN_ATTRIBUTE)).toBe("festival");
+    expect(readSeasonalSkin("spring")).toBe("classic");
+    expect(runtime.saved.size).toBe(0);
+
+    saveSeasonalSkinDrafts({ spring: "festival", christmas: "pastel" });
+    expect(runtime.saved.get(seasonalSkinKey("spring"))).toBe("festival");
+    expect(runtime.saved.get(seasonalSkinKey("christmas"))).toBe("pastel");
+    expect(readSeasonalSkin("spring")).toBe("festival");
+    expect(runtime.attributes.get(SKIN_ATTRIBUTE)).toBe("festival");
+    expect(runtime.changes).toEqual(["myfinance:seasonal-skin-changed"]);
+  });
+
+  it("rolls back all skin changes if a later storage write fails", () => {
+    const runtime = setup();
+    runtime.saved.set(seasonalSkinKey("spring"), "pastel");
+    runtime.failNextWrite(seasonalSkinKey("christmas"));
+    expect(() => saveSeasonalSkinDrafts({ spring: "festival", christmas: "pastel" }))
+      .toThrow("Simulated storage failure");
+    expect(runtime.saved.get(seasonalSkinKey("spring"))).toBe("pastel");
+    expect(runtime.saved.has(seasonalSkinKey("christmas"))).toBe(false);
+    expect(runtime.changes).toEqual([]);
+  });
+
+  it("detects ignored storage writes instead of reporting a fake Save", () => {
+    const runtime = setup();
+    runtime.ignoreNextWrite(seasonalSkinKey("spring"));
+    expect(() => saveSeasonalSkinDrafts({ spring: "festival" })).toThrow("Không xác nhận");
+    expect(runtime.saved.size).toBe(0);
+    expect(runtime.changes).toEqual([]);
   });
 
   it("rejects unrecognized season or skin at runtime", () => {
