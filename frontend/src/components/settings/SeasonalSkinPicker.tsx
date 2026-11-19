@@ -112,13 +112,18 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
   // A saved custom date window must replace an old temporary season preview.
   useEffect(() => {
     if (saveRevision === 0) return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("season")) {
-      url.searchParams.delete("season");
-      router.replace(`${url.pathname}${url.search}`, { scroll: false });
-    }
-    setPreviewOverride(null);
-    setCalendarSeason(resolveCurrentSeason(null));
+    // Defer local state updates to the next tick; the effect itself only
+    // synchronizes with browser navigation, avoiding cascading React renders.
+    const timer = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("season")) {
+        url.searchParams.delete("season");
+        router.replace(`${url.pathname}${url.search}`, { scroll: false });
+      }
+      setPreviewOverride(null);
+      setCalendarSeason(resolveCurrentSeason(null));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [saveRevision, resolveCurrentSeason, router]);
   const isPreviewing = previewOverride === selectedSeason;
 
