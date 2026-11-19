@@ -19,9 +19,26 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     expect(end).toBeGreaterThan(start);
     expect(page).toContain('import SeasonalSkinPicker from "@/src/components/settings/SeasonalSkinPicker";');
     expect(segment).toContain("<SeasonalThemeSettingsCard />");
-    expect(segment).toContain("<SeasonalSkinPicker />");
-    expect(segment.indexOf("<SeasonalSkinPicker />")).toBeGreaterThan(segment.indexOf("<SeasonalThemeSettingsCard />"));
-    expect(page.match(/<SeasonalSkinPicker \/>/g)).toHaveLength(1);
+    expect(segment).toContain("<SeasonalSkinPicker");
+    expect(segment.indexOf("<SeasonalSkinPicker")).toBeGreaterThan(segment.indexOf("<SeasonalThemeSettingsCard />"));
+    expect(page.match(/<SeasonalSkinPicker\s/g)).toHaveLength(1);
+  });
+
+  it("uses one parent Save and treats the seasonal calendar as an option rather than a second save", () => {
+    const preferences = page.slice(page.indexOf('id="settings-preferences"'), page.indexOf('id="settings-financial"'));
+    expect(preferences.match(/onClick={handleSavePreferences}/g)).toHaveLength(1);
+    expect(preferences).toContain("scheduleDrafts={seasonalScheduleDrafts}");
+    expect(preferences).toContain("onScheduleChange={(season, draft) => {");
+    expect(page).toContain("validateSeasonalScheduleDrafts(seasonalScheduleDrafts)");
+    expect(page).toContain("saveSeasonalScheduleDrafts(seasonalScheduleDrafts)");
+    expect(picker).toContain("Tùy chọn lịch");
+    expect(picker).toContain("Theo mùa tự động");
+    expect(picker).toContain("Tùy chọn ngày");
+    expect(picker).toContain('data-seasonal-schedule-mode="auto"');
+    expect(picker).toContain('data-seasonal-schedule-mode="custom"');
+    expect(picker).not.toContain(">Lưu lịch</button>");
+    expect(picker).not.toContain(">Dùng lịch tự động</button>");
+    expect(picker).not.toContain("saveSeasonalDateWindow(");
   });
 
   it("renders all six tabs and three previews with full-area buttons and accessible labels", () => {
