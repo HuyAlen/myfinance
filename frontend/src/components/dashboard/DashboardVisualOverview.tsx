@@ -232,14 +232,14 @@ function ChartCard({
             </span>
           ) : null}
           <div className="min-w-0">
-            <h3 className="text-[15px] font-extrabold leading-6 tracking-tight text-[#294A66] sm:text-[16px]">{title}</h3>
+            <h3 className="whitespace-nowrap text-[clamp(12px,3.5vw,15px)] font-extrabold leading-6 tracking-tight text-[#294A66] sm:text-[16px]">{title}</h3>
             {subtitle ? (
               <p className="mt-0.5 text-[11px] font-semibold leading-4 text-[#607A91] sm:text-[12px]">{subtitle}</p>
             ) : null}
           </div>
         </div>
         {hint ? (
-          <span data-dashboard-polish-hint="true" className={"inline-flex min-h-8 max-w-full shrink-0 items-center border border-[#E0EAF3] bg-[#F8FBFE] px-2.5 text-[11px] font-bold text-[#54708A] sm:text-[12px] " + (insight ? "rounded-xl" : "rounded-lg")}>
+          <span data-dashboard-polish-hint="true" className={"inline-flex min-h-8 max-w-full w-full sm:w-auto shrink-0 items-center border border-[#E0EAF3] bg-[#F8FBFE] px-2.5 text-[11px] font-bold text-[#54708A] sm:text-[12px] " + (insight ? "rounded-xl" : "rounded-lg")}>
             {hint}
           </span>
         ) : null}
@@ -515,13 +515,13 @@ export default function DashboardVisualOverview({
           <div data-dashboard-visual-chart="expenses" className="mt-3 flex min-h-[260px] min-w-0 flex-1 flex-col gap-3">
             <div
               data-dashboard-expense-summary="true"
-              className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-2xl border border-[#DEEAF5] bg-linear-to-br from-[#F4F9FF] via-white to-[#F6FAFE] p-3.5 shadow-[0_8px_22px_-19px_rgba(32,82,130,0.35)] sm:p-4"
+              className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between rounded-2xl border border-[#DEEAF5] bg-linear-to-br from-[#F4F9FF] via-white to-[#F6FAFE] p-3.5 shadow-[0_8px_22px_-19px_rgba(32,82,130,0.35)] sm:p-4"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-bold uppercase tracking-[.09em] text-[#607B91]">Tổng chi thực tế</p>
                 <p
                   data-dashboard-expense-total="true"
-                  className="mt-1 break-words text-[clamp(21px,2vw,28px)] font-extrabold leading-tight tracking-tight tabular-nums text-[#183C5A]"
+                  className="mt-1 whitespace-nowrap text-[clamp(19px,6vw,28px)] font-extrabold leading-tight tracking-tight tabular-nums text-[#183C5A]"
                 >
                   {formatVND(totalExpense)}
                 </p>
@@ -547,12 +547,12 @@ export default function DashboardVisualOverview({
             <div data-dashboard-expense-planning-summary="true" className="grid min-w-0 grid-cols-2 gap-2">
               <div className="min-w-0 rounded-2xl border border-[#D8E6F7] bg-[#F1F7FF] p-3">
                 <p className="text-[11px] font-bold text-[#456B91]">Chi tiêu cố định</p>
-                <p data-dashboard-expense-fixed="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#24537D] sm:text-[17px]">{formatVND(fixedExpense)}</p>
+                <p data-dashboard-expense-fixed="true" className="mt-1 whitespace-nowrap text-[clamp(11px,3.1vw,15px)] font-extrabold tabular-nums text-[#24537D] sm:text-[17px]">{formatVND(fixedExpense)}</p>
                 <p className="mt-1 text-[11px] font-semibold text-[#5D7992]">{incomeShare(fixedExpense)}</p>
               </div>
               <div className="min-w-0 rounded-2xl border border-[#F1E1D6] bg-[#FFF7F1] p-3">
                 <p className="text-[11px] font-bold text-[#98633E]">Chi tiêu biến đổi</p>
-                <p data-dashboard-expense-variable="true" className="mt-1 break-words text-[15px] font-extrabold tabular-nums text-[#87532F] sm:text-[17px]">{formatVND(variableExpense)}</p>
+                <p data-dashboard-expense-variable="true" className="mt-1 whitespace-nowrap text-[clamp(11px,3.1vw,15px)] font-extrabold tabular-nums text-[#87532F] sm:text-[17px]">{formatVND(variableExpense)}</p>
                 <p className="mt-1 text-[11px] font-semibold text-[#9A765C]">{incomeShare(variableExpense)}</p>
               </div>
               {totalExpense > fixedExpense + variableExpense ? (
@@ -660,7 +660,7 @@ export default function DashboardVisualOverview({
                               Gộp {item.aggregateCount} danh mục còn lại
                             </p>
                           ) : null}
-                          <p data-dashboard-mobile-expense-amount="true" className="mt-1 min-w-0 break-words text-[13px] font-semibold leading-5 tabular-nums text-[#44647D]">
+                          <p data-dashboard-mobile-expense-amount="true" className="mt-1 min-w-0 whitespace-nowrap text-[clamp(10px,3vw,13px)] font-semibold leading-5 tabular-nums text-[#44647D]">
                             {formatVND(item.value)}
                           </p>
                         </div>
