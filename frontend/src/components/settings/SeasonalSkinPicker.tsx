@@ -29,6 +29,7 @@ export default function SeasonalSkinPicker() {
   const [scheduleStart, setScheduleStart] = useState("");
   const [scheduleEnd, setScheduleEnd] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
+  const [scheduleError, setScheduleError] = useState(false);
   // Fixed initial value on SSR prevents hydration mismatch across timezones.
   const [selectedSeason, setSelectedSeason] = useState<SeasonalSkinSeason>("spring");
   const [calendarSeason, setCalendarSeason] = useState<SeasonalSkinSeason | null>(null);
@@ -39,6 +40,7 @@ export default function SeasonalSkinPicker() {
       setScheduleStart(saved?.start ?? "");
       setScheduleEnd(saved?.end ?? "");
       setScheduleMessage("");
+      setScheduleError(false);
     };
     const timer = window.setTimeout(refresh, 0);
     window.addEventListener("storage", refresh);
@@ -150,7 +152,7 @@ export default function SeasonalSkinPicker() {
         <p className="text-[11px] text-slate-500">Để trống cả hai ngày để sử dụng lịch mùa tự động. Lịch tùy chỉnh áp dụng từ 00:00 ngày bắt đầu đến hết ngày kết thúc (giờ Việt Nam).</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="space-y-1 text-xs font-medium text-slate-600">Ngày bắt đầu
-            <input type="date" value={scheduleStart} onChange={(event) => { setScheduleStart(event.target.value); setScheduleMessage(""); }} className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
+            <input type="date" value={scheduleStart} onChange={(event) => { setScheduleStart(event.target.value); setScheduleMessage(""); setScheduleError(false); }} className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
           </label>
           <label className="space-y-1 text-xs font-medium text-slate-600">Ngày kết thúc
             <input type="date" value={scheduleEnd} min={scheduleStart || undefined} onChange={(event) => { setScheduleEnd(event.target.value); setScheduleMessage(""); }} className="block min-h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-sm" />
@@ -159,14 +161,21 @@ export default function SeasonalSkinPicker() {
         <div className="flex flex-wrap gap-2">
           <button type="button" className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white disabled:opacity-50" disabled={!scheduleStart || !scheduleEnd} onClick={() => {
             const candidate = { start: scheduleStart, end: scheduleEnd };
-            if (!isValidSeasonalDateWindow(candidate)) { setScheduleMessage("Ngày bắt đầu/kết thúc không hợp lệ."); return; }
+            if (!isValidSeasonalDateWindow(candidate)) { setScheduleError(true); setScheduleMessage("Ngày bắt đầu/kết thúc không hợp lệ."); return; }
             const conflict = getSeasonalScheduleConflict(selectedSeason, candidate);
-            if (conflict) { setScheduleMessage("Lịch bị trùng với mùa " + (SKIN_SEASONS.find((s) => s.value === conflict)?.label ?? conflict) + "."); return; }
-            setScheduleMessage(saveSeasonalDateWindow(selectedSeason, candidate) ? "Đã lưu lịch áp dụng." : "Không thể lưu lịch. Vui lòng thử lại.");
+            if (conflict) { setScheduleError(true); setScheduleMessage("Lịch bị trùng với mùa " + (SKIN_SEASONS.find((season) => season.value === conflict)?.label ?? conflict) + "."); return; }
+            const saved = saveSeasonalDateWindow(selectedSeason, candidate);
+            setScheduleError(!saved);
+            setScheduleMessage(saved ? "Đã lưu lịch áp dụng." : "Không thể lưu lịch. Vui lòng thử lại.");
           }}>Lưu lịch</button>
-          <button type="button" className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600" onClick={() => setScheduleMessage(saveSeasonalDateWindow(selectedSeason, null) ? "Đã trở về lịch tự động." : "Không thể cập nhật lịch.")}>Dùng lịch tự động</button>
+          <button type="button" className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600" onClick={() => {
+            const saved = saveSeasonalDateWindow(selectedSeason, null);
+            if (saved) { setScheduleStart(""); setScheduleEnd(""); }
+            setScheduleError(!saved);
+            setScheduleMessage(saved ? "Đã trở về lịch tự động." : "Không thể cập nhật lịch.");
+          }}>Dùng lịch tự động</button>
         </div>
-        {scheduleMessage ? <p role="status" className="text-xs text-slate-600">{scheduleMessage}</p> : null}
+        {scheduleMessage ? <p role="status" aria-live="polite" className={`text-xs ${scheduleError ? "text-red-600" : "text-emerald-700"}`}>{scheduleMessage}</p> : null}
       </div>
       {selectedSeason === "birthday" ? (
         <p className="text-[11px] leading-4 text-slate-500">
