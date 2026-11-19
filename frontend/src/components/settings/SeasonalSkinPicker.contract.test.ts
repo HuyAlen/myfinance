@@ -29,6 +29,7 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     expect(preferences.match(/onClick={handleSavePreferences}/g)).toHaveLength(1);
     expect(preferences).toContain("scheduleDrafts={seasonalScheduleDrafts}");
     expect(preferences).toContain("skinDrafts={seasonalSkinDrafts}");
+    expect(preferences).toContain("saveRevision={seasonalSaveRevision}");
     expect(preferences).toContain("onSkinChange={(season, skin) => {");
     expect(page).toContain("saveSeasonalSkinDrafts(seasonalSkinDrafts)");
     expect(preferences).toContain("onScheduleChange={(season, draft) => {");
@@ -42,6 +43,20 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     expect(picker).not.toContain(">Lưu lịch</button>");
     expect(picker).not.toContain(">Dùng lịch tự động</button>");
     expect(picker).not.toContain("saveSeasonalDateWindow(");
+  });
+
+  it("makes a seasonal-only save independent from untouched/legacy app preferences", () => {
+    const save = page.slice(page.indexOf('function handleSavePreferences()'), page.indexOf('async function handleSaveFinancial()'));
+    expect(save).toContain("const hasSeasonalDrafts =");
+    expect(save).toContain("const savePreferenceFields = preferenceFieldsDirty || !hasSeasonalDrafts;");
+    expect(save).toContain("if (savePreferenceFields) {");
+    expect(save).toContain('saveAccountSettingsSection(user.id, "preferences"');
+    expect(page).toContain('data-seasonal-save-error="true"');
+    expect(page).toContain("setPreferencesSaveError(message)");
+    expect(page).toContain("setDefaultPage(SETTINGS_START_PAGES.some");
+    expect(picker).toContain("resolveScheduledSeason(now)");
+    expect(picker).toContain("setCalendarSeason(resolveCurrentSeason(null))");
+    expect(picker).toContain('url.searchParams.delete("season")');
   });
 
   it("renders all six tabs and three previews with full-area buttons and accessible labels", () => {

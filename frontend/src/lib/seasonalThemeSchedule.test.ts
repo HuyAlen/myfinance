@@ -66,6 +66,17 @@ describe("MYFINANCE-SEASONAL-SINGLE-SAVE-1", () => {
     expect(storage.events).toHaveLength(2);
   });
 
+  it("activates the chosen Christmas skin window from November 20 to December 26 in Vietnam", () => {
+    setupStorage();
+    const christmas = { start: "2026-11-20", end: "2026-12-26" };
+    saveSeasonalScheduleDrafts({ christmas });
+    expect(readSeasonalDateWindow("christmas")).toEqual(christmas);
+    expect(resolveScheduledSeason(new Date("2026-11-19T16:59:59.000Z"))).toBeNull();
+    expect(resolveScheduledSeason(new Date("2026-11-19T17:00:00.000Z"))).toBe("christmas");
+    expect(resolveScheduledSeason(new Date("2026-12-26T16:59:59.000Z"))).toBe("christmas");
+    expect(resolveScheduledSeason(new Date("2026-12-26T17:00:00.000Z"))).toBeNull();
+  });
+
   it("rejects conflicting dates before writing any season", () => {
     const storage = setupStorage();
     saveSeasonalScheduleDrafts({ christmas: { start: "2026-12-01", end: "2026-12-31" } });

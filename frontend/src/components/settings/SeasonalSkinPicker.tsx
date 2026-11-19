@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/components/auth/AuthProvider";
 import { readAccountBirthDate, resolveAccountSeasonalTheme } from "@/src/lib/accountBirthdayTheme";
@@ -14,6 +14,8 @@ import {
   syncSeasonalSkinForDocument,
   useSeasonalSkin,
   readAllSeasonalDateWindows,
+  resolveScheduledSeason,
+  vietnamDate,
   SEASONAL_SCHEDULE_CHANGED,
   type SeasonalDateWindow,
   type SeasonalScheduleDrafts,
@@ -28,10 +30,11 @@ type SeasonalSkinPickerProps = {
   onScheduleChange: (season: SeasonalSkinSeason, value: SeasonalDateWindow | null) => void;
   skinDrafts: SeasonalSkinDrafts;
   onSkinChange: (season: SeasonalSkinSeason, skin: SeasonalSkin) => void;
+  saveRevision: number;
 };
 
 /** Compact seasonal skin picker, nested under Settings > Tùy chỉnh. */
-export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, skinDrafts, onSkinChange }: SeasonalSkinPickerProps) {
+export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, skinDrafts, onSkinChange, saveRevision }: SeasonalSkinPickerProps) {
   const router = useRouter();
   const { user } = useAuth();
   const accountBirthDate = readAccountBirthDate(user?.user_metadata);
@@ -41,8 +44,23 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
   const [selectedSeason, setSelectedSeason] = useState<SeasonalSkinSeason>("spring");
   const [calendarSeason, setCalendarSeason] = useState<SeasonalSkinSeason | null>(null);
   const enabled = useSeasonalThemeEnabled();
+  const resolveCurrentSeason = useCallback((requested: string | null): SeasonalSkinSeason | null => {
+    const now = new Date();
+    const automatic = resolveAccountSeasonalTheme(resolveSeasonalAuthTheme(now, requested), now, requested, accountBirthDate);
+    const schedules = readAllSeasonalDateWindows();
+    const scheduled = requested ? null : resolveScheduledSeason(now);
+    if (scheduled) return scheduled;
+    if (automatic === "off") return null;
+    const dateWindow = schedules[automatic];
+    const today = vietnamDate(now);
+    if (dateWindow && !(dateWindow.start <= today && today <= dateWindow.end)) return null;
+    return automatic;
+  }, [accountBirthDate]);
   useEffect(() => {
-    const refresh = () => setSavedSchedules(readAllSeasonalDateWindows());
+    const refresh = () => {
+      setSavedSchedules(readAllSeasonalDateWindows());
+      setCalendarSeason(resolveCurrentSeason(new URLSearchParams(window.location.search).get("season")));
+    };
     const timer = window.setTimeout(refresh, 0);
     window.addEventListener("storage", refresh);
     window.addEventListener(SEASONAL_SCHEDULE_CHANGED, refresh);
@@ -51,7 +69,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
       window.removeEventListener("storage", refresh);
       window.removeEventListener(SEASONAL_SCHEDULE_CHANGED, refresh);
     };
-  }, []);
+  }, [resolveCurrentSeason]);
   const currentSchedule = Object.prototype.hasOwnProperty.call(scheduleDrafts, selectedSeason)
     ? (scheduleDrafts[selectedSeason] ?? null)
     : (savedSchedules[selectedSeason] ?? null);
@@ -67,17 +85,13 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const requested = new URLSearchParams(window.location.search).get("season");
-      const now = new Date();
-      const calendar = resolveSeasonalAuthTheme(now, requested);
-      const active = resolveAccountSeasonalTheme(calendar, now, requested, accountBirthDate);
-      if (active !== "off") {
-        setCalendarSeason(active);
-        setSelectedSeason(active);
-      }
+      const active = resolveCurrentSeason(requested);
+      setCalendarSeason(active);
+      if (active !== null) setSelectedSeason(active);
       setPreviewOverride(requested);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [accountBirthDate]);
+  }, [resolveCurrentSeason]);
 
   // Preview another season without persisting an override or losing month filters.
   // The existing workspace controller uses Next search params after navigation.
@@ -92,11 +106,20 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
     const url = new URL(window.location.href);
     url.searchParams.delete("season");
     setPreviewOverride(null);
-    const now = new Date();
-    const automatic = resolveAccountSeasonalTheme(resolveSeasonalAuthTheme(now, null), now, null, accountBirthDate);
-    setCalendarSeason(automatic === "off" ? null : automatic);
+    setCalendarSeason(resolveCurrentSeason(null));
     router.replace(`${url.pathname}${url.search}`, { scroll: false });
   };
+  // A saved custom date window must replace an old temporary season preview.
+  useEffect(() => {
+    if (saveRevision === 0) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("season")) {
+      url.searchParams.delete("season");
+      router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    }
+    setPreviewOverride(null);
+    setCalendarSeason(resolveCurrentSeason(null));
+  }, [saveRevision, resolveCurrentSeason, router]);
   const isPreviewing = previewOverride === selectedSeason;
 
   return (
