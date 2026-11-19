@@ -1013,6 +1013,7 @@ export default function SettingsPage() {
         key: SEASONAL_SCHEDULE_PREFIX + value,
         oldValue: window.localStorage.getItem(SEASONAL_SCHEDULE_PREFIX + value),
       }));
+      const preferencesBackup = window.localStorage.getItem(localSettingsKey);
       let schedulesCommitted = false;
       try {
         saveSeasonalScheduleDrafts(seasonalScheduleDrafts);
@@ -1031,8 +1032,14 @@ export default function SettingsPage() {
               rollbackError = true;
             }
           }
+          try {
+            if (preferencesBackup === null) window.localStorage.removeItem(localSettingsKey);
+            else window.localStorage.setItem(localSettingsKey, preferencesBackup);
+          } catch {
+            rollbackError = true;
+          }
           window.dispatchEvent(new Event(SEASONAL_SCHEDULE_CHANGED));
-          if (rollbackError) throw new Error("Không thể lưu tùy chỉnh và chưa khôi phục được toàn bộ lịch cũ.");
+          if (rollbackError) throw new Error("Không thể lưu tùy chỉnh và chưa khôi phục được toàn bộ dữ liệu cũ.");
         }
         throw error;
       }
