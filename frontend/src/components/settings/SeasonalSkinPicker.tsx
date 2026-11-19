@@ -160,6 +160,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
           <button
             type="button"
             aria-pressed={!customSchedule}
+            disabled={!customSchedule}
             data-seasonal-schedule-mode="auto"
             onClick={() => onScheduleChange(selectedSeason, null)}
             className={`min-h-10 rounded-lg border px-2 text-xs font-semibold ${!customSchedule ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
@@ -167,6 +168,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
           <button
             type="button"
             aria-pressed={customSchedule}
+            disabled={customSchedule}
             data-seasonal-schedule-mode="custom"
             onClick={() => onScheduleChange(selectedSeason, currentSchedule ?? savedSchedules[selectedSeason] ?? { start: "", end: "" })}
             className={`min-h-10 rounded-lg border px-2 text-xs font-semibold ${customSchedule ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
