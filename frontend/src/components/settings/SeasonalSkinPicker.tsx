@@ -10,12 +10,15 @@ import { useSeasonalThemeEnabled } from "@/src/lib/seasonalThemePreference";
 import {
   SKIN_CHOICES,
   SKIN_SEASONS,
-  setSeasonalSkin,
+  previewSeasonalSkinDrafts,
+  syncSeasonalSkinForDocument,
   useSeasonalSkin,
   readAllSeasonalDateWindows,
   SEASONAL_SCHEDULE_CHANGED,
   type SeasonalDateWindow,
   type SeasonalScheduleDrafts,
+  type SeasonalSkin,
+  type SeasonalSkinDrafts,
   type SeasonalSkinSeason,
 } from "@/src/lib/seasonalThemeSkins";
 
@@ -23,10 +26,12 @@ import {
 type SeasonalSkinPickerProps = {
   scheduleDrafts: SeasonalScheduleDrafts;
   onScheduleChange: (season: SeasonalSkinSeason, value: SeasonalDateWindow | null) => void;
+  skinDrafts: SeasonalSkinDrafts;
+  onSkinChange: (season: SeasonalSkinSeason, skin: SeasonalSkin) => void;
 };
 
 /** Compact seasonal skin picker, nested under Settings > Tùy chỉnh. */
-export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }: SeasonalSkinPickerProps) {
+export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, skinDrafts, onSkinChange }: SeasonalSkinPickerProps) {
   const router = useRouter();
   const { user } = useAuth();
   const accountBirthDate = readAccountBirthDate(user?.user_metadata);
@@ -51,7 +56,12 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
     ? (scheduleDrafts[selectedSeason] ?? null)
     : (savedSchedules[selectedSeason] ?? null);
   const customSchedule = currentSchedule !== null;
-  const selectedSkin = useSeasonalSkin(selectedSeason);
+  const savedSkin = useSeasonalSkin(selectedSeason);
+  const selectedSkin = skinDrafts[selectedSeason] ?? savedSkin;
+  useEffect(() => {
+    previewSeasonalSkinDrafts(skinDrafts);
+    return () => syncSeasonalSkinForDocument();
+  }, [skinDrafts, selectedSeason, previewOverride, enabled]);
   const seasonMeta = SKIN_SEASONS.find((season) => season.value === selectedSeason) ?? SKIN_SEASONS[0];
 
   useEffect(() => {
@@ -101,7 +111,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
         </span>
         <div className="min-w-0 flex-1">
           <h3 id="seasonal-skins-title" className="text-sm font-bold text-slate-700">Skin theo mùa</h3>
-          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">3 skin/chủ đề · tự dùng theo lịch và ngày sinh tài khoản</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">3 skin/chủ đề · chọn skin và lưu cho từng mùa</p>
         </div>
       </div>
 
@@ -222,7 +232,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
               data-seasonal-skin-selected={selected ? "true" : "false"}
               aria-pressed={selected}
               aria-label={`${choice.label}, ${choice.description}, mùa ${seasonMeta.label}`}
-              onClick={() => setSeasonalSkin(selectedSeason, choice.value)}
+              onClick={() => onSkinChange(selectedSeason, choice.value)}
               className={`group min-w-0 rounded-xl border p-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
                 selected
                   ? "border-blue-400 bg-blue-50 ring-1 ring-blue-200"
@@ -266,11 +276,13 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange }:
       </div>
 
       <p aria-live="polite" className="text-[11px] leading-4 text-slate-500">
-        {enabled
-          ? calendarSeason === selectedSeason
-            ? `Đang áp dụng: ${SKIN_CHOICES.find((item) => item.value === selectedSkin)?.label}.`
-            : `Đã lưu skin mùa ${seasonMeta.label}; sẽ tự dùng khi đến mùa.`
-          : "Đã lưu skin; bật Giao diện theo mùa để hiển thị."}
+        {skinDrafts[selectedSeason] !== undefined
+          ? "Đang xem trước: " + (SKIN_CHOICES.find((item) => item.value === selectedSkin)?.label ?? selectedSkin) + ". Nhấn Lưu tùy chỉnh để lưu skin."
+          : enabled
+            ? calendarSeason === selectedSeason
+              ? `Đang áp dụng skin đã lưu: ${SKIN_CHOICES.find((item) => item.value === selectedSkin)?.label}.`
+              : `Đã lưu skin mùa ${seasonMeta.label}; sẽ tự dùng khi đến mùa.`
+            : "Đã lưu skin; bật Giao diện theo mùa để hiển thị."}
       </p>
     </section>
   );

@@ -28,6 +28,9 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     const preferences = page.slice(page.indexOf('id="settings-preferences"'), page.indexOf('id="settings-financial"'));
     expect(preferences.match(/onClick={handleSavePreferences}/g)).toHaveLength(1);
     expect(preferences).toContain("scheduleDrafts={seasonalScheduleDrafts}");
+    expect(preferences).toContain("skinDrafts={seasonalSkinDrafts}");
+    expect(preferences).toContain("onSkinChange={(season, skin) => {");
+    expect(page).toContain("saveSeasonalSkinDrafts(seasonalSkinDrafts)");
     expect(preferences).toContain("onScheduleChange={(season, draft) => {");
     expect(page).toContain("validateSeasonalScheduleDrafts(seasonalScheduleDrafts)");
     expect(page).toContain("saveSeasonalScheduleDrafts(seasonalScheduleDrafts)");
@@ -50,7 +53,9 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     expect(picker).toContain("grid-cols-3");
     expect(picker).toContain("overflow-x-auto");
     expect(picker).toContain("min-h-10");
-    expect(picker).toContain("setSeasonalSkin(selectedSeason");
+    expect(picker).toContain("onSkinChange(selectedSeason");
+    expect(picker).toContain("previewSeasonalSkinDrafts(skinDrafts)");
+    expect(picker).not.toContain("setSeasonalSkin(selectedSeason");
   });
 
   it("loads the saved seasonal skin on refresh and on external updates", () => {

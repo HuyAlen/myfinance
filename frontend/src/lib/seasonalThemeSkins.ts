@@ -11,6 +11,8 @@ import type { ActiveSeasonalAuthTheme } from "@/src/lib/seasonal-auth";
  */
 export type SeasonalSkin = "classic" | "pastel" | "festival";
 export type SeasonalSkinSeason = ActiveSeasonalAuthTheme;
+/** Unsaved skin choices, committed with Settings > Lưu tùy chỉnh. */
+export type SeasonalSkinDrafts = Partial<Record<SeasonalSkinSeason, SeasonalSkin>>;
 
 export const SKIN_STORAGE_PREFIX = "myfinance-seasonal-skin-v1:";
 export const SKIN_ATTRIBUTE = "data-finance-season-skin";
@@ -111,6 +113,77 @@ export function setSeasonalSkin(season: SeasonalSkinSeason, skin: SeasonalSkin):
   // The active season changes immediately; other seasons are saved for later.
   syncSeasonalSkinForDocument();
   window.dispatchEvent(new Event(SKIN_CHANGE_EVENT));
+}
+
+/** Apply pending choices to the active page without writing to localStorage. */
+export function previewSeasonalSkinDrafts(drafts: SeasonalSkinDrafts): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const active = root.getAttribute(SEASON_ATTRIBUTE);
+  if (!isSkinSeason(active)) return;
+  const skin = drafts[active];
+  if (skin === undefined) {
+    syncSeasonalSkinForDocument();
+  } else if (skin === "classic") {
+    root.removeAttribute(SKIN_ATTRIBUTE);
+  } else if (skin === "pastel" || skin === "festival") {
+    root.setAttribute(SKIN_ATTRIBUTE, skin);
+  }
+}
+
+/** Notify page and React subscribers after either a commit or a rollback. */
+export function refreshSeasonalSkinFromStorage(): void {
+  if (typeof window === "undefined") return;
+  ephemeral.clear();
+  syncSeasonalSkinForDocument();
+  window.dispatchEvent(new Event(SKIN_CHANGE_EVENT));
+}
+
+/** Persist all pending skins with verification and rollback on partial failure. */
+export function saveSeasonalSkinDrafts(drafts: SeasonalSkinDrafts): void {
+  if (Object.keys(drafts).some((key) => !isSkinSeason(key))) {
+    throw new Error("Mùa skin không hợp lệ.");
+  }
+  const changed = SKIN_SEASONS.filter(({ value }) => Object.prototype.hasOwnProperty.call(drafts, value));
+  if (changed.length === 0) return;
+  if (typeof window === "undefined") throw new Error("Bộ nhớ skin chưa sẵn sàng.");
+  for (const { value } of changed) {
+    const skin = drafts[value];
+    if (skin !== "classic" && skin !== "pastel" && skin !== "festival") {
+      throw new Error("Lựa chọn skin không hợp lệ cho mùa " + value + ".");
+    }
+  }
+
+  const storage = window.localStorage;
+  const before = changed.map(({ value }) => ({
+    key: seasonalSkinKey(value),
+    oldValue: storage.getItem(seasonalSkinKey(value)),
+  }));
+  try {
+    for (const { value } of changed) {
+      const key = seasonalSkinKey(value);
+      const skin = drafts[value]!;
+      storage.setItem(key, skin);
+      if (storage.getItem(key) !== skin) {
+        throw new Error("Không xác nhận được skin đã lưu cho mùa " + value + ".");
+      }
+    }
+  } catch (error) {
+    let rollbackFailed = false;
+    for (const { key, oldValue } of before) {
+      try {
+        if (oldValue === null) storage.removeItem(key);
+        else storage.setItem(key, oldValue);
+      } catch {
+        rollbackFailed = true;
+      }
+    }
+    if (rollbackFailed) {
+      throw new Error("Lưu skin thất bại và chưa thể khôi phục toàn bộ lựa chọn cũ.");
+    }
+    throw error;
+  }
+  refreshSeasonalSkinFromStorage();
 }
 
 function subscribeToSeasonalSkin(season: SeasonalSkinSeason, changed: () => void): () => void {
