@@ -144,7 +144,7 @@ export function useSeasonalSkin(season: SeasonalSkinSeason): SeasonalSkin {
 export type SeasonalDateWindow = { start: string; end: string };
 export const SEASONAL_SCHEDULE_PREFIX = "myfinance-seasonal-date-window-v1:";
 export const SEASONAL_SCHEDULE_CHANGED = "myfinance:seasonal-schedule-changed";
-const datePattern = /^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$/;
+const datePattern = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export function isValidSeasonalDate(value: string): boolean {
   if (!datePattern.test(value)) return false;
   const [y, m, d] = value.split("-").map(Number);
