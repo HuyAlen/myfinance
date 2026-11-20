@@ -214,7 +214,7 @@ export default function SeasonalSkinPicker({ scheduleDrafts, onScheduleChange, s
         </div>
         {customSchedule ? (
           <>
-            <p className="text-[11px] leading-4 text-slate-500">Áp dụng từ 00:00 ngày bắt đầu đến hết ngày kết thúc, theo giờ Việt Nam.</p>
+            <p className="text-[11px] leading-4 text-slate-500">Áp dụng từ 00:00 ngày bắt đầu đến hết ngày kết thúc, theo giờ Việt Nam. Lịch được phép trùng; Sinh nhật, Tết, Năm mới, Giáng sinh và Halloween ưu tiên hơn mùa Xuân/Hạ/Thu.</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="space-y-1 text-xs font-medium text-slate-600">Ngày bắt đầu
                 <input

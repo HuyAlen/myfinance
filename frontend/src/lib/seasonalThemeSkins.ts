@@ -219,6 +219,14 @@ export type SeasonalDateWindow = { start: string; end: string };
 export type SeasonalScheduleDrafts = Partial<Record<SeasonalSkinSeason, SeasonalDateWindow | null>>;
 export const SEASONAL_SCHEDULE_PREFIX = "myfinance-seasonal-date-window-v1:";
 export const SEASONAL_SCHEDULE_CHANGED = "myfinance:seasonal-schedule-changed";
+/** Higher-priority schedules take over overlapping days without deleting other seasons.
+ * Named holidays and birthdays override broad seasonal themes. This order never
+ * depends on which tab edited first, storage insertion order or device locale.
+ */
+export const SEASONAL_SCHEDULE_PRIORITY = [
+  "birthday", "tet", "newyear", "christmas", "halloween",
+  "autumn", "summer", "spring",
+] as const satisfies readonly SeasonalSkinSeason[];
 const datePattern = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export function isValidSeasonalDate(value: string): boolean {
   if (!datePattern.test(value)) return false;
@@ -246,13 +254,14 @@ export function readAllSeasonalDateWindows(): Partial<Record<SeasonalSkinSeason,
     return window ? [[value, window]] : [];
   })) as Partial<Record<SeasonalSkinSeason, SeasonalDateWindow>>;
 }
+/** Informational only; overlapping custom windows are allowed and resolved by priority. */
 export function getSeasonalScheduleConflict(season: SeasonalSkinSeason, window: SeasonalDateWindow): SeasonalSkinSeason | null {
   const other = readAllSeasonalDateWindows();
   return SKIN_SEASONS.find(({ value }) => value !== season && other[value] && window.start <= other[value]!.end && other[value]!.start <= window.end)?.value ?? null;
 }
 export function saveSeasonalDateWindow(season: SeasonalSkinSeason, dateWindow: SeasonalDateWindow | null): boolean {
   if (typeof window === "undefined" || !isSkinSeason(season)) return false;
-  if (dateWindow && (!isValidSeasonalDateWindow(dateWindow) || getSeasonalScheduleConflict(season, dateWindow))) return false;
+  if (dateWindow && !isValidSeasonalDateWindow(dateWindow)) return false;
   try {
     if (dateWindow) window.localStorage.setItem(SEASONAL_SCHEDULE_PREFIX + season, JSON.stringify(dateWindow));
     else window.localStorage.removeItem(SEASONAL_SCHEDULE_PREFIX + season);
@@ -272,37 +281,24 @@ export function vietnamDate(now: Date): string {
 }
 export function resolveScheduledSeason(now: Date): SeasonalSkinSeason | null {
   const today = vietnamDate(now);
-  for (const { value } of SKIN_SEASONS) {
-    const window = readSeasonalDateWindow(value);
-    if (window && window.start <= today && today <= window.end) return value;
+  for (const season of SEASONAL_SCHEDULE_PRIORITY) {
+    const window = readSeasonalDateWindow(season);
+    if (window && window.start <= today && today <= window.end) return season;
   }
   return null;
 }
 
 
-/** Validate all pending seasons against the effective calendar before any writes. */
+/** Validate only date syntax/ranges. Overlaps are legal: season priority decides. */
 export function validateSeasonalScheduleDrafts(drafts: SeasonalScheduleDrafts): string | null {
-  const windows = readAllSeasonalDateWindows();
+  if (Object.keys(drafts).some((key) => !isSkinSeason(key))) {
+    return "Mùa tùy chỉnh không hợp lệ.";
+  }
   for (const { value, label } of SKIN_SEASONS) {
     if (!Object.prototype.hasOwnProperty.call(drafts, value)) continue;
     const candidate = drafts[value];
-    if (candidate == null) {
-      delete windows[value];
-    } else if (!isValidSeasonalDateWindow(candidate)) {
+    if (candidate !== null && candidate !== undefined && !isValidSeasonalDateWindow(candidate)) {
       return "Ngày bắt đầu/kết thúc của mùa " + label + " không hợp lệ.";
-    } else {
-      windows[value] = candidate;
-    }
-  }
-  for (let i = 0; i < SKIN_SEASONS.length; i++) {
-    for (let j = i + 1; j < SKIN_SEASONS.length; j++) {
-      const a = SKIN_SEASONS[i];
-      const b = SKIN_SEASONS[j];
-      const first = windows[a.value];
-      const second = windows[b.value];
-      if (first && second && first.start <= second.end && second.start <= first.end) {
-        return "Lịch mùa " + a.label + " bị trùng với " + b.label + ".";
-      }
     }
   }
   return null;
