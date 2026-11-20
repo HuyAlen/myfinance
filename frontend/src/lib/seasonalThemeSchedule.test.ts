@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SEASONAL_SCHEDULE_CHANGED,
   SEASONAL_SCHEDULE_PREFIX,
+  SEASONAL_SCHEDULE_PRIORITY,
   isValidSeasonalDate,
   isValidSeasonalDateWindow,
   readSeasonalDateWindow,
   resolveScheduledSeason,
+  saveSeasonalDateWindow,
   saveSeasonalScheduleDrafts,
   validateSeasonalScheduleDrafts,
   vietnamDate,
@@ -77,15 +79,57 @@ describe("MYFINANCE-SEASONAL-SINGLE-SAVE-1", () => {
     expect(resolveScheduledSeason(new Date("2026-12-26T17:00:00.000Z"))).toBeNull();
   });
 
-  it("rejects conflicting dates before writing any season", () => {
+  it("allows the user's overlapping Autumn + Christmas dates, with Christmas taking priority", () => {
     const storage = setupStorage();
-    saveSeasonalScheduleDrafts({ christmas: { start: "2026-12-01", end: "2026-12-31" } });
+    const autumn = { start: "2026-09-01", end: "2026-12-31" };
+    const christmas = { start: "2026-11-20", end: "2026-12-26" };
+    saveSeasonalScheduleDrafts({ autumn });
+    expect(validateSeasonalScheduleDrafts({ christmas })).toBeNull();
+    saveSeasonalScheduleDrafts({ christmas });
+    expect(storage.data.has(SEASONAL_SCHEDULE_PREFIX + "christmas")).toBe(true);
+    expect(readSeasonalDateWindow("autumn")).toEqual(autumn);
+    expect(readSeasonalDateWindow("christmas")).toEqual(christmas);
+    // 00:00 and 23:59:59 Vietnam time, including the first and last day.
+    expect(resolveScheduledSeason(new Date("2026-11-19T16:59:59.000Z"))).toBe("autumn");
+    expect(resolveScheduledSeason(new Date("2026-11-19T17:00:00.000Z"))).toBe("christmas");
+    expect(resolveScheduledSeason(new Date("2026-12-26T16:59:59.000Z"))).toBe("christmas");
+    expect(resolveScheduledSeason(new Date("2026-12-26T17:00:00.000Z"))).toBe("autumn");
+    expect(storage.events).toHaveLength(2);
+  });
+
+  it("prioritizes special days consistently even when multiple holiday windows overlap", () => {
+    setupStorage();
+    expect(SEASONAL_SCHEDULE_PRIORITY.indexOf("christmas")).toBeLessThan(
+      SEASONAL_SCHEDULE_PRIORITY.indexOf("autumn"),
+    );
+    saveSeasonalScheduleDrafts({
+      autumn: { start: "2026-09-01", end: "2027-01-10" },
+      christmas: { start: "2026-11-20", end: "2026-12-31" },
+      newyear: { start: "2026-12-27", end: "2027-01-05" },
+      birthday: { start: "2026-12-30", end: "2026-12-30" },
+    });
+    expect(resolveScheduledSeason(new Date("2026-12-25T05:00:00Z"))).toBe("christmas");
+    expect(resolveScheduledSeason(new Date("2026-12-27T05:00:00Z"))).toBe("newyear");
+    expect(resolveScheduledSeason(new Date("2026-12-30T05:00:00Z"))).toBe("birthday");
+    expect(resolveScheduledSeason(new Date("2027-01-06T05:00:00Z"))).toBe("autumn");
+  });
+
+  it("retains invalid-date validation and does not touch saved seasons on failure", () => {
+    const storage = setupStorage();
+    saveSeasonalScheduleDrafts({ autumn: { start: "2026-09-01", end: "2026-12-31" } });
     const priorEvents = storage.events.length;
-    const conflicting = { tet: { start: "2026-12-25", end: "2027-01-03" } };
-    expect(validateSeasonalScheduleDrafts(conflicting)).toContain("bị trùng");
-    expect(() => saveSeasonalScheduleDrafts(conflicting)).toThrow("bị trùng");
-    expect(storage.data.has(SEASONAL_SCHEDULE_PREFIX + "tet")).toBe(false);
+    const invalid = { christmas: { start: "2026-12-26", end: "2026-11-20" } };
+    expect(validateSeasonalScheduleDrafts(invalid)).toContain("không hợp lệ");
+    expect(() => saveSeasonalScheduleDrafts(invalid)).toThrow("không hợp lệ");
+    expect(storage.data.has(SEASONAL_SCHEDULE_PREFIX + "christmas")).toBe(false);
     expect(storage.events).toHaveLength(priorEvents);
+  });
+
+  it("keeps the single-season save helper compatible with overlapping windows", () => {
+    setupStorage();
+    expect(saveSeasonalDateWindow("autumn", { start: "2026-09-01", end: "2026-12-31" })).toBe(true);
+    expect(saveSeasonalDateWindow("christmas", { start: "2026-11-20", end: "2026-12-26" })).toBe(true);
+    expect(resolveScheduledSeason(new Date("2026-11-20T05:00:00Z"))).toBe("christmas");
   });
 
   it("rolls back the entire batch if a write fails, with no success event", () => {

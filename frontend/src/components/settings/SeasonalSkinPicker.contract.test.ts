@@ -38,6 +38,9 @@ describe("MYFINANCE-SEASONAL-SKINS-1 settings and presentation contract", () => 
     expect(picker).toContain("Tùy chọn lịch");
     expect(picker).toContain("Theo mùa tự động");
     expect(picker).toContain("Tùy chọn ngày");
+    expect(picker).toContain("Lịch được phép trùng");
+    expect(skins).toContain("SEASONAL_SCHEDULE_PRIORITY");
+    expect(skins).not.toContain('return "Lịch mùa " + a.label + " bị trùng');
     expect(picker).toContain('data-seasonal-schedule-mode="auto"');
     expect(picker).toContain('data-seasonal-schedule-mode="custom"');
     expect(picker).not.toContain(">Lưu lịch</button>");
